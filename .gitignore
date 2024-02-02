@@ -1,0 +1,29 @@
+__pycache__/
+.local
+.cache
+.bash_history
+.vscode-server
+.gitconfig
+.ssh
+.gnupg
+.cache
+.viminfo
+.python_history
+.nv
+.bashrc
+.config
+.conda
+.vscode
+build
+runs
+tensorrt-cpp-api/*
+
+# files
+
+## videos
+*.mp4
+
+## models
+*.engine
+*.onnx
+*.pt
