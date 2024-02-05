@@ -1,8 +1,11 @@
 #include <string>
 #include <chrono>
 #include <queue>
+#include <deque>
 #include <list>
 #include <opencv4/opencv2/opencv.hpp>
+#include <mutex>
+#include <condition_variable>
 
 typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
@@ -17,6 +20,40 @@ typedef char GPUReqDataType;
 typedef std::vector<int32_t> RequestShapeType;
 typedef std::vector<cv::cuda::GpuMat> LocalGPUDataType;
 typedef std::vector<cv::Mat> LocalCPUDataType;
+
+template <typename InType, int MaxSize = 100>
+class ThreadSafeFixSizedQueue {
+private:
+    std::queue<InType> queue;
+    std::mutex q_mutex;
+    std::condition_variable q_condition;
+
+public:
+    void emplace(InType request) {
+        std::unique_lock<std::mutex> lock(q_mutex);
+        if (queue.size() == MaxSize) {
+            queue.pop();
+        }
+        queue.emplace(request);
+        q_condition.notify_one();
+    }
+
+    InType pop() {
+        std::unique_lock<std::mutex> lock(q_mutex);
+        q_condition.wait(
+            lock,
+            [this]() {return !queue.empty();}
+        );
+        InType request = queue.front();
+        queue.pop();
+        return request;
+    }
+
+    int32_t size() {
+        return queue.size();
+    }
+};
+
 /**
  * @brief 
  * 
@@ -164,7 +201,7 @@ public:
     // Another example is the
     std::string msvc_name;
 
-    void SetInQueue(std::queue<InType> *queue) {
+    void SetInQueue(ThreadSafeFixSizedQueue<InType> *queue) {
         InQueue = queue;
     };
     virtual void Schedule();
@@ -188,7 +225,7 @@ protected:
     std::vector<NeighborMicroservice> upstreamMicroserviceList;
     std::vector<NeighborMicroservice> dnstreamMicroserviceList;
 
-    std::queue<InType>* InQueue;
+    ThreadSafeFixSizedQueue<InType>* InQueue;
 };
 
 template <typename InType>
@@ -197,13 +234,13 @@ public:
     GPUDataMicroservice(const BaseMicroserviceConfigs &configs);
     ~GPUDataMicroservice();
 
-    std::queue<GPUDataRequest>* getOutQueue () {
+    ThreadSafeFixSizedQueue<GPUDataRequest>* getOutQueue () {
         return &OutQueue;
     }
     void Schedule() override;
 
 protected:
-    std::queue<GPUDataRequest> OutQueue;
+    ThreadSafeFixSizedQueue<GPUDataRequest> OutQueue;
 };
 
 template <typename InType>
@@ -212,13 +249,13 @@ public:
     ShMemMicroservice(const BaseMicroserviceConfigs &configs);
     ~ShMemMicroservice();
 
-    std::queue<DataRequest<ShmReqDataType>>* getOutQueue () {
+    ThreadSafeFixSizedQueue<DataRequest<ShmReqDataType>>* getOutQueue () {
         return &OutQueue;
     }
     void Schedule() override;
 
 protected:
-    std::queue<DataRequest<ShmReqDataType>> OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<ShmReqDataType>> OutQueue;
 };
 
 template <typename InType>
@@ -227,13 +264,13 @@ public:
     SerDataMicroservice(const BaseMicroserviceConfigs &configs);
     ~SerDataMicroservice();
 
-    std::queue<DataRequest<CPUReqDataType>>* getOutQueue () {
+    ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>>* getOutQueue () {
         return &OutQueue;
     }
     void Schedule() override;
 
 protected:
-    std::queue<DataRequest<CPUReqDataType>> OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>> OutQueue;
 };
 
 template <typename InType>
@@ -242,13 +279,13 @@ public:
     LocalGPUDataMicroservice(const BaseMicroserviceConfigs &configs);
     ~LocalGPUDataMicroservice();
 
-    std::queue<DataRequest<LocalGPUDataType>>* getOutQueue () {
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getOutQueue () {
         return &OutQueue;
     }
     void Schedule() override;
 
 protected:
-    std::queue<DataRequest<LocalGPUDataType>> OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> OutQueue;
 };
 
 template <typename InType>
@@ -257,11 +294,11 @@ public:
     LocalCPUDataMicroservice(const BaseMicroserviceConfigs &configs);
     ~LocalCPUDataMicroservice();
 
-    std::queue<DataRequest<LocalCPUDataType>>* getOutQueue () {
+    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getOutQueue () {
         return &OutQueue;
     }
     void Schedule() override;
 
 protected:
-    std::queue<DataRequest<LocalCPUDataType>> OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> OutQueue;
 };

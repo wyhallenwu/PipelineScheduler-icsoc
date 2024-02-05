@@ -51,7 +51,7 @@
 //    cv::Mat mat = cv::Mat(size, CV_32F, 3);
 //    ClockType time = 1;
 //    DataRequest<CPUReqDataType> req = DataRequest<CPUReqDataType>(time, 1, size, "", mat);
-//    newQueue->push(req);
+//    newQueue->emplace(req);
 //    if (isInQueue) {
 //        numGPUInQueues++;
 //        InQueue = *newQueue;
@@ -154,7 +154,7 @@ void GPUDataMicroservice<InType>::Schedule() {
     InType data = Microservice<InType>::InQueue->front();
     Microservice<InType>::InQueue->pop();
     // process data
-    OutQueue.push(data);
+    OutQueue.emplace(data);
 }
 
 template<typename InType>
@@ -165,7 +165,7 @@ void ShMemMicroservice<InType>::Schedule() {
     InType data = Microservice<InType>::InQueue->front();
     Microservice<InType>::InQueue->pop();
     // process data
-    OutQueue.push(data);
+    OutQueue.emplace(data);
 }
 
 template<typename InType>
@@ -176,6 +176,6 @@ void SerDataMicroservice<InType>::Schedule() {
     InType data = Microservice<InType>::InQueue->front();
     Microservice<InType>::InQueue->pop();
     // process data
-    OutQueue.push(data);
+    OutQueue.emplace(data);
 }
 
