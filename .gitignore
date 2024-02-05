@@ -16,7 +16,10 @@ __pycache__/
 .vscode
 build
 runs
-tensorrt-cpp-api/*
+tensorrt-cpp-api
+face-recognition-cpp-tensorrt
+face-recognition
+cmake-test
 
 # files
 

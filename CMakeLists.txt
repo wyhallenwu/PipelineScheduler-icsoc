@@ -46,7 +46,7 @@ find_package(CUDA REQUIRED)
 find_package(OpenCV REQUIRED)
 
 
-add_subdirectory(libs/microservice)
+add_subdirectory(libs/trtengine)
 
 add_library(PipePlusPlus SHARED
         src/main.cpp)
