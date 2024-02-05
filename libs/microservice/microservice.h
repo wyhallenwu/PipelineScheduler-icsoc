@@ -16,7 +16,7 @@ typedef std::string ShmReqDataType;
 //typedef std::chrono::high_resolution_clock::time_point ClockType;
 typedef uint16_t ClockType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
-typedef char GPUReqDataType;
+typedef char * GPUReqDataType;
 typedef std::vector<int32_t> RequestShapeType;
 typedef std::vector<cv::cuda::GpuMat> LocalGPUDataType;
 typedef std::vector<cv::Mat> LocalCPUDataType;
@@ -86,15 +86,14 @@ struct MetaRequest {
 struct GPUDataRequest : MetaRequest {
     // The data of that this request carries.
     // There are several types of data a request can carry.
-    GPUReqDataType req_data[CUDA_IPC_HANDLE_LENGTH];
+    GPUReqDataType req_data;
     GPUDataRequest(
         ClockType genTime,
         MsvcSLOType latency,
         RequestShapeType shape,
         std::string path,
-        GPUReqDataType data[CUDA_IPC_HANDLE_LENGTH]
-    ) : MetaRequest(genTime, latency, shape, path) {
-        strcpy(req_data, data);
+        GPUReqDataType data
+    ) : MetaRequest(genTime, latency, shape, path), req_data(data) {
     };
 };
 

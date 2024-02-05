@@ -1,2 +1,5 @@
 #include <opencv2/opencv.hpp>
-// #include <>
+
+int main() {
+    return 0;
+}
