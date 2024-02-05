@@ -15,6 +15,8 @@ typedef uint16_t ClockType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
 typedef char GPUReqDataType;
 typedef std::vector<int32_t> RequestShapeType;
+typedef std::vector<cv::cuda::GpuMat> LocalGPUDataType;
+typedef std::vector<cv::Mat> LocalCPUDataType;
 /**
  * @brief 
  * 
@@ -93,6 +95,7 @@ enum class CommMethod {
  * 
  */
 enum class QueueType {
+    localGPUDataQueue,
     gpuDataQueue,
     shmDataQueue,
     cpuDataQueue,
@@ -231,4 +234,34 @@ public:
 
 protected:
     std::queue<DataRequest<CPUReqDataType>> OutQueue;
+};
+
+template <typename InType>
+class LocalGPUDataMicroservice : public Microservice<InType> {
+public:
+    LocalGPUDataMicroservice(const BaseMicroserviceConfigs &configs);
+    ~LocalGPUDataMicroservice();
+
+    std::queue<DataRequest<LocalGPUDataType>>* getOutQueue () {
+        return &OutQueue;
+    }
+    void Schedule() override;
+
+protected:
+    std::queue<DataRequest<LocalGPUDataType>> OutQueue;
+};
+
+template <typename InType>
+class LocalCPUDataMicroservice : public Microservice<InType> {
+public:
+    LocalCPUDataMicroservice(const BaseMicroserviceConfigs &configs);
+    ~LocalCPUDataMicroservice();
+
+    std::queue<DataRequest<LocalCPUDataType>>* getOutQueue () {
+        return &OutQueue;
+    }
+    void Schedule() override;
+
+protected:
+    std::queue<DataRequest<LocalCPUDataType>> OutQueue;
 };
