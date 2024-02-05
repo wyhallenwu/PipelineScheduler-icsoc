@@ -150,6 +150,7 @@ struct BaseMicroserviceConfigs {
  * @brief 
  * 
  */
+template <typename InType>
 class Microservice {
 public:
     // Constructor that loads a struct args
@@ -157,8 +158,14 @@ public:
     ~Microservice();
     // Name Identifier assigned to the microservice in the format of `type_of_msvc-number`.
     // For instance, an object detector could be named `YOLOv5s-01`.
-    // Another example is the 
+    // Another example is the
     std::string msvc_name;
+
+    void SetInQueue(std::queue<InType> *queue) {
+        InQueue = queue;
+    };
+    virtual void Schedule();
+
 protected:
     struct NeighborMicroservice : NeighborMicroserviceConfigs {
         NumQueuesType queueNum;
@@ -173,35 +180,55 @@ protected:
 
     MsvcSLOType msvc_svcLevelObjLatency;
     NumMscvType numUpstreamMicroservices = 0;
-    NumMscvType numShmUpstreamMicroservices = 0;
-    NumMscvType numGRPCUpstreamMicroservices = 0;
-    NumMscvType numQueueUpstreamMicroservices = 0;
-
     NumMscvType numDnstreamMicroservices = 0;
-    NumMscvType numShmDnstreamMicroservices = 0;
-    NumMscvType numGRPCDnstreamMicroservices = 0;
-    NumMscvType numQueueDnstreamMicroservices = 0;
 
     std::vector<NeighborMicroservice> upstreamMicroserviceList;
     std::vector<NeighborMicroservice> dnstreamMicroserviceList;
 
+    std::queue<InType>* InQueue;
+};
 
-    NumQueuesType numGPUOutQueues = 0;
-    NumQueuesType numShmOutQueues = 0;
-    NumQueuesType numCPUOutQueues = 0;
+template <typename InType>
+class GPUDataMicroservice : public Microservice<InType> {
+public:
+    GPUDataMicroservice(const BaseMicroserviceConfigs &configs);
+    ~GPUDataMicroservice();
 
-    NumQueuesType numGPUInQueues = 0;
-    NumQueuesType numShmInQueues = 0;
-    NumQueuesType numCPUInQueues = 0;
+    std::queue<GPUDataRequest>* getOutQueue () {
+        return &OutQueue;
+    }
+    void Schedule() override;
 
-    
-    std::vector<std::queue<GPUDataRequest>> gpuInQueueList;
-    std::vector<std::queue<GPUDataRequest>> gpuOutQueueList;
-    std::vector<std::queue<DataRequest<ShmReqDataType>>> shmInQueueList;
-    std::vector<std::queue<DataRequest<ShmReqDataType>>> shmOutQueueList;
-    std::vector<std::queue<DataRequest<CPUReqDataType>>> cpuInQueueList;
-    std::vector<std::queue<DataRequest<CPUReqDataType>>> cpuOutQueueList;
+protected:
+    std::queue<GPUDataRequest> OutQueue;
+};
 
-    NumQueuesType generateQueue(const QueueType queueType, bool isInQueue);
+template <typename InType>
+class ShMemMicroservice : public Microservice<InType> {
+public:
+    ShMemMicroservice(const BaseMicroserviceConfigs &configs);
+    ~ShMemMicroservice();
 
+    std::queue<DataRequest<ShmReqDataType>>* getOutQueue () {
+        return &OutQueue;
+    }
+    void Schedule() override;
+
+protected:
+    std::queue<DataRequest<ShmReqDataType>> OutQueue;
+};
+
+template <typename InType>
+class SerDataMicroservice : public Microservice<InType> {
+public:
+    SerDataMicroservice(const BaseMicroserviceConfigs &configs);
+    ~SerDataMicroservice();
+
+    std::queue<DataRequest<CPUReqDataType>>* getOutQueue () {
+        return &OutQueue;
+    }
+    void Schedule() override;
+
+protected:
+    std::queue<DataRequest<CPUReqDataType>> OutQueue;
 };
