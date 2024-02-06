@@ -2,68 +2,6 @@
 #include<iostream>
 #include<opencv2/opencv.hpp>
 
-/**
- * @brief 
- * 
- * @param queueType 
- * @param isInQueue 
- * @return QueueLengthType 
- */
-//template<typename InType>
-//NumQueuesType GPUDataMicroservice<InType>::generateQueue(const QueueType queueType, bool isInQueue) {
-//    QueueLengthType queueNum = -1;
-//    if (isInQueue) {
-//        std::queue<InType> newQueue;
-//        numGPUInQueues++;
-//        InQueue = newQueue;
-//        queueNum += 1;
-//    } else {
-//        std::queue<GPUDataRequest> newQueue;
-//        numGPUOutQueues++;
-//        OutQueue = newQueue;
-//        queueNum = OutQueue.size() - 1;
-//    }
-//    return queueNum;
-//}
-//
-//template<typename InType>
-//NumQueuesType ShMemMicroservice<ShmReqDataType>::generateQueue(const QueueType queueType, bool isInQueue) {
-//    QueueLengthType queueNum = -1;
-//    if (isInQueue) {
-//        std::queue<InType> newQueue;
-//        numGPUInQueues++;
-//        InQueue = newQueue;
-//        queueNum += 1;
-//    } else {
-//        std::queue<DataRequest<ShmReqDataType>> newQueue;
-//        numGPUOutQueues++;
-//        OutQueue = newQueue;
-//        queueNum = OutQueue.size() - 1;
-//    }
-//    return queueNum;
-//}
-//
-//template<typename InType>
-//NumQueuesType SerDataMicroservice<InType>::generateQueue(const QueueType queueType, bool isInQueue) {
-//    QueueLengthType queueNum = -1;
-//    std::queue<DataRequest<CPUReqDataType>> *newQueue;
-//    const cv::dnn::dnn4_v20230620::MatShape size = {1, 3, 640, 640};
-//    cv::Mat mat = cv::Mat(size, CV_32F, 3);
-//    ClockType time = 1;
-//    DataRequest<CPUReqDataType> req = DataRequest<CPUReqDataType>(time, 1, size, "", mat);
-//    newQueue->emplace(req);
-//    if (isInQueue) {
-//        numGPUInQueues++;
-//        InQueue = *newQueue;
-//        queueNum += 1;
-//    } else {
-//        numGPUOutQueues++;
-//        OutQueue = *newQueue;
-//        queueNum = OutQueue.size() - 1;
-//    }
-//    return queueNum;
-//}
-
 template<typename InType>
 Microservice<InType>::Microservice(const BaseMicroserviceConfigs &configs) {
     msvc_name = configs.msvc_name;
@@ -120,19 +58,13 @@ Microservice<InType>::Microservice(const BaseMicroserviceConfigs &configs) {
 template<typename InType>
 GPUDataMicroservice<InType>::GPUDataMicroservice(const BaseMicroserviceConfigs &configs)
         :Microservice<InType>(configs) {
-    OutQueue = std::queue<GPUDataRequest>();
-}
-
-template<typename InType>
-ShMemMicroservice<InType>::ShMemMicroservice(const BaseMicroserviceConfigs &configs)
-        :Microservice<InType>(configs) {
-    OutQueue = std::queue<DataRequest<ShmReqDataType>>();
+    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>;
 }
 
 template<typename InType>
 SerDataMicroservice<InType>::SerDataMicroservice(const BaseMicroserviceConfigs &configs)
         :Microservice<InType>(configs) {
-    OutQueue = std::queue<DataRequest<CPUReqDataType>>();
+    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>>();
 }
 
 template<typename InType>
@@ -154,18 +86,7 @@ void GPUDataMicroservice<InType>::Schedule() {
     InType data = Microservice<InType>::InQueue->front();
     Microservice<InType>::InQueue->pop();
     // process data
-    OutQueue.emplace(data);
-}
-
-template<typename InType>
-void ShMemMicroservice<InType>::Schedule() {
-    if (Microservice<InType>::InQueue->empty()) {
-        return;
-    }
-    InType data = Microservice<InType>::InQueue->front();
-    Microservice<InType>::InQueue->pop();
-    // process data
-    OutQueue.emplace(data);
+    OutQueue->emplace(data);
 }
 
 template<typename InType>
@@ -176,6 +97,6 @@ void SerDataMicroservice<InType>::Schedule() {
     InType data = Microservice<InType>::InQueue->front();
     Microservice<InType>::InQueue->pop();
     // process data
-    OutQueue.emplace(data);
+    OutQueue->emplace(data);
 }
 
