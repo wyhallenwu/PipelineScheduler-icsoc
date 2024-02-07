@@ -1,0 +1,15 @@
+@PACKAGE_INIT@
+
+# Include the exported CMake file
+get_filename_component(baseprocessors_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+
+# This macro enables usage of find_dependency().
+# https://cmake.org/cmake/help/v3.11/module/CMakeFindDependencyMacro.html
+include(CMakeFindDependencyMacro)
+
+
+if(NOT TARGET baseprocessors::baseprocessors)
+    include("${baseprocessors_CMAKE_DIR}/baseprocessors-targets.cmake")
+endif()
+
+check_required_components(baseprocessors)
