@@ -132,6 +132,7 @@ enum class CommMethod {
  */
 enum class QueueType {
     localGPUDataQueue,
+    localCPUDataQueue,
     gpuDataQueue,
     shmDataQueue,
     cpuDataQueue,
@@ -300,4 +301,23 @@ public:
 
 protected:
     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> OutQueue;
+};
+
+template <typename InType>
+class DualLocalDataMicroservice : public Microservice<InType> {
+public:
+    DualLocalDataMicroservice(const BaseMicroserviceConfigs &configs);
+    ~LocalCPUDataMicroservice();
+
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getGPUOutQueue () {
+        return &LocalGPUOutQueue;
+    }
+    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getGPUOutQueue () {
+        return &LocalCPUOutQueue;
+    }
+    void Schedule() override;
+
+protected:
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> LocalGPUOutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> LocalCPUOutQueue;
 };

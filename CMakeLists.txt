@@ -47,6 +47,7 @@ find_package(OpenCV REQUIRED)
 
 
 add_subdirectory(libs/trtengine)
+add_subdirectory(libs/microservice)
 
 add_library(PipePlusPlus SHARED
         src/main.cpp)
