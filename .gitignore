@@ -17,11 +17,10 @@ __pycache__/
 .idea
 build
 runs
-tensorrt-cpp-api
-face-recognition-cpp-tensorrt
-face-recognition
-cmake-test
-
+tensorrt-cpp-api/
+face-recognition-cpp-tensorrt/
+face-recognition/
+cmake-test/
 # files
 
 ## videos

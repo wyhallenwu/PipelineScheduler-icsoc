@@ -228,6 +228,8 @@ protected:
     std::vector<NeighborMicroservice> dnstreamMicroserviceList;
 
     ThreadSafeFixSizedQueue<InType>* InQueue;
+
+    virtual bool isTimeToBatch();    
 };
 
 template <typename InType>
@@ -294,17 +296,17 @@ template <typename InType>
 class DualLocalDataMicroservice : public Microservice<InType> {
 public:
     DualLocalDataMicroservice(const BaseMicroserviceConfigs &configs);
-    ~LocalCPUDataMicroservice();
+    ~DualLocalDataMicroservice();
 
     ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getGPUOutQueue () {
-        return &LocalGPUOutQueue;
+        return LocalGPUOutQueue;
     }
-    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getGPUOutQueue () {
-        return &LocalCPUOutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getCPUOutQueue () {
+        return LocalCPUOutQueue;
     }
     void Schedule() override;
 
 protected:
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> LocalGPUOutQueue;
-    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> LocalCPUOutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *LocalGPUOutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *LocalCPUOutQueue;
 };
