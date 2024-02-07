@@ -6,6 +6,8 @@
 #include <opencv4/opencv2/opencv.hpp>
 #include <mutex>
 #include <condition_variable>
+#include <iostream>
+#include <opencv2/opencv.hpp>
 
 typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
@@ -14,9 +16,9 @@ typedef uint16_t NumMscvType;
 typedef cv::Mat CPUReqDataType;
 typedef std::string ShmReqDataType;
 //typedef std::chrono::high_resolution_clock::time_point ClockType;
-typedef uint16_t ClockType;
+typedef int64_t ClockType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
-typedef char * GPUReqDataType;
+typedef const char * GPUReqDataType;
 typedef std::vector<int32_t> RequestShapeType;
 typedef std::vector<cv::cuda::GpuMat> LocalGPUDataType;
 typedef std::vector<cv::Mat> LocalCPUDataType;
@@ -201,7 +203,7 @@ public:
     // Another example is the
     std::string msvc_name;
 
-    void SetInQueue(ThreadSafeFixSizedQueue<InType> *queue) {
+    virtual void SetInQueue(ThreadSafeFixSizedQueue<InType> *queue) {
         InQueue = queue;
     };
     virtual void Schedule();
@@ -234,28 +236,13 @@ public:
     GPUDataMicroservice(const BaseMicroserviceConfigs &configs);
     ~GPUDataMicroservice();
 
-    ThreadSafeFixSizedQueue<GPUDataRequest>* getOutQueue () {
-        return &OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getOutQueue () {
+        return OutQueue;
     }
     void Schedule() override;
 
 protected:
-    ThreadSafeFixSizedQueue<GPUDataRequest> OutQueue;
-};
-
-template <typename InType>
-class ShMemMicroservice : public Microservice<InType> {
-public:
-    ShMemMicroservice(const BaseMicroserviceConfigs &configs);
-    ~ShMemMicroservice();
-
-    ThreadSafeFixSizedQueue<DataRequest<ShmReqDataType>>* getOutQueue () {
-        return &OutQueue;
-    }
-    void Schedule() override;
-
-protected:
-    ThreadSafeFixSizedQueue<DataRequest<ShmReqDataType>> OutQueue;
+    static ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *OutQueue;
 };
 
 template <typename InType>
@@ -265,12 +252,12 @@ public:
     ~SerDataMicroservice();
 
     ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>>* getOutQueue () {
-        return &OutQueue;
+        return OutQueue;
     }
     void Schedule() override;
 
 protected:
-    ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>> OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>> *OutQueue;
 };
 
 template <typename InType>
@@ -280,12 +267,12 @@ public:
     ~LocalGPUDataMicroservice();
 
     ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getOutQueue () {
-        return &OutQueue;
+        return OutQueue;
     }
     void Schedule() override;
 
 protected:
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *OutQueue;
 };
 
 template <typename InType>
@@ -295,12 +282,12 @@ public:
     ~LocalCPUDataMicroservice();
 
     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getOutQueue () {
-        return &OutQueue;
+        return OutQueue;
     }
     void Schedule() override;
 
 protected:
-    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *OutQueue;
 };
 
 template <typename InType>
