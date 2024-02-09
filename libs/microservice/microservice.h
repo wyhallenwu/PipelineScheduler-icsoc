@@ -156,6 +156,13 @@ struct NeighborMicroserviceConfigs {
     QueueType queueType;
     //
     QueueLengthType maxQueueSize;
+    // For a Downstream Microservice, this is the data class (defined by the current microservice's model) to be sent this neighbor.
+    // For instance, if the model is trained on coco and this neighbor microservice expects coco human, then the value is `0`.
+    // Value `-1` denotes all classes.
+    // Value `-2` denotes Upstream Microservice.
+    uint16_t classOfInterest;
+    // The shape of data this neighbor microservice expects from the current microservice.
+    RequestShapeType expectedShape;
 };
 
 /**
