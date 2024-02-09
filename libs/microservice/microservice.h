@@ -218,25 +218,29 @@ public:
 protected:
     struct NeighborMicroservice : NeighborMicroserviceConfigs {
         NumQueuesType queueNum;
-        NeighborMicroservice(const NeighborMicroserviceConfigs& configs) {
-            name = configs.name;
-            commMethod = configs.commMethod;
-            link = configs.link;
-            queueType = configs.queueType;
-            maxQueueSize = configs.maxQueueSize;
-        }
+        NeighborMicroservice(const NeighborMicroserviceConfigs& configs, NumQueuesType queueNum) 
+            :NeighborMicroserviceConfigs(configs), 
+             queueNum(queueNum) {}
     };
 
     MsvcSLOType msvc_svcLevelObjLatency;
+    MsvcSLOType msvc_interReqTime;
+
+    uint32_t msvc_inReqCount = 0;
+    uint32_t msvc_outReqCount = 0;
+
+
     NumMscvType numUpstreamMicroservices = 0;
     NumMscvType numDnstreamMicroservices = 0;
 
     std::vector<NeighborMicroservice> upstreamMicroserviceList;
     std::vector<NeighborMicroservice> dnstreamMicroserviceList;
+    std::vector<std::tuple<uint32_t, uint32_t>> classToDnstreamMap;
 
     ThreadSafeFixSizedQueue<InType>* InQueue;
 
-    virtual bool isTimeToBatch();    
+    virtual bool isTimeToBatch();
+    virtual bool checkReqEligibility();
 };
 
 template <typename InType>
@@ -284,36 +288,36 @@ protected:
     ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *OutQueue;
 };
 
-template <typename InType>
-class LocalCPUDataMicroservice : public Microservice<InType> {
-public:
-    LocalCPUDataMicroservice(const BaseMicroserviceConfigs &configs);
-    ~LocalCPUDataMicroservice();
+// template <typename InType>
+// class LocalCPUDataMicroservice : public Microservice<InType> {
+// public:
+//     LocalCPUDataMicroservice(const BaseMicroserviceConfigs &configs);
+//     ~LocalCPUDataMicroservice();
 
-    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getOutQueue () {
-        return OutQueue;
-    }
-    void Schedule() override;
+//     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getOutQueue () {
+//         return OutQueue;
+//     }
+//     void Schedule() override;
 
-protected:
-    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *OutQueue;
-};
+// protected:
+//     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *OutQueue;
+// };
 
-template <typename InType>
-class DualLocalDataMicroservice : public Microservice<InType> {
-public:
-    DualLocalDataMicroservice(const BaseMicroserviceConfigs &configs);
-    ~DualLocalDataMicroservice();
+// template <typename InType>
+// class DualLocalDataMicroservice : public Microservice<InType> {
+// public:
+//     DualLocalDataMicroservice(const BaseMicroserviceConfigs &configs);
+//     ~DualLocalDataMicroservice();
 
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getGPUOutQueue () {
-        return LocalGPUOutQueue;
-    }
-    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getCPUOutQueue () {
-        return LocalCPUOutQueue;
-    }
-    void Schedule() override;
+//     ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getGPUOutQueue () {
+//         return LocalGPUOutQueue;
+//     }
+//     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getCPUOutQueue () {
+//         return LocalCPUOutQueue;
+//     }
+//     void Schedule() override;
 
-protected:
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *LocalGPUOutQueue;
-    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *LocalCPUOutQueue;
-};
+// protected:
+//     ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *LocalGPUOutQueue;
+//     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *LocalCPUOutQueue;
+// };
