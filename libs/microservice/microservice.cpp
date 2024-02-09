@@ -15,8 +15,11 @@ Microservice<InType>::Microservice(const BaseMicroserviceConfigs &configs) {
 
     std::list<NeighborMicroserviceConfigs>::const_iterator it;
     for (it = configs.dnstreamMicroservices.begin(); it != configs.upstreamMicroservices.end(); ++it) {
+        // Create downstream neigbor config and push that into a list for information later
+        // Local microservice supposedly has only 1 downstream but `sender` microservices could have multiple.
         NeighborMicroservice dnStreamMsvc = NeighborMicroservice(configs, numDnstreamMicroservices);
         dnstreamMicroserviceList.emplace_back(dnStreamMsvc);
+        // This maps the data class to be send to this downstream microservice and the microservice's index.
         classToDnstreamMap.emplace_back({dnStreamMsvc.classOfInterest, numDnstreamMicroservices++});
     }
 
