@@ -31,7 +31,13 @@ Microservice<InType>::Microservice(const BaseMicroserviceConfigs &configs) {
 template<typename InType>
 GPUDataMicroservice<InType>::GPUDataMicroservice(const BaseMicroserviceConfigs &configs)
         :Microservice<InType>(configs) {
-    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>;
+    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<GPUReqDataType>>();
+}
+
+template<typename InType>
+LocalGPUDataMicroservice<InType>::LocalGPUDataMicroservice(const BaseMicroserviceConfigs &configs)
+        :Microservice<InType>(configs) {
+    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>();
 }
 
 template<typename InType>
@@ -73,3 +79,13 @@ void SerDataMicroservice<InType>::Schedule() {
     OutQueue->emplace(data);
 }
 
+template<typename InType>
+void LocalGPUDataMicroservice<InType>::Schedule() {
+    if (Microservice<InType>::InQueue->empty()) {
+        return;
+    }
+    InType data = Microservice<InType>::InQueue->front();
+    Microservice<InType>::InQueue->pop();
+    // process data
+    OutQueue->emplace(data);
+}
