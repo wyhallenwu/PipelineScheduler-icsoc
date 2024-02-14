@@ -179,7 +179,7 @@ struct NeighborMicroserviceConfigs {
     // For instance, if the model is trained on coco and this neighbor microservice expects coco human, then the value is `0`.
     // Value `-1` denotes all classes.
     // Value `-2` denotes Upstream Microservice.
-    uint16_t classOfInterest;
+    int16_t classOfInterest;
     // The shape of data this neighbor microservice expects from the current microservice.
     RequestShapeType expectedShape;
 };
@@ -206,7 +206,7 @@ struct BaseMicroserviceConfigs {
     // The acceptable latency for each individual request processed by this microservice, in `ms`
     MsvcSLOType msvc_svcLevelObjLatency;
     // Shape of data produced by this microservice
-    std::vector<uint16_t> msvc_dataShape;
+    RequestShapeType msvc_dataShape;
     // List of upstream microservices
     std::list<NeighborMicroserviceConfigs> upstreamMicroservices;
     std::list<NeighborMicroserviceConfigs> dnstreamMicroservices;
