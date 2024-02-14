@@ -28,6 +28,17 @@ Microservice<InType>::Microservice(const BaseMicroserviceConfigs &configs) {
     }
 }
 
+/**
+ * @brief 
+ * 
+ * @tparam InType 
+ * @param lastInterReqDuration 
+ */
+template<typename InType>
+void Microservice<InType>::updateReqRate(ClockTypeTemp lastInterReqDuration) {
+    msvc_interReqTime = 0.0001;
+}
+
 template<typename InType>
 GPUDataMicroservice<InType>::GPUDataMicroservice(const BaseMicroserviceConfigs &configs)
         :Microservice<InType>(configs) {

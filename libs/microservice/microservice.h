@@ -15,7 +15,7 @@ typedef uint32_t MsvcSLOType;
 typedef uint16_t NumMscvType;
 typedef cv::Mat CPUReqDataType;
 typedef std::string ShmReqDataType;
-//typedef std::chrono::high_resolution_clock::time_point ClockType;
+typedef std::chrono::high_resolution_clock::time_point ClockTypeTemp;
 typedef int64_t ClockType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
 typedef const char * GPUReqDataType;
@@ -53,6 +53,25 @@ public:
 
     int32_t size() {
         return queue.size();
+    }
+};
+
+template <typename T, int MaxSize = 100>
+class FixSizedQueue {
+private:
+    std::queue<T> queue;
+public:
+    void emplace(T elem) {
+        if (queue.size() == MaxSize) {
+            queue.pop();
+        }
+        queue.emplace(elem);
+    }
+
+    T pop() {
+        T out = queue.front();
+        queue.pop();
+        return out;
     }
 };
 
@@ -216,6 +235,13 @@ public:
     virtual void Schedule();
 
 protected:
+    // Used to signal to thread when not to run and to bring thread to a natural end.
+    bool RUN_THREADS = false;
+
+    /**
+     * @brief 
+     * 
+     */
     struct NeighborMicroservice : NeighborMicroserviceConfigs {
         NumQueuesType queueNum;
         NeighborMicroservice(const NeighborMicroserviceConfigs& configs, NumQueuesType queueNum) 
@@ -223,24 +249,40 @@ protected:
              queueNum(queueNum) {}
     };
 
+    //
     MsvcSLOType msvc_svcLevelObjLatency;
+    //
     MsvcSLOType msvc_interReqTime;
 
+    //
     uint32_t msvc_inReqCount = 0;
+    //
     uint32_t msvc_outReqCount = 0;
 
-
+    //
     NumMscvType numUpstreamMicroservices = 0;
+    //
     NumMscvType numDnstreamMicroservices = 0;
 
+    //
+    RequestShapeType msvc_outReqShape;
+
+    //
     std::vector<NeighborMicroservice> upstreamMicroserviceList;
+    //
     std::vector<NeighborMicroservice> dnstreamMicroserviceList;
+    //
     std::vector<std::tuple<uint32_t, uint32_t>> classToDnstreamMap;
 
+    //
     ThreadSafeFixSizedQueue<InType>* InQueue;
 
+    //
     virtual bool isTimeToBatch();
-    virtual bool checkReqEligibility();
+    //
+    virtual bool checkReqEligibility(ClockTypeTemp currReq_genTime);
+    //
+    virtual void updateReqRate(ClockTypeTemp lastInterReqDuration);
 };
 
 template <typename InType>
