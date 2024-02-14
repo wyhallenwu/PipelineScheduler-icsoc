@@ -27,11 +27,23 @@ template<typename InType>
 class Sender : public Microservice<InType> {
 public:
     Sender(const BaseMicroserviceConfigs &configs, const std::string &target_str) : Microservice<InType>(configs) {
-        stub_ = DataTransferService::NewStub(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
+        stubs = std::vector<std::unique_ptr<DataTransferService::Stub>>();
+        stubs.push_back(DataTransferService::NewStub(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())));
+        multipleStubs = false;
     }
     ~Sender() {}
 
 protected:
+    static inline std::mt19937& generator() {
+        // the generator will only be seeded once (per thread) since it's static
+        static thread_local std::mt19937 gen(std::random_device{}());
+        return gen;
+    }
+    static int rand_int(int min, int max) {
+        std::uniform_int_distribution<int> dist(min, max);
+        return dist(generator());
+    }
+
     static std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
                                   SimpleConfirm &reply, Status &status) {
         rpc->Finish(&reply, &status, (void*) 1);
@@ -48,7 +60,8 @@ protected:
         }
     }
 
-    std::unique_ptr<DataTransferService::Stub> stub_;
+    std::vector<std::unique_ptr<DataTransferService::Stub>> stubs;
+    bool multipleStubs;
 };
 
 class GPUSender : public Sender<DataRequest<LocalGPUDataType>> {
@@ -73,28 +86,24 @@ public:
         ClientContext context;
         Status status;
 
-        auto tag = (void*)(uintptr_t)(rand_tag(0, 1000));
+        auto tag = (void*)(uintptr_t)(rand_int(0, 1000));
         while (tagToGpuPointer.find(tag) != tagToGpuPointer.end()) {
-            tag = (void*)(uintptr_t)(rand_tag(0, 1000));
+            tag = (void*)(uintptr_t)(rand_int(0, 1000));
         }
-        std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
-                stub_->AsyncGpuPointerTransfer(&context, request, &cq));
         tagToGpuPointer[tag] = pointer;
+
+        if (!multipleStubs) {
+            std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
+                    stubs[0]->AsyncGpuPointerTransfer(&context, request, &cq));
+            return HandleRpcs(rpc, cq, reply, status, tag);
+        }
+
+        std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
+                stubs[rand_int(0, stubs.size()-1)]->AsyncGpuPointerTransfer(&context, request, &cq));
         return HandleRpcs(rpc, cq, reply, status, tag);
     }
 
 private:
-    static inline std::mt19937& generator() {
-        // the generator will only be seeded once (per thread) since it's static
-        static thread_local std::mt19937 gen(std::random_device{}());
-        return gen;
-    }
-    template<typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
-    static T rand_tag(T min, T max) {
-        std::uniform_int_distribution<T> dist(min, max);
-        return dist(generator());
-    }
-
     static std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
                                   SimpleConfirm &reply, Status &status, void* tag) {
         rpc->Finish(&reply, &status, tag);
@@ -137,8 +146,14 @@ public:
         ClientContext context;
         Status status;
 
+        if (!multipleStubs) {
+            std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
+                    stubs[0]->AsyncSharedMemTransfer(&context, request, &cq));
+            return HandleRpcs(rpc, cq, reply, status);
+        }
+
         std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
-                stub_->AsyncSharedMemTransfer(&context, request, &cq));
+                stubs[rand_int(0, stubs.size()-1)]->AsyncSharedMemTransfer(&context, request, &cq));
         return HandleRpcs(rpc, cq, reply, status);
     }
 };
@@ -165,8 +180,14 @@ public:
         ClientContext context;
         Status status;
 
+        if (!multipleStubs) {
+            std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
+                    stubs[0]->AsyncSerializedDataTransfer(&context, request, &cq));
+            return HandleRpcs(rpc, cq, reply, status);
+        }
+
         std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
-                stub_->AsyncSerializedDataTransfer(&context, request, &cq));
+                stubs[rand_int(0, stubs.size()-1)]->AsyncSerializedDataTransfer(&context, request, &cq));
         return HandleRpcs(rpc, cq, reply, status);
     }
 };

@@ -21,6 +21,7 @@ tensorrt-cpp-api/
 face-recognition-cpp-tensorrt/
 face-recognition/
 cmake-test/
+cmake-build-debug/
 # files
 
 ## videos
