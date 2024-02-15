@@ -42,7 +42,7 @@ void Microservice<InType>::updateReqRate(ClockTypeTemp lastInterReqDuration) {
 template<typename InType>
 GPUDataMicroservice<InType>::GPUDataMicroservice(const BaseMicroserviceConfigs &configs)
         :Microservice<InType>(configs) {
-    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<GPUReqDataType>>();
+    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>();
 }
 
 template<typename InType>
@@ -66,37 +66,4 @@ void Microservice<InType>::Schedule() {
     InQueue->pop();
     // process data
     // No out queue as this is only used for final job
-}
-
-template<typename InType>
-void GPUDataMicroservice<InType>::Schedule() {
-    if (Microservice<InType>::InQueue->empty()) {
-        return;
-    }
-    InType data = Microservice<InType>::InQueue->front();
-    Microservice<InType>::InQueue->pop();
-    // process data
-    OutQueue->emplace(data);
-}
-
-template<typename InType>
-void SerDataMicroservice<InType>::Schedule() {
-    if (Microservice<InType>::InQueue->empty()) {
-        return;
-    }
-    InType data = Microservice<InType>::InQueue->front();
-    Microservice<InType>::InQueue->pop();
-    // process data
-    OutQueue->emplace(data);
-}
-
-template<typename InType>
-void LocalGPUDataMicroservice<InType>::Schedule() {
-    if (Microservice<InType>::InQueue->empty()) {
-        return;
-    }
-    InType data = Microservice<InType>::InQueue->front();
-    Microservice<InType>::InQueue->pop();
-    // process data
-    OutQueue->emplace(data);
 }

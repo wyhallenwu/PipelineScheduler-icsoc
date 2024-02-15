@@ -20,10 +20,14 @@ public:
     void Schedule() {
         DataRequest<LocalCPUDataType> req = InQueue->pop();
         // copy data to gpu using cuda
-        auto gpu_image = cv::cuda::GpuMat(req.req_dataShape[0], req.req_dataShape[1], CV_8UC3);
-        gpu_image.upload(req.req_data);
+        std::vector<Data<LocalGPUDataType>> elements = {};
+        for (auto el: req.req_data) {
+            auto gpu_image = cv::cuda::GpuMat(req.req_dataShape[0], req.req_dataShape[1], CV_8UC3);
+            gpu_image.upload(el.content);
+            elements.push_back({req.req_dataShape, gpu_image});
+        }
         OutQueue->emplace(
-                {req.req_origGenTime, req.req_e2eSLOLatency, req.req_dataShape, req.req_travelPath, {gpu_image}});
+                {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, elements});
     }
 
     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *getInQueue() {
@@ -87,14 +91,15 @@ private:
             } else if (status_ == PROCESS) {
                 new GpuPointerRequestHandler(service_, cq_, LoadingQueue);
 
+                std::vector<Data<LocalGPUDataType>> elements = {};
                 for (const auto& el : *request_.mutable_elements()) {
                     auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3,
                                                       (void *) (&el.data()));
-                    DataRequest<LocalGPUDataType> req = {request_.timestamp(), request_.slo(),
-                                                         {el.width(), el.height()}, request_.path(),
-                                                         {gpu_image}};
-                    OutQueue->emplace(req);
+                    elements.push_back({{el.width(), el.height()}, gpu_image});
                 }
+                DataRequest<LocalGPUDataType> req = {request_.timestamp(), request_.slo(),
+                                                     request_.path(), elements};
+                OutQueue->emplace(req);
 
                 status_ = FINISH;
                 responder_.Finish(reply_, Status::OK, this);
@@ -131,18 +136,19 @@ private:
             } else if (status_ == PROCESS) {
                 new SharedMemoryRequestHandler(service_, cq_, LoadingQueue);
 
+                std::vector<Data<LocalCPUDataType>> elements = {};
                 for (const auto& el : *request_.mutable_elements()) {
                     auto name = el.name().c_str();
                     boost::interprocess::shared_memory_object shm{open_only, name, read_only};
                     boost::interprocess::mapped_region region{shm, read_only};
                     auto image = static_cast<cv::Mat *>(region.get_address());
+                    elements.push_back({{el.width(), el.height()}, *image});
 
-                    DataRequest<LocalCPUDataType> req = {request_.timestamp(), request_.slo(),
-                                                         {el.width(), el.height()}, request_.path(),
-                                                         *image};
-                    LoadingQueue->emplace(req);
                     boost::interprocess::shared_memory_object::remove(name);
                 }
+                DataRequest<LocalCPUDataType> req = {request_.timestamp(), request_.slo(),
+                                                     request_.path(), elements};
+                LoadingQueue->emplace(req);
 
                 status_ = FINISH;
                 responder_.Finish(reply_, Status::OK, this);
@@ -181,6 +187,7 @@ private:
             } else if (status_ == PROCESS) {
                 new SerializedDataRequestHandler(service_, cq_, LoadingQueue);
 
+                std::vector<Data<LocalCPUDataType>> elements = {};
                 for (const auto& el : *request_.mutable_elements()) {
                     uint length = el.data().length();
                     if (length != el.datalen()) {
@@ -188,11 +195,11 @@ private:
                     }
                     cv::Mat image = cv::Mat(el.height(), el.width(), CV_8UC3,
                                             const_cast<char *>(el.data().c_str())).clone();
-
-                    DataRequest<LocalCPUDataType> req = {request_.timestamp(), request_.slo(),
-                                                         {el.width(), el.height()}, request_.path(), image};
-                    LoadingQueue->emplace(req);
+                    elements.push_back({{el.width(), el.height()}, image});
                 }
+                DataRequest<LocalCPUDataType> req = {request_.timestamp(), request_.slo(),
+                                                    request_.path(), elements};
+                LoadingQueue->emplace(req);
 
                 status_ = FINISH;
                 responder_.Finish(reply_, Status::OK, this);

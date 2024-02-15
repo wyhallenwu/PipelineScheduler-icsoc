@@ -29,8 +29,8 @@ public:
                 return;
             }
         }
-        DataRequest<CPUReqDataType> req = {time, msvc_svcLevelObjLatency,
-                                           {frame.cols, frame.rows}, msvc_name, frame};
+        DataRequest<CPUReqDataType> req = {time, msvc_svcLevelObjLatency, msvc_name,
+                                           {Data<CPUReqDataType>{{frame.cols, frame.rows}, frame}}};
         OutQueue->emplace(req);
     };
 

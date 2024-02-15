@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <utility>
 
 typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
@@ -20,8 +21,8 @@ typedef int64_t ClockType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
 typedef const char * GPUReqDataType;
 typedef std::vector<int32_t> RequestShapeType;
-typedef std::vector<cv::cuda::GpuMat> LocalGPUDataType;
-typedef std::vector<cv::Mat> LocalCPUDataType;
+typedef cv::cuda::GpuMat LocalGPUDataType;
+typedef cv::Mat LocalCPUDataType;
 
 template <typename InType, int MaxSize = 100>
 class ThreadSafeFixSizedQueue {
@@ -94,10 +95,14 @@ struct MetaRequest {
 
     MetaRequest(
         ClockType genTime,
-        MsvcSLOType latency, 
-        RequestShapeType shape,
+        MsvcSLOType latency,
         std::string path
-    ) : req_origGenTime(genTime), req_e2eSLOLatency(latency), req_dataShape(shape), req_travelPath(path) {}
+    ) : req_origGenTime(genTime), req_e2eSLOLatency(latency), req_travelPath(std::move(path)) {}
+};
+
+struct GPUData {
+    RequestShapeType shape;
+    GPUReqDataType data;
 };
 
 /**
@@ -107,17 +112,21 @@ struct MetaRequest {
 struct GPUDataRequest : MetaRequest {
     // The data of that this request carries.
     // There are several types of data a request can carry.
-    GPUReqDataType req_data;
+    std::vector<GPUData> req_data;
     GPUDataRequest(
         ClockType genTime,
         MsvcSLOType latency,
-        RequestShapeType shape,
         std::string path,
-        GPUReqDataType data
-    ) : MetaRequest(genTime, latency, shape, path), req_data(data) {
+        std::vector<GPUData> data
+    ) : MetaRequest(genTime, latency, std::move(path)), req_data(std::move(data)) {
     };
 };
 
+template <typename Type>
+struct Data {
+    RequestShapeType shape;
+    Type content;
+};
 /**
  * @brief 
  * 
@@ -125,15 +134,14 @@ struct GPUDataRequest : MetaRequest {
  */
 template <typename DataType>
 struct DataRequest : MetaRequest {
-    DataType req_data;
+    std::vector<Data<DataType>> req_data;
 
     DataRequest<DataType>(
         ClockType genTime,
         MsvcSLOType latency,
-        RequestShapeType shape,
         std::string path,
-        DataType data
-    ) : MetaRequest(genTime, latency, shape, path), req_data(data) {};
+        std::vector<Data<DataType>> data
+    ) : MetaRequest(genTime, latency, path), req_data(data) {};
 };
 
 /**
@@ -294,7 +302,6 @@ public:
     ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getOutQueue () {
         return OutQueue;
     }
-    void Schedule() override;
 
 protected:
     static ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *OutQueue;
@@ -309,7 +316,6 @@ public:
     ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>>* getOutQueue () {
         return OutQueue;
     }
-    void Schedule() override;
 
 protected:
     ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>> *OutQueue;
@@ -324,7 +330,6 @@ public:
     ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getOutQueue () {
         return OutQueue;
     }
-    void Schedule() override;
 
 protected:
     ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *OutQueue;
