@@ -1,24 +1,11 @@
 #include "absl/strings/str_format.h"
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
-#include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <boost/interprocess/mapped_region.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
-#include "pipelinescheduler.grpc.pb.h"
-#include <microservice.h>
 
-using grpc::Server;
-using grpc::ServerBuilder;
-using grpc::ServerContext;
-using grpc::ServerCompletionQueue;
-using grpc::Status;
-using boost::interprocess::read_only;
-using boost::interprocess::open_only;
-using pipelinescheduler::DataTransferService;
-using pipelinescheduler::GpuPointerPayload;
-using pipelinescheduler::SharedMemPayload;
-using pipelinescheduler::SerializedDataPayload;
-using pipelinescheduler::SimpleConfirm;
+#include "microservice.h"
+#include "sender.h"
 
 class GPULoader : public Microservice<DataRequest<LocalCPUDataType>> {
 public:
@@ -100,12 +87,14 @@ private:
             } else if (status_ == PROCESS) {
                 new GpuPointerRequestHandler(service_, cq_, LoadingQueue);
 
-                auto gpu_image = cv::cuda::GpuMat(request_.height(), request_.width(), CV_8UC3,
-                                                  (void *) (&request_.pointer()));
-                DataRequest<LocalGPUDataType> req = {request_.timestamp(), request_.slo(),
-                                                     {request_.width(), request_.height()}, request_.path(),
-                                                     {gpu_image}};
-                OutQueue->emplace(req);
+                for (const auto& el : *request_.mutable_elements()) {
+                    auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3,
+                                                      (void *) (&el.data()));
+                    DataRequest<LocalGPUDataType> req = {request_.timestamp(), request_.slo(),
+                                                         {el.width(), el.height()}, request_.path(),
+                                                         {gpu_image}};
+                    OutQueue->emplace(req);
+                }
 
                 status_ = FINISH;
                 responder_.Finish(reply_, Status::OK, this);
@@ -142,16 +131,18 @@ private:
             } else if (status_ == PROCESS) {
                 new SharedMemoryRequestHandler(service_, cq_, LoadingQueue);
 
-                auto name = request_.name().c_str();
-                boost::interprocess::shared_memory_object shm{open_only, name, read_only};
-                boost::interprocess::mapped_region region{shm, read_only};
-                auto image = static_cast<cv::Mat *>(region.get_address());
+                for (const auto& el : *request_.mutable_elements()) {
+                    auto name = el.name().c_str();
+                    boost::interprocess::shared_memory_object shm{open_only, name, read_only};
+                    boost::interprocess::mapped_region region{shm, read_only};
+                    auto image = static_cast<cv::Mat *>(region.get_address());
 
-                DataRequest<LocalCPUDataType> req = {request_.timestamp(), request_.slo(),
-                                                     {request_.width(), request_.height()}, request_.path(), *image};
-                LoadingQueue->emplace(req);
-
-                boost::interprocess::shared_memory_object::remove(name);
+                    DataRequest<LocalCPUDataType> req = {request_.timestamp(), request_.slo(),
+                                                         {el.width(), el.height()}, request_.path(),
+                                                         *image};
+                    LoadingQueue->emplace(req);
+                    boost::interprocess::shared_memory_object::remove(name);
+                }
 
                 status_ = FINISH;
                 responder_.Finish(reply_, Status::OK, this);
@@ -190,16 +181,18 @@ private:
             } else if (status_ == PROCESS) {
                 new SerializedDataRequestHandler(service_, cq_, LoadingQueue);
 
-                int length = request_.data().length();
-                if (length != request_.datalen()) {
-                    responder_.Finish(reply_, Status(grpc::INVALID_ARGUMENT, "Data length does not match"), this);
-                }
-                cv::Mat image = cv::Mat(request_.height(), request_.width(), CV_8UC3,
-                                        const_cast<char *>(request_.data().c_str())).clone();
+                for (const auto& el : *request_.mutable_elements()) {
+                    uint length = el.data().length();
+                    if (length != el.datalen()) {
+                        responder_.Finish(reply_, Status(grpc::INVALID_ARGUMENT, "Data length does not match"), this);
+                    }
+                    cv::Mat image = cv::Mat(el.height(), el.width(), CV_8UC3,
+                                            const_cast<char *>(el.data().c_str())).clone();
 
-                DataRequest<LocalCPUDataType> req = {request_.timestamp(), request_.slo(),
-                                                     {request_.width(), request_.height()}, request_.path(), image};
-                LoadingQueue->emplace(req);
+                    DataRequest<LocalCPUDataType> req = {request_.timestamp(), request_.slo(),
+                                                         {el.width(), el.height()}, request_.path(), image};
+                    LoadingQueue->emplace(req);
+                }
 
                 status_ = FINISH;
                 responder_.Finish(reply_, Status::OK, this);

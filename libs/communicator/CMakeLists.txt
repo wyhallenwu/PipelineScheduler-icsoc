@@ -25,7 +25,10 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 # Only public header files go here.
-
+set(
+        HEADER_FILES
+        ./sender.h
+)
 # All source files and private header files go here.
 set(
         SOURCE_FILES
@@ -35,6 +38,7 @@ set(
 
 # Here we define the library.
 add_library(communicator
+        ${HEADER_FILES}
         ${SOURCE_FILES})
 
 # We also add an alias definition so that we shadown
