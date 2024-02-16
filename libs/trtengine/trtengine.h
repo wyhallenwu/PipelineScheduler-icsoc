@@ -72,6 +72,7 @@ class Logger : public nvinfer1::ILogger {
 
 /**
  * @brief Engine class for tensorrt model convert and inference
+ * TODO: add type and create an Engine template
  * 
  */
 class Engine {
@@ -98,7 +99,9 @@ public:
     // Input format [input][batch][cv::cuda::GpuMat]
     // Output format [batch][output][feature_vector]
     // bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<std::vector<float>>& outputs);
-    bool runInference(const cv::cuda::GpuMat& inputs, std::vector<cv::cuda::GpuMat>& outputs, const int32_t batchSize);
+    bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<cv::cuda::GpuMat>& outputs, const int32_t batchSize);
+
+    void copyToBuffer(const std::vector<cv::cuda::GpuMat>& inputs, cudaStream_t &inferenceStream);
 
     // Utility method for resizing an image while maintaining the aspect ratio by adding padding to smaller dimension after scaling
     // While letterbox padding normally adds padding to top & bottom, or left & right sides, this implementation only adds padding to the right or bottom side

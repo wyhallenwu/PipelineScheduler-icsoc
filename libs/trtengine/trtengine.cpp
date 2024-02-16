@@ -375,15 +375,64 @@ Engine::~Engine() {
 }
 
 /**
+ * @brief Copy the preprocessed data into TRT buffer to be ready for inference. 
+ * 
+ * @param batch A vector of GpuMat images representing the batched data.
+ * @param inferenceStream 
+ */
+void Engine::copyToBuffer(
+    const std::vector<cv::cuda::GpuMat>& batch,
+    cudaStream_t &inferenceStream
+) {
+    // Number of the batch predefined within the trt engine when built
+    const auto numInputs = m_inputDims.size();
+    // We need to copy batched data to all pre-defined batch
+    for (std::size_t i = 0; i < numInputs; ++i) {
+        /**
+         * @brief Because the pointer to i-th input buffer is of `void *` type, which is
+         * arimathically inoperable, we need a float (later change to a random type T) pointer to point
+         * to the buffer.
+         */
+        float * inputBufferPtr;
+        inputBufferPtr = (float *)&m_buffers[i];
+
+        uint32_t singleDataSize = 1;
+        // Calculating the size of each image in memory.
+        for (uint8_t j = 0; j < 3; ++j) {
+            singleDataSize *= m_inputDims[i].d[j];
+        }
+        /**
+         * @brief Now, we copy all the images in the `batch` vector to the buffer
+         * In the case, where the engine model has more than 1 input, the `batch` vector would look
+         * like batch = {input1.1,input1.2,...,input1.M,...,inputN.1,inputN.2,...,inputN.M}, where
+         * N is batch size and M is the `numInputs`.
+         */
+        for (std::size_t j = i; j < batch.size(); j += numInputs) {
+            const void * dataPtr = batch[j].ptr<void>();
+            void * bufferPtr = (void *) (inputBufferPtr + j * singleDataSize);
+            checkCudaErrorCode(
+                cudaMemcpyAsync(
+                    bufferPtr,
+                    dataPtr,
+                    singleDataSize * sizeof(float),
+                    cudaMemcpyDeviceToDevice,
+                    inferenceStream
+                )
+            );
+        }
+    }
+}
+
+/**
  * @brief Inference function capable of taking varying batch size
  * 
- * @param inputs 
+ * @param batch 
  * @param batchSize 
  * @return true 
  * @return false 
  */
 bool Engine::runInference(
-    const cv::cuda::GpuMat& batch,
+    const std::vector<cv::cuda::GpuMat>& batch,
     std::vector<cv::cuda::GpuMat> &outputs,
     const int32_t batchSize
 ) {
@@ -393,30 +442,33 @@ bool Engine::runInference(
         return false;
     }
 
-    // Create the cuda stream that will be used for inference
+    // Cuda stream that will be used for inference
     cudaStream_t inferenceStream;
     checkCudaErrorCode(cudaStreamCreate(&inferenceStream));
 
     // As we support dynamic batching, we need to reset the shape of the input binding everytime.
     const auto numInputs = m_inputDims.size();
-    // There could be more than one inputs to the inference, and to do inference we need to make sure all the input data
-    // is copied to the allocated buffers
     for (size_t i = 0; i < numInputs; ++i) {
         const auto& engineInputDims = m_inputDims[i];
         nvinfer1::Dims4 inputDims = {batchSize, engineInputDims.d[0], engineInputDims.d[1], engineInputDims.d[2]};
         m_context->setBindingDimensions(i, inputDims);
-        const void *dataPointer = batch.ptr<void>();
-        const int32_t inputMemSize = batchSize * engineInputDims.d[0] * engineInputDims.d[1] * engineInputDims.d[2] * sizeof(float);
-        checkCudaErrorCode(
-            cudaMemcpyAsync(
-                m_buffers[i],
-                dataPointer,
-                inputMemSize,
-                cudaMemcpyDeviceToDevice,
-                inferenceStream
-            )
-        );
+        // const void *dataPointer = batch.ptr<void>();
+        // const int32_t inputMemSize = batchSize * engineInputDims.d[0] * engineInputDims.d[1] * engineInputDims.d[2] * sizeof(float);
+        // checkCudaErrorCode(
+        //     cudaMemcpyAsync(
+        //         m_buffers[i],
+        //         dataPointer,
+        //         inputMemSize,
+        //         cudaMemcpyDeviceToDevice,
+        //         inferenceStream
+        //     )
+        // );
     }
+
+    
+    // There could be more than one inputs to the inference, and to do inference we need to make sure all the input data
+    // is copied to the allocated buffers
+    copyToBuffer(batch, inferenceStream);
 
     // Run Inference
     bool inferenceStatus = m_context->enqueueV2(m_buffers.data(), inferenceStream, nullptr);
