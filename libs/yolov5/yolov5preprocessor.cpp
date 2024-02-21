@@ -16,7 +16,7 @@ void YoloV5Preprocessor<InType>::batchRequests() {
     // The time where the current incoming request arrives
     ClockTypeTemp currReq_recvTime;
     // Buffer memory for each batch
-    LocalGPUDataType batchBuffer;
+    std::vector<LocalGPUReqDataType> batchBuffer;
     
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -40,34 +40,41 @@ void YoloV5Preprocessor<InType>::batchRequests() {
         }
         // Resize the incoming request image the padd with the grey color
         // The resize image will be copied into a reserved buffer
-        batchBuffer.emplace_back(resizePadRightBottom(
-            currReq.req_data,
-            this->msvc_outReqShape[1],
-            this->msvc_outReqShape[2],
-            cv::Scalar(128, 128, 128))
+        batchBuffer.emplace_back(
+            {
+                resizePadRightBottom(
+                    currReq.req_data.content,
+                    this->msvc_outReqShape[1],
+                    this->msvc_outReqShape[2],
+                    cv::Scalar(128, 128, 128)
+                )
+            }
         );
         cudaFree(currReq.req_data.cudaPtr());
         // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
         // Waiting more means there is a higher chance the earliest request in the buffer will be late eventually.
         if (this->isTimeToBatch()) {
             // If true, copy the buffer data into the out queue
-            LocalGPUDataType batchedData(batchBuffer);
-            std::vector<uint32_t> batchDataShape = {
-                this->msvc_onBufferBatchSize,
-                this->msvc_outReqShape[0],
-                this->msvc_outReqShape[1],
-                this->msvc_outReqShape[2]
-            };
-            DataRequest<LocalGPUDataType> outReq(
+            std::vector<Data<LocalGPUReqDataType>> batchedData;
+            for (std::size_t i = 0; i < batchBuffer.size(); ++i) {
+                batchedData.emplace_back(
+                    {
+                        this->msvc_outReqShape,
+                        batchBuffer[i]
+                    }
+                );
+            }
+            
+            DataRequest<LocalGPUReqDataType> outReq(
                 std::chrono::high_resolution_clock::now(),
                 currReq.req_e2eSLOLatency,
-                batchDataShape,
                 "",
                 batchedData
             );
             this->OutQueue.emplace(outReq);
             this->mscv_onBufferBatchSize = 0;
         }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }
 }
