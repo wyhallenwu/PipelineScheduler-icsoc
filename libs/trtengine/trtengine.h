@@ -102,6 +102,7 @@ public:
     bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<cv::cuda::GpuMat>& outputs, const int32_t batchSize);
 
     void copyToBuffer(const std::vector<cv::cuda::GpuMat>& inputs, cudaStream_t &inferenceStream);
+    void copyFromBuffer(std::vector<cv::cuda::GpuMat>& outputs, const uint16_t batchSize, cudaStream_t &inferenceStream);
 
     // Utility method for resizing an image while maintaining the aspect ratio by adding padding to smaller dimension after scaling
     // While letterbox padding normally adds padding to top & bottom, or left & right sides, this implementation only adds padding to the right or bottom side

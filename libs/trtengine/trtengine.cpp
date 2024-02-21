@@ -434,6 +434,43 @@ void Engine::copyToBuffer(
 }
 
 /**
+ * @brief After inference, we need to copy the data residing in the output buffers to 
+ * 
+ * @param outputs 
+ * @param inferenceStream 
+ */
+void Engine::copyFromBuffer(
+    std::vector<cv::cuda::GpuMat>& outputs,
+    const uint16_t batchSize,
+    cudaStream_t &inferenceStream
+) {
+
+    for (std::size_t i = 0; i < m_outputBuffers.size(); ++i) {
+        // After inference the 4 buffers, namely `num_detections`, `nmsed_boxes`, `nmsed_scores`, `nmsed_classes`
+        // will be filled with inference results.
+
+        // `num_detections` has the shape of (BatchSize x 1)
+        // So we create a GpuMat header for the memory of `num_detections`
+        uint32_t bufferMemSize = 1;
+        for (std::size_t j = 1; j < m_outputDims[i].nbDims; ++j) {
+            bufferMemSize *= m_outputDims[i].d[j];
+        }
+        cv::cuda::GpuMat batch_numDetections(batchSize, bufferMemSize, CV_32F);
+        // GpuMat has shape of (BatchSize, ).
+        void * ptr = batch_numDetections.ptr<void>();
+        checkCudaErrorCode(
+            cudaMemcpyAsync(
+                ptr,
+                m_outputBuffers[i],
+                bufferMemSize * sizeof(float),
+                cudaMemcpyDeviceToDevice,
+                inferenceStream
+            )
+        );
+    }
+}
+
+/**
  * @brief Inference function capable of taking varying batch size
  * 
  * @param batch 
@@ -482,24 +519,13 @@ bool Engine::runInference(
 
     // Run Inference
     bool inferenceStatus = m_context->enqueueV2(m_buffers.data(), inferenceStream, nullptr);
+
+    // Copy inference results from `m_outputBuffers` to `outputs`
+    copyFromBuffer(outputs, batchSize, inferenceStream);
     
     // Synchronize the cuda stream
     checkCudaErrorCode(cudaStreamSynchronize(inferenceStream));
     checkCudaErrorCode(cudaStreamDestroy(inferenceStream));
-
-    const auto numOutputs = m_outputDims.size();
-    for (size_t i = 0; i < numOutputs; ++i) {
-        const auto& engineOutputDims = m_outputDims[i];
-        checkCudaErrorCode(
-            cudaMemcpyAsync(
-                outputs[i].data,
-                m_buffers[i],
-                batchSize * engineOutputDims.d[0] * engineOutputDims.d[1] * engineOutputDims.d[2],
-                cudaMemcpyDeviceToDevice,
-                inferenceStream
-            )
-        );
-    }
 
     return inferenceStatus;
 
