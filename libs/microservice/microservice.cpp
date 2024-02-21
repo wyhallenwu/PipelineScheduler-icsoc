@@ -42,19 +42,19 @@ void Microservice<InType>::updateReqRate(ClockTypeTemp lastInterReqDuration) {
 template<typename InType>
 GPUDataMicroservice<InType>::GPUDataMicroservice(const BaseMicroserviceConfigs &configs)
         :Microservice<InType>(configs) {
-    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>();
+    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>>();
 }
 
 template<typename InType>
 LocalGPUDataMicroservice<InType>::LocalGPUDataMicroservice(const BaseMicroserviceConfigs &configs)
         :Microservice<InType>(configs) {
-    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>();
+    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>>();
 }
 
 template<typename InType>
 SerDataMicroservice<InType>::SerDataMicroservice(const BaseMicroserviceConfigs &configs)
         :Microservice<InType>(configs) {
-    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>>();
+    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<InterConCPUReqDataType>>();
 }
 
 template<typename InType>

@@ -49,7 +49,7 @@ protected:
     bool multipleStubs;
 };
 
-class GPUSender : public Sender<DataRequest<LocalGPUDataType>> {
+class GPUSender : public Sender<DataRequest<LocalGPUReqDataType>> {
 public:
     explicit GPUSender(const BaseMicroserviceConfigs &configs, const std::string &target) : Sender(configs, target) {
         tagToGpuPointer = std::map<void *, std::vector<ImageData> *>();

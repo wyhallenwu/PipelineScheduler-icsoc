@@ -10,18 +10,21 @@
 #include <opencv2/opencv.hpp>
 #include <utility>
 
+#ifndef MICROSERVICE_H
+#define MICROSERVICE_H
+
 typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
 typedef uint32_t MsvcSLOType;
 typedef uint16_t NumMscvType;
-typedef cv::Mat CPUReqDataType;
+typedef cv::Mat InterConCPUReqDataType;
 typedef std::string ShmReqDataType;
 typedef std::chrono::high_resolution_clock::time_point ClockTypeTemp;
 typedef int64_t ClockType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
-typedef const char * GPUReqDataType;
+typedef const char * InterConGPUReqDataType;
 typedef std::vector<int32_t> RequestShapeType;
-typedef cv::cuda::GpuMat LocalGPUDataType;
+typedef cv::cuda::GpuMat LocalGPUReqDataType;
 typedef cv::Mat LocalCPUDataType;
 
 template <typename InType, int MaxSize = 100>
@@ -87,7 +90,7 @@ struct MetaRequest {
     // The end-to-end service level latency objective to which this request is subject
     MsvcSLOType req_e2eSLOLatency;
     // Shape of data contained in the request. Helps interpret the data.
-    RequestShapeType req_dataShape;
+    // RequestShapeType req_dataShape;
     // The path that this request and its ancestors have travelled through.
     // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
     // For instance, `[YOLOv5Prep-01_05][YOLOv5s_05][YOLOv5post_07]`
@@ -102,7 +105,7 @@ struct MetaRequest {
 
 struct GPUData {
     RequestShapeType shape;
-    GPUReqDataType data;
+    InterConGPUReqDataType data;
 };
 
 /**
@@ -110,8 +113,7 @@ struct GPUData {
  * 
  */
 struct GPUDataRequest : MetaRequest {
-    // The data of that this request carries.
-    // There are several types of data a request can carry.
+    // The GPU data of that this request carries.
     std::vector<GPUData> req_data;
     GPUDataRequest(
         ClockType genTime,
@@ -178,7 +180,7 @@ struct NeighborMicroserviceConfigs {
     // The communication method for the microservice to 
     CommMethod commMethod;
     //
-    std::string link;
+    std::vector<std::string> link;
     //
     QueueType queueType;
     //
@@ -299,12 +301,12 @@ public:
     GPUDataMicroservice(const BaseMicroserviceConfigs &configs);
     ~GPUDataMicroservice();
 
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getOutQueue () {
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>>* getOutQueue () {
         return OutQueue;
     }
 
 protected:
-    static ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *OutQueue;
+    static ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *OutQueue;
 };
 
 template <typename InType>
@@ -313,12 +315,12 @@ public:
     SerDataMicroservice(const BaseMicroserviceConfigs &configs);
     ~SerDataMicroservice();
 
-    ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>>* getOutQueue () {
+    ThreadSafeFixSizedQueue<DataRequest<InterConCPUReqDataType>>* getOutQueue () {
         return OutQueue;
     }
 
 protected:
-    ThreadSafeFixSizedQueue<DataRequest<CPUReqDataType>> *OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<InterConCPUReqDataType>> *OutQueue;
 };
 
 template <typename InType>
@@ -327,12 +329,12 @@ public:
     LocalGPUDataMicroservice(const BaseMicroserviceConfigs &configs);
     ~LocalGPUDataMicroservice();
 
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getOutQueue () {
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>>* getOutQueue () {
         return OutQueue;
     }
 
 protected:
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *OutQueue;
 };
 
 // template <typename InType>
@@ -356,7 +358,7 @@ protected:
 //     DualLocalDataMicroservice(const BaseMicroserviceConfigs &configs);
 //     ~DualLocalDataMicroservice();
 
-//     ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>>* getGPUOutQueue () {
+//     ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>>* getGPUOutQueue () {
 //         return LocalGPUOutQueue;
 //     }
 //     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getCPUOutQueue () {
@@ -365,6 +367,7 @@ protected:
 //     void Schedule() override;
 
 // protected:
-//     ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *LocalGPUOutQueue;
+//     ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *LocalGPUOutQueue;
 //     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *LocalCPUOutQueue;
 // };
+#endif
