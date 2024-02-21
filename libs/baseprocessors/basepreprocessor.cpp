@@ -31,7 +31,7 @@ cv::cuda::GpuMat resizePadRightBottom(
     size_t height,
     size_t width,
     const cv::Scalar &bgcolor,
-    bool toNormalize = true
+    bool toNormalize
 ) {
     float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;

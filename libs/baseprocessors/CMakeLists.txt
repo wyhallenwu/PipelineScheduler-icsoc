@@ -29,12 +29,14 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES 
         basepreprocessor.h
+        baseprocessor.h
 )
 
 # All source files and private header files go here.
 set(
         SOURCE_FILES
         basepreprocessor.cpp
+        baseprocessor.cpp
 )
 
 # Here we define the library.
