@@ -1,4 +1,5 @@
 #include <basepreprocessor.h>
+#include <baseprocessor.h>
 #include <trtengine.h>
 
 template<typename InType>
@@ -14,4 +15,18 @@ protected:
     // bool checkReqEligibility(uint64_t currReq_genTime) override;
     //
     // void updateReqRate(ClockTypeTemp lastInterReqDuration) override;
+};
+
+template<typename InType>
+class YoloV5Inference : public BaseProcessor<InType> {
+public:
+    YoloV5Inference(const BaseMicroserviceConfigs &config, const TRTConfigs &engineConfigs);
+    ~YoloV5Inference();
+protected:
+    void inference();
+    std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
+    BatchSizeType msvc_idealBatchSize;
+    std::vector<LocalGPUReqDataType> batchedOutBuffer;
+    TRTConfigs msvc_engineConfigs;
+    Engine msvc_inferenceEngine;
 };

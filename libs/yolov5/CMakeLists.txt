@@ -34,7 +34,7 @@ set(
 set(
         SOURCE_FILES
         yolov5preprocessor.cpp
-        # yolov5.cpp
+        yolov5inference.cpp
         # yolov5postprocessor.cpp
 )
 
