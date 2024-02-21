@@ -120,6 +120,9 @@ public:
     static void transformOutput(std::vector<std::vector<std::vector<float>>>& input, std::vector<float>& output);
     // Convert NHWC to NCHW and apply scaling and mean subtraction
     static cv::cuda::GpuMat blobFromGpuMats(const std::vector<cv::cuda::GpuMat>& batchInput, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals, bool normalize);
+
+    std::vector<void *>& getInputBuffers();
+    std::vector<void *>& getOutputBuffers();
 private:
     // Converts the engine options into a string
     void serializeEngineOptions(const TRTConfigs& options);
@@ -132,9 +135,11 @@ private:
     bool m_normalize;
 
     // Holds pointers to the input and output GPU buffers
-    std::vector<void*> m_buffers;
+    std::vector<void*> m_buffers, m_inputBuffers, m_outputBuffers;
     std::vector<uint32_t> m_outputLengthsFloat{};
+    // Dimemsions of inputs without batch size
     std::vector<nvinfer1::Dims3> m_inputDims;
+    // Dimensions of outputs with batch size
     std::vector<nvinfer1::Dims> m_outputDims;
     std::vector<std::string> m_IOTensorNames;
     // The Batch size with which we are going to allocate memory buffers

@@ -315,6 +315,7 @@ bool Engine::loadNetwork() {
         // const auto tensorType = m_engine->getTensorIOMode(tensorName);
         const auto tensorShape = m_engine->getBindingDimensions(i);
         if (m_engine->bindingIsInput(i)) {
+            m_inputBuffers.emplace_back(m_buffers[i]);
             //
             if (tensorShape.d[0] == -1) {
                 isDynamic = true;
@@ -339,6 +340,7 @@ bool Engine::loadNetwork() {
         // const auto tensorType = m_engine->getTensorIOMode(tensorName);
         const auto tensorShape = m_engine->getBindingDimensions(i);
         if (!m_engine->bindingIsInput(i)) {
+            m_outputBuffers.emplace_back(m_buffers[i]);
             // The binding is an output
             uint32_t outputLenFloat = 1;
             m_outputDims.push_back(tensorShape);
@@ -359,6 +361,14 @@ bool Engine::loadNetwork() {
     checkCudaErrorCode(cudaStreamDestroy(stream));
 
     return true;
+}
+
+std::vector<void *>& Engine::getInputBuffers() {
+    return m_inputBuffers;
+}
+
+std::vector<void *>& Engine::getOutputBuffers() {
+    return m_outputBuffers;
 }
 
 /**
@@ -385,7 +395,7 @@ void Engine::copyToBuffer(
     cudaStream_t &inferenceStream
 ) {
     // Number of the batch predefined within the trt engine when built
-    const auto numInputs = m_inputDims.size();
+    const auto numInputs = m_inputBuffers.size();
     // We need to copy batched data to all pre-defined batch
     for (std::size_t i = 0; i < numInputs; ++i) {
         /**
@@ -394,7 +404,7 @@ void Engine::copyToBuffer(
          * to the buffer.
          */
         float * inputBufferPtr;
-        inputBufferPtr = (float *)&m_buffers[i];
+        inputBufferPtr = (float *)&m_inputBuffers[i];
 
         uint32_t singleDataSize = 1;
         // Calculating the size of each image in memory.
