@@ -56,7 +56,7 @@ cv::cuda::GpuMat resizePadRightBottom(
  */
 template<typename InType>
 BasePreprocessor<InType>::BasePreprocessor(const BaseMicroserviceConfigs &configs) : LocalGPUDataMicroservice<InType>(configs){
-    msvc_idealBatchSize = configs.msvc_idealBatchSize;
+    this->msvc_idealBatchSize = configs.msvc_idealBatchSize;
     this->msvc_outReqShape = {configs.msvc_dataShape[0][1], configs.msvc_dataShape[0][2], configs.msvc_dataShape[0][3]};
     // for (BatchSizeType i = 0; i < msvc_idealBatchSize; ++i) {
     //     msvc_batchBuffer.emplace_back(cv::cuda::GpuMat(configs.msvc_dataShape[2], configs.msvc_dataShape[3], CV_32FC3));
@@ -72,7 +72,7 @@ BasePreprocessor<InType>::BasePreprocessor(const BaseMicroserviceConfigs &config
  */
 template<typename InType>
 bool BasePreprocessor<InType>::isTimeToBatch() {
-    if (msvc_onBufferBatchSize == msvc_idealBatchSize) {
+    if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
         return true;
     }
 }

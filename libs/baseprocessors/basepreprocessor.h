@@ -26,7 +26,6 @@ public:
     BasePreprocessor(const BaseMicroserviceConfigs &configs);
     ~BasePreprocessor();
 protected:
-    BatchSizeType msvc_idealBatchSize;
     BatchSizeType msvc_onBufferBatchSize;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
     bool isTimeToBatch() override;
