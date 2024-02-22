@@ -25,7 +25,6 @@ public:
 protected:
     void inference();
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
-    BatchSizeType msvc_idealBatchSize;
     std::vector<LocalGPUReqDataType> batchedOutBuffer;
     TRTConfigs msvc_engineConfigs;
     Engine msvc_inferenceEngine;

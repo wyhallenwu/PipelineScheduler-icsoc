@@ -451,7 +451,7 @@ void Engine::copyFromBuffer(
 
         // Calculating the memory for each sample in the output buffer number `i`
         uint32_t bufferMemSize = 1;
-        for (std::size_t j = 1; j < m_outputDims[i].nbDims; ++j) {
+        for (uint32_t j = 1; j < m_outputDims[i].nbDims; ++j) {
             bufferMemSize *= m_outputDims[i].d[j];
         }
         // Creating a GpuMat to which we would copy the memory in output buffer.

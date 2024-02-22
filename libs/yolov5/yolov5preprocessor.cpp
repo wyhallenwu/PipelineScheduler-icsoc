@@ -44,8 +44,8 @@ void YoloV5Preprocessor<InType>::batchRequests() {
             {
                 resizePadRightBottom(
                     currReq.req_data.content,
-                    this->msvc_outReqShape[1],
-                    this->msvc_outReqShape[2],
+                    this->msvc_outReqShape[0][1],
+                    this->msvc_outReqShape[0][2],
                     cv::Scalar(128, 128, 128)
                 )
             }

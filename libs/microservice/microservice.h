@@ -26,6 +26,7 @@ typedef const char * InterConGPUReqDataType;
 typedef std::vector<int32_t> RequestShapeType;
 typedef cv::cuda::GpuMat LocalGPUReqDataType;
 typedef cv::Mat LocalCPUDataType;
+typedef uint16_t BatchSizeType;
 
 template <typename InType, int MaxSize = 100>
 class ThreadSafeFixSizedQueue {
@@ -91,16 +92,21 @@ struct MetaRequest {
     MsvcSLOType req_e2eSLOLatency;
     // Shape of data contained in the request. Helps interpret the data.
     // RequestShapeType req_dataShape;
+
     // The path that this request and its ancestors have travelled through.
     // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
     // For instance, `[YOLOv5Prep-01_05][YOLOv5s_05][YOLOv5post_07]`
     std::string req_travelPath;
 
+    // Batch size
+    BatchSizeType req_batchSize;
+
     MetaRequest(
         ClockType genTime,
         MsvcSLOType latency,
-        std::string path
-    ) : req_origGenTime(genTime), req_e2eSLOLatency(latency), req_travelPath(std::move(path)) {}
+        std::string path,
+        BatchSizeType batchSize
+    ) : req_origGenTime(genTime), req_e2eSLOLatency(latency), req_travelPath(std::move(path)), req_batchSize(batchSize) {}
 };
 
 struct GPUData {
@@ -109,7 +115,7 @@ struct GPUData {
 };
 
 /**
- * @brief 
+ * @brief Sending CUDA Handle
  * 
  */
 struct GPUDataRequest : MetaRequest {
@@ -119,8 +125,9 @@ struct GPUDataRequest : MetaRequest {
         ClockType genTime,
         MsvcSLOType latency,
         std::string path,
+        BatchSizeType batchSize,
         std::vector<GPUData> data
-    ) : MetaRequest(genTime, latency, std::move(path)), req_data(std::move(data)) {
+    ) : MetaRequest(genTime, latency, std::move(path), batchSize), req_data(std::move(data)) {
     };
 };
 
@@ -142,8 +149,9 @@ struct DataRequest : MetaRequest {
         ClockType genTime,
         MsvcSLOType latency,
         std::string path,
+        BatchSizeType batchSize,
         std::vector<Data<DataType>> data
-    ) : MetaRequest(genTime, latency, path), req_data(data) {};
+    ) : MetaRequest(genTime, latency, path, batchSize), req_data(data) {};
 };
 
 /**
@@ -191,7 +199,7 @@ struct NeighborMicroserviceConfigs {
     // Value `-2` denotes Upstream Microservice.
     int16_t classOfInterest;
     // The shape of data this neighbor microservice expects from the current microservice.
-    RequestShapeType expectedShape;
+    std::vector<RequestShapeType> expectedShape;
 };
 
 /**
@@ -215,8 +223,10 @@ struct BaseMicroserviceConfigs {
     MicroserviceType msvc_type;
     // The acceptable latency for each individual request processed by this microservice, in `ms`
     MsvcSLOType msvc_svcLevelObjLatency;
+    // Ideal batch size for this microservice, runtime batch size could be smaller though
+    BatchSizeType msvc_idealBatchSize;
     // Shape of data produced by this microservice
-    RequestShapeType msvc_dataShape;
+    std::vector<RequestShapeType> msvc_dataShape;
     // List of upstream microservices
     std::list<NeighborMicroserviceConfigs> upstreamMicroservices;
     std::list<NeighborMicroserviceConfigs> dnstreamMicroservices;
@@ -275,7 +285,10 @@ protected:
     NumMscvType numDnstreamMicroservices = 0;
 
     //
-    RequestShapeType msvc_outReqShape;
+    std::vector<RequestShapeType> msvc_outReqShape;
+
+    // Ideal batch size for this microservice, runtime batch size could be smaller though
+    BatchSizeType msvc_idealBatchSize;
 
     //
     std::vector<NeighborMicroservice> upstreamMicroserviceList;

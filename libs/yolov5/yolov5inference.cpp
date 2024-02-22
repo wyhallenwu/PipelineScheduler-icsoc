@@ -6,7 +6,6 @@ YoloV5Inference<InType>::YoloV5Inference(
     const TRTConfigs &engineConfigs) : BaseProcessor<InType>(config), msvc_engineConfigs(engineConfigs) {
     
     msvc_inferenceEngine = Engine(engineConfigs);
-    msvc_idealBatchSize = engineConfigs.maxBatchSize;
 
     msvc_engineInputBuffers = msvc_inferenceEngine.getInputBuffers();
     msvc_engineOutputBuffers = msvc_inferenceEngine.getOutputBuffers();
@@ -48,7 +47,7 @@ void YoloV5Inference<InType>::inference() {
         for (std::size_t i; i < currReq_batchSize; ++i) {
             batch.emplace_back(currReq.req_data[i].content);
         }
-        msvc_inferenceEngine.runInference(batch, outBuffer, msvc_idealBatchSize);
+        msvc_inferenceEngine.runInference(batch, outBuffer, this->msvc_idealBatchSize);
 
         
     }
