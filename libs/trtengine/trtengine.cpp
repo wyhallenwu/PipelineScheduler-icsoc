@@ -436,8 +436,8 @@ void Engine::copyToBuffer(
 /**
  * @brief After inference, we need to copy the data residing in the output buffers to 
  * 
- * @param outputs 
- * @param inferenceStream 
+ * @param outputs carry back the inference results in the form of GpuMat vector to the inference class
+ * @param inferenceStream to ensure the operations will be done in a correct order `copyToBuffer -> inference -> copyFromBuffer` in the same stream 
  */
 void Engine::copyFromBuffer(
     std::vector<cv::cuda::GpuMat>& outputs,
@@ -449,15 +449,15 @@ void Engine::copyFromBuffer(
         // After inference the 4 buffers, namely `num_detections`, `nmsed_boxes`, `nmsed_scores`, `nmsed_classes`
         // will be filled with inference results.
 
-        // `num_detections` has the shape of (BatchSize x 1)
-        // So we create a GpuMat header for the memory of `num_detections`
+        // Calculating the memory for each sample in the output buffer number `i`
         uint32_t bufferMemSize = 1;
         for (std::size_t j = 1; j < m_outputDims[i].nbDims; ++j) {
             bufferMemSize *= m_outputDims[i].d[j];
         }
-        cv::cuda::GpuMat batch_numDetections(batchSize, bufferMemSize, CV_32F);
-        // GpuMat has shape of (BatchSize, ).
-        void * ptr = batch_numDetections.ptr<void>();
+        // Creating a GpuMat to which we would copy the memory in output buffer.
+        cv::cuda::GpuMat batch_outputBuffer(batchSize, bufferMemSize, CV_32F);
+        outputs.emplace_back(batch_outputBuffer);
+        void * ptr = batch_outputBuffer.ptr<void>();
         checkCudaErrorCode(
             cudaMemcpyAsync(
                 ptr,
