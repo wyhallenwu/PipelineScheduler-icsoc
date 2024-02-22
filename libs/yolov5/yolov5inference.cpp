@@ -44,11 +44,31 @@ void YoloV5Inference<InType>::inference() {
         // Do batched inference
         std::vector<LocalGPUReqDataType> batch;
         currReq_batchSize = currReq.req_data.size();
-        for (std::size_t i; i < currReq_batchSize; ++i) {
+        for (std::size_t i = 0; i < currReq_batchSize; ++i) {
             batch.emplace_back(currReq.req_data[i].content);
         }
         msvc_inferenceEngine.runInference(batch, outBuffer, this->msvc_idealBatchSize);
 
-        
+        // After inference, 4 buffers are filled with memory, which we need to carry to post processor.
+        // We put 4 buffers into a vector along with their respective shapes for the post processor to interpret.
+        std::vector<Data<LocalGPUReqDataType>> batchedData;
+        for (std::size_t i = 0; i < this->msvc_outReqShape; ++i) {
+            batchedData.emplace_back(
+                {
+                    this->msvc_outReqShape[i],
+                    outBuffer[i]
+                }
+            );
+        }
+        DataRequest<Data<LocalGPUReqDataType>> outReq(
+            std::chrono::high_resolution_clock::now(),
+            currReq.req_e2eSLOLatency,
+            "",
+            currReq_batchSize,
+            batchedData
+        );
+        this->OutQueue.emplace(outReq);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }
 }

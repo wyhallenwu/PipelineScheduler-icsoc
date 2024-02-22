@@ -59,16 +59,17 @@ void YoloV5Preprocessor<InType>::batchRequests() {
             for (std::size_t i = 0; i < batchBuffer.size(); ++i) {
                 batchedData.emplace_back(
                     {
-                        this->msvc_outReqShape,
+                        this->msvc_outReqShape[0],
                         batchBuffer[i]
                     }
                 );
             }
             
-            DataRequest<LocalGPUReqDataType> outReq(
+            DataRequest<Data<LocalGPUReqDataType>> outReq(
                 std::chrono::high_resolution_clock::now(),
                 currReq.req_e2eSLOLatency,
                 "",
+                this->msvc_onBufferBatchSize,
                 batchedData
             );
             this->OutQueue.emplace(outReq);
