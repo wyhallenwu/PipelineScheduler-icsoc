@@ -390,6 +390,29 @@ protected:
     ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *OutQueue;
 };
 
+template <typename InType>
+class LocalGPUDataPostProcessorMicroservice : public Microservice<InType> {
+public:
+    LocalGPUDataPostProcessorMicroservice(const BaseMicroserviceConfigs &configs);
+    ~LocalGPUDataPostProcessorMicroservice();
+
+    ThreadSafeFixSizedQueue<GPUDataRequest>* getInterConGPUOutQueue() {
+        return interConGPUOutQueue;
+    }
+
+    ThreadSafeFixSizedQueue<DataRequest<ShmReqDataType>>* getShmOutQueue() {
+        return shmOutQueue;
+    }
+
+    ThreadSafeFixSizedQueue<DataRequest<InterConCPUReqDataType>>* getInterConCPUOutQueue() {
+        return interConCPUOutQueue;
+    }
+
+protected:
+    ThreadSafeFixSizedQueue<GPUDataRequest> *interConGPUOutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<ShmReqDataType>> *shmOutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<InterConCPUReqDataType>> *interConCPUOutQueue;
+};
 // template <typename InType>
 // class LocalCPUDataMicroservice : public Microservice<InType> {
 // public:
