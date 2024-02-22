@@ -106,7 +106,10 @@ struct MetaRequest {
         MsvcSLOType latency,
         std::string path,
         BatchSizeType batchSize
-    ) : req_origGenTime(genTime), req_e2eSLOLatency(latency), req_travelPath(std::move(path)), req_batchSize(batchSize) {}
+    ) : req_origGenTime(genTime),
+        req_e2eSLOLatency(latency),
+        req_travelPath(std::move(path)),
+        req_batchSize(batchSize) {}
 };
 
 struct GPUData {
@@ -119,16 +122,36 @@ struct GPUData {
  * 
  */
 struct GPUDataRequest : MetaRequest {
-    // The GPU data of that this request carries.
+    // The Inter-container GPU data of that this request carries.
     std::vector<GPUData> req_data;
+    // To carry the data of the upstream microservice in case we need them for further processing.
+    // For instance, for cropping we need both the original image (`upstreamReq_data`) and the output
+    // of the inference engine, which is a result of `req_data`.
+    // If there is nothing to carry, it is a blank vector.
+    std::vector<GPUData> upstreamReq_data;
+    GPUDataRequest(
+        ClockType genTime,
+        MsvcSLOType latency,
+        std::string path,
+        BatchSizeType batchSize,
+        std::vector<GPUData> data,
+        std::vector<GPUData> upstream_data
+    ) : MetaRequest(
+        genTime,
+        latency,
+        std::move(path),
+        batchSize), req_data(std::move(data)), upstreamReq_data(std::move(upstream_data)) {};
     GPUDataRequest(
         ClockType genTime,
         MsvcSLOType latency,
         std::string path,
         BatchSizeType batchSize,
         std::vector<GPUData> data
-    ) : MetaRequest(genTime, latency, std::move(path), batchSize), req_data(std::move(data)) {
-    };
+    ) : MetaRequest(
+        genTime,
+        latency,
+        std::move(path),
+        batchSize), req_data(std::move(data)) {};
 };
 
 template <typename Type>
@@ -137,21 +160,38 @@ struct Data {
     Type content;
 };
 /**
- * @brief 
+ * @brief Similar to the `GPUDataRequest` type but for any other type beside GPU Handles
  * 
  * @tparam DataType 
  */
 template <typename DataType>
 struct DataRequest : MetaRequest {
     std::vector<Data<DataType>> req_data;
+    std::vector<Data<DataType>> upstreamReq_data;
 
     DataRequest<DataType>(
         ClockType genTime,
         MsvcSLOType latency,
         std::string path,
         BatchSizeType batchSize,
+        std::vector<Data<DataType>> data,
+        std::vector<Data<DataType>> upstreamData
+    ) : MetaRequest(
+        genTime,
+        latency,
+        path,
+        batchSize), req_data(data), upstreamReq_data(upstreamData) {};
+    DataRequest<DataType>(
+        ClockType genTime,
+        MsvcSLOType latency,
+        std::string path,
+        BatchSizeType batchSize,
         std::vector<Data<DataType>> data
-    ) : MetaRequest(genTime, latency, path, batchSize), req_data(data) {};
+    ) : MetaRequest(
+        genTime,
+        latency,
+        path,
+        batchSize), req_data(data) {};
 };
 
 /**
