@@ -14,17 +14,17 @@ Microservice<InType>::Microservice(const BaseMicroserviceConfigs &configs) {
     msvc_svcLevelObjLatency = configs.msvc_svcLevelObjLatency;
 
     std::list<NeighborMicroserviceConfigs>::const_iterator it;
-    for (it = configs.dnstreamMicroservices.begin(); it != configs.upstreamMicroservices.end(); ++it) {
+    for (it = configs.dnstreamMicroservices.begin(); it != configs.dnstreamMicroservices.end(); ++it) {
         // Create downstream neigbor config and push that into a list for information later
         // Local microservice supposedly has only 1 downstream but `sender` microservices could have multiple.
-        NeighborMicroservice dnStreamMsvc = NeighborMicroservice(configs, numDnstreamMicroservices);
+        NeighborMicroservice dnStreamMsvc = NeighborMicroservice(it, numDnstreamMicroservices);
         dnstreamMicroserviceList.emplace_back(dnStreamMsvc);
-        // This maps the data class to be send to this downstream microservice and the microservice's index.
+        // This maps the data class to be sent to this downstream microservice and the microservice's index.
         classToDnstreamMap.emplace_back({dnStreamMsvc.classOfInterest, numDnstreamMicroservices++});
     }
 
     for (it = configs.upstreamMicroservices.begin(); it != configs.upstreamMicroservices.end(); ++it) {
-        NeighborMicroservice upStreamMsvc = NeighborMicroservice(configs, numUpstreamMicroservices++);
+        NeighborMicroservice upStreamMsvc = NeighborMicroservice(it, numUpstreamMicroservices++);
     }
 }
 

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option objc_class_prefix = "HLW";
+
+package indevicecommunication;
+
+service InDeviceCommunication {
+  rpc SendQueueSize(QueueSize) returns (SimpleConfirm) {}
+  rpc StopExecution(SimpleConfirm) returns (SimpleConfirm) {}
+}
+
+message QueueSize {
+  repeated int32 size = 1;
+}
+
+// The response message confirming transfer
+message SimpleConfirm {
+}

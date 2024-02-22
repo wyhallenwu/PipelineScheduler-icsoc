@@ -6,7 +6,7 @@ include(cmake/ccache.cmake)
 
 # Only do these if this is the main project, and not if it is included through
 # add_subdirectory
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     set(CMAKE_CXX_STANDARD 17)
     # Set C++ version and optimization level
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Ofast -DNDEBUG -Wno-deprecated-declarations")
@@ -26,17 +26,17 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     find_package(Doxygen)
     # For finding FindTensorRT.cmake
     set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
-    if(Doxygen_FOUND)
+    if (Doxygen_FOUND)
         add_subdirectory(docs)
-    else()
+    else ()
         message(STATUS "Doxygen not found, not building docs")
-    endif()
-endif()
+    endif ()
+endif ()
 
 # TODO: Specify the path to TensorRT root dir
 if (NOT TensorRT_DIR)
     set(TensorRT_DIR /TensorRT/)
-endif()
+endif ()
 # Use the correct version of CUDA
 set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
 
@@ -45,9 +45,14 @@ find_package(TensorRT REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(OpenCV REQUIRED)
 
-
 add_subdirectory(libs/trtengine)
 add_subdirectory(libs/microservice)
+add_subdirectory(libs/protobufprotocols)
+add_subdirectory(libs/baseprocessors)
+add_subdirectory(libs/communicator)
+add_subdirectory(libs/data_source)
+add_subdirectory(libs/container_agent)
+add_subdirectory(libs/yolov5)
 
 add_library(PipePlusPlus SHARED
         src/main.cpp)

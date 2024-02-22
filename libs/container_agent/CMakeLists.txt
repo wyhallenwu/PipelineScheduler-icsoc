@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(communicator)
+project(container_agent)
 
 # This include defines standard install locations.
 # https://cmake.org/cmake/help/v3.11/module/GNUInstallDirs.html
@@ -25,35 +25,35 @@ if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 # Only public header files go here.
-set(
-        HEADER_FILES
-        ./communicator.h
-)
+#set(
+#        HEADER_FILES
+#        header.h
+#)
+
 # All source files and private header files go here.
 set(
         SOURCE_FILES
-        ./receiver.cpp
-        ./sender.cpp
+        container_agent.cpp
 )
 
 # Here we define the library.
-add_library(communicator
-        ${HEADER_FILES}
+add_library(container_agent
+        #        ${HEADER_FILES}
         ${SOURCE_FILES})
 
 # We also add an alias definition so that we shadown
 # the export namespace when using add_subdirectory() instead.
-add_library(communicator::communicator ALIAS communicator)
+add_library(container_agent::container_agent ALIAS container_agent)
 
 
 # Required compiler features.
 # https://cmake.org/cmake/help/v3.1/manual/cmake-compile-features.7.html
-target_compile_features(communicator
+target_compile_features(container_agent
         # Features required to compile the library itself.
         PRIVATE cxx_std_11)
 # By prefixing the installation paths with our name and version
 # we can have multiple versions installed at the same time.
-set(PROJECT_PREFIX communicator)
+set(PROJECT_PREFIX container_agent)
 
 # Find Protobuf installation
 # Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
@@ -81,40 +81,37 @@ else ()
     set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
 endif ()
 
-# Find Boost installation
-find_package(Boost REQUIRED)
-include_directories(${Boost_INCLUDE_DIR})
+find_package(Threads REQUIRED)
 
 # Manually specify the path to the protobufprotocols
 set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
 
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
+
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
-target_include_directories(communicator
+target_include_directories(container_agent
         PUBLIC
         # Used when building the library:
-        $<BUILD_INTERFACE:${communicator_SOURCE_DIR}/>
+        $<BUILD_INTERFACE:${container_agent_SOURCE_DIR}/>
         # Used when installing the library:
         $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
         ${OpenCV_INCLUDE_DIRS}
-        ${CUDA_INCLUDE_DIRS}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
         PRIVATE
         # Used only when building the library:
         src)
 
-target_link_libraries(communicator
+set(communicator_DIR "${CMAKE_CURRENT_BINARY_DIR}/../communicator")
+find_package(communicator CONFIG REQUIRED)
+
+target_link_libraries(container_agent
         PUBLIC
-        ${OpenCV_LIBS}
-        ${CUDA_LIBRARIES}
-        ${CMAKE_THREAD_LIBS_INIT}
-        absl::flags
-        absl::flags_parse
-        ${Boost_LIBRARIES}
         ${_GRPC_GRPCPP}
+        ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
+        ${CMAKE_THREAD_LIBS_INIT}
         microservice
 )
 
@@ -123,28 +120,28 @@ set(INSTALL_RUNTIME_DIR ${CMAKE_INSTALL_BINDIR})
 set(INSTALL_CONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/${PROJECT_PREFIX}/cmake)
 set(INSTALL_LIBRARY_DIR ${CMAKE_INSTALL_LIBDIR}/${PROJECT_PREFIX}/${CMAKE_BUILD_TYPE})
 set(INSTALL_ARCHIVE_DIR ${CMAKE_INSTALL_LIBDIR}/${PROJECT_PREFIX}/${CMAKE_BUILD_TYPE}/static)
-set(INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_PREFIX}/communicator)
+set(INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_PREFIX}/container_agent)
 
 # Define the configuration file locations.
-set(PROJECT_CONFIG_VERSION_FILE "${PROJECT_BINARY_DIR}/communicator-config-version.cmake")
-set(PROJECT_CONFIG_FILE "${PROJECT_BINARY_DIR}/communicator-config.cmake")
+set(PROJECT_CONFIG_VERSION_FILE "${PROJECT_BINARY_DIR}/container_agent-config-version.cmake")
+set(PROJECT_CONFIG_FILE "${PROJECT_BINARY_DIR}/container_agent-config.cmake")
 
-configure_package_config_file(cmake/communicator-config.cmake.in
+configure_package_config_file(cmake/container_agent-config.cmake.in
         ${PROJECT_CONFIG_FILE}
         INSTALL_DESTINATION ${INSTALL_CONFIG_DIR})
 
 
 # The INSTALL(TARGET) command specifies where to install specific targets.
 # By specifying EXPORT here, we add these targets to an export group.
-install(TARGETS communicator
-        EXPORT communicator-targets
+install(TARGETS container_agent
+        EXPORT container_agent-targets
         RUNTIME DESTINATION ${INSTALL_RUNTIME_DIR}
         LIBRARY DESTINATION ${INSTALL_LIBRARY_DIR}
         ARCHIVE DESTINATION ${INSTALL_ARCHIVE_DIR})
 
-# The INSTALL(FILES) command specifies where to install specific files, such as headers.
-install(FILES ${HEADER_FILES}
-        DESTINATION ${INSTALL_INCLUDE_DIR})
+# # The INSTALL(FILES) command specifies where to install specific files, such as headers.
+#install(FILES ${HEADER_FILES}
+#        DESTINATION ${INSTALL_INCLUDE_DIR})
 
 # The INSTALL(FILES) command specifies where to install specific files, such as headers.
 install(FILES
@@ -153,15 +150,15 @@ install(FILES
         DESTINATION ${INSTALL_CONFIG_DIR})
 
 # The INSTALL(EXPORT) command installs a previously defined export group to a script.
-install(EXPORT communicator-targets
-        FILE communicator-targets.cmake
-        NAMESPACE communicator::
+install(EXPORT container_agent-targets
+        FILE container_agent-targets.cmake
+        NAMESPACE container_agent::
         DESTINATION ${INSTALL_CONFIG_DIR})
 
-export(EXPORT communicator-targets
-        FILE ${CMAKE_CURRENT_BINARY_DIR}/communicator-targets.cmake
-        NAMESPACE communicator::)
+export(EXPORT container_agent-targets
+        FILE ${CMAKE_CURRENT_BINARY_DIR}/container_agent-targets.cmake
+        NAMESPACE container_agent::)
 
 # Register the package in the user's package registry.
 # https://cmake.org/cmake/help/v3.11/command/export.html
-export(PACKAGE communicator)
+export(PACKAGE container_agent)
