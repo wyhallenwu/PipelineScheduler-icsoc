@@ -1,6 +1,4 @@
 #include <yolov5.h>
-#include <chrono>
-#include <thread>
 
 template<typename InType>
 YoloV5Preprocessor<InType>::YoloV5Preprocessor(const BaseMicroserviceConfigs &configs) : BasePreprocessor<InType>(configs) {

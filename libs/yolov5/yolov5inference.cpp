@@ -43,7 +43,7 @@ void YoloV5Inference<InType>::inference() {
         }
         // Do batched inference
         std::vector<LocalGPUReqDataType> batch;
-        currReq_batchSize = currReq.req_data.size();
+        currReq_batchSize = currReq.req_batchSize;
         for (std::size_t i = 0; i < currReq_batchSize; ++i) {
             batch.emplace_back(currReq.req_data[i].content);
         }
@@ -64,8 +64,8 @@ void YoloV5Inference<InType>::inference() {
             std::chrono::high_resolution_clock::now(),
             currReq.req_e2eSLOLatency,
             "",
-            currReq_batchSize,
-            batchedData
+            batchedData, //req_data
+            currReq.req_data // upstreamReq_data
         );
         this->OutQueue.emplace(outReq);
 
