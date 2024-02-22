@@ -19,7 +19,6 @@ endif(NOT CMAKE_BUILD_TYPE)
 
 # If no installation prefix is given manually, install locally.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-        message(lalalala)
     set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE STRING
             "The install location"
             FORCE)

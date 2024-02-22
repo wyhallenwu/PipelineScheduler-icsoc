@@ -91,7 +91,7 @@ struct MetaRequest {
     // The end-to-end service level latency objective to which this request is subject
     MsvcSLOType req_e2eSLOLatency;
     // Shape of data contained in the request. Helps interpret the data.
-    // RequestShapeType req_dataShape;
+    RequestShapeType req_dataShape;
 
     // The path that this request and its ancestors have travelled through.
     // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
@@ -217,6 +217,11 @@ enum class QueueType {
     cpuDataQueue,
 };
 
+enum class NeighborType {
+    Upstream,
+    Downstream,
+};
+
 /**
  * @brief Descriptions of up and downstream microservices neighboring this current microservice.
  * 
@@ -282,8 +287,9 @@ template <typename InType>
 class Microservice {
 public:
     // Constructor that loads a struct args
-    Microservice(const BaseMicroserviceConfigs& configs);
-    ~Microservice();
+    explicit Microservice(const BaseMicroserviceConfigs& configs);
+
+    virtual ~Microservice() = default;
     // Name Identifier assigned to the microservice in the format of `type_of_msvc-number`.
     // For instance, an object detector could be named `YOLOv5s-01`.
     // Another example is the
@@ -292,6 +298,9 @@ public:
     virtual void SetInQueue(ThreadSafeFixSizedQueue<InType> *queue) {
         InQueue = queue;
     };
+
+    virtual QueueLengthType GetOutQueueSize();
+
     virtual void Schedule();
 
 protected:
@@ -351,11 +360,14 @@ protected:
 template <typename InType>
 class GPUDataMicroservice : public Microservice<InType> {
 public:
-    GPUDataMicroservice(const BaseMicroserviceConfigs &configs);
-    ~GPUDataMicroservice();
+    explicit GPUDataMicroservice(const BaseMicroserviceConfigs &configs);
 
     ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>>* getOutQueue () {
         return OutQueue;
+    }
+
+    QueueLengthType GetOutQueueSize() {
+        return OutQueue->size();
     }
 
 protected:
@@ -365,11 +377,14 @@ protected:
 template <typename InType>
 class SerDataMicroservice : public Microservice<InType> {
 public:
-    SerDataMicroservice(const BaseMicroserviceConfigs &configs);
-    ~SerDataMicroservice();
+    explicit SerDataMicroservice(const BaseMicroserviceConfigs &configs);
 
     ThreadSafeFixSizedQueue<DataRequest<InterConCPUReqDataType>>* getOutQueue () {
         return OutQueue;
+    }
+
+    QueueLengthType GetOutQueueSize() {
+        return OutQueue->size();
     }
 
 protected:
@@ -379,11 +394,14 @@ protected:
 template <typename InType>
 class LocalGPUDataMicroservice : public Microservice<InType> {
 public:
-    LocalGPUDataMicroservice(const BaseMicroserviceConfigs &configs);
-    ~LocalGPUDataMicroservice();
+    explicit LocalGPUDataMicroservice(const BaseMicroserviceConfigs &configs);
 
     ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>>* getOutQueue () {
         return OutQueue;
+    }
+
+    QueueLengthType GetOutQueueSize() {
+        return OutQueue->size();
     }
 
 protected:

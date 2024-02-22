@@ -50,7 +50,7 @@ public:
         BaseMicroserviceConfigs sender_configs = {"cam1::sender", MicroserviceType::Sender, slo, dataShape,
                                                   {neighbor_reader_configs}, std::list<NeighborMicroserviceConfigs>()};
         reader = new DataReader(reader_configs, datapath);
-        sender = new LocalCPUSender(sender_configs, "localhost:50000");
+        sender = new LocalCPUSender(sender_configs, "localhost", 50000);
     };
 
     ~DataSource() {

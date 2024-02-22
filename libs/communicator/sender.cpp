@@ -1,21 +1,21 @@
-#include "absl/flags/parse.h"
-#include <random>
-#include <cuda_runtime.h>
+#ifndef COMMUNICATOR_H
+#define COMMUNICATOR_H
 
-#include "microservice.h"
-#include "sender.h"
+#include "communicator.h"
+
+#endif
 
 template<typename InType>
 class Sender : public Microservice<InType> {
 public:
-    Sender(const BaseMicroserviceConfigs &configs, const std::string &target_str) : Microservice<InType>(configs) {
+    Sender(const BaseMicroserviceConfigs &configs, const std::string &url, const uint16_t port) : Microservice<InType>(
+            configs) {
+        std::string target_str = absl::StrFormat("%s:%d", url, port);
         stubs = std::vector<std::unique_ptr<DataTransferService::Stub>>();
         stubs.push_back(
                 DataTransferService::NewStub(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())));
         multipleStubs = false;
     }
-
-    ~Sender() {}
 
 protected:
     static inline std::mt19937 &generator() {
@@ -51,7 +51,8 @@ protected:
 
 class GPUSender : public Sender<DataRequest<LocalGPUReqDataType>> {
 public:
-    explicit GPUSender(const BaseMicroserviceConfigs &configs, const std::string &target) : Sender(configs, target) {
+    explicit GPUSender(const BaseMicroserviceConfigs &configs, const std::string &url, const uint16_t port) : Sender(
+            configs, url, port) {
         tagToGpuPointer = std::map<void *, std::vector<ImageData> *>();
     }
 
@@ -121,7 +122,8 @@ private:
 
 class LocalCPUSender : public Sender<DataRequest<LocalCPUDataType>> {
 public:
-    LocalCPUSender(const BaseMicroserviceConfigs &configs, const std::string &target) : Sender(configs, target) {}
+    LocalCPUSender(const BaseMicroserviceConfigs &configs, const std::string &url, const uint16_t port) : Sender(
+            configs, url, port) {}
 
     std::string
     SendSharedMemory(const std::vector<MemoryImageData> &elements, const int64_t timestamp, const std::string &path,
@@ -156,7 +158,8 @@ public:
 
 class RemoteCPUSender : public Sender<DataRequest<LocalCPUDataType>> {
 public:
-    RemoteCPUSender(const BaseMicroserviceConfigs &configs, const std::string &target) : Sender(configs, target) {}
+    RemoteCPUSender(const BaseMicroserviceConfigs &configs, const std::string &url, const uint16_t port) : Sender(
+            configs, url, port) {}
 
     std::string SendSerializedData(
             const std::vector<SerialImageData> &elements, const int64_t timestamp, const std::string &path,
