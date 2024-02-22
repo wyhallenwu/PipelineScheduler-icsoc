@@ -72,6 +72,7 @@ class Logger : public nvinfer1::ILogger {
 
 /**
  * @brief Engine class for tensorrt model convert and inference
+ * TODO: add type and create an Engine template
  * 
  */
 class Engine {
@@ -98,7 +99,10 @@ public:
     // Input format [input][batch][cv::cuda::GpuMat]
     // Output format [batch][output][feature_vector]
     // bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<std::vector<float>>& outputs);
-    bool runInference(const cv::cuda::GpuMat& inputs, std::vector<cv::cuda::GpuMat>& outputs, const int32_t batchSize);
+    bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<cv::cuda::GpuMat>& outputs, const int32_t batchSize);
+
+    void copyToBuffer(const std::vector<cv::cuda::GpuMat>& inputs, cudaStream_t &inferenceStream);
+    void copyFromBuffer(std::vector<cv::cuda::GpuMat>& outputs, const uint16_t batchSize, cudaStream_t &inferenceStream);
 
     // Utility method for resizing an image while maintaining the aspect ratio by adding padding to smaller dimension after scaling
     // While letterbox padding normally adds padding to top & bottom, or left & right sides, this implementation only adds padding to the right or bottom side
@@ -117,6 +121,9 @@ public:
     static void transformOutput(std::vector<std::vector<std::vector<float>>>& input, std::vector<float>& output);
     // Convert NHWC to NCHW and apply scaling and mean subtraction
     static cv::cuda::GpuMat blobFromGpuMats(const std::vector<cv::cuda::GpuMat>& batchInput, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals, bool normalize);
+
+    std::vector<void *>& getInputBuffers();
+    std::vector<void *>& getOutputBuffers();
 private:
     // Converts the engine options into a string
     void serializeEngineOptions(const TRTConfigs& options);
@@ -129,9 +136,11 @@ private:
     bool m_normalize;
 
     // Holds pointers to the input and output GPU buffers
-    std::vector<void*> m_buffers;
+    std::vector<void*> m_buffers, m_inputBuffers, m_outputBuffers;
     std::vector<uint32_t> m_outputLengthsFloat{};
+    // Dimemsions of inputs without batch size
     std::vector<nvinfer1::Dims3> m_inputDims;
+    // Dimensions of outputs with batch size
     std::vector<nvinfer1::Dims> m_outputDims;
     std::vector<std::string> m_IOTensorNames;
     // The Batch size with which we are going to allocate memory buffers

@@ -7,7 +7,7 @@
 
 class GPULoader : public Microservice<DataRequest<LocalCPUDataType>> {
 public:
-    GPULoader(const BaseMicroserviceConfigs &configs, ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *out)
+    GPULoader(const BaseMicroserviceConfigs &configs, ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *out)
             : Microservice(configs) {
         InQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>();
         OutQueue = out;
@@ -16,7 +16,7 @@ public:
     void Schedule() override {
         DataRequest<LocalCPUDataType> req = InQueue->pop();
         // copy data to gpu using cuda
-        std::vector<Data<LocalGPUDataType>> elements = {};
+        std::vector<Data<LocalGPUReqDataType>> elements = {};
         for (const auto &el: req.req_data) {
             auto gpu_image = cv::cuda::GpuMat(req.req_dataShape[0], req.req_dataShape[1], CV_8UC3);
             gpu_image.upload(el.content);
@@ -31,7 +31,7 @@ public:
     }
 
 protected:
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUDataType>> *OutQueue;
+    ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *OutQueue;
 };
 
 class Receiver : public GPUDataMicroservice<void> {
@@ -94,13 +94,13 @@ private:
             } else if (status == PROCESS) {
                 new GpuPointerRequestHandler(service, cq, LoadingQueue);
 
-                std::vector<Data<LocalGPUDataType>> elements = {};
+                std::vector<Data<LocalGPUReqDataType>> elements = {};
                 for (const auto &el: *request.mutable_elements()) {
                     auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3,
                                                       (void *) (&el.data()));
                     elements.push_back({{el.width(), el.height()}, gpu_image});
                 }
-                DataRequest<LocalGPUDataType> req = {request.timestamp(), request.slo(),
+                DataRequest<LocalGPUReqDataType> req = {request.timestamp(), request.slo(),
                                                      request.path(), elements};
                 OutQueue->emplace(req);
 

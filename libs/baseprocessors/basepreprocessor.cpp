@@ -31,7 +31,7 @@ cv::cuda::GpuMat resizePadRightBottom(
     size_t height,
     size_t width,
     const cv::Scalar &bgcolor,
-    bool toNormalize = true
+    bool toNormalize
 ) {
     float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
@@ -56,8 +56,8 @@ cv::cuda::GpuMat resizePadRightBottom(
  */
 template<typename InType>
 BasePreprocessor<InType>::BasePreprocessor(const BaseMicroserviceConfigs &configs) : LocalGPUDataMicroservice<InType>(configs){
-    msvc_idealBatchSize = configs.msvc_dataShape[0];
-    this->msvc_outReqShape = {configs.msvc_dataShape[1], configs.msvc_dataShape[2], configs.msvc_dataShape[3]};
+    msvc_idealBatchSize = configs.msvc_idealBatchSize;
+    this->msvc_outReqShape = {configs.msvc_dataShape[0][1], configs.msvc_dataShape[0][2], configs.msvc_dataShape[0][3]};
     // for (BatchSizeType i = 0; i < msvc_idealBatchSize; ++i) {
     //     msvc_batchBuffer.emplace_back(cv::cuda::GpuMat(configs.msvc_dataShape[2], configs.msvc_dataShape[3], CV_32FC3));
     // }
