@@ -91,7 +91,7 @@ struct MetaRequest {
     // The end-to-end service level latency objective to which this request is subject
     MsvcSLOType req_e2eSLOLatency;
     // Shape of data contained in the request. Helps interpret the data.
-    // RequestShapeType req_dataShape;
+    RequestShapeType req_dataShape;
 
     // The path that this request and its ancestors have travelled through.
     // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`

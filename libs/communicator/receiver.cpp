@@ -23,7 +23,7 @@ public:
             elements.push_back({req.req_dataShape, gpu_image});
         }
         OutQueue->emplace(
-                {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, elements});
+                {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
     }
 
     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *getInQueue() {
@@ -101,7 +101,7 @@ private:
                     elements.push_back({{el.width(), el.height()}, gpu_image});
                 }
                 DataRequest<LocalGPUReqDataType> req = {request.timestamp(), request.slo(),
-                                                     request.path(), elements};
+                                                     request.path(), 1, elements};
                 OutQueue->emplace(req);
 
                 status = FINISH;
@@ -145,7 +145,7 @@ private:
                     boost::interprocess::shared_memory_object::remove(name);
                 }
                 DataRequest<LocalCPUDataType> req = {request.timestamp(), request.slo(),
-                                                     request.path(), elements};
+                                                     request.path(), 1, elements};
                 LoadingQueue->emplace(req);
 
                 status = FINISH;
@@ -189,7 +189,7 @@ private:
                     elements.push_back({{el.width(), el.height()}, image});
                 }
                 DataRequest<LocalCPUDataType> req = {request.timestamp(), request.slo(),
-                                                     request.path(), elements};
+                                                     request.path(), 1, elements};
                 LoadingQueue->emplace(req);
 
                 status = FINISH;
