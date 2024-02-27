@@ -7,11 +7,19 @@ package indevicecommunication;
 
 service InDeviceCommunication {
   rpc SendQueueSize(QueueSize) returns (SimpleConfirm) {}
+  rpc ReportMsvcStart(ConnectionConfigs) returns (SimpleConfirm) {}
   rpc StopExecution(SimpleConfirm) returns (SimpleConfirm) {}
 }
 
 message QueueSize {
-  repeated int32 size = 1;
+  string name = 1;
+  repeated int32 size = 2;
+}
+
+message ConnectionConfigs {
+  string msvc_name = 1;
+  string ip = 2;
+  int32 port = 3;
 }
 
 // The response message confirming transfer

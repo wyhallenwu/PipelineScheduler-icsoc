@@ -52,6 +52,7 @@ add_subdirectory(libs/baseprocessors)
 add_subdirectory(libs/communicator)
 add_subdirectory(libs/data_source)
 add_subdirectory(libs/container_agent)
+add_subdirectory(libs/device_agent)
 add_subdirectory(libs/yolov5)
 
 add_library(PipePlusPlus SHARED

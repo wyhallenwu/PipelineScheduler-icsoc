@@ -5,9 +5,12 @@
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/health_check_service_interface.h>
 
+#include "../json/json.h"
 #include "../communicator/sender.cpp"
 #include "../communicator/receiver.cpp"
 #include "../protobufprotocols/indevicecommunication.grpc.pb.h"
+
+using json = nlohmann::json;
 
 using indevicecommunication::InDeviceCommunication;
 using indevicecommunication::QueueSize;
@@ -43,8 +46,9 @@ public:
     }
 
     void SendQueueLengths();
-
 private:
+    void ReportStart(int port);
+
     class RequestHandler {
     public:
         RequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq)
@@ -81,9 +85,8 @@ private:
         std::atomic<bool> *run;
     };
 
-    void HandleOutRpcs();
+    void HandleRecvRpcs();
 
-    std::vector<std::thread> msvc_threads;
     std::vector<Microservice<void> *> msvcs;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;

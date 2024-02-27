@@ -18,9 +18,7 @@ ContainerAgent::ContainerAgent(const std::string &url, uint16_t device_port, uin
     sender_cq = new CompletionQueue();
 
     for (auto &config: msvc_configs) {
-        if (config.first.msvc_type == MicroserviceType::Regular) {
-            msvcs.push_back(new Microservice<void>(config.first));
-        } else if (config.first.msvc_type == MicroserviceType::Sender) {
+        if (config.first.msvc_type == MicroserviceType::Sender) {
             if (config.second == TransferMethod::LocalCPU)
                 msvcs.push_back(
                         reinterpret_cast<Microservice<void> *const>(new LocalCPUSender(config.first, OutConfigs.ip,
@@ -41,7 +39,21 @@ ContainerAgent::ContainerAgent(const std::string &url, uint16_t device_port, uin
     }
 
     run = true;
-    std::thread receiver(&ContainerAgent::HandleOutRpcs, this);
+    std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
+    receiver.detach();
+    ReportStart(own_port);
+}
+
+void ContainerAgent::ReportStart(int port) {
+    indevicecommunication::ConnectionConfigs request;
+    request.set_ip("localhost");
+    request.set_port(port);
+    indevicecommunication::SimpleConfirm reply;
+    ClientContext context;
+    std::unique_ptr<ClientAsyncResponseReader<indevicecommunication::SimpleConfirm>> rpc(
+            stub->AsyncReportMsvcStart(&context, request, sender_cq));
+    Status status;
+    rpc->Finish(&reply, &status, (void *) 1);
 }
 
 void ContainerAgent::SendQueueLengths() {
@@ -57,7 +69,7 @@ void ContainerAgent::SendQueueLengths() {
     rpc->Finish(&reply, &status, (void *) 1);
 }
 
-void ContainerAgent::HandleOutRpcs() {
+void ContainerAgent::HandleRecvRpcs() {
     new StopRequestHandler(&service, server_cq.get(), &run);
     void *tag;
     bool ok;
