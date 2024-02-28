@@ -10,7 +10,6 @@ public:
     BaseProcessor(const BaseMicroserviceConfigs &configs);
     ~BaseProcessor();
 protected:
-    BatchSizeType msvc_idealBatchSize;
     BatchSizeType msvc_onBufferBatchSize;
     bool checkReqEligibility(ClockTypeTemp currReq_genTime) override;
 };
