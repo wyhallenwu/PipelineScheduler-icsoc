@@ -29,8 +29,8 @@ public:
                 return;
             }
         }
-        DataRequest<CPUReqDataType> req = {time, msvc_svcLevelObjLatency, msvc_name,
-                                           {Data<CPUReqDataType>{{frame.cols, frame.rows}, frame}}};
+        DataRequest<LocalCPUDataType> req = {time, msvc_svcLevelObjLatency, msvc_name, 1,
+                                           {Data<LocalCPUDataType>{{frame.cols, frame.rows}, frame}}};
         OutQueue->emplace(req);
     };
 
@@ -41,16 +41,17 @@ private:
 class DataSource {
 public:
     DataSource(std::string &datapath, std::vector<int32_t> dataShape, uint32_t slo) {
-        NeighborMicroserviceConfigs neighbor_reader_configs = {"cam1::source", CommMethod::localQueue, "",
-                                                               QueueType::cpuDataQueue, 30, -2, dataShape};
-        NeighborMicroserviceConfigs neighbor_sender_configs = {"cam1::sender", CommMethod::localQueue, "",
-                                                               QueueType::cpuDataQueue, 30, -1, dataShape};
-        BaseMicroserviceConfigs reader_configs = {"cam1::source", MicroserviceType::Regular, slo, dataShape,
+        NeighborMicroserviceConfigs neighbor_reader_configs = {"cam1::source", CommMethod::localQueue, {""},
+                                                               QueueType::cpuDataQueue, 30, -2, {dataShape}};
+        NeighborMicroserviceConfigs neighbor_sender_configs = {"cam1::sender", CommMethod::localQueue, {""},
+                                                               QueueType::cpuDataQueue, 30, -1, {dataShape}};
+        BaseMicroserviceConfigs reader_configs = {"cam1::source", MicroserviceType::Postprocessor, slo, 1, {dataShape},
                                                   std::list<NeighborMicroserviceConfigs>(), {neighbor_sender_configs}};
-        BaseMicroserviceConfigs sender_configs = {"cam1::sender", MicroserviceType::Sender, slo, dataShape,
+        BaseMicroserviceConfigs sender_configs = {"cam1::sender", MicroserviceType::Sender, slo, 1, {dataShape},
                                                   {neighbor_reader_configs}, std::list<NeighborMicroserviceConfigs>()};
         reader = new DataReader(reader_configs, datapath);
-        sender = new LocalCPUSender(sender_configs, "localhost", 50000);
+        std::string connection = "localhost:50000";
+        sender = new LocalCPUSender(sender_configs, connection);
     };
 
     ~DataSource() {
