@@ -1,3 +1,6 @@
+#ifndef CONTAINER_AGENT_H
+#define CONTAINER_AGENT_H
+
 #include <vector>
 #include <thread>
 #include "absl/strings/str_format.h"
@@ -11,14 +14,19 @@
 #include "../communicator/receiver.cpp"
 #include "../protobufprotocols/indevicecommunication.grpc.pb.h"
 
-ABSL_FLAG(std::string, name, "", "base name of container");
-ABSL_FLAG(std::string, json, "", "configurations for microservices");
-ABSL_FLAG(uint16_t, port, 0, "Server port for the service");
+#include "../yolov5/yolov5.h"
+#include "../data_source/data_source.cpp"
+#include "../trtengine/trtengine.h"
+
+ABSL_DECLARE_FLAG(std::string, name);
+ABSL_DECLARE_FLAG(std::string, json);
+ABSL_DECLARE_FLAG(uint16_t, port);
 
 using json = nlohmann::json;
 
 using indevicecommunication::InDeviceCommunication;
 using indevicecommunication::QueueSize;
+using indevicecommunication::StaticConfirm;
 
 enum TransferMethod {
     LocalCPU,
@@ -32,33 +40,14 @@ struct ConnectionConfigs {
 };
 
 namespace msvcconfigs {
-    void from_json(const json &j, NeighborMicroserviceConfigs &val)
-    {
-        j.at("name").get_to(val.name);
-        j.at("comm").get_to(val.commMethod);
-        j.at("link").get_to(val.link);
-        j.at("qt").get_to(val.queueType);
-        j.at("maxqs").get_to(val.maxQueueSize);
-        j.at("coi").get_to(val.classOfInterest);
-        j.at("shape").get_to(val.expectedShape);
-    }
+    void from_json(const json &j, NeighborMicroserviceConfigs &val);
 
-    void from_json(const json &j, BaseMicroserviceConfigs &val)
-    {
-        j.at("name").get_to(val.msvc_name);
-        j.at("type").get_to(val.msvc_type);
-        j.at("slo").get_to(val.msvc_svcLevelObjLatency);
-        j.at("bs").get_to(val.msvc_idealBatchSize);
-        j.at("ds").get_to(val.msvc_dataShape);
-        j.at("upstrm").get_to(val.upstreamMicroservices);
-        j.at("downstrm").get_to(val.dnstreamMicroservices);
-    }
+    void from_json(const json &j, BaseMicroserviceConfigs &val);
 }
 
 class ContainerAgent {
 public:
-    ContainerAgent(const std::string &name, const std::string &url, uint16_t device_port, uint16_t own_port,
-                   std::vector<BaseMicroserviceConfigs> &msvc_configs);
+    ContainerAgent(const std::string &name, uint16_t device_port, uint16_t own_port);
 
     ~ContainerAgent() {
         for (auto msvc: msvcs) {
@@ -74,7 +63,8 @@ public:
     }
 
     void SendQueueLengths();
-private:
+
+protected:
     void ReportStart(int port);
 
     class RequestHandler {
@@ -83,6 +73,7 @@ private:
                 : service(service), cq(cq), status(CREATE) {};
 
         virtual ~RequestHandler() = default;
+
         virtual void Proceed() = 0;
 
     protected:
@@ -107,9 +98,9 @@ private:
         void Proceed() final;
 
     private:
-        indevicecommunication::SimpleConfirm request;
-        indevicecommunication::SimpleConfirm reply;
-        grpc::ServerAsyncResponseWriter<indevicecommunication::SimpleConfirm> responder;
+        StaticConfirm request;
+        StaticConfirm reply;
+        grpc::ServerAsyncResponseWriter<StaticConfirm> responder;
         std::atomic<bool> *run;
     };
 
@@ -124,3 +115,17 @@ private:
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     std::atomic<bool> run{};
 };
+
+class Yolo5ContainerAgent : public ContainerAgent {
+public:
+    Yolo5ContainerAgent(const std::string &name, uint16_t device_port, uint16_t own_port,
+                        std::vector<BaseMicroserviceConfigs> &msvc_configs);
+};
+
+class DataSourceAgent : public ContainerAgent {
+public:
+    DataSourceAgent(const std::string &name, uint16_t device_port, uint16_t own_port,
+                    std::vector<BaseMicroserviceConfigs> &msvc_configs);
+};
+
+#endif

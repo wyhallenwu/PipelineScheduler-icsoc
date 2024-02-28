@@ -6,9 +6,9 @@ option objc_class_prefix = "HLW";
 package indevicecommunication;
 
 service InDeviceCommunication {
-  rpc SendQueueSize(QueueSize) returns (SimpleConfirm) {}
-  rpc ReportMsvcStart(ConnectionConfigs) returns (SimpleConfirm) {}
-  rpc StopExecution(SimpleConfirm) returns (SimpleConfirm) {}
+  rpc SendQueueSize(QueueSize) returns (StaticConfirm) {}
+  rpc ReportMsvcStart(ConnectionConfigs) returns (StaticConfirm) {}
+  rpc StopExecution(StaticConfirm) returns (StaticConfirm) {}
 }
 
 message QueueSize {
@@ -23,5 +23,5 @@ message ConnectionConfigs {
 }
 
 // The response message confirming transfer
-message SimpleConfirm {
+message StaticConfirm {
 }

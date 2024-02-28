@@ -45,6 +45,32 @@ find_package(TensorRT REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(OpenCV REQUIRED)
 
+# Find Protobuf installation
+# Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
+option(protobuf_MODULE_COMPATIBLE TRUE)
+find_package(Protobuf CONFIG REQUIRED)
+message(STATUS "Using protobuf ${Protobuf_VERSION}")
+
+set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
+set(_REFLECTION gRPC::grpc++_reflection)
+if (CMAKE_CROSSCOMPILING)
+    find_program(_PROTOBUF_PROTOC protoc)
+else ()
+    set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
+endif ()
+
+# Find gRPC installation
+# Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
+find_package(gRPC CONFIG REQUIRED)
+message(STATUS "Using gRPC ${gRPC_VERSION}")
+
+set(_GRPC_GRPCPP gRPC::grpc++)
+if (CMAKE_CROSSCOMPILING)
+    find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+else ()
+    set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
+endif ()
+
 add_subdirectory(libs/trtengine)
 add_subdirectory(libs/microservice)
 add_subdirectory(libs/protobufprotocols)
@@ -58,8 +84,27 @@ add_subdirectory(libs/yolov5)
 add_library(PipePlusPlus SHARED
         src/main.cpp)
 
-target_include_directories(PipePlusPlus PUBLIC ${OpenCV_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ${TensorRT_INCLUDE_DIRS})
-target_link_libraries(PipePlusPlus PUBLIC ${OpenCV_LIBS} ${CUDA_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${TensorRT_LIBRARIES})
+target_include_directories(PipePlusPlus PUBLIC
+        ${OpenCV_INCLUDE_DIRS}
+        ${CUDA_INCLUDE_DIRS}
+        ${TensorRT_INCLUDE_DIRS}
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
+target_link_libraries(PipePlusPlus PUBLIC
+        ${OpenCV_LIBS}
+        ${CUDA_LIBRARIES}
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${TensorRT_LIBRARIES}
+        ${_GRPC_GRPCPP}
+        ${_REFLECTION}
+        ${_PROTOBUF_LIBPROTOBUF}
+        trtengine
+        microservice
+        baseprocessors
+        communicator
+        data_source
+        container_agent
+        device_agent
+        yolov5)
 
 add_executable(run src/main.cpp)
 target_link_libraries(run PipePlusPlus)

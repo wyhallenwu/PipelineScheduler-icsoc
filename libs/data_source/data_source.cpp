@@ -3,7 +3,13 @@
 #include <thread>
 
 #include "microservice.h"
+
+#ifndef COMMUNICATOR_H
+
 #include "../communicator/sender.cpp"
+
+#define COMMUNICATOR_H
+#endif
 
 using namespace cv;
 
@@ -30,7 +36,7 @@ public:
             }
         }
         DataRequest<LocalCPUDataType> req = {time, msvc_svcLevelObjLatency, msvc_name, 1,
-                                           {Data<LocalCPUDataType>{{frame.cols, frame.rows}, frame}}};
+                                             {Data<LocalCPUDataType>{{frame.cols, frame.rows}, frame}}};
         OutQueue->emplace(req);
     };
 

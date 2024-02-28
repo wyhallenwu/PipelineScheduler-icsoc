@@ -21,11 +21,11 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, uint16_t controller_
 }
 
 void DeviceAgent::StopContainer(const ContainerHandle &container) {
-    indevicecommunication::SimpleConfirm request;
-    indevicecommunication::SimpleConfirm reply;
+    StaticConfirm request;
+    StaticConfirm reply;
     ClientContext context;
     Status status;
-    std::unique_ptr<ClientAsyncResponseReader<indevicecommunication::SimpleConfirm>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<StaticConfirm>> rpc(
             container.stub->AsyncStopExecution(&context, request, container.cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
@@ -40,21 +40,33 @@ void DeviceAgent::StopContainer(const ContainerHandle &container) {
 void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs &upstream,
                                        const std::vector<NeighborMicroserviceConfigs> &downstreams,
                                        const MsvcSLOType &slo) {
-    std::string name = "yolo5_" + std::to_string(id);
+    std::string name = "yolov5_" + std::to_string(id);
     json j = createConfigs(
-            {{name + "_receiver",      MicroserviceType::Receiver,      QueueType::localGPUDataQueue, {}},
-             {name + "_preprocessor",  MicroserviceType::Preprocessor,  QueueType::localGPUDataQueue, {}},
-             {name + "_inference",     MicroserviceType::Inference,     QueueType::localGPUDataQueue, {}},
-             {name + "_postprocessor", MicroserviceType::Postprocessor, QueueType::none,              {}},
-             {name + "_sender",        MicroserviceType::Sender,        QueueType::localCPUDataQueue, {}}},
+            {{name + "::receiver",      MicroserviceType::Receiver,      QueueType::localGPUDataQueue,10, -1, {}},
+             {name + "::preprocessor",  MicroserviceType::Preprocessor,  QueueType::localGPUDataQueue,10, -1, {}},
+             {name + "::inference",     MicroserviceType::Inference,     QueueType::localGPUDataQueue,10, -1, {}},
+             {name + "::postprocessor", MicroserviceType::Postprocessor, QueueType::none,             10, -1, {}},
+             {name + "::sender",        MicroserviceType::Sender,        QueueType::localCPUDataQueue,10, -1, {}}},
             slo, upstream, downstreams
     );
-    std::thread container(&DeviceAgent::runDocker, this, name, to_string(j), 5050 + containers.size());
+    std::thread container(&DeviceAgent::runDocker, this, name, to_string(j), 49152 + containers.size());
+    container.detach();
+}
+
+void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams,
+                                       const MsvcSLOType &slo, const std::string &video_path) {
+    std::string name = "data_source_" + std::to_string(id);
+    json j = createConfigs(
+            {{name + "::source",  MicroserviceType::Postprocessor,  QueueType::cpuDataQueue,30, -1, {}},
+             {name + "::sender",  MicroserviceType::Sender,         QueueType::cpuDataQueue,30, -1, {}}},
+            slo, {"video", CommMethod::localQueue, {video_path}, QueueType::none, 0, -2, }, downstreams
+    );
+    std::thread container(&DeviceAgent::runDocker, this, name, to_string(j), 49152 + containers.size());
     container.detach();
 }
 
 json DeviceAgent::createConfigs(
-        const std::vector<std::tuple<std::string, MicroserviceType, QueueType, std::vector<RequestShapeType>>> &data,
+        const std::vector<std::tuple<std::string, MicroserviceType, QueueType, QueueLengthType, int16_t, std::vector<RequestShapeType>>> &data,
         const MsvcSLOType &slo, const NeighborMicroserviceConfigs &prev_msvc,
         const std::vector<NeighborMicroserviceConfigs> &next_msvc) {
     int i = 0, j = next_msvc.size() + 1;
@@ -68,18 +80,18 @@ json DeviceAgent::createConfigs(
         if (std::get<1>(msvc) == MicroserviceType::Postprocessor) {
             while (--j > 0) {
                 downstream.push_back(
-                        {std::get<0>(data[i + j]), CommMethod::localQueue, {""}, std::get<2>(data[i + j]), 30, -1,
-                         std::get<3>(data[i + j])});
+                        {std::get<0>(data[i + j]), CommMethod::localQueue, {""}, std::get<2>(data[i + j]), std::get<3>(data[i + j]), std::get<4>(data[i + j]),
+                         std::get<5>(data[i + j])});
             }
-        } else if (std::get<1>(msvc) == MicroserviceType::Receiver) {
+        } else if (std::get<1>(msvc) == MicroserviceType::Sender) {
             downstream.push_back(next_msvc[j++]);
         } else {
-            downstream.push_back({std::get<0>(data[++i]), CommMethod::localQueue, {""}, std::get<2>(msvc), 30, -1,
-                                  std::get<3>(msvc)});
+            downstream.push_back({std::get<0>(data[++i]), CommMethod::localQueue, {""}, std::get<2>(msvc), std::get<3>(msvc), std::get<4>(msvc),
+                                  std::get<5>(msvc)});
         }
-        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), slo, 1, std::get<3>(msvc), {upstream}, downstream});
+        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), slo, 1, std::get<5>(msvc), {upstream}, downstream});
         //current mvsc becomes upstream for next msvc
-        upstream = {std::get<0>(msvc), CommMethod::localQueue, {""}, std::get<2>(msvc), 30, -2, std::get<3>(msvc)};
+        upstream = {std::get<0>(msvc), CommMethod::localQueue, {""}, std::get<2>(msvc), std::get<3>(msvc), -2, std::get<5>(msvc)};
     }
     return json(configs);
 }
