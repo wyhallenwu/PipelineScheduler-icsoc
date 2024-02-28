@@ -1,9 +1,8 @@
 #include "container_agent.h"
 
 
-ContainerAgent::ContainerAgent(const std::string &url, uint16_t device_port, uint16_t own_port,
-                               std::vector<std::pair<BaseMicroserviceConfigs, TransferMethod>> &msvc_configs,
-                               ConnectionConfigs &InConfigs, ConnectionConfigs &OutConfigs) {
+ContainerAgent::ContainerAgent(const std::string &name, const std::string &url, uint16_t device_port, uint16_t own_port,
+                               std::vector<BaseMicroserviceConfigs> &msvc_configs) {
     std::string server_address = absl::StrFormat("%s:%d", url, own_port);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
@@ -18,23 +17,19 @@ ContainerAgent::ContainerAgent(const std::string &url, uint16_t device_port, uin
     sender_cq = new CompletionQueue();
 
     for (auto &config: msvc_configs) {
-        if (config.first.msvc_type == MicroserviceType::Sender) {
-            if (config.second == TransferMethod::LocalCPU)
+        if (config.msvc_type == MicroserviceType::Sender) {
+            if (config.dnstreamMicroservices.front().commMethod == CommMethod::sharedMemory)
                 msvcs.push_back(
-                        reinterpret_cast<Microservice<void> *const>(new LocalCPUSender(config.first, OutConfigs.ip,
-                                                                                       OutConfigs.port)));
-            else if (config.second == TransferMethod::RemoteCPU)
+                        reinterpret_cast<Microservice<void> *const>(new LocalCPUSender(config, config.dnstreamMicroservices.front().link[0])));
+            else if (config.dnstreamMicroservices.front().commMethod == CommMethod::gRPC)
                 msvcs.push_back(
-                        reinterpret_cast<Microservice<void> *const>(new RemoteCPUSender(config.first, OutConfigs.ip,
-                                                                                        OutConfigs.port)));
-            else if (config.second == TransferMethod::GPU)
+                        reinterpret_cast<Microservice<void> *const>(new RemoteCPUSender(config, config.dnstreamMicroservices.front().link[0])));
+            else if (config.dnstreamMicroservices.front().commMethod == CommMethod::gRPCLocal) // gRPCLocal = GPU
                 msvcs.push_back(
-                        reinterpret_cast<Microservice<void> *const>(new GPUSender(config.first, OutConfigs.ip,
-                                                                                  OutConfigs.port)));
-        } else if (config.first.msvc_type == MicroserviceType::Receiver) {
+                        reinterpret_cast<Microservice<void> *const>(new GPUSender(config, config.dnstreamMicroservices.front().link[0])));
+        } else if (config.msvc_type == MicroserviceType::Receiver) {
             msvcs.push_back(
-                    reinterpret_cast<Microservice<void> *const>(new Receiver(config.first, InConfigs.ip,
-                                                                             InConfigs.port)));
+                    reinterpret_cast<Microservice<void> *const>(new Receiver(config, config.upstreamMicroservices.front().link[0])));
         }
     }
 
@@ -97,10 +92,9 @@ void ContainerAgent::StopRequestHandler::Proceed() {
 
 int main(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
-    std::vector<std::pair<BaseMicroserviceConfigs, TransferMethod>> msvc_configs;
-    ConnectionConfigs InConfigs = {"localhost", 50000};
-    ConnectionConfigs OutConfigs = {"localhost", 50001};
-    auto agent = new ContainerAgent("localhost", 50051, 50052, msvc_configs, InConfigs, OutConfigs);
+    auto msvc_configs = json::parse(absl::GetFlag(FLAGS_json)).get<std::vector<BaseMicroserviceConfigs>>();
+    auto agent = new ContainerAgent(absl::GetFlag(FLAGS_name), "localhost", 2000, absl::GetFlag(FLAGS_port),
+                                    msvc_configs);
 
     while (agent->running()) {
         std::this_thread::sleep_for(std::chrono::seconds(10));

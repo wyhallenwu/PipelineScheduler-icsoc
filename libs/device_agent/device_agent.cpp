@@ -39,7 +39,7 @@ void DeviceAgent::StopContainer(const ContainerHandle &container) {
 
 void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs &upstream,
                                        const std::vector<NeighborMicroserviceConfigs> &downstreams,
-                                       const MsvcSLOType slo) {
+                                       const MsvcSLOType &slo) {
     std::string name = "yolo5_" + std::to_string(id);
     json j = createConfigs(
             {{name + "_receiver",      MicroserviceType::Receiver,      QueueType::localGPUDataQueue, {}},
@@ -49,8 +49,7 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
              {name + "_sender",        MicroserviceType::Sender,        QueueType::localCPUDataQueue, {}}},
             slo, upstream, downstreams
     );
-    j.push_back({{"name", name}});
-    std::thread container(&DeviceAgent::runDocker, this, to_string(j), 5050 + containers.size());
+    std::thread container(&DeviceAgent::runDocker, this, name, to_string(j), 5050 + containers.size());
     container.detach();
 }
 

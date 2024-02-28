@@ -163,7 +163,7 @@ struct DataRequest : MetaRequest {
  */
 enum class CommMethod {
     sharedMemory,
-    gRPCLocal,
+    gRPCLocal, // gRPCLocal = GPU
     gRPC,
     localQueue,
 };

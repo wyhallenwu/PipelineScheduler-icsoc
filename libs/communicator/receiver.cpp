@@ -36,13 +36,12 @@ protected:
 
 class Receiver : public GPUDataMicroservice<void> {
 public:
-    Receiver(const BaseMicroserviceConfigs &configs, const std::string &url, const uint16_t port)
+    Receiver(const BaseMicroserviceConfigs &configs, const std::string &connection)
             : GPUDataMicroservice<void>(configs) {
-        std::string serveraddress = absl::StrFormat("%s:%d", url, port);
         grpc::EnableDefaultHealthCheckService(true);
         grpc::reflection::InitProtoReflectionServerBuilderPlugin();
         ServerBuilder builder;
-        builder.AddListeningPort(serveraddress, grpc::InsecureServerCredentials());
+        builder.AddListeningPort(connection, grpc::InsecureServerCredentials());
         builder.RegisterService(&service);
         cq = builder.AddCompletionQueue();
         server = builder.BuildAndStart();
