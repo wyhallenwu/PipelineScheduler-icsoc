@@ -84,9 +84,6 @@ endif ()
 
 find_package(Threads REQUIRED)
 
-# Manually specify the path to the protobufprotocols
-set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
-
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 

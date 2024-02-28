@@ -1,6 +1,6 @@
-#include <basepreprocessor.h>
-#include <baseprocessor.h>
-#include <trtengine.h>
+#include "../baseprocessors/basepreprocessor.h"
+#include "../baseprocessors/baseprocessor.h"
+#include "../trtengine/trtengine.h"
 
 template<typename InType>
 class YoloV5Preprocessor : public BasePreprocessor<InType> {

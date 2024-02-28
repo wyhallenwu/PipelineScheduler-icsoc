@@ -84,8 +84,8 @@ endif ()
 
 find_package(Threads REQUIRED)
 
-# Manually specify the path to the protobufprotocols
-set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
+set(baseprocessors_DIR "${CMAKE_CURRENT_BINARY_DIR}/../baseprocessors")
+find_package(baseprocessors CONFIG REQUIRED)
 
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
@@ -114,6 +114,8 @@ target_link_libraries(container_agent
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
         microservice
+        baseprocessors
+        trtengine
 )
 
 # Here we configure variables specifying the target directories.
