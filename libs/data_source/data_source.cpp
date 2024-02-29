@@ -3,7 +3,7 @@
 #include <thread>
 
 #include "microservice.h"
-#include "../communicator/sender.cpp"
+#include "sender.cpp"
 
 using namespace cv;
 

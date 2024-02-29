@@ -62,6 +62,9 @@ find_package(Threads REQUIRED)
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
+set(communicator_DIR "${CMAKE_CURRENT_BINARY_DIR}/../communicator")
+find_package(communicator CONFIG REQUIRED)
+
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(data_source
@@ -79,6 +82,7 @@ target_link_libraries(data_source
         PUBLIC
         ${OpenCV_LIBS}
         ${CMAKE_THREAD_LIBS_INIT}
+        communicator
         microservice
 )
 
