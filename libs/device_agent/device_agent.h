@@ -56,14 +56,17 @@ private:
     void CreateYolo5Container(int id, const NeighborMicroserviceConfigs &upstream,
                               const std::vector<NeighborMicroserviceConfigs> &downstreams, const MsvcSLOType &slo);
 
+    void CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams, const MsvcSLOType &slo,
+                          const std::string &video_path);
+
     json createConfigs(
-            const std::vector<std::tuple<std::string, MicroserviceType, QueueType, std::vector<RequestShapeType>>> &data,
+            const std::vector<std::tuple<std::string, MicroserviceType, QueueType, QueueLengthType, int16_t, std::vector<RequestShapeType>>> &data,
             const MsvcSLOType &slo, const NeighborMicroserviceConfigs &prev_msvc,
             const std::vector<NeighborMicroserviceConfigs> &next_msvc);
 
     void runDocker(const std::string &name, const std::string &start_string, const int &port) {
         system(absl::StrFormat(R"(docker run -p %i:%i pipeline-base-container --name="%s"--json="%s" --port=%i)", port,
-                               port, name, start_string,port).c_str());
+                               port, name, start_string, port).c_str());
     };
 
     static void StopContainer(const ContainerHandle &container);
@@ -100,8 +103,8 @@ private:
 
     private:
         QueueSize request;
-        indevicecommunication::SimpleConfirm reply;
-        grpc::ServerAsyncResponseWriter<indevicecommunication::SimpleConfirm> responder;
+        StaticConfirm reply;
+        grpc::ServerAsyncResponseWriter<StaticConfirm> responder;
         DeviceAgent *device_agent;
     };
 
@@ -117,8 +120,8 @@ private:
 
     private:
         indevicecommunication::ConnectionConfigs request;
-        indevicecommunication::SimpleConfirm reply;
-        grpc::ServerAsyncResponseWriter<indevicecommunication::SimpleConfirm> responder;
+        StaticConfirm reply;
+        grpc::ServerAsyncResponseWriter<StaticConfirm> responder;
         DeviceAgent *device_agent;
     };
 

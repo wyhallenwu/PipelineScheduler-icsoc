@@ -94,6 +94,7 @@ find_package(microservice CONFIG REQUIRED)
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(container_agent
         PUBLIC
+        ${OpenCV_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ${TensorRT_INCLUDE_DIRS}
         # Used when building the library:
         $<BUILD_INTERFACE:${container_agent_SOURCE_DIR}/>
         # Used when installing the library:
@@ -109,6 +110,7 @@ find_package(communicator CONFIG REQUIRED)
 
 target_link_libraries(container_agent
         PUBLIC
+        ${OpenCV_LIBS} ${CUDA_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${TensorRT_LIBRARIES}
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
@@ -117,6 +119,9 @@ target_link_libraries(container_agent
         baseprocessors
         trtengine
 )
+
+add_executable(ContainerAgent container_agent.cpp)
+target_link_libraries(ContainerAgent container_agent)
 
 # Here we configure variables specifying the target directories.
 set(INSTALL_RUNTIME_DIR ${CMAKE_INSTALL_BINDIR})

@@ -1,9 +1,31 @@
 #include "container_agent.h"
 
+ABSL_FLAG(std::string, name, "", "base name of container");
+ABSL_FLAG(std::string, json, "", "configurations for microservices");
+ABSL_FLAG(uint16_t, port, 0, "Server port for the service");
 
-ContainerAgent::ContainerAgent(const std::string &name, const std::string &url, uint16_t device_port, uint16_t own_port,
-                               std::vector<BaseMicroserviceConfigs> &msvc_configs) {
-    std::string server_address = absl::StrFormat("%s:%d", url, own_port);
+void msvcconfigs::from_json(const json &j, msvcconfigs::NeighborMicroserviceConfigs &val) {
+    j.at("name").get_to(val.name);
+    j.at("comm").get_to(val.commMethod);
+    j.at("link").get_to(val.link);
+    j.at("qt").get_to(val.queueType);
+    j.at("maxqs").get_to(val.maxQueueSize);
+    j.at("coi").get_to(val.classOfInterest);
+    j.at("shape").get_to(val.expectedShape);
+}
+
+void msvcconfigs::from_json(const json &j, msvcconfigs::BaseMicroserviceConfigs &val) {
+    j.at("name").get_to(val.msvc_name);
+    j.at("type").get_to(val.msvc_type);
+    j.at("slo").get_to(val.msvc_svcLevelObjLatency);
+    j.at("bs").get_to(val.msvc_idealBatchSize);
+    j.at("ds").get_to(val.msvc_dataShape);
+    j.at("upstrm").get_to(val.upstreamMicroservices);
+    j.at("downstrm").get_to(val.dnstreamMicroservices);
+}
+
+ContainerAgent::ContainerAgent(const std::string &name, uint16_t device_port, uint16_t own_port) : name(name) {
+    std::string server_address = absl::StrFormat("%s:%d", "localhost", own_port);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder builder;
@@ -16,23 +38,6 @@ ContainerAgent::ContainerAgent(const std::string &name, const std::string &url, 
     stub = InDeviceCommunication::NewStub(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
     sender_cq = new CompletionQueue();
 
-    for (auto &config: msvc_configs) {
-        if (config.msvc_type == MicroserviceType::Sender) {
-            if (config.dnstreamMicroservices.front().commMethod == CommMethod::sharedMemory)
-                msvcs.push_back(
-                        reinterpret_cast<Microservice<void> *const>(new LocalCPUSender(config, config.dnstreamMicroservices.front().link[0])));
-            else if (config.dnstreamMicroservices.front().commMethod == CommMethod::gRPC)
-                msvcs.push_back(
-                        reinterpret_cast<Microservice<void> *const>(new RemoteCPUSender(config, config.dnstreamMicroservices.front().link[0])));
-            else if (config.dnstreamMicroservices.front().commMethod == CommMethod::gRPCLocal) // gRPCLocal = GPU
-                msvcs.push_back(
-                        reinterpret_cast<Microservice<void> *const>(new GPUSender(config, config.dnstreamMicroservices.front().link[0])));
-        } else if (config.msvc_type == MicroserviceType::Receiver) {
-            msvcs.push_back(
-                    reinterpret_cast<Microservice<void> *const>(new Receiver(config, config.upstreamMicroservices.front().link[0])));
-        }
-    }
-
     run = true;
     std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
     receiver.detach();
@@ -43,9 +48,9 @@ void ContainerAgent::ReportStart(int port) {
     indevicecommunication::ConnectionConfigs request;
     request.set_ip("localhost");
     request.set_port(port);
-    indevicecommunication::SimpleConfirm reply;
+    StaticConfirm reply;
     ClientContext context;
-    std::unique_ptr<ClientAsyncResponseReader<indevicecommunication::SimpleConfirm>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<StaticConfirm>> rpc(
             stub->AsyncReportMsvcStart(&context, request, sender_cq));
     Status status;
     rpc->Finish(&reply, &status, (void *) 1);
@@ -56,9 +61,9 @@ void ContainerAgent::SendQueueLengths() {
     for (auto msvc: msvcs) {
         request.add_size(msvc->GetOutQueueSize());
     }
-    indevicecommunication::SimpleConfirm reply;
+    StaticConfirm reply;
     ClientContext context;
-    std::unique_ptr<ClientAsyncResponseReader<indevicecommunication::SimpleConfirm>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<StaticConfirm>> rpc(
             stub->AsyncSendQueueSize(&context, request, sender_cq));
     Status status;
     rpc->Finish(&reply, &status, (void *) 1);
@@ -90,17 +95,66 @@ void ContainerAgent::StopRequestHandler::Proceed() {
     }
 }
 
-int main(int argc, char **argv) {
-    absl::ParseCommandLine(argc, argv);
-    auto msvc_configs = json::parse(absl::GetFlag(FLAGS_json)).get<std::vector<BaseMicroserviceConfigs>>();
-    auto agent = new ContainerAgent(absl::GetFlag(FLAGS_name), "localhost", 2000, absl::GetFlag(FLAGS_port),
-                                    msvc_configs);
-
-    while (agent->running()) {
-        std::this_thread::sleep_for(std::chrono::seconds(10));
-        agent->SendQueueLengths();
+Yolo5ContainerAgent::Yolo5ContainerAgent(const std::string &name, uint16_t device_port,
+                                         uint16_t own_port, std::vector<BaseMicroserviceConfigs> &msvc_configs)
+        : ContainerAgent(name, device_port, own_port) {
+    for (auto &config: msvc_configs) {
+        if (config.msvc_type == MicroserviceType::Sender) {
+            if (config.dnstreamMicroservices.front().commMethod == CommMethod::sharedMemory)
+                msvcs.push_back(
+                        reinterpret_cast<Microservice<void> *const>(new LocalCPUSender(config,
+                                                                                       config.dnstreamMicroservices.front().link[0])));
+            else if (config.dnstreamMicroservices.front().commMethod == CommMethod::gRPC)
+                msvcs.push_back(
+                        reinterpret_cast<Microservice<void> *const>(new RemoteCPUSender(config,
+                                                                                        config.dnstreamMicroservices.front().link[0])));
+            else if (config.dnstreamMicroservices.front().commMethod == CommMethod::gRPCLocal) // gRPCLocal = GPU
+                msvcs.push_back(
+                        reinterpret_cast<Microservice<void> *const>(new GPUSender(config,
+                                                                                  config.dnstreamMicroservices.front().link[0])));
+        } else if (config.msvc_type == MicroserviceType::Receiver) {
+            msvcs.push_back(
+                    reinterpret_cast<Microservice<void> *const>(new Receiver(config,
+                                                                             config.upstreamMicroservices.front().link[0])));
+        } else if (config.msvc_type == MicroserviceType::Preprocessor) {
+            msvcs.push_back(
+                    reinterpret_cast<Microservice<void> *const>(new YoloV5Preprocessor<LocalGPUReqDataType>(config)));
+        } else if (config.msvc_type == MicroserviceType::Inference) {
+            msvcs.push_back(
+                    reinterpret_cast<Microservice<void> *const>(new YoloV5Inference<LocalGPUReqDataType>(config,
+                                                                                                         TRTConfigs())));
+        }
     }
-    delete agent;
-    return 0;
 }
+
+DataSourceAgent::DataSourceAgent(const std::string &name, uint16_t device_port, uint16_t own_port,
+                                 std::vector<BaseMicroserviceConfigs> &msvc_configs)
+        : ContainerAgent(name, device_port, own_port) {
+    msvcs.push_back(reinterpret_cast<Microservice<void> *const>(new DataReader(msvc_configs[0],
+                                                                               msvc_configs[0].upstreamMicroservices.front().link[0])));
+    msvcs.push_back(reinterpret_cast<Microservice<void> *const>(new LocalCPUSender(msvc_configs[1],
+                                                                                   msvc_configs[1].dnstreamMicroservices.front().link[0])));
+}
+
+//int main(int argc, char **argv) {
+//    absl::ParseCommandLine(argc, argv);
+//    auto msvc_configs = json::parse(absl::GetFlag(FLAGS_json)).get<std::vector<BaseMicroserviceConfigs>>();
+//    std::string name = absl::GetFlag(FLAGS_name);
+//    ContainerAgent *agent;
+//    if (name.find("yolov5") != std::string::npos) {
+//        agent = new Yolo5ContainerAgent(name, 2000, absl::GetFlag(FLAGS_port), msvc_configs);
+//    } else if (name.find("data_source") != std::string::npos) {
+//        agent = new DataSourceAgent(name, 2000, absl::GetFlag(FLAGS_port), msvc_configs);
+//    } else if (name.find("base") != std::string::npos) {
+//        agent = new ContainerAgent(name, 2000, absl::GetFlag(FLAGS_port));
+//    } else {
+//        return 1;
+//    }
+//    while (agent->running()) {
+//        std::this_thread::sleep_for(std::chrono::seconds(10));
+//        agent->SendQueueLengths();
+//    }
+//    delete agent;
+//    return 0;
+//}
 
