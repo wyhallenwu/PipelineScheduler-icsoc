@@ -120,8 +120,8 @@ target_link_libraries(container_agent
         trtengine
 )
 
-add_executable(ContainerAgent container_agent.cpp)
-target_link_libraries(ContainerAgent container_agent)
+# add_executable(ContainerAgent container_agent.cpp)
+# target_link_libraries(ContainerAgent container_agent)
 
 # Here we configure variables specifying the target directories.
 set(INSTALL_RUNTIME_DIR ${CMAKE_INSTALL_BINDIR})

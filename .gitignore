@@ -15,6 +15,7 @@ __pycache__/
 .conda
 .vscode
 .idea
+.dotnet
 build
 runs
 tensorrt-cpp-api/
