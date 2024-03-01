@@ -16,6 +16,7 @@ __pycache__/
 .vscode
 .idea
 .dotnet
+.wget-hsts
 build
 runs
 tensorrt-cpp-api/
