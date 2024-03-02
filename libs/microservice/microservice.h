@@ -61,6 +61,89 @@ public:
     }
 };
 
+template<typename Type1, typename Type2, int MaxSize=100>
+class ThreadSafeFixSizedDoubleQueue {
+private:
+    std::queue<Type1> queue1;
+    std::queue<Type2> queue2;
+    std::mutex q_mutex;
+    std::condition_variable q_condition;
+    std::uint8_t activeQueueIndex;
+
+protected:
+    /**
+     * @brief Emplacing Type 1 requests
+     * 
+     * @param request 
+     */
+    void emplace(Type1 request) {
+        std::unique_lock<std::mutex> lock(q_mutex);
+        if (queue1.size() == MaxSize) {
+            queue1.pop();
+        }
+        queue1.emplace(request);
+        q_condition.notify_one();
+    }
+
+    /**
+     * @brief Emplacing Type 2 requests
+     * 
+     * @param request 
+     */
+    void emplace(Type2 request) {
+        std::unique_lock<std::mutex> lock(q_mutex);
+        if (queue2.size() == MaxSize) {
+            queue2.pop();
+        }
+        queue2.emplace(request);
+        q_condition.notify_one();
+    }
+
+    /**
+     * @brief poping Type 1 requests
+     * 
+     * @param request 
+     */
+    Type1 pop1() {
+        std::unique_lock<std::mutex> lock(q_mutex);
+        q_condition.wait(
+                lock,
+                [this]() { return !queue1.empty(); }
+        );
+        Type1 request = queue1.front();
+        queue1.pop();
+        return request;
+    }
+
+    /**
+     * @brief popping Type 2 requests
+     * 
+     * @param request 
+     */
+    Type2 pop2() {
+        std::unique_lock<std::mutex> lock(q_mutex);
+        q_condition.wait(
+                lock,
+                [this]() { return !queue2.empty(); }
+        );
+        Type2 request = queue1.front();
+        queue2.pop();
+        return request;
+    }
+
+    int32_t size() {
+        if (activeQueueIndex == 1) {
+            return queue1.size();
+        } else if (activeQueueIndex == 2) {
+            return queue2.size();
+        }
+    }
+
+    void setActiveQueueIndex(uint8_t index) {
+        activeQueueIndex = index;
+    }
+};
+
 template<typename T, int MaxSize = 100>
 class FixSizedQueue {
 private:
