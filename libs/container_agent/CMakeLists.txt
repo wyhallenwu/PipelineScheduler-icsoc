@@ -89,11 +89,8 @@ find_package(microservice CONFIG REQUIRED)
 set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
 find_package(misc CONFIG REQUIRED)
 
-set(yolov5_DIR "${CMAKE_CURRENT_BINARY_DIR}/../yolov5")
-find_package(yolov5 CONFIG REQUIRED)
-
-set(data_source_DIR "${CMAKE_CURRENT_BINARY_DIR}/../data_source")
-find_package(data_source CONFIG REQUIRED)
+set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
+find_package(protobufprotocols CONFIG REQUIRED)
 
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
