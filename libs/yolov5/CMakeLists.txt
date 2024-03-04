@@ -35,7 +35,7 @@ set(
         SOURCE_FILES
         yolov5preprocessor.cpp
         yolov5inference.cpp
-        # yolov5postprocessor.cpp
+        yolov5postprocessor.cpp
 )
 
 # Here we define the library.
@@ -70,6 +70,9 @@ find_package(baseprocessors CONFIG REQUIRED)
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
+set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
+find_package(misc CONFIG REQUIRED)
+
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(yolov5
@@ -89,6 +92,7 @@ target_link_libraries(yolov5
         ${OpenCV_LIBS}
         ${CUDA_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
+        misc
         microservice
         baseprocessors
         trtengine

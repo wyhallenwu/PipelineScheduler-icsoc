@@ -1,8 +1,16 @@
 #include <basepreprocessor.h>
 #include <baseprocessor.h>
+#include <basepostprocessor.h>
 #include <trtengine.h>
+#include <misc.h>
 #include <chrono>
 #include <thread>
+
+struct yoloV5Configs {
+    const TRTConfigs engineConfigs;
+    const std::vector<std::string> classNames = cocoClassNames;
+};
+
 
 template<typename InType>
 class YoloV5Preprocessor : public BasePreprocessor<InType> {
@@ -30,4 +38,13 @@ protected:
     std::vector<LocalGPUReqDataType> batchedOutBuffer;
     TRTConfigs msvc_engineConfigs;
     Engine msvc_inferenceEngine;
+};
+
+template<typename InType>
+class YoloV5Postprocessor : public BasePostprocessor<InType> {
+public:
+    YoloV5Postprocessor(const BaseMicroserviceConfigs &config);
+    ~YoloV5Postprocessor();
+protected:
+    void postProcessing();
 };
