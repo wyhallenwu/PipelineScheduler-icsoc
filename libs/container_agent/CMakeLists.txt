@@ -90,6 +90,15 @@ find_package(baseprocessors CONFIG REQUIRED)
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
+set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
+find_package(misc CONFIG REQUIRED)
+
+set(yolov5_DIR "${CMAKE_CURRENT_BINARY_DIR}/../yolov5")
+find_package(yolov5 CONFIG REQUIRED)
+
+set(data_source_DIR "${CMAKE_CURRENT_BINARY_DIR}/../data_source")
+find_package(data_source CONFIG REQUIRED)
+
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(container_agent
@@ -115,9 +124,12 @@ target_link_libraries(container_agent
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
+        communicator
         microservice
         baseprocessors
         trtengine
+        yolov5
+        data_source
 )
 
 # add_executable(ContainerAgent container_agent.cpp)

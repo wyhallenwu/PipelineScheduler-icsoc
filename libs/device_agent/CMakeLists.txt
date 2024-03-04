@@ -90,6 +90,9 @@ find_package(baseprocessors CONFIG REQUIRED)
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
+set(container_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../container_agent")
+find_package(container_agent CONFIG REQUIRED)
+
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(device_agent
@@ -110,6 +113,7 @@ target_link_libraries(device_agent
         ${_GRPC_GRPCPP}
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
+        container_agent
         microservice
         baseprocessors
         trtengine

@@ -10,13 +10,13 @@
 #include <grpcpp/health_check_service_interface.h>
 
 #include "../json/json.h"
-#include "../communicator/sender.cpp"
-#include "../communicator/receiver.cpp"
-#include "../protobufprotocols/indevicecommunication.grpc.pb.h"
+#include "sender.cpp"
+#include "receiver.cpp"
+#include "indevicecommunication.grpc.pb.h"
 
-#include "../yolov5/yolov5.h"
-#include "../data_source/data_source.cpp"
-#include "../trtengine/trtengine.h"
+#include "yolov5.h"
+#include "data_source.cpp"
+#include "trtengine.h"
 
 ABSL_DECLARE_FLAG(std::string, name);
 ABSL_DECLARE_FLAG(std::string, json);
