@@ -71,15 +71,16 @@ else ()
     set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
 endif ()
 
+add_subdirectory(libs/misc)
 add_subdirectory(libs/trtengine)
 add_subdirectory(libs/microservice)
-add_subdirectory(libs/protobufprotocols)
 add_subdirectory(libs/baseprocessors)
+add_subdirectory(libs/protobufprotocols)
 add_subdirectory(libs/communicator)
 add_subdirectory(libs/data_source)
+add_subdirectory(libs/yolov5)
 add_subdirectory(libs/container_agent)
 add_subdirectory(libs/device_agent)
-add_subdirectory(libs/yolov5)
 
 add_library(PipePlusPlus SHARED
         src/main.cpp)
@@ -102,9 +103,9 @@ target_link_libraries(PipePlusPlus PUBLIC
         baseprocessors
         communicator
         data_source
+        yolov5
         container_agent
-        device_agent
-        yolov5)
+        device_agent)
 
 add_executable(run src/main.cpp)
 target_link_libraries(run PipePlusPlus)
