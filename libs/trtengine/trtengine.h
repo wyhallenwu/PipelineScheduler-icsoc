@@ -9,6 +9,7 @@
 #include "NvInfer.h"
 #include "NvInferPluginUtils.h"
 #include <cuda_runtime.h>
+#include <misc.h>
 
 
 // Utility methods
@@ -46,7 +47,7 @@ struct TRTConfigs {
     // Path to the engine or onnx file
     std::string path = "";
     // Precision to use for GPU inference.
-    Precision precision = Precision::FP16;
+    MODEL_DATA_TYPE precision = MODEL_DATA_TYPE::fp32;
     // If INT8 precision is selected, must provide path to calibration dataset directory.
     std::string calibrationDataDirectoryPath;
     // The batch size to be used when computing calibration data for INT8 inference.
@@ -155,4 +156,6 @@ private:
     // This flag signifies whether the output goes out as cuda data or gpu data
     bool outToGPU = true;
     bool isDynamic = false;
+
+    MODEL_DATA_TYPE m_precision;
 };

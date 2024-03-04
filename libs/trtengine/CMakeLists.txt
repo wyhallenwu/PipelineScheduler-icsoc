@@ -44,6 +44,9 @@ set(PROJECT_PREFIX trtengine)
 find_package(CUDA REQUIRED)
 find_package(OpenCV REQUIRED)
 
+set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
+find_package(misc CONFIG REQUIRED)
+
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(trtengine
@@ -65,6 +68,7 @@ target_link_libraries(trtengine
         ${CUDA_LIBRARIES}
         ${TensorRT_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
+        misc
 )
 
 # Here we configure variables specifying the target directories.

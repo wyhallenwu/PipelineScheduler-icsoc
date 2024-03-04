@@ -5,6 +5,7 @@
 #include <list>
 #include <opencv4/opencv2/opencv.hpp>
 #include <mutex>
+#include <misc.h>
 #include <condition_variable>
 #include <iostream>
 #include <opencv2/opencv.hpp>
@@ -432,6 +433,9 @@ protected:
 
     // Ideal batch size for this microservice, runtime batch size could be smaller though
     BatchSizeType msvc_idealBatchSize;
+
+    //
+    MODEL_DATA_TYPE msvc_modelDataType = MODEL_DATA_TYPE::fp32;
 
     //
     std::vector<NeighborMicroservice> upstreamMicroserviceList;

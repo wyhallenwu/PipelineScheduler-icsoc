@@ -63,9 +63,9 @@ void Engine::serializeEngineOptions(const TRTConfigs &configs) {
     engineName+= "_" + deviceName;
 
     // Serialize the specified options into the filename
-    if (configs.precision == Precision::FP16) {
+    if (configs.precision == MODEL_DATA_TYPE::fp16) {
         engineName += "_fp16";
-    } else if (configs.precision == Precision::FP32){
+    } else if (configs.precision == MODEL_DATA_TYPE::fp32){
         engineName += "_fp32";
     } else {
         engineName += "_int8";
@@ -196,13 +196,14 @@ bool Engine::build(const TRTConfigs &configs) {
     builderConfig->addOptimizationProfile(optProfile);
 
     // Set the precision level
-    if (m_configs.precision == Precision::FP16) {
+    m_precision = configs.precision;
+    if (m_configs.precision == MODEL_DATA_TYPE::fp16) {
         // Ensure the GPU supports FP16 inference
         if (!builder->platformHasFastFp16()) {
             throw std::runtime_error("Error: GPU does not support FP16 precision");
         }
         builderConfig->setFlag(BuilderFlag::kFP16);
-    } else if (m_configs.precision == Precision::INT8) {
+    } else if (m_configs.precision == MODEL_DATA_TYPE::int8) {
         if (numInputs > 1) {
             throw std::runtime_error("Error, this implementation currently only supports INT8 quantization for single input models");
         }
@@ -326,7 +327,7 @@ bool Engine::loadNetwork() {
             std::int32_t m_engineMaxBatchSize = m_engine->getProfileDimensions(i, 0, nvinfer1::OptProfileSelector::kMAX).d[0];
             batchSize = std::min(m_engineMaxBatchSize, batchSize);
             // Allocate enough to fit the max batch size we chose (we could end up using less later)
-            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], batchSize * tensorShape.d[1] * tensorShape.d[2] * tensorShape.d[3] * sizeof(float), stream));
+            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], batchSize * tensorShape.d[1] * tensorShape.d[2] * tensorShape.d[3] * m_precision, stream));
             
             // Store the input dims for later use
             m_inputDims.emplace_back(tensorShape.d[1], tensorShape.d[2], tensorShape.d[3]);
@@ -352,7 +353,7 @@ bool Engine::loadNetwork() {
 
             m_outputLengthsFloat.push_back(outputLenFloat);
             // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
-            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * batchSize * sizeof(float), stream));
+            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * batchSize * m_precision, stream));
         }
     }
 
@@ -424,7 +425,7 @@ void Engine::copyToBuffer(
                 cudaMemcpyAsync(
                     bufferPtr,
                     dataPtr,
-                    singleDataSize * sizeof(float),
+                    singleDataSize * m_precision,
                     cudaMemcpyDeviceToDevice,
                     inferenceStream
                 )
@@ -451,7 +452,7 @@ void Engine::copyFromBuffer(
 
         // Calculating the memory for each sample in the output buffer number `i`
         uint32_t bufferMemSize = 1;
-        for (uint32_t j = 1; j < m_outputDims[i].nbDims; ++j) {
+        for (int32_t j = 1; j < m_outputDims[i].nbDims; ++j) {
             bufferMemSize *= m_outputDims[i].d[j];
         }
         // Creating a GpuMat to which we would copy the memory in output buffer.
@@ -462,7 +463,7 @@ void Engine::copyFromBuffer(
             cudaMemcpyAsync(
                 ptr,
                 m_outputBuffers[i],
-                bufferMemSize * sizeof(float),
+                bufferMemSize * m_precision,
                 cudaMemcpyDeviceToDevice,
                 inferenceStream
             )
