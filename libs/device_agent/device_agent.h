@@ -1,5 +1,5 @@
-#include "../container_agent/container_agent.h"
-#include "../protobufprotocols/indevicecommunication.grpc.pb.h"
+#include "container_agent.h"
+#include "indevicecommunication.grpc.pb.h"
 #include <cstdlib>
 
 enum ContainerType {

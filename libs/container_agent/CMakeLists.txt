@@ -25,21 +25,20 @@ if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 # Only public header files go here.
-#set(
-#        HEADER_FILES
-#        header.h
-#)
+set(
+        HEADER_FILES
+        ../json/json.h
+)
 
 # All source files and private header files go here.
 set(
         SOURCE_FILES
-        ../json/json.h
         container_agent.cpp
 )
 
 # Here we define the library.
 add_library(container_agent
-        #        ${HEADER_FILES}
+        ${HEADER_FILES}
         ${SOURCE_FILES})
 
 # We also add an alias definition so that we shadown
@@ -84,9 +83,6 @@ endif ()
 
 find_package(Threads REQUIRED)
 
-set(baseprocessors_DIR "${CMAKE_CURRENT_BINARY_DIR}/../baseprocessors")
-find_package(baseprocessors CONFIG REQUIRED)
-
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
@@ -94,7 +90,6 @@ find_package(microservice CONFIG REQUIRED)
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(container_agent
         PUBLIC
-        ${OpenCV_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ${TensorRT_INCLUDE_DIRS}
         # Used when building the library:
         $<BUILD_INTERFACE:${container_agent_SOURCE_DIR}/>
         # Used when installing the library:
@@ -105,19 +100,13 @@ target_include_directories(container_agent
         # Used only when building the library:
         src)
 
-set(communicator_DIR "${CMAKE_CURRENT_BINARY_DIR}/../communicator")
-find_package(communicator CONFIG REQUIRED)
-
 target_link_libraries(container_agent
         PUBLIC
-        ${OpenCV_LIBS} ${CUDA_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${TensorRT_LIBRARIES}
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
         microservice
-        baseprocessors
-        trtengine
 )
 
 # add_executable(ContainerAgent container_agent.cpp)

@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.18)
 
 project(data_source)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
-
 # This include defines standard install locations.
 # https://cmake.org/cmake/help/v3.11/module/GNUInstallDirs.html
 include(GNUInstallDirs)
@@ -27,10 +25,10 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 # Only public header files go here.
-#set(
-#        HEADER_FILES
-#        header.h
-#)
+set(
+        HEADER_FILES
+        ../json/json.h
+)
 
 # All source files and private header files go here.
 set(
@@ -40,7 +38,7 @@ set(
 
 # Here we define the library.
 add_library(data_source
-#        ${HEADER_FILES}
+        ${HEADER_FILES}
         ${SOURCE_FILES})
 
 # We also add an alias definition so that we shadown
@@ -93,6 +91,9 @@ find_package(microservice CONFIG REQUIRED)
 set(communicator_DIR "${CMAKE_CURRENT_BINARY_DIR}/../communicator")
 find_package(communicator CONFIG REQUIRED)
 
+set(container_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../container_agent")
+find_package(container_agent CONFIG REQUIRED)
+
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(data_source
@@ -114,8 +115,11 @@ target_link_libraries(data_source
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
-        communicator
         microservice
+        data_grpc_proto
+        device_grpc_proto
+        container_agent
+        communicator
 )
 
 # Here we configure variables specifying the target directories.
