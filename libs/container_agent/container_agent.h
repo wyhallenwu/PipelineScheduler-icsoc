@@ -4,19 +4,15 @@
 #include <vector>
 #include <thread>
 #include "absl/strings/str_format.h"
+#include "absl/flags/parse.h"
 #include "absl/flags/flag.h"
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/health_check_service_interface.h>
 
 #include "../json/json.h"
-#include "sender.cpp"
-#include "receiver.cpp"
+#include "microservice.h"
 #include "indevicecommunication.grpc.pb.h"
-
-#include "yolov5.h"
-#include "data_source.cpp"
-#include "trtengine.h"
 
 ABSL_DECLARE_FLAG(std::string, name);
 ABSL_DECLARE_FLAG(std::string, json);
@@ -24,6 +20,14 @@ ABSL_DECLARE_FLAG(uint16_t, port);
 
 using json = nlohmann::json;
 
+using grpc::Status;
+using grpc::CompletionQueue;
+using grpc::ClientContext;
+using grpc::ClientAsyncResponseReader;
+using grpc::Server;
+using grpc::ServerBuilder;
+using grpc::ServerContext;
+using grpc::ServerCompletionQueue;
 using indevicecommunication::InDeviceCommunication;
 using indevicecommunication::QueueSize;
 using indevicecommunication::StaticConfirm;
@@ -32,11 +36,6 @@ enum TransferMethod {
     LocalCPU,
     RemoteCPU,
     GPU
-};
-
-struct ConnectionConfigs {
-    std::string ip;
-    int port;
 };
 
 namespace msvcconfigs {
@@ -114,18 +113,6 @@ protected:
     std::unique_ptr<Server> server;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     std::atomic<bool> run{};
-};
-
-class Yolo5ContainerAgent : public ContainerAgent {
-public:
-    Yolo5ContainerAgent(const std::string &name, uint16_t device_port, uint16_t own_port,
-                        std::vector<BaseMicroserviceConfigs> &msvc_configs);
-};
-
-class DataSourceAgent : public ContainerAgent {
-public:
-    DataSourceAgent(const std::string &name, uint16_t device_port, uint16_t own_port,
-                    std::vector<BaseMicroserviceConfigs> &msvc_configs);
 };
 
 #endif

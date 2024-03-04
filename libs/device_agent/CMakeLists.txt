@@ -115,6 +115,7 @@ target_link_libraries(device_agent
         ${CMAKE_THREAD_LIBS_INIT}
         container_agent
         microservice
+        container_agent
         baseprocessors
         trtengine
 )
@@ -137,7 +138,7 @@ configure_package_config_file(cmake/device_agent-config.cmake.in
 
 # The INSTALL(TARGET) command specifies where to install specific targets.
 # By specifying EXPORT here, we add these targets to an export group.
-install(TARGETS device_agent device_grpc_proto
+install(TARGETS device_agent
         EXPORT device_agent-targets
         RUNTIME DESTINATION ${INSTALL_RUNTIME_DIR}
         LIBRARY DESTINATION ${INSTALL_LIBRARY_DIR}
