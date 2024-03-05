@@ -33,8 +33,8 @@ public:
         return OutQueue;
     }
 
-    QueueLengthType GetOutQueueSize() {
-        return OutQueue->size();
+    QueueLengthType GetOutQueueSize(uint32_t index) {
+        return OutQueue[index].size();
     }
 
 protected:
