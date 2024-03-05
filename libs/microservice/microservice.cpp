@@ -8,8 +8,7 @@
  * @tparam InType 
  * @param configs 
  */
-template<typename InType>
-Microservice<InType>::Microservice(const BaseMicroserviceConfigs &configs) {
+Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
     msvc_name = configs.msvc_name;
     msvc_svcLevelObjLatency = configs.msvc_svcLevelObjLatency;
 
@@ -17,14 +16,15 @@ Microservice<InType>::Microservice(const BaseMicroserviceConfigs &configs) {
     for (it = configs.dnstreamMicroservices.begin(); it != configs.dnstreamMicroservices.end(); ++it) {
         // Create downstream neigbor config and push that into a list for information later
         // Local microservice supposedly has only 1 downstream but `sender` microservices could have multiple.
-        NeighborMicroservice dnStreamMsvc = NeighborMicroservice(it, numDnstreamMicroservices);
+        NeighborMicroservice dnStreamMsvc = NeighborMicroservice(*it, numDnstreamMicroservices);
         dnstreamMicroserviceList.emplace_back(dnStreamMsvc);
         // This maps the data class to be sent to this downstream microservice and the microservice's index.
-        classToDnstreamMap.emplace_back({dnStreamMsvc.classOfInterest, numDnstreamMicroservices++});
+        std::tuple<uint16_t, uint16_t> map = {dnStreamMsvc.classOfInterest, numDnstreamMicroservices++};
+        classToDnstreamMap.emplace_back(map);
     }
 
     for (it = configs.upstreamMicroservices.begin(); it != configs.upstreamMicroservices.end(); ++it) {
-        NeighborMicroservice upStreamMsvc = NeighborMicroservice(it, numUpstreamMicroservices++);
+        NeighborMicroservice upStreamMsvc = NeighborMicroservice(*it, numUpstreamMicroservices++);
     }
 }
 
@@ -34,36 +34,6 @@ Microservice<InType>::Microservice(const BaseMicroserviceConfigs &configs) {
  * @tparam InType 
  * @param lastInterReqDuration 
  */
-template<typename InType>
-void Microservice<InType>::updateReqRate(ClockTypeTemp lastInterReqDuration) {
+void Microservice::updateReqRate(ClockTypeTemp lastInterReqDuration) {
     msvc_interReqTime = 0.0001;
-}
-
-template<typename InType>
-GPUDataMicroservice<InType>::GPUDataMicroservice(const BaseMicroserviceConfigs &configs)
-        :Microservice<InType>(configs) {
-    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>>();
-}
-
-template<typename InType>
-LocalGPUDataMicroservice<InType>::LocalGPUDataMicroservice(const BaseMicroserviceConfigs &configs)
-        :Microservice<InType>(configs) {
-    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>>();
-}
-
-template<typename InType>
-SerDataMicroservice<InType>::SerDataMicroservice(const BaseMicroserviceConfigs &configs)
-        :Microservice<InType>(configs) {
-    OutQueue = new ThreadSafeFixSizedQueue<DataRequest<InterConCPUReqDataType>>();
-}
-
-template<typename InType>
-void Microservice<InType>::Schedule() {
-    if (InQueue->empty()) {
-        return;
-    }
-    InType data = InQueue->front();
-    InQueue->pop();
-    // process data
-    // No out queue as this is only used for final job
 }
