@@ -37,6 +37,6 @@ Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
  * @tparam InType 
  * @param lastInterReqDuration 
  */
-void Microservice::updateReqRate(ClockTypeTemp lastInterReqDuration) {
+void Microservice::updateReqRate(ClockType lastInterReqDuration) {
     msvc_interReqTime = 0.0001;
 }

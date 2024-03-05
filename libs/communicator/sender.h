@@ -13,6 +13,8 @@ class Sender : public Microservice {
 public:
     Sender(const BaseMicroserviceConfigs &configs, const std::string &connection);
 
+    virtual void Process() = 0;
+
 protected:
     static inline std::mt19937 &generator() {
         // the generator will only be seeded once (per thread) since it's static
@@ -37,9 +39,11 @@ class GPUSender : public Sender {
 public:
     explicit GPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection);
 
+    void Process() final;
+
     std::string SendGpuPointer(
             std::vector<RequestData<LocalGPUReqDataType>> &elements,
-            const int64_t timestamp, const std::string &path, const uint32_t &slo);
+            const ClockType &timestamp, const std::string &path, const uint32_t &slo);
 
 private:
     static std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
@@ -52,8 +56,10 @@ class LocalCPUSender : public Sender {
 public:
     LocalCPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection);
 
+    void Process() final;
+
     std::string
-    SendSharedMemory(const std::vector<RequestData<LocalCPUReqDataType>> &elements, const int64_t timestamp, const std::string &path,
+    SendSharedMemory(const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp, const std::string &path,
                      const uint32_t &slo);
 };
 
@@ -61,8 +67,10 @@ class RemoteCPUSender : public Sender {
 public:
     RemoteCPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection);
 
+    void Process() final;
+
     std::string SendSerializedData(
-            const std::vector<RequestData<LocalCPUReqDataType>> &elements, const int64_t timestamp, const std::string &path,
+            const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp, const std::string &path,
             const uint32_t &slo);
 };
 

@@ -31,6 +31,8 @@ DataSourceAgent::DataSourceAgent(const std::string &name, uint16_t device_port, 
         msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
         std::thread processor(&DataReader::Process, dynamic_cast<DataReader*>(msvcs[0]));
         processor.detach();
+        std::thread sender(&LocalCPUSender::Process, dynamic_cast<LocalCPUSender*>(msvcs[1]));
+        sender.detach();
     }
 
 int main(int argc, char **argv) {
