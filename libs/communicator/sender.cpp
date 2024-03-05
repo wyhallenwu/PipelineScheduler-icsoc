@@ -7,6 +7,7 @@ Sender::Sender(const BaseMicroserviceConfigs &configs, const std::string &connec
     stubs.push_back(
             DataTransferService::NewStub(grpc::CreateChannel(connection, grpc::InsecureChannelCredentials())));
     multipleStubs = false;
+    run = true;
 }
 
 
@@ -30,9 +31,10 @@ Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rp
 GPUSender::GPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection) : Sender(configs,
                                                                                                      connection) {
     tagToGpuPointer = std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *>();
-    while (true) {
+    while (run) {
         auto request = msvc_InQueue[0]->pop2();
         SendGpuPointer(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 
@@ -97,7 +99,13 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Simp
 }
 
 LocalCPUSender::LocalCPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection) : Sender(
-        configs, connection) {}
+        configs, connection) {
+    while (run) {
+        auto request = msvc_InQueue[0]->pop1();
+        SendSharedMemory(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
 
 std::string LocalCPUSender::SendSharedMemory(const std::vector<RequestData<LocalCPUReqDataType>> &elements, const int64_t timestamp,
                                              const std::string &path,
@@ -134,7 +142,13 @@ std::string LocalCPUSender::SendSharedMemory(const std::vector<RequestData<Local
 }
 
 RemoteCPUSender::RemoteCPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection) : Sender(
-        configs, connection) {}
+        configs, connection) {
+    while (run) {
+        auto request = msvc_InQueue[0]->pop1();
+        SendSerializedData(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
 
 std::string RemoteCPUSender::SendSerializedData(
         const std::vector<RequestData<LocalCPUReqDataType>> &elements, const int64_t timestamp, const std::string &path,

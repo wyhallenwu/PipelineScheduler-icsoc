@@ -30,6 +30,7 @@ protected:
 
     std::vector<std::unique_ptr<DataTransferService::Stub>> stubs;
     bool multipleStubs;
+    std::atomic<bool> run{};
 };
 
 class GPUSender : public Sender {
