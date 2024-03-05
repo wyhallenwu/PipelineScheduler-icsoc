@@ -210,7 +210,7 @@ namespace msvcconfigs {
         // For instance, if the model is trained on coco and this neighbor microservice expects coco human, then the value is `0`.
         // Value `-1` denotes all classes.
         // Value `-2` denotes Upstream Microservice.
-        uint16_t classOfInterest;
+        int16_t classOfInterest;
         // The shape of data this neighbor microservice expects from the current microservice.
         std::vector<RequestShapeType> expectedShape;
     };

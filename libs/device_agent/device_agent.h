@@ -18,7 +18,6 @@ namespace msvcconfigs {
         j["name"] = val.name;
         j["comm"] = val.commMethod;
         j["link"] = val.link;
-        j["qt"] = val.queueType;
         j["maxqs"] = val.maxQueueSize;
         j["coi"] = val.classOfInterest;
         j["shape"] = val.expectedShape;
@@ -60,7 +59,7 @@ private:
                           const std::string &video_path);
 
     json createConfigs(
-            const std::vector<std::tuple<std::string, MicroserviceType, QueueType, QueueLengthType, int16_t, std::vector<RequestShapeType>>> &data,
+            const std::vector<std::tuple<std::string, MicroserviceType, QueueLengthType, int16_t, std::vector<RequestShapeType>>> &data,
             const MsvcSLOType &slo, const NeighborMicroserviceConfigs &prev_msvc,
             const std::vector<NeighborMicroserviceConfigs> &next_msvc);
 
