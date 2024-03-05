@@ -75,8 +75,8 @@ add_subdirectory(libs/misc)
 add_subdirectory(libs/microservice)
 # add_subdirectory(libs/trtengine)
 # add_subdirectory(libs/baseprocessors)
-# add_subdirectory(libs/protobufprotocols)
-# add_subdirectory(libs/communicator)
+add_subdirectory(libs/protobufprotocols)
+add_subdirectory(libs/communicator)
 # add_subdirectory(libs/container_agent)
 # add_subdirectory(libs/data_source)
 # add_subdirectory(libs/yolov5)
@@ -101,7 +101,7 @@ target_link_libraries(PipePlusPlus PUBLIC
         microservice
         # trtengine
         # baseprocessors
-        # communicator
+        communicator
         # data_source
         # yolov5
         # container_agent

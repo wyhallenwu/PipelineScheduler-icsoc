@@ -11,6 +11,8 @@
 Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
     msvc_name = configs.msvc_name;
     msvc_svcLevelObjLatency = configs.msvc_svcLevelObjLatency;
+    msvc_InQueue = {};
+    msvc_OutQueue = {};
 
     std::list<NeighborMicroserviceConfigs>::const_iterator it;
     for (it = configs.dnstreamMicroservices.begin(); it != configs.dnstreamMicroservices.end(); ++it) {

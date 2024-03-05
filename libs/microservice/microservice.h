@@ -101,7 +101,7 @@ private:
     std::uint8_t activeQueueIndex;
     size_t MaxSize = 100;
 
-protected:
+public:
     /**
      * @brief Emplacing Type 1 requests
      * 
@@ -181,9 +181,10 @@ protected:
  */
 enum class CommMethod {
     sharedMemory,
-    gRPCLocal, // gRPCLocal = GPU
-    gRPC,
-    localQueue,
+    GpuAddress,
+    serialized,
+    localGPU,
+    localCPU,
 };
 
 enum class NeighborType {
@@ -269,16 +270,14 @@ public:
     // Another example is the
     std::string msvc_name;
 
-    void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue> &queue) {
-        msvc_InQueue = &queue;
+    void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue*> &queue) {
+        msvc_InQueue = queue;
     };
 
     virtual QueueLengthType GetOutQueueSize();
 
-    virtual void Schedule();
-
 protected:
-    std::vector<ThreadSafeFixSizedDoubleQueue> *msvc_InQueue, *msvc_OutQueue;
+    std::vector<ThreadSafeFixSizedDoubleQueue*> msvc_InQueue, msvc_OutQueue;
     uint8_t msvc_activeInQueueIndex = 0, msvc_activeOutQueueIndex = 0;
 
     // Used to signal to thread when not to run and to bring thread to a natural end.
