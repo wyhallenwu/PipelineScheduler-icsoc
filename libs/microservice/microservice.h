@@ -30,7 +30,7 @@ typedef uint16_t BatchSizeType;
 template<typename DataType>
 struct RequestData {
     RequestShapeType shape;
-    Type data;
+    DataType data;
 };
 
 /**
@@ -76,21 +76,19 @@ struct Request {
         req_travelPath(std::move(path)),
         req_batchSize(batchSize),
         req_data(data),
-        upstreamReq_data(std::move(upstream_data)) {}
+        upstreamReq_data(upstream_data) {}
     
     Request(
         ClockType genTime,
         MsvcSLOType latency,
         std::string path,
         BatchSizeType batchSize,
-        std::vector<RequestData<DataType>> data,
-        std::vector<RequestData<DataType>> upstream_data
-
+        std::vector<RequestData<DataType>> data
     ) : req_origGenTime(genTime),
         req_e2eSLOLatency(latency),
         req_travelPath(std::move(path)),
         req_batchSize(batchSize),
-        req_data(std::move(data)) {}
+        req_data(data) {}
 };
 
 //template<int MaxSize=100>
@@ -101,7 +99,7 @@ private:
     std::mutex q_mutex;
     std::condition_variable q_condition;
     std::uint8_t activeQueueIndex;
-    int MaxSize = 100;
+    size_t MaxSize = 100;
 
 protected:
     /**
@@ -212,7 +210,7 @@ namespace msvcconfigs {
         // For instance, if the model is trained on coco and this neighbor microservice expects coco human, then the value is `0`.
         // Value `-1` denotes all classes.
         // Value `-2` denotes Upstream Microservice.
-        int16_t classOfInterest;
+        uint16_t classOfInterest;
         // The shape of data this neighbor microservice expects from the current microservice.
         std::vector<RequestShapeType> expectedShape;
     };
@@ -272,7 +270,7 @@ public:
     std::string msvc_name;
 
     void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue> &queue) {
-        msvc_InQueue = queue;
+        msvc_InQueue = &queue;
     };
 
     virtual QueueLengthType GetOutQueueSize();
@@ -280,7 +278,7 @@ public:
     virtual void Schedule();
 
 protected:
-    std::vector<ThreadSafeFixSizedDoubleQueue> msvc_InQueue, msvc_OutQueue;
+    std::vector<ThreadSafeFixSizedDoubleQueue> *msvc_InQueue, *msvc_OutQueue;
     uint8_t msvc_activeInQueueIndex = 0, msvc_activeOutQueueIndex = 0;
 
     // Used to signal to thread when not to run and to bring thread to a natural end.
@@ -328,7 +326,7 @@ protected:
     //
     std::vector<NeighborMicroservice> dnstreamMicroserviceList;
     //
-    std::vector<std::tuple<uint32_t, uint32_t>> classToDnstreamMap;
+    std::vector<std::tuple<uint16_t, uint16_t>> classToDnstreamMap;
 
     //
     virtual bool isTimeToBatch();
