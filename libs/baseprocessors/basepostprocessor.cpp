@@ -1,4 +1,4 @@
-#include "basepostprocessor.h"
+#include "baseprocessor.h"
 
 /**
  * @brief Scale the bounding box coordinates to the original aspect ratio of the image
@@ -39,6 +39,5 @@ void crop(
     }
 }
 
-template<typename InType>
-BasePostprocessor<InType>::BasePostprocessor(const BaseMicroserviceConfigs &configs) : Microservice<InType>(configs) {
+BasePostprocessor::BasePostprocessor(const BaseMicroserviceConfigs &configs) : Microservice(configs) {
 }

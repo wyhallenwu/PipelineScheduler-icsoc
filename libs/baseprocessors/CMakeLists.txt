@@ -27,9 +27,9 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 # Only public header files go here.
 set(
         HEADER_FILES 
-        basepreprocessor.h
+        # basepreprocessor.h
         baseprocessor.h
-        basepostprocessor.h
+        # basepostprocessor.h
 )
 
 # All source files and private header files go here.
