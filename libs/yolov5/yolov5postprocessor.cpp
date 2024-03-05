@@ -49,21 +49,22 @@ void YoloV5Postprocessor<InType>::postProcessing() {
          */
 
         cudaStream_t postProcStream;
-        uint16_t topDetResults = this->msvc_outReqShape[2][0];
+        uint16_t maxNumDets = this->msvc_outReqShape[2][0];
 
         std::vector<Data<LocalGPUReqDataType>> currReq_data = currReq.req_data;
         // float num_detections[currReq_batchSize];
-        // float nmsed_boxes[currReq_batchSize][topDetResults][4];
-        // float nmsed_scores[currReq_batchSize][topDetResults];
-        // float nmsed_classes[currReq_batchSize][topDetResults];
+        // float nmsed_boxes[currReq_batchSize][maxNumDets][4];
+        // float nmsed_scores[currReq_batchSize][maxNumDets];
+        // float nmsed_classes[currReq_batchSize][maxNumDets];
         // float *numDetList = &num_detections;
         // float *nmsedBoxesList = &nmsed_boxes;
         // float *nmsedScoresList = &nmsed_scores;
         // float *nmsedclassesList = &nmsed_classes;
+
         float numDetList[currReq_batchSize];
-        float nmsedBoxesList[currReq_batchSize][topDetResults][4];
-        float nmsedScoresList[currReq_batchSize][topDetResults];
-        float nmsedClassesList[currReq_batchSize][topDetResults];
+        float nmsedBoxesList[currReq_batchSize][maxNumDets][4];
+        float nmsedScoresList[currReq_batchSize][maxNumDets];
+        float nmsedClassesList[currReq_batchSize][maxNumDets];
         std::vector<float *> ptrList = {&numDetList, &nmsedBoxesList, &nmsedScoresList, &nmsedClassesList};
         std::vector<size_t> bufferSizeList;
 
@@ -83,9 +84,25 @@ void YoloV5Postprocessor<InType>::postProcessing() {
                 postProcStream
             );
         }
+        std::vector<Data<LocalGPUReqDataType>> imageList = currReq.upstreamReq_data; 
         std::vector<cv::cuda::GpuMat> singleImageBBoxList;
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
-            
+            int infer_h, infer_w;
+            int numDetsInFrame = (int)numDetList[i];
+            infer_h = imageList[i].shape[1];
+            infer_w = imageList[i].shape[2];
+            crop(imageList[i].content, infer_h, infer_w, numDetsInFrame, &nmsedBoxesList[4], singleImageBBoxList);
+            for (int j = 0; j < numDetsInFrame; ++i) {
+                uint32_t bboxClass = (uint32_t)nmsedClassesList[i][j];
+                uint32_t queueIndex;
+                for (size_t k = 0; k < this->classToDnstreamMap.size(); ++k) {
+                    if (this->classToDnstreamMap[i][0] == bboxClass) {
+                        queueIndex = this->classToDnstreamMap[i][1]; 
+                        break;
+                    }
+                }
+                this->getOutQueue()[queueIndex].emplace(singleImageBBoxList[j]);
+            }
         }
     }
 
