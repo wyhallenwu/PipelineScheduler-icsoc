@@ -94,8 +94,8 @@ struct Request {
 //template<int MaxSize=100>
 class ThreadSafeFixSizedDoubleQueue {
 private:
-    std::queue<RequestData<LocalCPUReqDataType>> cpuQueue;
-    std::queue<RequestData<LocalGPUReqDataType>> gpuQueue;
+    std::queue<Request<LocalCPUReqDataType>> cpuQueue;
+    std::queue<Request<LocalGPUReqDataType>> gpuQueue;
     std::mutex q_mutex;
     std::condition_variable q_condition;
     std::uint8_t activeQueueIndex;
@@ -107,7 +107,7 @@ protected:
      * 
      * @param request 
      */
-    void emplace(RequestData<LocalCPUReqDataType> request) {
+    void emplace(Request<LocalCPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
         if (cpuQueue.size() == MaxSize) {
             cpuQueue.pop();
@@ -121,7 +121,7 @@ protected:
      * 
      * @param request 
      */
-    void emplace(RequestData<LocalGPUReqDataType> request) {
+    void emplace(Request<LocalGPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
         if (gpuQueue.size() == MaxSize) {
             gpuQueue.pop();
@@ -135,13 +135,13 @@ protected:
      * 
      * @param request 
      */
-    RequestData<LocalCPUReqDataType> pop1() {
+    Request<LocalCPUReqDataType> pop1() {
         std::unique_lock<std::mutex> lock(q_mutex);
         q_condition.wait(
                 lock,
                 [this]() { return !cpuQueue.empty(); }
         );
-        RequestData<LocalCPUReqDataType> request = cpuQueue.front();
+        Request<LocalCPUReqDataType> request = cpuQueue.front();
         cpuQueue.pop();
         return request;
     }
@@ -151,13 +151,13 @@ protected:
      * 
      * @param request 
      */
-    RequestData<LocalGPUReqDataType> pop2() {
+    Request<LocalGPUReqDataType> pop2() {
         std::unique_lock<std::mutex> lock(q_mutex);
         q_condition.wait(
                 lock,
                 [this]() { return !gpuQueue.empty(); }
         );
-        RequestData<LocalGPUReqDataType> request = gpuQueue.front();
+        Request<LocalGPUReqDataType> request = gpuQueue.front();
         gpuQueue.pop();
         return request;
     }
