@@ -16,6 +16,7 @@ Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
 
     std::list<NeighborMicroserviceConfigs>::const_iterator it;
     for (it = configs.dnstreamMicroservices.begin(); it != configs.dnstreamMicroservices.end(); ++it) {
+        msvc_OutQueue.emplace_back(new ThreadSafeFixSizedDoubleQueue());
         // Create downstream neigbor config and push that into a list for information later
         // Local microservice supposedly has only 1 downstream but `sender` microservices could have multiple.
         NeighborMicroservice dnStreamMsvc = NeighborMicroservice(*it, numDnstreamMicroservices);
