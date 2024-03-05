@@ -17,8 +17,7 @@ typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
 typedef uint32_t MsvcSLOType;
 typedef uint16_t NumMscvType;
-typedef std::chrono::high_resolution_clock::time_point ClockTypeTemp;
-typedef int64_t ClockType;
+typedef std::chrono::high_resolution_clock::time_point ClockType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
 typedef const char *InterConGPUReqDataType;
 typedef std::vector<int32_t> RequestShapeType;
@@ -270,8 +269,12 @@ public:
     // Another example is the
     std::string msvc_name;
 
-    void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue*> &queue) {
-        msvc_InQueue = queue;
+    void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue*> queue) {
+        msvc_InQueue = std::move(queue);
+    };
+
+    std::vector<ThreadSafeFixSizedDoubleQueue*> GetOutQueue() {
+        return msvc_OutQueue;
     };
 
     virtual QueueLengthType GetOutQueueSize();
@@ -331,10 +334,10 @@ protected:
     virtual bool isTimeToBatch();
 
     //
-    virtual bool checkReqEligibility(ClockTypeTemp currReq_genTime);
+    virtual bool checkReqEligibility(ClockType currReq_genTime);
 
     //
-    virtual void updateReqRate(ClockTypeTemp lastInterReqDuration);
+    virtual void updateReqRate(ClockType lastInterReqDuration);
 
 
 };

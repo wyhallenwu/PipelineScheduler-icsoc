@@ -6,7 +6,7 @@ DataReader::DataReader(const BaseMicroserviceConfigs &configs, std::string &data
 };
 
 void DataReader::Process() {
-    int64_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    ClockType time = std::chrono::system_clock::now();
     Mat frame;
     source >> frame;
     if (frame.empty()) {
@@ -31,6 +31,8 @@ DataSourceAgent::DataSourceAgent(const std::string &name, uint16_t device_port, 
         msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
         std::thread processor(&DataReader::Process, dynamic_cast<DataReader*>(msvcs[0]));
         processor.detach();
+        std::thread sender(&LocalCPUSender::Process, dynamic_cast<LocalCPUSender*>(msvcs[1]));
+        sender.detach();
     }
 
 int main(int argc, char **argv) {
