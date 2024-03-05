@@ -28,6 +28,8 @@ endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES
         ./communicator.h
+        ./sender.h
+        ./receiver.h
 )
 # All source files and private header files go here.
 set(

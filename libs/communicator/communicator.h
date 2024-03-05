@@ -1,3 +1,6 @@
+#ifndef PIPEPLUSPLUS_COMMUNICATOR_H
+#define PIPEPLUSPLUS_COMMUNICATOR_H
+
 #include <cstdint>
 #include <utility>
 #include <string>
@@ -15,18 +18,7 @@
 #include "pipelinescheduler.grpc.pb.h"
 
 using grpc::Channel;
-using grpc::ClientContext;
-using grpc::ClientAsyncResponseReader;
 using grpc::Status;
-using grpc::Server;
-using grpc::ServerBuilder;
-using grpc::ServerContext;
-using grpc::ServerCompletionQueue;
-using grpc::CompletionQueue;
-using boost::interprocess::read_write;
-using boost::interprocess::create_only;
-using boost::interprocess::read_only;
-using boost::interprocess::open_only;
 using pipelinescheduler::DataTransferService;
 using pipelinescheduler::GpuPointerPayload;
 using pipelinescheduler::SharedMemPayload;
@@ -48,3 +40,5 @@ struct SerialImageData {
     std::pair<int32_t, int32_t> dims;
     uint32_t size;
 };
+
+#endif //PIPEPLUSPLUS_COMMUNICATOR_H

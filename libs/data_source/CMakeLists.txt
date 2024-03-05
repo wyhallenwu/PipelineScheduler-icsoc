@@ -28,6 +28,7 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES
         ../json/json.h
+        data_source.h
 )
 
 # All source files and private header files go here.
