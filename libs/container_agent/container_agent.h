@@ -106,7 +106,7 @@ protected:
     void HandleRecvRpcs();
 
     std::string name;
-    std::vector<Microservice<void> *> msvcs;
+    std::vector<Microservice*> msvcs;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
     InDeviceCommunication::AsyncService service;
