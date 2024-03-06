@@ -82,7 +82,7 @@ add_subdirectory(libs/data_source)
 add_subdirectory(libs/yolov5)
 add_subdirectory(libs/device_agent)
 
-add_library(PipePlusPlus SHARED
+add_library(PipePlusPlus
         src/main.cpp)
 
 target_include_directories(PipePlusPlus PUBLIC

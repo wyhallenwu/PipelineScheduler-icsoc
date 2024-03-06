@@ -19,9 +19,9 @@ void GPULoader::Onloading() {
     // copy data to gpu using cuda
     std::vector<RequestData<LocalGPUReqDataType>> elements = {};
     for (const auto &el: req.req_data) {
-        auto gpu_image = cv::cuda::GpuMat(req.req_dataShape[0], req.req_dataShape[1], CV_8UC3);
+        auto gpu_image = cv::cuda::GpuMat(el.shape[0], el.shape[1], CV_8UC3);
         gpu_image.upload(el.data);
-        elements.push_back({req.req_dataShape, gpu_image});
+        elements.push_back({el.shape, gpu_image});
     }
     OutQueue->emplace(
             {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
@@ -34,7 +34,7 @@ void GPULoader::Offloading() {
     for (const auto &el: req.req_data) {
         cv::Mat image;
         el.data.download(image);
-        elements.push_back({req.req_dataShape, image});
+        elements.push_back({el.shape, image});
     }
     OutQueue->emplace(
             {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
@@ -50,11 +50,13 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
     LoadingQueue = (new GPULoader(configs, msvc_OutQueue[0], m))->getInQueue();
     cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
+    std::thread handler;
     if (m == CommMethod::localGPU) {
-        HandleRpcsToGPU();
+        handler = std::thread(&Receiver::HandleRpcsToGPU, this);
     } else if (m == CommMethod::localCPU) {
-        HandleRpcsToCPU();
+        handler = std::thread(&Receiver::HandleRpcsToCPU, this);
     }
+    handler.detach();
 }
 
 Receiver::GpuPointerRequestHandler::GpuPointerRequestHandler(DataTransferService::AsyncService *service,

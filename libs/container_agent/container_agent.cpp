@@ -57,7 +57,7 @@ void ContainerAgent::ReportStart() {
 void ContainerAgent::SendQueueLengths() {
     QueueSize request;
     for (auto msvc: msvcs) {
-        request.add_size(msvc->GetOutQueueSize());
+        request.add_size(msvc->GetOutQueueSize(0));
     }
     StaticConfirm reply;
     ClientContext context;
