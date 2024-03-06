@@ -328,7 +328,7 @@ protected:
     //
     std::vector<NeighborMicroservice> dnstreamMicroserviceList;
     //
-    std::vector<std::tuple<uint16_t, uint16_t>> classToDnstreamMap;
+    std::vector<std::pair<uint16_t, uint16_t>> classToDnstreamMap;
 
     //
     virtual bool isTimeToBatch() {return true;};

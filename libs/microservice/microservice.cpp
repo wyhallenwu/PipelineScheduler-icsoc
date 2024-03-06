@@ -9,10 +9,12 @@
  * @param configs 
  */
 Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
+    msvc_dataShape = configs.msvc_dataShape;
     msvc_name = configs.msvc_name;
     msvc_svcLevelObjLatency = configs.msvc_svcLevelObjLatency;
     msvc_InQueue = {};
     msvc_OutQueue = {};
+    msvc_outReqShape = {};
 
     std::list<NeighborMicroserviceConfigs>::const_iterator it;
     for (it = configs.dnstreamMicroservices.begin(); it != configs.dnstreamMicroservices.end(); ++it) {
@@ -22,8 +24,9 @@ Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
         NeighborMicroservice dnStreamMsvc = NeighborMicroservice(*it, numDnstreamMicroservices);
         dnstreamMicroserviceList.emplace_back(dnStreamMsvc);
         // This maps the data class to be sent to this downstream microservice and the microservice's index.
-        std::tuple<uint16_t, uint16_t> map = {dnStreamMsvc.classOfInterest, numDnstreamMicroservices++};
+        std::pair<uint16_t, uint16_t> map = {dnStreamMsvc.classOfInterest, numDnstreamMicroservices++};
         classToDnstreamMap.emplace_back(map);
+        msvc_outReqShape.emplace_back(it->expectedShape);
     }
 
     for (it = configs.upstreamMicroservices.begin(); it != configs.upstreamMicroservices.end(); ++it) {
