@@ -66,7 +66,7 @@ private:
     void finishContainer(const std::string &executable, const std::string &name, const std::string &start_string, const int &port);
 
     static void runDocker(const std::string &executable, const std::string &name, const std::string &start_string, const int &port) {
-        system(absl::StrFormat(R"(docker run -dp %i:%i --gpus 1 pipeline-base-container %s --name="%s"--json="%s" --port=%i)", port,
+        system(absl::StrFormat(R"(docker run -dp %i:%i --gpus 1 pipeline-base-container %s --name="%s"--json='%s' --port=%i)", port,
                                port, executable, name, start_string, port).c_str());
     };
 

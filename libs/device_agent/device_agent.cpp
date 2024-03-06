@@ -18,7 +18,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, uint16_t controller_
     containers = std::map<std::string, ContainerHandle>();
 
 
-    CreateDataSource(0, {{"yolov5_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -1, {}}}, 1, "path/to/video");
+    CreateDataSource(0, {{"yolov5_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -1, {}}}, 1, "./test.mp4");
     //CreateYolo5Container(0, {"datasource_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -2, {}}, {}, 1);
 
     HandleRecvRpcs();
@@ -53,7 +53,7 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
              {name + "::sender",        MicroserviceType::Sender,        10, -1, {}}},
             slo, upstream, downstreams
     );
-    finishContainer(name, to_string(j), 49152 + containers.size());
+    finishContainer("./Container_Yolov5", name, to_string(j), 49152 + containers.size());
 }
 
 void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams,
@@ -65,7 +65,7 @@ void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroservic
                                    {name + "::sender",      MicroserviceType::Sender,        10, -1, {}}},
                            slo, upstream, downstreams
     );
-    finishContainer("./Container_Datasource", name, to_string(j), 49152 + containers.size());
+    finishContainer("./Container_DataSource", name, to_string(j), 49152 + containers.size());
 }
 
 void DeviceAgent::finishContainer(const std::string &executable, const std::string &name, const std::string &start_string, const int &port) {
