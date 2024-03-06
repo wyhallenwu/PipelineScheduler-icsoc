@@ -19,14 +19,6 @@ namespace Util {
         return f.good();
     }
 
-    inline void checkCudaErrorCode(cudaError_t code) {
-        if (code != 0) {
-            std::string errMsg = "CUDA operation failed with code: " + std::to_string(code) + "(" + cudaGetErrorName(code) + "), with message: " + cudaGetErrorString(code);
-            std::cout << errMsg << std::endl;
-            throw std::runtime_error(errMsg);
-        }
-    }
-
     std::vector<std::string> getFilesInDirectory(const std::string& dirPath);
 }
 
