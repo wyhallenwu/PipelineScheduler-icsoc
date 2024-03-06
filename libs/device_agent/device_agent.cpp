@@ -19,7 +19,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, uint16_t controller_
 
 
     CreateDataSource(0, {{"yolov5_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -1, {}}}, 1, "path/to/video");
-    CreateYolo5Container(0, {"datasource_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -2, {}}, {}, 1);
+    //CreateYolo5Container(0, {"datasource_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -2, {}}, {}, 1);
 
     HandleRecvRpcs();
 }
@@ -69,8 +69,9 @@ void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroservic
 }
 
 void DeviceAgent::finishContainer(const std::string &name, const std::string &start_string, const int &port) {
-    std::thread container(&DeviceAgent::runDocker, name, start_string, port);
-    container.detach();
+    //std::thread container(&DeviceAgent::runDocker, name, start_string, port);
+    //container.detach();
+    runDocker(name, start_string, port);
     std::string target = absl::StrFormat("%s:%d", "localhost", port);
     containers[name] = {{},
                         InDeviceCommunication::NewStub(grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
@@ -83,7 +84,7 @@ json DeviceAgent::createConfigs(
         const std::vector<NeighborMicroserviceConfigs> &next_msvc) {
     int i = 0, j = next_msvc.size() + 1;
     std::vector<BaseMicroserviceConfigs> configs;
-    NeighborMicroserviceConfigs upstream;
+    NeighborMicroserviceConfigs upstream = {std::get<0>(data[0]), CommMethod::localGPU, {""}, std::get<2>(data[0]), -2, std::get<4>(data[0])};
     for (auto &msvc: data) {
         if (i == 0) {
             upstream = prev_msvc;

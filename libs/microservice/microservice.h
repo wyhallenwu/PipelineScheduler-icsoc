@@ -238,7 +238,7 @@ namespace msvcconfigs {
         // Value `-2` denotes Upstream Microservice.
         int16_t classOfInterest;
         // The shape of data this neighbor microservice expects from the current microservice.
-        RequestShapeType expectedShape;
+        std::vector<RequestShapeType> expectedShape;
     };
 
     /**
