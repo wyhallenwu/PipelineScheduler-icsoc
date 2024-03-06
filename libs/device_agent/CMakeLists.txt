@@ -115,9 +115,6 @@ target_link_libraries(device_agent
         ${CMAKE_THREAD_LIBS_INIT}
         container_agent
         microservice
-        container_agent
-        baseprocessors
-        trtengine
 )
 
 # Here we configure variables specifying the target directories.

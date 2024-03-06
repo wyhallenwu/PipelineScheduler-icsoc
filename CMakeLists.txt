@@ -79,7 +79,7 @@ add_subdirectory(libs/protobufprotocols)
 add_subdirectory(libs/communicator)
 add_subdirectory(libs/container_agent)
 add_subdirectory(libs/data_source)
-# add_subdirectory(libs/yolov5)
+add_subdirectory(libs/yolov5)
 add_subdirectory(libs/device_agent)
 
 add_library(PipePlusPlus SHARED
@@ -103,7 +103,7 @@ target_link_libraries(PipePlusPlus PUBLIC
         baseprocessors
         communicator
         data_source
-        # yolov5
+        yolov5
         container_agent
         device_agent
 )
