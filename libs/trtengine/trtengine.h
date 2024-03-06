@@ -47,7 +47,9 @@ struct TRTConfigs {
     int32_t calibrationBatchSize = 128;
     // The batch size which should be optimized for.
     int32_t optBatchSize = 1;
-    // Maximum allowable batch size
+    // Maximum batch size  we want to use for inference
+    // this will be compared with the maximum batch size set when the engine model was created min(maxBatchSize, engine_max)
+    // This determines the GPU memory buffer sizes allocated upon model loading so CANNOT BE CHANGE DURING RUNTIME.
     int32_t maxBatchSize = 128;
     // GPU device index
     int deviceIndex = 0;
