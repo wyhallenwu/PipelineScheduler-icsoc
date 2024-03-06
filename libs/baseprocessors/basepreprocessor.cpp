@@ -82,6 +82,6 @@ bool BasePreprocessor::isTimeToBatch() {
  * @return true 
  * @return false 
  */
-bool BasePreprocessor::checkReqEligibility(ClockTypeTemp currReq_gentime) {
+bool BasePreprocessor::checkReqEligibility(ClockType currReq_gentime) {
     return true;
 }

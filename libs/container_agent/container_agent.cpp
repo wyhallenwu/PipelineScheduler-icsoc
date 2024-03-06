@@ -8,7 +8,6 @@ void msvcconfigs::from_json(const json &j, msvcconfigs::NeighborMicroserviceConf
     j.at("name").get_to(val.name);
     j.at("comm").get_to(val.commMethod);
     j.at("link").get_to(val.link);
-    j.at("qt").get_to(val.queueType);
     j.at("maxqs").get_to(val.maxQueueSize);
     j.at("coi").get_to(val.classOfInterest);
     j.at("shape").get_to(val.expectedShape);
@@ -41,13 +40,12 @@ ContainerAgent::ContainerAgent(const std::string &name, uint16_t device_port, ui
     run = true;
     std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
     receiver.detach();
-    ReportStart(own_port);
+    ReportStart();
 }
 
-void ContainerAgent::ReportStart(int port) {
+void ContainerAgent::ReportStart() {
     indevicecommunication::ConnectionConfigs request;
-    request.set_ip("localhost");
-    request.set_port(port);
+    request.set_msvc_name(name);
     StaticConfirm reply;
     ClientContext context;
     std::unique_ptr<ClientAsyncResponseReader<StaticConfirm>> rpc(

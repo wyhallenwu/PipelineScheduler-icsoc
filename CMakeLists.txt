@@ -73,14 +73,14 @@ endif ()
 
 add_subdirectory(libs/misc)
 add_subdirectory(libs/microservice)
-# add_subdirectory(libs/trtengine)
-# add_subdirectory(libs/baseprocessors)
+add_subdirectory(libs/trtengine)
+add_subdirectory(libs/baseprocessors)
 add_subdirectory(libs/protobufprotocols)
 add_subdirectory(libs/communicator)
-# add_subdirectory(libs/container_agent)
-# add_subdirectory(libs/data_source)
+add_subdirectory(libs/container_agent)
+add_subdirectory(libs/data_source)
 # add_subdirectory(libs/yolov5)
-# add_subdirectory(libs/device_agent)
+add_subdirectory(libs/device_agent)
 
 add_library(PipePlusPlus SHARED
         src/main.cpp)
@@ -99,19 +99,19 @@ target_link_libraries(PipePlusPlus PUBLIC
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
         microservice
-        # trtengine
-        # baseprocessors
+        trtengine
+        baseprocessors
         communicator
-        # data_source
+        data_source
         # yolov5
-        # container_agent
-        # device_agent
+        container_agent
+        device_agent
 )
 add_executable(run src/main.cpp)
 target_link_libraries(run PipePlusPlus)
 
-# add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
-# target_link_libraries(DeviceAgent device_agent)
+add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
+target_link_libraries(DeviceAgent device_agent)
 
-# add_executable(Container_DataSource libs/data_source/data_source.cpp)
-# target_link_libraries(Container_DataSource data_source)
+add_executable(Container_DataSource libs/data_source/data_source.cpp)
+target_link_libraries(Container_DataSource data_source)

@@ -17,6 +17,10 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, uint16_t controller_
 
     containers = std::map<std::string, ContainerHandle>();
 
+
+    CreateDataSource(0, {{"yolov5_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -1, {}}}, 1, "path/to/video");
+    CreateYolo5Container(0, {"datasource_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -2, {}}, {}, 1);
+
     HandleRecvRpcs();
 }
 
@@ -42,31 +46,39 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
                                        const MsvcSLOType &slo) {
     std::string name = "yolov5_" + std::to_string(id);
     json j = createConfigs(
-            {{name + "::receiver",      MicroserviceType::Receiver,      QueueType::localGPUDataQueue,10, -1, {}},
-             {name + "::preprocessor",  MicroserviceType::Preprocessor,  QueueType::localGPUDataQueue,10, -1, {}},
-             {name + "::inference",     MicroserviceType::Inference,     QueueType::localGPUDataQueue,10, -1, {}},
-             {name + "::postprocessor", MicroserviceType::Postprocessor, QueueType::none,             10, -1, {}},
-             {name + "::sender",        MicroserviceType::Sender,        QueueType::localCPUDataQueue,10, -1, {}}},
+            {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {}},
+             {name + "::preprocessor",  MicroserviceType::Preprocessor,  10, -1, {}},
+             {name + "::inference",     MicroserviceType::Inference,     10, -1, {}},
+             {name + "::postprocessor", MicroserviceType::Postprocessor, 10, -1, {}},
+             {name + "::sender",        MicroserviceType::Sender,        10, -1, {}}},
             slo, upstream, downstreams
     );
-    std::thread container(&DeviceAgent::runDocker, this, name, to_string(j), 49152 + containers.size());
-    container.detach();
+    finishContainer(name, to_string(j), 49152 + containers.size());
 }
 
 void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams,
-                                       const MsvcSLOType &slo, const std::string &video_path) {
-    std::string name = "data_source_" + std::to_string(id);
-    json j = createConfigs(
-            {{name + "::source",  MicroserviceType::Postprocessor,  QueueType::cpuDataQueue,30, -1, {}},
-             {name + "::sender",  MicroserviceType::Sender,         QueueType::cpuDataQueue,30, -1, {}}},
-            slo, {"video", CommMethod::localQueue, {video_path}, QueueType::none, 0, -2, }, downstreams
+                                   const MsvcSLOType &slo, const std::string &video_path) {
+    std::string name = "datasource_" + std::to_string(id);
+    NeighborMicroserviceConfigs upstream = {"video_source", CommMethod::localCPU, {video_path}, 0, -2, {}};
+    json j = createConfigs({
+                                   {name + "::data_reader", MicroserviceType::Postprocessor, 10, -1, {}},
+                                   {name + "::sender",      MicroserviceType::Sender,        10, -1, {}}},
+                           slo, upstream, downstreams
     );
-    std::thread container(&DeviceAgent::runDocker, this, name, to_string(j), 49152 + containers.size());
+    finishContainer(name, to_string(j), 49152 + containers.size());
+}
+
+void DeviceAgent::finishContainer(const std::string &name, const std::string &start_string, const int &port) {
+    std::thread container(&DeviceAgent::runDocker, name, start_string, port);
     container.detach();
+    std::string target = absl::StrFormat("%s:%d", "localhost", port);
+    containers[name] = {{},
+                        InDeviceCommunication::NewStub(grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
+                        new CompletionQueue()};
 }
 
 json DeviceAgent::createConfigs(
-        const std::vector<std::tuple<std::string, MicroserviceType, QueueType, QueueLengthType, int16_t, std::vector<RequestShapeType>>> &data,
+        const std::vector<std::tuple<std::string, MicroserviceType, QueueLengthType, int16_t, std::vector<RequestShapeType>>> &data,
         const MsvcSLOType &slo, const NeighborMicroserviceConfigs &prev_msvc,
         const std::vector<NeighborMicroserviceConfigs> &next_msvc) {
     int i = 0, j = next_msvc.size() + 1;
@@ -80,23 +92,26 @@ json DeviceAgent::createConfigs(
         if (std::get<1>(msvc) == MicroserviceType::Postprocessor) {
             while (--j > 0) {
                 downstream.push_back(
-                        {std::get<0>(data[i + j]), CommMethod::localQueue, {""}, std::get<2>(data[i + j]), std::get<3>(data[i + j]), std::get<4>(data[i + j]),
-                         std::get<5>(data[i + j])});
+                        {std::get<0>(data[i + j]), CommMethod::localGPU, {""}, std::get<2>(data[i + j]),
+                         std::get<3>(data[i + j]), std::get<4>(data[i + j])});
             }
         } else if (std::get<1>(msvc) == MicroserviceType::Sender) {
             downstream.push_back(next_msvc[j++]);
         } else {
-            downstream.push_back({std::get<0>(data[++i]), CommMethod::localQueue, {""}, std::get<2>(msvc), std::get<3>(msvc), std::get<4>(msvc),
-                                  std::get<5>(msvc)});
+            downstream.push_back(
+                    {std::get<0>(data[++i]), CommMethod::localGPU, {""}, std::get<2>(msvc), std::get<3>(msvc),
+                     std::get<4>(msvc)});
         }
-        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), slo, 1, std::get<5>(msvc), {upstream}, downstream});
+        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), slo, 1, std::get<4>(msvc), {upstream}, downstream});
         //current mvsc becomes upstream for next msvc
-        upstream = {std::get<0>(msvc), CommMethod::localQueue, {""}, std::get<2>(msvc), std::get<3>(msvc), -2, std::get<5>(msvc)};
+        upstream = {std::get<0>(msvc), CommMethod::localGPU, {""}, std::get<2>(msvc), -2, std::get<4>(msvc)};
     }
     return json(configs);
 }
 
 void DeviceAgent::HandleRecvRpcs() {
+    new CounterUpdateRequestHandler(&service, server_cq.get(), this);
+    new ReportStartRequestHandler(&service, server_cq.get(), this);
     while (true) {
         void *tag;
         bool ok;
@@ -128,11 +143,7 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
         service->RequestReportMsvcStart(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new ReportStartRequestHandler(service, cq, device_agent);
-        std::string target_str = absl::StrFormat("%s:%d", "localhost", request.port());
-        device_agent->containers[request.msvc_name()] = {{},
-                                                         InDeviceCommunication::NewStub(grpc::CreateChannel(target_str,
-                                                                                                            grpc::InsecureChannelCredentials())),
-                                                         new CompletionQueue()};
+        std::cout << "Received start report from " << request.msvc_name() << std::endl;
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

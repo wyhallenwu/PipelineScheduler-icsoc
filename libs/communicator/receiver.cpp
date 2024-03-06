@@ -40,12 +40,12 @@ void GPULoader::Offloading() {
             {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
 }
 
-Receiver::Receiver(const BaseMicroserviceConfigs &configs, const std::string &connection, const CommMethod &m)
+Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
         : Microservice(configs) {
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder builder;
-    builder.AddListeningPort(connection, grpc::InsecureServerCredentials());
+    builder.AddListeningPort(configs.upstreamMicroservices.front().link[0], grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
     LoadingQueue = (new GPULoader(configs, msvc_OutQueue[0], m))->getInQueue();
     cq = builder.AddCompletionQueue();
@@ -78,8 +78,9 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
                                               (void *) (&el.data()));
             elements.push_back({{el.width(), el.height()}, gpu_image});
         }
-        Request<LocalGPUReqDataType> req = {request.timestamp(), request.slo(),
-                                            request.path(), 1, elements};
+        Request<LocalGPUReqDataType> req = {
+                std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
+                request.slo(), request.path(), 1, elements};
         OutQueue->emplace(req);
 
         status = FINISH;
@@ -115,8 +116,9 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
 
             boost::interprocess::shared_memory_object::remove(name);
         }
-        Request<LocalCPUReqDataType> req = {request.timestamp(), request.slo(),
-                                            request.path(), 1, elements};
+        Request<LocalCPUReqDataType> req = {
+                std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
+                request.slo(), request.path(), 1, elements};
         OutQueue->emplace(req);
 
         status = FINISH;
@@ -152,8 +154,9 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
                                     const_cast<char *>(el.data().c_str())).clone();
             elements.push_back({{el.width(), el.height()}, image});
         }
-        Request<LocalCPUReqDataType> req = {request.timestamp(), request.slo(),
-                                            request.path(), 1, elements};
+        Request<LocalCPUReqDataType> req = {
+                std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
+                request.slo(), request.path(), 1, elements};
         OutQueue->emplace(req);
 
         status = FINISH;
