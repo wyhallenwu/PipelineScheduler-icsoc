@@ -1,12 +1,10 @@
 #include <yolov5.h>
 
-template<typename InType>
-YoloV5Preprocessor<InType>::YoloV5Preprocessor(const BaseMicroserviceConfigs &configs) : BasePreprocessor<InType>(configs) {
+YoloV5Preprocessor::YoloV5Preprocessor(const BaseMicroserviceConfigs &configs) : BasePreprocessor(configs) {
     
 }
 
-template<typename InType>
-void YoloV5Preprocessor<InType>::batchRequests() {
+void YoloV5Preprocessor::batchRequests() {
     // The time where the last request was generated.
     ClockTypeTemp lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -18,12 +16,15 @@ void YoloV5Preprocessor<InType>::batchRequests() {
     
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (not this->RUN_THREADS) {
+        if (this->STOP_THREADS) {
             break;
         }
+        else if (this->PAUSE_THREADS) {
+            continue;
+        }
         // Processing the next incoming request
-        InType currReq = this->InQueue.pop();
-        this->msvc_inReqCount++;
+        Request<LocalGPUReqDataType> currReq = msvc_InQueue.at(0)->pop2();
+        msvc_inReqCount++;
         currReq_genTime = currReq.req_origGenTime;
         // We need to check if the next request is worth processing.
         // If it's too late, then we can drop and stop processing this request.

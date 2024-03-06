@@ -1,6 +1,4 @@
-#include <basepreprocessor.h>
 #include <baseprocessor.h>
-#include <basepostprocessor.h>
 #include <trtengine.h>
 #include <misc.h>
 #include <chrono>
@@ -12,8 +10,7 @@ struct yoloV5Configs {
 };
 
 
-template<typename InType>
-class YoloV5Preprocessor : public BasePreprocessor<InType> {
+class YoloV5Preprocessor : public BasePreprocessor {
 public:
     YoloV5Preprocessor(const BaseMicroserviceConfigs &config);
     ~YoloV5Preprocessor();
@@ -27,8 +24,7 @@ protected:
     // void updateReqRate(ClockTypeTemp lastInterReqDuration) override;
 };
 
-template<typename InType>
-class YoloV5Inference : public BaseProcessor<InType> {
+class YoloV5Inference : public BaseProcessor {
 public:
     YoloV5Inference(const BaseMicroserviceConfigs &config, const TRTConfigs &engineConfigs);
     ~YoloV5Inference();
@@ -40,8 +36,7 @@ protected:
     Engine msvc_inferenceEngine;
 };
 
-template<typename InType>
-class YoloV5Postprocessor : public BasePostprocessor<InType> {
+class YoloV5Postprocessor : public BasePostprocessor {
 public:
     YoloV5Postprocessor(const BaseMicroserviceConfigs &config);
     ~YoloV5Postprocessor();

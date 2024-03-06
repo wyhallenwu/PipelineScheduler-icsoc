@@ -1,9 +1,8 @@
 #include "yolov5.h"
 
-template<typename InType>
-YoloV5Inference<InType>::YoloV5Inference(
+YoloV5Inference::YoloV5Inference(
     const BaseMicroserviceConfigs &config, 
-    const TRTConfigs &engineConfigs) : BaseProcessor<InType>(config), msvc_engineConfigs(engineConfigs) {
+    const TRTConfigs &engineConfigs) : BaseProcessor(config), msvc_engineConfigs(engineConfigs) {
     
     msvc_inferenceEngine = Engine(engineConfigs);
 
@@ -11,8 +10,7 @@ YoloV5Inference<InType>::YoloV5Inference(
     msvc_engineOutputBuffers = msvc_inferenceEngine.getOutputBuffers();
 }
 
-template<typename InType>
-void YoloV5Inference<InType>::inference() {
+void YoloV5Inference::inference() {
     // The time where the last request was generated.
     ClockTypeTemp lastReq_genTime;
     // The time where the current incoming request was generated.

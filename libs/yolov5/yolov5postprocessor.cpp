@@ -1,11 +1,10 @@
 #include <yolov5.h>
 
-template<typename InType>
-YoloV5Postprocessor<InType>::YoloV5Postprocessor(const BaseMicroserviceConfigs &config) : BasePostprocessor<InType>(config) {
+YoloV5Postprocessor::YoloV5Postprocessor(const BaseMicroserviceConfigs &config) : BasePostprocessor(config) {
 }
 
 template<typename InType>
-void YoloV5Postprocessor<InType>::postProcessing() {
+void YoloV5Postprocessor::postProcessing() {
     // The time where the last request was generated.
     ClockTypeTemp lastReq_genTime;
     // The time where the current incoming request was generated.
