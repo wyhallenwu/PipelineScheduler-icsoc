@@ -238,7 +238,7 @@ namespace msvcconfigs {
         // Value `-2` denotes Upstream Microservice.
         int16_t classOfInterest;
         // The shape of data this neighbor microservice expects from the current microservice.
-        std::vector<RequestShapeType> expectedShape;
+        RequestShapeType expectedShape;
     };
 
     /**
@@ -340,8 +340,10 @@ protected:
     //
     NumMscvType numDnstreamMicroservices = 0;
 
-    //
+    // The expected shape of the data for the next microservice
     std::vector<RequestShapeType> msvc_outReqShape;
+    // The shape of the data to be processed by this microservice
+    std::vector<RequestShapeType> msvc_dataShape;
 
     // Ideal batch size for this microservice, runtime batch size could be smaller though
     BatchSizeType msvc_idealBatchSize;
