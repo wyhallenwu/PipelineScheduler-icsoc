@@ -26,7 +26,7 @@ Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
         // This maps the data class to be sent to this downstream microservice and the microservice's index.
         std::pair<uint16_t, uint16_t> map = {dnStreamMsvc.classOfInterest, numDnstreamMicroservices++};
         classToDnstreamMap.emplace_back(map);
-        msvc_outReqShape.emplace_back(it->expectedShape);
+        msvc_outReqShape.emplace_back(it->expectedShape[0]); // This is a dummy value for now
     }
 
     for (it = configs.upstreamMicroservices.begin(); it != configs.upstreamMicroservices.end(); ++it) {
