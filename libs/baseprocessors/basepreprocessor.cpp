@@ -55,8 +55,6 @@ cv::cuda::GpuMat resizePadRightBottom(
  */
 BasePreprocessor::BasePreprocessor(const BaseMicroserviceConfigs &configs) : Microservice(configs){
     this->msvc_idealBatchSize = configs.msvc_idealBatchSize;
-    RequestShapeType shape{configs.msvc_dataShape[0][1], configs.msvc_dataShape[0][2], configs.msvc_dataShape[0][3]};
-    this->msvc_outReqShape.emplace_back(shape);
     // for (BatchSizeType i = 0; i < msvc_idealBatchSize; ++i) {
     //     msvc_batchBuffer.emplace_back(cv::cuda::GpuMat(configs.msvc_dataShape[2], configs.msvc_dataShape[3], CV_32FC3));
     // }

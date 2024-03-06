@@ -56,9 +56,9 @@ protected:
  */
 void crop(
     const cv::cuda::GpuMat &image,
-    uint16_t infer_h,
-    uint16_t infer_w,
-    RequestShapeType numDetections,
+    int infer_h,
+    int infer_w,
+    int numDetections,
     const float *bbox_coorList,
     std::vector<cv::cuda::GpuMat> &croppedBBoxes
 );
