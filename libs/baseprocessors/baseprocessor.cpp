@@ -15,6 +15,6 @@ BaseProcessor::BaseProcessor(const BaseMicroserviceConfigs &configs) : Microserv
  * @return true 
  * @return false 
  */
-bool BaseProcessor::checkReqEligibility(ClockTypeTemp currReq_gentime) {
+bool BaseProcessor::checkReqEligibility(ClockType currReq_gentime) {
     return true;
 }

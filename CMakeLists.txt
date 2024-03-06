@@ -73,8 +73,8 @@ endif ()
 
 add_subdirectory(libs/misc)
 add_subdirectory(libs/microservice)
-# add_subdirectory(libs/trtengine)
-# add_subdirectory(libs/baseprocessors)
+add_subdirectory(libs/trtengine)
+add_subdirectory(libs/baseprocessors)
 add_subdirectory(libs/protobufprotocols)
 add_subdirectory(libs/communicator)
 add_subdirectory(libs/container_agent)
@@ -99,8 +99,8 @@ target_link_libraries(PipePlusPlus PUBLIC
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
         microservice
-        # trtengine
-        # baseprocessors
+        trtengine
+        baseprocessors
         communicator
         data_source
         # yolov5
