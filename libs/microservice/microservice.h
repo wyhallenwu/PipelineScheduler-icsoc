@@ -277,7 +277,7 @@ public:
         return msvc_OutQueue;
     };
 
-    virtual QueueLengthType GetOutQueueSize() {};
+    virtual QueueLengthType GetOutQueueSize() {return 0;};
 
 protected:
     std::vector<ThreadSafeFixSizedDoubleQueue*> msvc_InQueue, msvc_OutQueue;
