@@ -277,7 +277,7 @@ public:
         return msvc_OutQueue;
     };
 
-    virtual QueueLengthType GetOutQueueSize();
+    virtual QueueLengthType GetOutQueueSize() {};
 
 protected:
     std::vector<ThreadSafeFixSizedDoubleQueue*> msvc_InQueue, msvc_OutQueue;
@@ -331,10 +331,10 @@ protected:
     std::vector<std::tuple<uint16_t, uint16_t>> classToDnstreamMap;
 
     //
-    virtual bool isTimeToBatch();
+    virtual bool isTimeToBatch() {return true;};
 
     //
-    virtual bool checkReqEligibility(ClockType currReq_genTime);
+    virtual bool checkReqEligibility(ClockType currReq_genTime) {return true;};
 
     //
     virtual void updateReqRate(ClockType lastInterReqDuration);

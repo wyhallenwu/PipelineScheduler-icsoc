@@ -63,7 +63,9 @@ private:
             const MsvcSLOType &slo, const NeighborMicroserviceConfigs &prev_msvc,
             const std::vector<NeighborMicroserviceConfigs> &next_msvc);
 
-    void runDocker(const std::string &name, const std::string &start_string, const int &port) {
+    void finishContainer(const std::string &name, const std::string &start_string, const int &port);
+
+    static void runDocker(const std::string &name, const std::string &start_string, const int &port) {
         system(absl::StrFormat(R"(docker run -p %i:%i pipeline-base-container --name="%s"--json="%s" --port=%i)", port,
                                port, name, start_string, port).c_str());
     };

@@ -111,16 +111,16 @@ target_include_directories(data_source
 
 target_link_libraries(data_source
         PUBLIC
+        data_grpc_proto
+        device_grpc_proto
         ${OpenCV_LIBS}
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
         microservice
-        data_grpc_proto
-        device_grpc_proto
-        container_agent
         communicator
+        container_agent
 )
 
 # Here we configure variables specifying the target directories.

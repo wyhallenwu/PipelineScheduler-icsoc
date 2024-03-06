@@ -40,13 +40,12 @@ ContainerAgent::ContainerAgent(const std::string &name, uint16_t device_port, ui
     run = true;
     std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
     receiver.detach();
-    ReportStart(own_port);
+    ReportStart();
 }
 
-void ContainerAgent::ReportStart(int port) {
+void ContainerAgent::ReportStart() {
     indevicecommunication::ConnectionConfigs request;
-    request.set_ip("localhost");
-    request.set_port(port);
+    request.set_msvc_name(name);
     StaticConfirm reply;
     ClientContext context;
     std::unique_ptr<ClientAsyncResponseReader<StaticConfirm>> rpc(

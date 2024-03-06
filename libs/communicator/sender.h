@@ -11,7 +11,7 @@ using boost::interprocess::create_only;
 
 class Sender : public Microservice {
 public:
-    Sender(const BaseMicroserviceConfigs &configs, const std::string &connection);
+    Sender(const BaseMicroserviceConfigs &configs);
 
     virtual void Process() = 0;
 
@@ -37,7 +37,7 @@ protected:
 
 class GPUSender : public Sender {
 public:
-    explicit GPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection);
+    explicit GPUSender(const BaseMicroserviceConfigs &configs);
 
     void Process() final;
 
@@ -46,15 +46,15 @@ public:
             const ClockType &timestamp, const std::string &path, const uint32_t &slo);
 
 private:
-    static std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
+    std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
                                   SimpleConfirm &reply, Status &status, void *tag);
 
-    static std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *> tagToGpuPointer;
+    std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *> tagToGpuPointer;
 };
 
 class LocalCPUSender : public Sender {
 public:
-    LocalCPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection);
+    LocalCPUSender(const BaseMicroserviceConfigs &configs);
 
     void Process() final;
 
@@ -65,7 +65,7 @@ public:
 
 class RemoteCPUSender : public Sender {
 public:
-    RemoteCPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection);
+    RemoteCPUSender(const BaseMicroserviceConfigs &configs);
 
     void Process() final;
 

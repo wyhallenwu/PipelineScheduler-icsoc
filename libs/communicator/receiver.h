@@ -28,7 +28,7 @@ protected:
 
 class Receiver : public Microservice {
 public:
-    Receiver(const BaseMicroserviceConfigs &configs, const std::string &connection, const CommMethod &m);
+    Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m);
 
     ~Receiver() override {
         server->Shutdown();

@@ -64,7 +64,7 @@ public:
     void SendQueueLengths();
 
 protected:
-    void ReportStart(int port);
+    void ReportStart();
 
     class RequestHandler {
     public:

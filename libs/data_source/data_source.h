@@ -12,13 +12,13 @@ using namespace cv;
 
 class DataReader : public Microservice {
 public:
-    DataReader(const BaseMicroserviceConfigs &configs, std::string &datapath);
+    DataReader(const BaseMicroserviceConfigs &config);
 
-    ~DataReader() {
+    ~DataReader() override {
         source.release();
     };
 
-    void Process();
+    void Process(int wait_time_ms);
 
 private:
     VideoCapture source;

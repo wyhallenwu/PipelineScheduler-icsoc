@@ -1,11 +1,11 @@
 #include "data_source.h"
 
-DataReader::DataReader(const BaseMicroserviceConfigs &configs, std::string &datapath) : Microservice(
+DataReader::DataReader(const BaseMicroserviceConfigs &configs) : Microservice(
         configs) {
-    source = VideoCapture(datapath);
+    source = VideoCapture(configs.upstreamMicroservices.front().link[0]);
 };
 
-void DataReader::Process() {
+void DataReader::Process(int wait_time_ms) {
     ClockType time = std::chrono::system_clock::now();
     Mat frame;
     source >> frame;
@@ -20,19 +20,19 @@ void DataReader::Process() {
     Request<LocalCPUReqDataType> req = {time, msvc_svcLevelObjLatency, msvc_name, 1,
                                          {RequestData<LocalCPUReqDataType>{{frame.cols, frame.rows}, frame}}};
     msvc_OutQueue[0]->emplace(req);
+    std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
 };
 
 DataSourceAgent::DataSourceAgent(const std::string &name, uint16_t device_port, uint16_t own_port,
                     std::vector<BaseMicroserviceConfigs> &msvc_configs) : ContainerAgent(name, device_port, own_port) {
-        msvcs.push_back(reinterpret_cast<Microservice* const>(new DataReader(msvc_configs[0],
-                                                                                   msvc_configs[0].upstreamMicroservices.front().link[0])));
-        msvcs.push_back(reinterpret_cast<Microservice* const>(new LocalCPUSender(msvc_configs[1],
-                                                                                       msvc_configs[1].dnstreamMicroservices.front().link[0])));
+        msvcs.push_back(reinterpret_cast<Microservice* const>(new DataReader(msvc_configs[0])));
+        msvcs.push_back(reinterpret_cast<Microservice* const>(new LocalCPUSender(msvc_configs[1])));
         msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
-        std::thread processor(&DataReader::Process, dynamic_cast<DataReader*>(msvcs[0]));
+        std::thread processor(&DataReader::Process, dynamic_cast<DataReader*>(msvcs[0]), 33); // ~30.3 fps
         processor.detach();
         std::thread sender(&LocalCPUSender::Process, dynamic_cast<LocalCPUSender*>(msvcs[1]));
         sender.detach();
+        ReportStart();
     }
 
 int main(int argc, char **argv) {

@@ -109,6 +109,7 @@ target_include_directories(communicator
 
 target_link_libraries(communicator
         PUBLIC
+        data_grpc_proto
         ${OpenCV_LIBS}
         ${CUDA_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}

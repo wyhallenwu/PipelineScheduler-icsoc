@@ -110,8 +110,8 @@ target_link_libraries(PipePlusPlus PUBLIC
 add_executable(run src/main.cpp)
 target_link_libraries(run PipePlusPlus)
 
-# add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
-# target_link_libraries(DeviceAgent device_agent)
+add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
+target_link_libraries(DeviceAgent device_agent)
 
-# add_executable(Container_DataSource libs/data_source/data_source.cpp)
-# target_link_libraries(Container_DataSource data_source)
+add_executable(Container_DataSource libs/data_source/data_source.cpp)
+target_link_libraries(Container_DataSource data_source)
