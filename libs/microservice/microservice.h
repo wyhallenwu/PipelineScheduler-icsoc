@@ -30,6 +30,12 @@ template<typename DataType>
 struct RequestData {
     RequestShapeType shape;
     DataType data;
+
+    RequestData(RequestShapeType s, DataType d) : data(d) {
+        shape = s;
+    }
+
+    RequestData() {}
 };
 
 /**
@@ -40,27 +46,26 @@ struct RequestData {
 template<typename DataType>
 struct Request {
     // The moment this request was generated at the begining of the pipeline.
-    ClockType req_origGenTime;
+    ClockType req_origGenTime = std::chrono::_V2::system_clock::now();
     // The end-to-end service level latency objective to which this request is subject
-    MsvcSLOType req_e2eSLOLatency;
-    // Shape of data contained in the request. Helps interpret the data.
-    RequestShapeType req_dataShape;
-
+    MsvcSLOType req_e2eSLOLatency = 0;
     // The path that this request and its ancestors have travelled through.
     // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
     // For instance, `[YOLOv5Prep-01_05][YOLOv5s_05][YOLOv5post_07]`
-    std::string req_travelPath;
+    std::string req_travelPath = "";
 
     // Batch size
-    BatchSizeType req_batchSize;
+    BatchSizeType req_batchSize = 0;
 
     // The Inter-container GPU data of that this request carries.
-    std::vector<RequestData<DataType>> req_data;
+    std::vector<RequestData<DataType>> req_data = {};
     // To carry the data of the upstream microservice in case we need them for further processing.
     // For instance, for cropping we need both the original image (`upstreamReq_data`) and the output
     // of the inference engine, which is a result of `req_data`.
     // If there is nothing to carry, it is a blank vector.
-    std::vector<RequestData<DataType>> upstreamReq_data;
+    std::vector<RequestData<DataType>> upstreamReq_data = {};
+
+    Request() {};
 
     Request(
         ClockType genTime,
@@ -73,10 +78,12 @@ struct Request {
     ) : req_origGenTime(genTime),
         req_e2eSLOLatency(latency),
         req_travelPath(std::move(path)),
-        req_batchSize(batchSize),
-        req_data(data),
-        upstreamReq_data(upstream_data) {}
+        req_batchSize(batchSize) {
+            req_data = data;
+            upstreamReq_data = upstream_data;
+    }
     
+    // df
     Request(
         ClockType genTime,
         MsvcSLOType latency,
@@ -86,8 +93,27 @@ struct Request {
     ) : req_origGenTime(genTime),
         req_e2eSLOLatency(latency),
         req_travelPath(std::move(path)),
-        req_batchSize(batchSize),
-        req_data(data) {}
+        req_batchSize(batchSize) {
+            req_data = data;
+    }
+
+    /**
+     * @brief making our request 
+     * 
+     * @param other 
+     * @return Request& 
+     */
+    Request& operator=(const Request& other) {
+        if (this != &other) {
+            req_origGenTime = other.req_origGenTime;
+            req_e2eSLOLatency = other.req_e2eSLOLatency;
+            req_travelPath = other.req_travelPath;
+            req_batchSize = other.req_batchSize;
+            req_data = other.req_data;
+            upstreamReq_data = other.upstreamReq_data;
+        }
+        return *this;
+    }
 };
 
 //template<int MaxSize=100>
