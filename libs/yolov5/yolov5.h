@@ -31,9 +31,8 @@ public:
 protected:
     void inference();
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
-    std::vector<LocalGPUReqDataType> batchedOutBuffer;
     TRTConfigs msvc_engineConfigs;
-    Engine msvc_inferenceEngine;
+    Engine* msvc_inferenceEngine;
 };
 
 class YoloV5Postprocessor : public BasePostprocessor {

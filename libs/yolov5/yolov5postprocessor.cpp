@@ -3,24 +3,45 @@
 YoloV5Postprocessor::YoloV5Postprocessor(const BaseMicroserviceConfigs &config) : BasePostprocessor(config) {
 }
 
-template<typename InType>
 void YoloV5Postprocessor::postProcessing() {
     // The time where the last request was generated.
-    ClockTypeTemp lastReq_genTime;
+    ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
-    ClockTypeTemp currReq_genTime;
+    ClockType currReq_genTime;
     // The time where the current incoming request arrives
-    ClockTypeTemp currReq_recvTime;
+    ClockType currReq_recvTime;
 
+    // Data package to be sent to and processed at the next microservice
+    std::vector<RequestData<LocalGPUReqDataType>> outReqData;
+    // List of images carried from the previous microservice here to be cropped from.
+    std::vector<RequestData<LocalGPUReqDataType>> imageList;
+    // Instance of data to be packed into `outReqData`
+    RequestData<LocalGPUReqDataType> reqData;
+
+    // List of bounding boxes cropped from one single image
+    std::vector<cv::cuda::GpuMat> singleImageBBoxList;
+
+    // Current incoming equest and request to be sent out to the next
+    Request<LocalGPUReqDataType> currReq, outReq;
+
+    // Batch size of current request
     BatchSizeType currReq_batchSize;
 
+    // Shape of cropped bounding boxes
+    RequestShapeType bboxShape;
+
     while (true) {
-        if (!this->RUN_THREADS) {
+        // Allowing this thread to naturally come to an end
+        if (this->STOP_THREADS) {
             break;
         }
+        else if (this->PAUSE_THREADS) {
+            continue;
+        }
+
         // Processing the next incoming request
-        InType currReq = this->InQueue.pop();
-        this->msvc_inReqCount++;
+        currReq = msvc_InQueue.at(0)->pop2();
+        msvc_inReqCount++;
 
         currReq_genTime = currReq.req_origGenTime;
         // We need to check if the next request is worth processing.
@@ -47,27 +68,27 @@ void YoloV5Postprocessor::postProcessing() {
          * We need to bring these buffers to CPU in order to process them.
          */
 
-        cudaStream_t postProcStream;
-        uint16_t maxNumDets = this->msvc_outReqShape[2][0];
+        uint16_t maxNumDets = msvc_dataShape[2][0];
 
-        std::vector<Data<LocalGPUReqDataType>> currReq_data = currReq.req_data;
-        // float num_detections[currReq_batchSize];
-        // float nmsed_boxes[currReq_batchSize][maxNumDets][4];
-        // float nmsed_scores[currReq_batchSize][maxNumDets];
-        // float nmsed_classes[currReq_batchSize][maxNumDets];
-        // float *numDetList = &num_detections;
-        // float *nmsedBoxesList = &nmsed_boxes;
-        // float *nmsedScoresList = &nmsed_scores;
-        // float *nmsedclassesList = &nmsed_classes;
+        std::vector<RequestData<LocalGPUReqDataType>> currReq_data = currReq.req_data;
+        float num_detections[currReq_batchSize];
+        float nmsed_boxes[currReq_batchSize][maxNumDets][4];
+        float nmsed_scores[currReq_batchSize][maxNumDets];
+        float nmsed_classes[currReq_batchSize][maxNumDets];
+        float *numDetList = num_detections;
+        float *nmsedBoxesList = &nmsed_boxes[0][0][0];
+        float *nmsedScoresList = &nmsed_scores[0][0];
+        float *nmsedClassesList = &nmsed_classes[0][0];
 
-        float numDetList[currReq_batchSize];
-        float nmsedBoxesList[currReq_batchSize][maxNumDets][4];
-        float nmsedScoresList[currReq_batchSize][maxNumDets];
-        float nmsedClassesList[currReq_batchSize][maxNumDets];
-        std::vector<float *> ptrList = {&numDetList, &nmsedBoxesList, &nmsedScoresList, &nmsedClassesList};
+        // float numDetList[currReq_batchSize];
+        // float nmsedBoxesList[currReq_batchSize][maxNumDets][4];
+        // float nmsedScoresList[currReq_batchSize][maxNumDets];
+        // float nmsedClassesList[currReq_batchSize][maxNumDets];
+        std::vector<float *> ptrList{numDetList, nmsedBoxesList, nmsedScoresList, nmsedClassesList};
         std::vector<size_t> bufferSizeList;
 
-        
+        cudaStream_t postProcStream;
+        checkCudaErrorCode(cudaStreamCreate(&postProcStream));
         for (std::size_t i = 0; i < currReq_data.size(); ++i) {
             size_t bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
             RequestShapeType shape = currReq_data[i].shape;
@@ -75,33 +96,48 @@ void YoloV5Postprocessor::postProcessing() {
                 bufferSize *= shape[j];
             }
             bufferSizeList.emplace_back(bufferSize);
-            cudaMemcpyAsync(
+            checkCudaErrorCode(cudaMemcpyAsync(
                 (void *) ptrList[i],
-                currReq_data[i].content.cudaPtr(),
+                currReq_data[i].data.cudaPtr(),
                 bufferSize,
                 cudaMemcpyDeviceToHost,
                 postProcStream
-            );
+            ));
         }
-        std::vector<Data<LocalGPUReqDataType>> imageList = currReq.upstreamReq_data; 
-        std::vector<cv::cuda::GpuMat> singleImageBBoxList;
+        imageList = currReq.upstreamReq_data; 
+        uint32_t bboxClass, queueIndex;
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
             int infer_h, infer_w;
             int numDetsInFrame = (int)numDetList[i];
             infer_h = imageList[i].shape[1];
             infer_w = imageList[i].shape[2];
-            crop(imageList[i].content, infer_h, infer_w, numDetsInFrame, &nmsedBoxesList[4], singleImageBBoxList);
+            crop(imageList[i].data, infer_h, infer_w, numDetsInFrame, nmsed_boxes[4][0], singleImageBBoxList);
             for (int j = 0; j < numDetsInFrame; ++i) {
-                uint32_t bboxClass = (uint32_t)nmsedClassesList[i][j];
-                uint32_t queueIndex;
+                bboxClass = (uint32_t)nmsed_classes[i][j];
                 for (size_t k = 0; k < this->classToDnstreamMap.size(); ++k) {
-                    if (this->classToDnstreamMap[i][0] == bboxClass) {
-                        queueIndex = this->classToDnstreamMap[i][1]; 
+                    if (classToDnstreamMap.at(i).second == bboxClass) {
+                        queueIndex = this->classToDnstreamMap.at(i).second; 
+                        bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
+                        reqData = {
+                            bboxShape,
+                            singleImageBBoxList[j]
+                        };
+                        outReqData.emplace_back(reqData);
+                        outReq = {
+                            std::chrono::_V2::system_clock::now(),
+                            currReq.req_e2eSLOLatency,
+                            "",
+                            1,
+                            outReqData, //req_data
+                            currReq.req_data // upstreamReq_data
+                        };
+                        msvc_OutQueue.at(queueIndex)->emplace(outReq);
                         break;
                     }
                 }
-                this->getOutQueue()[queueIndex].emplace(singleImageBBoxList[j]);
             }
+            outReqData.clear();
+            singleImageBBoxList.clear();
         }
     }
 
