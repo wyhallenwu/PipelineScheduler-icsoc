@@ -23,6 +23,16 @@ void scaleBBox(
     }
 }
 
+/**
+ * @brief Cropping multiple boxes from 1 picture
+ * 
+ * @param image 
+ * @param infer_h 
+ * @param infer_w 
+ * @param numDetections 
+ * @param bbox_coorList 
+ * @param croppedBBoxes 
+ */
 void crop(
     const cv::cuda::GpuMat &image,
     int infer_h,
@@ -40,6 +50,33 @@ void crop(
         cv::cuda::GpuMat croppedBBox = image(cv::Range((int)orig_bboxCoors[0], (int)orig_bboxCoors[2]), cv::Range((int)orig_bboxCoors[1], (int)orig_bboxCoors[3])).clone();
         croppedBBoxes.emplace_back(croppedBBox);
     }
+}
+
+/**
+ * @brief Cropping 1 box from 1 picture
+ * 
+ * @param image 
+ * @param infer_h 
+ * @param infer_w 
+ * @param numDetections 
+ * @param bbox_coorList 
+ * @param croppedBBoxes 
+ */
+void crop(
+    const cv::cuda::GpuMat &image,
+    int infer_h,
+    int infer_w,
+    int numDetections,
+    const float *bbox_coorList,
+    cv::cuda::GpuMat &croppedBBoxes
+) {
+    int orig_h, orig_w;
+    orig_h = image.rows;
+    orig_w = image.cols;
+    int orig_bboxCoors[4];
+    scaleBBox(orig_h, orig_w, infer_h, infer_w, bbox_coorList, orig_bboxCoors);
+    cv::cuda::GpuMat croppedBBox = image(cv::Range((int)orig_bboxCoors[0], (int)orig_bboxCoors[2]), cv::Range((int)orig_bboxCoors[1], (int)orig_bboxCoors[3])).clone();
+    croppedBBoxes = croppedBBox;
 }
 
 BasePostprocessor::BasePostprocessor(const BaseMicroserviceConfigs &configs) : Microservice(configs) {

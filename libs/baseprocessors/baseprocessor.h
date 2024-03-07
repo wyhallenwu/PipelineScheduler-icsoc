@@ -3,6 +3,7 @@
 #include <cuda_runtime.h>
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
+#include <thread>
 
 typedef uint16_t BatchSizeType;
 
@@ -61,6 +62,15 @@ void crop(
     int numDetections,
     const float *bbox_coorList,
     std::vector<cv::cuda::GpuMat> &croppedBBoxes
+);
+
+void crop(
+    const cv::cuda::GpuMat &image,
+    int infer_h,
+    int infer_w,
+    int numDetections,
+    const float *bbox_coorList,
+    cv::cuda::GpuMat croppedBBoxes
 );
 
 class BasePostprocessor : public Microservice {

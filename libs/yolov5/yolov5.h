@@ -2,7 +2,6 @@
 #include <trtengine.h>
 #include <misc.h>
 #include <chrono>
-#include <thread>
 
 struct yoloV5Configs {
     const TRTConfigs engineConfigs;

@@ -80,6 +80,7 @@ add_subdirectory(libs/communicator)
 add_subdirectory(libs/container_agent)
 add_subdirectory(libs/data_source)
 add_subdirectory(libs/yolov5)
+add_subdirectory(libs/retinaface)
 add_subdirectory(libs/device_agent)
 
 add_library(PipePlusPlus
@@ -104,6 +105,7 @@ target_link_libraries(PipePlusPlus PUBLIC
         communicator
         data_source
         yolov5
+        retinaface
         container_agent
         device_agent
 )

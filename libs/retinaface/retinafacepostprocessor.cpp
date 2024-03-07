@@ -1,9 +1,9 @@
-#include <yolov5.h>
+#include <retinaface.h>
 
-YoloV5Postprocessor::YoloV5Postprocessor(const BaseMicroserviceConfigs &config) : BasePostprocessor(config) {
+RetinaFacePostprocessor::RetinaFacePostprocessor(const BaseMicroserviceConfigs &config) : BasePostprocessor(config) {
 }
 
-void YoloV5Postprocessor::postProcessing() {
+void RetinaFacePostprocessor::postProcessing() {
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -17,9 +17,6 @@ void YoloV5Postprocessor::postProcessing() {
     std::vector<RequestData<LocalGPUReqDataType>> imageList;
     // Instance of data to be packed into `outReqData`
     RequestData<LocalGPUReqDataType> reqData;
-
-    // List of bounding boxes cropped from one single image
-    std::vector<cv::cuda::GpuMat> singleImageBBoxList;
 
     // Current incoming equest and request to be sent out to the next
     Request<LocalGPUReqDataType> currReq, outReq;
@@ -58,33 +55,23 @@ void YoloV5Postprocessor::postProcessing() {
         currReq_batchSize = currReq.req_batchSize;
 
         /**
-         * @brief Each request to the postprocessing microservice of YOLOv5 contains the buffers which are results of TRT inference 
+         * @brief Each request to the postprocessing microservice of RetinaFace contains the buffers which are results of TRT inference 
          * as well as the images from which bounding boxes will be cropped.
-         * `The buffers` are a vector of 4 small raw memory (float) buffers (since using `BatchedNMSPlugin` provided by TRT), which are
+         * `The buffers` are a vector of 2 small raw memory (float) buffers (since using `BatchedNMSPlugin` provided by TRT), which are
          * 1/ `num_detections` (Batch, 1): number of objects detected in this frame
-         * 2/ `nmsed_boxes` (Batch, TopK, 4): the boxes remaining after nms is performed.
-         * 3/ `nmsed_scores` (Batch, TopK): the scores of these boxes.
-         * 4/ `nmsed_classes` (Batch, TopK):
+         * 2/ `nmsed_boxes` (Batch, 1, 4): the only box remaining after nms is performed. In principle, there should be more than 1 boxes
+         *                                  for each input picture. But in this case, the image is a cropped bounding box of human class,
+         *                                  so it can have at most 1 face (if found).
          * We need to bring these buffers to CPU in order to process them.
          */
 
-        uint16_t maxNumDets = msvc_dataShape[2][0];
-
         std::vector<RequestData<LocalGPUReqDataType>> currReq_data = currReq.req_data;
         float num_detections[currReq_batchSize];
-        float nmsed_boxes[currReq_batchSize][maxNumDets][4];
-        float nmsed_scores[currReq_batchSize][maxNumDets];
-        float nmsed_classes[currReq_batchSize][maxNumDets];
-        float *numDetList = num_detections;
-        float *nmsedBoxesList = &nmsed_boxes[0][0][0];
-        float *nmsedScoresList = &nmsed_scores[0][0];
-        float *nmsedClassesList = &nmsed_classes[0][0];
+        float nmsed_boxes[currReq_batchSize][4];
+        float *numDetList = &num_detections[0];
+        float *nmsedBoxesList = &nmsed_boxes[0][0];
 
-        // float numDetList[currReq_batchSize];
-        // float nmsedBoxesList[currReq_batchSize][maxNumDets][4];
-        // float nmsedScoresList[currReq_batchSize][maxNumDets];
-        // float nmsedClassesList[currReq_batchSize][maxNumDets];
-        std::vector<float *> ptrList{numDetList, nmsedBoxesList, nmsedScoresList, nmsedClassesList};
+        std::vector<float *> ptrList{numDetList, nmsedBoxesList};
         std::vector<size_t> bufferSizeList;
 
         cudaStream_t postProcStream;
@@ -106,11 +93,8 @@ void YoloV5Postprocessor::postProcessing() {
         }
 
         // List of images to be cropped from
+        // in this case, each image is a detected human bounding box
         imageList = currReq.upstreamReq_data; 
-
-        // class of the bounding box cropped from one the images in the image list
-        int16_t bboxClass;
-        // The index of the queue we are going to put data on based on the value of `bboxClass`
         NumQueuesType queueIndex;
 
         // Doing post processing for the whole batch
@@ -118,42 +102,29 @@ void YoloV5Postprocessor::postProcessing() {
             // Height and width of the image used for inference
             int infer_h, infer_w;
 
-            // If there is no object in frame, we don't have to do nothing.
+            // If there is no face in frame, we don't have to do nothing.
             int numDetsInFrame = (int)numDetList[i];
             if (numDetsInFrame <= 0) {
                 continue;
             }
 
-            // Otherwise, we need to do some cropping.
+            // The face found in each human class co
+            cv::cuda::GpuMat foundFace;
 
+            // Otherwise, we need to do some cropping.
+            // Btw, we should have only 1 box to crop thus make singleImageBBoxList
             infer_h = imageList[i].shape[1];
             infer_w = imageList[i].shape[2];
-            crop(imageList[i].data, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
+            crop(imageList[i].data, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i], foundFace);
+            queueIndex = -1;
 
-            // After cropping, we need to find the right queues to put the bounding boxes in
-            for (int j = 0; j < numDetsInFrame; ++i) {
-                bboxClass = (int16_t)nmsed_classes[i][j];
-                queueIndex = -1;
-                // in the constructor of each microservice, we map the class number to the corresponding queue index in 
-                // `classToDntreamMap`.
-                for (size_t k = 0; k < this->classToDnstreamMap.size(); ++k) {
-                    if (classToDnstreamMap.at(k).second == bboxClass) {
-                        queueIndex = this->classToDnstreamMap.at(i).second; 
-                        // Breaking is only appropriate if case we assume the downstream only wants to take one class
-                        // TODO: More than class-of-interests for 1 queue
-                        break;
-                    }
-                }
-                // If this class number is not needed anywhere downstream
-                if (queueIndex == -1) {
-                    continue;
-                }
-
-                // Putting the bounding box into an `outReq` to be sent out
-                bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
+            // The face we found to the downstreams
+            for (size_t k = 0; k < this->classToDnstreamMap.size(); ++k) {
+                queueIndex = this->classToDnstreamMap.at(k).second;
+                bboxShape = {foundFace.channels(), foundFace.rows, foundFace.cols};
                 reqData = {
                     bboxShape,
-                    singleImageBBoxList[j].clone()
+                    foundFace.clone()
                 };
                 outReqData.emplace_back(reqData);
                 outReq = {
@@ -165,13 +136,11 @@ void YoloV5Postprocessor::postProcessing() {
                     currReq.req_data // upstreamReq_data
                 };
                 msvc_OutQueue.at(queueIndex)->emplace(outReq);
+                outReqData.clear();
             }
-            // Clearing out data of the vector
-            outReqData.clear();
-            singleImageBBoxList.clear();
         }
+        // Let the poor boy sleep for some time before he has to wake up and do postprocessing again.
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
-
     }
 
 
