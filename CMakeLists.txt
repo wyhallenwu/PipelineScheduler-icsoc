@@ -78,14 +78,9 @@ add_subdirectory(libs/baseprocessors)
 add_subdirectory(libs/protobufprotocols)
 add_subdirectory(libs/communicator)
 add_subdirectory(libs/container_agent)
-<<<<<<< HEAD
-=======
 add_subdirectory(libs/data_source)
 add_subdirectory(libs/yolov5)
->>>>>>> origin/cpp-gpu
 add_subdirectory(libs/device_agent)
-add_subdirectory(libs/yolov5)
-add_subdirectory(libs/data_source)
 
 add_library(PipePlusPlus
         src/main.cpp)

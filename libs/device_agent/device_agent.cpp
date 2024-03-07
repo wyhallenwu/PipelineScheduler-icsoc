@@ -18,8 +18,8 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, uint16_t controller_
     containers = std::map<std::string, ContainerHandle>();
 
 
-    CreateDataSource(0, {{"yolov5_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -1, {}}}, 1, "./test.mp4");
-    //CreateYolo5Container(0, {"datasource_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -2, {}}, {}, 1);
+    CreateDataSource(0, {{"yolov5_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -1, {{0,0}}}}, 1, "./test.mp4");
+    //CreateYolo5Container(0, {"datasource_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -2, {{0,0}}}, {}, 1);
 
     HandleRecvRpcs();
 }

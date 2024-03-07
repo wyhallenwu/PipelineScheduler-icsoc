@@ -2,27 +2,27 @@
 
 DataReader::DataReader(const BaseMicroserviceConfigs &configs) : Microservice(
         configs) {
-    NeighborMicroserviceConfigs upStreamMsvc = configs.upstreamMicroservices.front();
-    upStreamMsvc.link[0] = "http://localhost:2000";
     source = VideoCapture(configs.upstreamMicroservices.begin()->link[0]);
 };
 
 void DataReader::Process(int wait_time_ms) {
-    ClockType time = std::chrono::system_clock::now();
-    Mat frame;
-    source >> frame;
-    if (frame.empty()) {
-        source.set(CAP_PROP_POS_FRAMES, 0);
+    while (true) {
+        ClockType time = std::chrono::system_clock::now();
+        Mat frame;
         source >> frame;
         if (frame.empty()) {
-            std::cout << "No more frames to read" << std::endl;
-            return;
+            source.set(CAP_PROP_POS_FRAMES, 0); // retry to get the frame by modifying source
+            source >> frame;
+            if (frame.empty()) {
+                std::cout << "No more frames to read" << std::endl;
+                return;
+            }
         }
+        Request<LocalCPUReqDataType> req = {time, msvc_svcLevelObjLatency, msvc_name, 1,
+                                            {RequestData<LocalCPUReqDataType>{{frame.cols, frame.rows}, frame}}};
+        msvc_OutQueue[0]->emplace(req);
+        std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
     }
-    Request<LocalCPUReqDataType> req = {time, msvc_svcLevelObjLatency, msvc_name, 1,
-                                         {RequestData<LocalCPUReqDataType>{{frame.cols, frame.rows}, frame}}};
-    msvc_OutQueue[0]->emplace(req);
-    std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
 };
 
 DataSourceAgent::DataSourceAgent(const std::string &name, uint16_t device_port, uint16_t own_port,
