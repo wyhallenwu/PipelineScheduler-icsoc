@@ -124,8 +124,9 @@ std::string LocalCPUSender::SendSharedMemory(const std::vector<RequestData<Local
         auto ref = request.add_elements();
         sprintf(name, "shared %d", rand_int(0, 1000));
         boost::interprocess::shared_memory_object shm{create_only, name, read_write};
+        shm.truncate(el.data.total() * el.data.elemSize());
         boost::interprocess::mapped_region region{shm, read_write};
-        std::memcpy(region.get_address(), &el.data, el.data.total() * el.data.elemSize());
+        std::memcpy(region.get_address(), el.data.data, el.data.total() * el.data.elemSize());
         ref->set_name(name);
         ref->set_width(el.shape[0]);
         ref->set_height(el.shape[1]);
@@ -167,7 +168,7 @@ std::string RemoteCPUSender::SendSerializedData(
     request.set_slo(slo);
     for (RequestData<LocalCPUReqDataType> el: elements) {
         auto ref = request.add_elements();
-        ref->set_data(&el.data, el.data.total() * el.data.elemSize());
+        ref->set_data(el.data.data, el.data.total() * el.data.elemSize());
         ref->set_width(el.shape[0]);
         ref->set_height(el.shape[1]);
         ref->set_datalen(el.data.total() * el.data.elemSize());

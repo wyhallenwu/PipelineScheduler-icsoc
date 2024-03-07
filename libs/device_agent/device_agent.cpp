@@ -61,8 +61,8 @@ void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroservic
     std::string name = "datasource_" + std::to_string(id);
     NeighborMicroserviceConfigs upstream = {"video_source", CommMethod::localCPU, {video_path}, 0, -2, {}};
     json j = createConfigs({
-                                   {name + "::data_reader", MicroserviceType::Postprocessor, 10, -1, {}},
-                                   {name + "::sender",      MicroserviceType::Sender,        10, -1, {}}},
+                                   {name + "::data_reader", MicroserviceType::Postprocessor, 10, -1, {{0,0}}},
+                                   {name + "::sender",      MicroserviceType::Sender,        10, -1, {{0,0}}}},
                            slo, upstream, downstreams
     );
     finishContainer("./Container_DataSource", name, to_string(j), 49152 + containers.size());
@@ -84,11 +84,8 @@ json DeviceAgent::createConfigs(
         const std::vector<NeighborMicroserviceConfigs> &next_msvc) {
     int i = 0, j = next_msvc.size() + 1;
     std::vector<BaseMicroserviceConfigs> configs;
-    NeighborMicroserviceConfigs upstream = {std::get<0>(data[0]), CommMethod::localGPU, {""}, std::get<2>(data[0]), -2, std::get<4>(data[0])};
+    NeighborMicroserviceConfigs upstream = prev_msvc;
     for (auto &msvc: data) {
-        if (i == 0) {
-            upstream = prev_msvc;
-        }
         std::list<NeighborMicroserviceConfigs> downstream;
         if (std::get<1>(msvc) == MicroserviceType::Postprocessor) {
             while (--j > 0) {

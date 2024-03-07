@@ -112,7 +112,7 @@ protected:
     InDeviceCommunication::AsyncService service;
     std::unique_ptr<Server> server;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
-    std::atomic<bool> run{};
+    std::atomic<bool> run;
 };
 
 #endif

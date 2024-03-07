@@ -2,7 +2,9 @@
 
 DataReader::DataReader(const BaseMicroserviceConfigs &configs) : Microservice(
         configs) {
-    source = VideoCapture(configs.upstreamMicroservices.front().link[0]);
+    NeighborMicroserviceConfigs upStreamMsvc = configs.upstreamMicroservices.front();
+    upStreamMsvc.link[0] = "http://localhost:2000";
+    source = VideoCapture(configs.upstreamMicroservices.begin()->link[0]);
 };
 
 void DataReader::Process(int wait_time_ms) {
@@ -26,11 +28,11 @@ void DataReader::Process(int wait_time_ms) {
 DataSourceAgent::DataSourceAgent(const std::string &name, uint16_t device_port, uint16_t own_port,
                     std::vector<BaseMicroserviceConfigs> &msvc_configs) : ContainerAgent(name, device_port, own_port) {
         msvcs.push_back(reinterpret_cast<Microservice* const>(new DataReader(msvc_configs[0])));
-        msvcs.push_back(reinterpret_cast<Microservice* const>(new LocalCPUSender(msvc_configs[1])));
+        msvcs.push_back(reinterpret_cast<Microservice* const>(new RemoteCPUSender(msvc_configs[1])));
         msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
         std::thread processor(&DataReader::Process, dynamic_cast<DataReader*>(msvcs[0]), 33); // ~30.3 fps
         processor.detach();
-        std::thread sender(&LocalCPUSender::Process, dynamic_cast<LocalCPUSender*>(msvcs[1]));
+        std::thread sender(&RemoteCPUSender::Process, dynamic_cast<RemoteCPUSender*>(msvcs[1]));
         sender.detach();
         ReportStart();
     }

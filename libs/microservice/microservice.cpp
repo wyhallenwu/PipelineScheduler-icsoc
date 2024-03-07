@@ -43,3 +43,6 @@ Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
 void Microservice::updateReqRate(ClockType lastInterReqDuration) {
     msvc_interReqTime = 0.0001;
 }
+
+[{"bs":1,"downstrm":[{"coi":-1,"comm":3,"link":[""],"maxqs":10,"name":"datasource_0::sender","shape":[[0,0]]}],"ds":[[0,0]],"name":"datasource_0::data_reader","slo":1,"type":3,"upstrm":[{"coi":-2,"comm":4,"link":["./test.mp4"],"maxqs":0,"name":"video_source","shape":[[0,0]]}]},
+ {"bs":1,"downstrm":[{"coi":-1,"comm":0,"link":["172.17.0.1:55000"],"maxqs":10,"name":"yolov5_0","shape":[[0,0]]}],"ds":[[0,0]],"name":"datasource_0::sender","slo":1,"type":4,"upstrm":[{"coi":-2,"comm":4,"link":["./test.mp4"],"maxqs":0,"name":"video_source","shape":[[0,0]]}]}]
