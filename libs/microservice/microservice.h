@@ -190,9 +190,9 @@ public:
     int32_t size() {
         if (activeQueueIndex == 1) {
             return cpuQueue.size();
-        } else if (activeQueueIndex == 2) {
-            return gpuQueue.size();
-        }
+        } //else if (activeQueueIndex == 2) {
+        return gpuQueue.size();
+        //}
     }
 
     void setActiveQueueIndex(uint8_t index) {
@@ -356,7 +356,7 @@ protected:
     //
     std::vector<NeighborMicroservice> dnstreamMicroserviceList;
     //
-    std::vector<std::pair<uint16_t, uint16_t>> classToDnstreamMap;
+    std::vector<std::pair<int16_t, NumQueuesType>> classToDnstreamMap;
 
     //
     virtual bool isTimeToBatch() {return true;};
