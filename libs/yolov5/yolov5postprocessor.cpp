@@ -104,41 +104,74 @@ void YoloV5Postprocessor::postProcessing() {
                 postProcStream
             ));
         }
+
+        // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
-        uint32_t bboxClass, queueIndex;
+
+        // class of the bounding box cropped from one the images in the image list
+        int16_t bboxClass;
+        // The index of the queue we are going to put data on based on the value of `bboxClass`
+        NumQueuesType queueIndex;
+
+        // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
+            // Height and width of the image used for inference
             int infer_h, infer_w;
+
+            // If there is no object in frame, we don't have to do nothing.
             int numDetsInFrame = (int)numDetList[i];
+            if (numDetsInFrame <= 0) {
+                continue;
+            }
+
+            // Otherwise, we need to do some cropping.
+
             infer_h = imageList[i].shape[1];
             infer_w = imageList[i].shape[2];
-            crop(imageList[i].data, infer_h, infer_w, numDetsInFrame, nmsed_boxes[4][0], singleImageBBoxList);
+            crop(imageList[i].data, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
+
+            // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++i) {
-                bboxClass = (uint32_t)nmsed_classes[i][j];
+                bboxClass = (int16_t)nmsed_classes[i][j];
+                queueIndex = -1;
+                // in the constructor of each microservice, we map the class number to the corresponding queue index in 
+                // `classToDntreamMap`.
                 for (size_t k = 0; k < this->classToDnstreamMap.size(); ++k) {
-                    if (classToDnstreamMap.at(i).second == bboxClass) {
+                    if (classToDnstreamMap.at(k).second == bboxClass) {
                         queueIndex = this->classToDnstreamMap.at(i).second; 
-                        bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
-                        reqData = {
-                            bboxShape,
-                            singleImageBBoxList[j]
-                        };
-                        outReqData.emplace_back(reqData);
-                        outReq = {
-                            std::chrono::_V2::system_clock::now(),
-                            currReq.req_e2eSLOLatency,
-                            "",
-                            1,
-                            outReqData, //req_data
-                            currReq.req_data // upstreamReq_data
-                        };
-                        msvc_OutQueue.at(queueIndex)->emplace(outReq);
+                        // Breaking is only appropriate if case we assume the downstream only wants to take one class
+                        // TODO: More than class-of-interests for 1 queue
                         break;
                     }
                 }
+                // If this class number is not needed anywhere downstream
+                if (queueIndex == -1) {
+                    continue;
+                }
+
+                // Putting the bounding box into an `outReq` to be sent out
+                bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
+                reqData = {
+                    bboxShape,
+                    singleImageBBoxList[j].clone()
+                };
+                outReqData.emplace_back(reqData);
+                outReq = {
+                    std::chrono::_V2::system_clock::now(),
+                    currReq.req_e2eSLOLatency,
+                    "",
+                    1,
+                    outReqData, //req_data
+                    currReq.req_data // upstreamReq_data
+                };
+                msvc_OutQueue.at(queueIndex)->emplace(outReq);
             }
+            // Clearing out data of the vector
             outReqData.clear();
             singleImageBBoxList.clear();
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+
     }
 
 
