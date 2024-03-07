@@ -52,8 +52,10 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
     server = builder.BuildAndStart();
     std::thread handler;
     if (m == CommMethod::localGPU) {
+        msvc_OutQueue[0]->setActiveQueueIndex(2);
         handler = std::thread(&Receiver::HandleRpcsToGPU, this);
     } else if (m == CommMethod::localCPU) {
+        msvc_OutQueue[0]->setActiveQueueIndex(1);
         handler = std::thread(&Receiver::HandleRpcsToCPU, this);
     }
     handler.detach();
