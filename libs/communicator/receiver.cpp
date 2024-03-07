@@ -1,42 +1,70 @@
 #include "receiver.h"
 
-GPULoader::GPULoader(const BaseMicroserviceConfigs &configs,
-                     ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *out)
+GPULoader::GPULoader(const BaseMicroserviceConfigs &configs, ThreadSafeFixSizedDoubleQueue *out, const CommMethod &m)
         : Microservice(configs) {
-    InQueue = new ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>();
+    InQueue = new ThreadSafeFixSizedDoubleQueue();
     OutQueue = out;
+    //spawn Thread that calls Schedule
+    if (m == CommMethod::localGPU) {
+        std::thread t(&GPULoader::Onloading, this);
+        t.detach();
+    } else if (m == CommMethod::localCPU) {
+        std::thread t(&GPULoader::Offloading, this);
+        t.detach();
+    }
 }
 
-void GPULoader::Schedule() {
-    DataRequest<LocalCPUDataType> req = InQueue->pop();
+void GPULoader::Onloading() {
+    Request<LocalCPUReqDataType> req = InQueue->pop1();
     // copy data to gpu using cuda
-    std::vector<Data<LocalGPUReqDataType>> elements = {};
+    std::vector<RequestData<LocalGPUReqDataType>> elements = {};
     for (const auto &el: req.req_data) {
-        auto gpu_image = cv::cuda::GpuMat(req.req_dataShape[0], req.req_dataShape[1], CV_8UC3);
-        gpu_image.upload(el.content);
-        elements.push_back({req.req_dataShape, gpu_image});
+        auto gpu_image = cv::cuda::GpuMat(el.shape[0], el.shape[1], CV_8UC3);
+        gpu_image.upload(el.data);
+        elements.push_back({el.shape, gpu_image});
     }
     OutQueue->emplace(
             {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
 }
 
-Receiver::Receiver(const BaseMicroserviceConfigs &configs, const std::string &connection)
-        : GPUDataMicroservice<void>(configs) {
+void GPULoader::Offloading() {
+    Request<LocalGPUReqDataType> req = InQueue->pop2();
+    // copy data from gpu using cuda
+    std::vector<RequestData<LocalCPUReqDataType>> elements = {};
+    for (const auto &el: req.req_data) {
+        cv::Mat image;
+        el.data.download(image);
+        elements.push_back({el.shape, image});
+    }
+    OutQueue->emplace(
+            {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
+}
+
+Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
+        : Microservice(configs) {
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder builder;
-    builder.AddListeningPort(connection, grpc::InsecureServerCredentials());
+    builder.AddListeningPort(configs.upstreamMicroservices.front().link[0], grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
+    LoadingQueue = (new GPULoader(configs, msvc_OutQueue[0], m))->getInQueue();
     cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
-    LoadingQueue = GPULoader(BaseMicroserviceConfigs(), OutQueue).getInQueue();
-    HandleRpcs();
+    std::thread handler;
+    if (m == CommMethod::localGPU) {
+        msvc_OutQueue[0]->setActiveQueueIndex(2);
+        handler = std::thread(&Receiver::HandleRpcsToGPU, this);
+    } else if (m == CommMethod::localCPU) {
+        msvc_OutQueue[0]->setActiveQueueIndex(1);
+        handler = std::thread(&Receiver::HandleRpcsToCPU, this);
+    }
+    handler.detach();
 }
 
 Receiver::GpuPointerRequestHandler::GpuPointerRequestHandler(DataTransferService::AsyncService *service,
                                                              ServerCompletionQueue *cq,
-                                                             ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *lq)
-        : RequestHandler(service, cq, lq), responder(&ctx) {
+                                                             ThreadSafeFixSizedDoubleQueue *out)
+        : RequestHandler(service, cq, out), responder(&ctx) {
     Proceed();
 }
 
@@ -46,16 +74,17 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
         service->RequestGpuPointerTransfer(&ctx, &request, &responder, cq, cq,
                                            this);
     } else if (status == PROCESS) {
-        new GpuPointerRequestHandler(service, cq, LoadingQueue);
+        new GpuPointerRequestHandler(service, cq, OutQueue);
 
-        std::vector<Data<LocalGPUReqDataType>> elements = {};
+        std::vector<RequestData<LocalGPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
             auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3,
                                               (void *) (&el.data()));
             elements.push_back({{el.width(), el.height()}, gpu_image});
         }
-        DataRequest<LocalGPUReqDataType> req = {request.timestamp(), request.slo(),
-                                                request.path(), 1, elements};
+        Request<LocalGPUReqDataType> req = {
+                std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
+                request.slo(), request.path(), 1, elements};
         OutQueue->emplace(req);
 
         status = FINISH;
@@ -68,8 +97,8 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
 
 Receiver::SharedMemoryRequestHandler::SharedMemoryRequestHandler(DataTransferService::AsyncService *service,
                                                                  ServerCompletionQueue *cq,
-                                                                 ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *lq)
-        : RequestHandler(service, cq, lq), responder(&ctx) {
+                                                                 ThreadSafeFixSizedDoubleQueue *out)
+        : RequestHandler(service, cq, out), responder(&ctx) {
     Proceed();
 }
 
@@ -79,9 +108,9 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
         service->RequestSharedMemTransfer(&ctx, &request, &responder, cq, cq,
                                           this);
     } else if (status == PROCESS) {
-        new SharedMemoryRequestHandler(service, cq, LoadingQueue);
+        new SharedMemoryRequestHandler(service, cq, OutQueue);
 
-        std::vector<Data<LocalCPUDataType>> elements = {};
+        std::vector<RequestData<LocalCPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
             auto name = el.name().c_str();
             boost::interprocess::shared_memory_object shm{open_only, name, read_only};
@@ -91,9 +120,10 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
 
             boost::interprocess::shared_memory_object::remove(name);
         }
-        DataRequest<LocalCPUDataType> req = {request.timestamp(), request.slo(),
-                                             request.path(), 1, elements};
-        LoadingQueue->emplace(req);
+        Request<LocalCPUReqDataType> req = {
+                std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
+                request.slo(), request.path(), 1, elements};
+        OutQueue->emplace(req);
 
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
@@ -105,8 +135,8 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
 
 Receiver::SerializedDataRequestHandler::SerializedDataRequestHandler(DataTransferService::AsyncService *service,
                                                                      ServerCompletionQueue *cq,
-                                                                     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *lq)
-        : RequestHandler(service, cq, lq), responder(&ctx) {
+                                                                     ThreadSafeFixSizedDoubleQueue *out)
+        : RequestHandler(service, cq, out), responder(&ctx) {
     Proceed();
 }
 
@@ -116,9 +146,9 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
         service->RequestSerializedDataTransfer(&ctx, &request, &responder, cq, cq,
                                                this);
     } else if (status == PROCESS) {
-        new SerializedDataRequestHandler(service, cq, LoadingQueue);
+        new SerializedDataRequestHandler(service, cq, OutQueue);
 
-        std::vector<Data<LocalCPUDataType>> elements = {};
+        std::vector<RequestData<LocalCPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
             uint length = el.data().length();
             if (length != el.datalen()) {
@@ -128,9 +158,10 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
                                     const_cast<char *>(el.data().c_str())).clone();
             elements.push_back({{el.width(), el.height()}, image});
         }
-        DataRequest<LocalCPUDataType> req = {request.timestamp(), request.slo(),
-                                             request.path(), 1, elements};
-        LoadingQueue->emplace(req);
+        Request<LocalCPUReqDataType> req = {
+                std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
+                request.slo(), request.path(), 1, elements};
+        OutQueue->emplace(req);
 
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
@@ -141,11 +172,24 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 }
 
 // This can be run in multiple threads if needed.
-void Receiver::HandleRpcs() {
-    new GpuPointerRequestHandler(&service, cq.get(), LoadingQueue);
+void Receiver::HandleRpcsToGPU() {
+    new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
     new SharedMemoryRequestHandler(&service, cq.get(), LoadingQueue);
     new SerializedDataRequestHandler(&service, cq.get(), LoadingQueue);
     void *tag;  // uniquely identifies a request.
+    bool ok;
+    while (true) {
+        GPR_ASSERT(cq->Next(&tag, &ok));
+        GPR_ASSERT(ok);
+        static_cast<RequestHandler *>(tag)->Proceed();
+    }
+}
+
+void Receiver::HandleRpcsToCPU() {
+    new GpuPointerRequestHandler(&service, cq.get(), LoadingQueue);
+    new SharedMemoryRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
+    new SerializedDataRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
+    void *tag;
     bool ok;
     while (true) {
         GPR_ASSERT(cq->Next(&tag, &ok));

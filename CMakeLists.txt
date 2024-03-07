@@ -72,17 +72,22 @@ else ()
 endif ()
 
 add_subdirectory(libs/misc)
-add_subdirectory(libs/trtengine)
 add_subdirectory(libs/microservice)
+add_subdirectory(libs/trtengine)
 add_subdirectory(libs/baseprocessors)
 add_subdirectory(libs/protobufprotocols)
 add_subdirectory(libs/communicator)
 add_subdirectory(libs/container_agent)
+<<<<<<< HEAD
+=======
+add_subdirectory(libs/data_source)
+add_subdirectory(libs/yolov5)
+>>>>>>> origin/cpp-gpu
 add_subdirectory(libs/device_agent)
 add_subdirectory(libs/yolov5)
 add_subdirectory(libs/data_source)
 
-add_library(PipePlusPlus SHARED
+add_library(PipePlusPlus
         src/main.cpp)
 
 target_include_directories(PipePlusPlus PUBLIC
@@ -98,15 +103,15 @@ target_link_libraries(PipePlusPlus PUBLIC
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
-        trtengine
         microservice
+        trtengine
         baseprocessors
         communicator
         data_source
         yolov5
         container_agent
-        device_agent)
-
+        device_agent
+)
 add_executable(run src/main.cpp)
 target_link_libraries(run PipePlusPlus)
 

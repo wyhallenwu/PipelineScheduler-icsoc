@@ -18,7 +18,6 @@ namespace msvcconfigs {
         j["name"] = val.name;
         j["comm"] = val.commMethod;
         j["link"] = val.link;
-        j["qt"] = val.queueType;
         j["maxqs"] = val.maxQueueSize;
         j["coi"] = val.classOfInterest;
         j["shape"] = val.expectedShape;
@@ -60,13 +59,15 @@ private:
                           const std::string &video_path);
 
     json createConfigs(
-            const std::vector<std::tuple<std::string, MicroserviceType, QueueType, QueueLengthType, int16_t, std::vector<RequestShapeType>>> &data,
+            const std::vector<std::tuple<std::string, MicroserviceType, QueueLengthType, int16_t, std::vector<RequestShapeType>>> &data,
             const MsvcSLOType &slo, const NeighborMicroserviceConfigs &prev_msvc,
             const std::vector<NeighborMicroserviceConfigs> &next_msvc);
 
-    void runDocker(const std::string &name, const std::string &start_string, const int &port) {
-        system(absl::StrFormat(R"(docker run -p %i:%i pipeline-base-container --name="%s"--json="%s" --port=%i)", port,
-                               port, name, start_string, port).c_str());
+    void finishContainer(const std::string &executable, const std::string &name, const std::string &start_string, const int &port);
+
+    static void runDocker(const std::string &executable, const std::string &name, const std::string &start_string, const int &port) {
+        system(absl::StrFormat(R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
+                               executable, name, start_string, port).c_str());
     };
 
     static void StopContainer(const ContainerHandle &container);

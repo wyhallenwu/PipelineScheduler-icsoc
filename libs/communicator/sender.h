@@ -9,10 +9,11 @@ using grpc::CompletionQueue;
 using boost::interprocess::read_write;
 using boost::interprocess::create_only;
 
-template<typename InType>
-class Sender : public Microservice<InType> {
+class Sender : public Microservice {
 public:
-    Sender(const BaseMicroserviceConfigs &configs, const std::string &connection);
+    Sender(const BaseMicroserviceConfigs &configs);
+
+    virtual void Process() = 0;
 
 protected:
     static inline std::mt19937 &generator() {
@@ -31,43 +32,45 @@ protected:
 
     std::vector<std::unique_ptr<DataTransferService::Stub>> stubs;
     bool multipleStubs;
+    std::atomic<bool> run{};
 };
 
-class GPUSender : public Sender<DataRequest<LocalGPUReqDataType>> {
+class GPUSender : public Sender {
 public:
-    explicit GPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection) : Sender(
-            configs, connection) {
-        tagToGpuPointer = std::map<void *, std::vector<ImageData> *>();
-    }
+    explicit GPUSender(const BaseMicroserviceConfigs &configs);
+
+    void Process() final;
 
     std::string SendGpuPointer(
-            std::vector<ImageData> &elements,
-            const int64_t timestamp, const std::string &path, const uint32_t &slo);
+            std::vector<RequestData<LocalGPUReqDataType>> &elements,
+            const ClockType &timestamp, const std::string &path, const uint32_t &slo);
 
 private:
-    static std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
+    std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
                                   SimpleConfirm &reply, Status &status, void *tag);
 
-    static std::map<void *, std::vector<ImageData> *> tagToGpuPointer;
+    std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *> tagToGpuPointer;
 };
 
-class LocalCPUSender : public Sender<DataRequest<LocalCPUDataType>> {
+class LocalCPUSender : public Sender {
 public:
-    LocalCPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection) : Sender(
-            configs, connection) {}
+    LocalCPUSender(const BaseMicroserviceConfigs &configs);
+
+    void Process() final;
 
     std::string
-    SendSharedMemory(const std::vector<MemoryImageData> &elements, const int64_t timestamp, const std::string &path,
+    SendSharedMemory(const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp, const std::string &path,
                      const uint32_t &slo);
 };
 
-class RemoteCPUSender : public Sender<DataRequest<LocalCPUDataType>> {
+class RemoteCPUSender : public Sender {
 public:
-    RemoteCPUSender(const BaseMicroserviceConfigs &configs, const std::string &connection) : Sender(
-            configs, connection) {}
+    RemoteCPUSender(const BaseMicroserviceConfigs &configs);
+
+    void Process() final;
 
     std::string SendSerializedData(
-            const std::vector<SerialImageData> &elements, const int64_t timestamp, const std::string &path,
+            const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp, const std::string &path,
             const uint32_t &slo);
 };
 

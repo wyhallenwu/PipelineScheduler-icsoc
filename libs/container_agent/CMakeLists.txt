@@ -106,11 +106,11 @@ target_include_directories(container_agent
 
 target_link_libraries(container_agent
         PUBLIC
+        device_grpc_proto
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
-        communicator
         microservice
 )
 

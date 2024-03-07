@@ -1,74 +1,88 @@
 #include "yolov5.h"
 
-template<typename InType>
-YoloV5Inference<InType>::YoloV5Inference(
+YoloV5Inference::YoloV5Inference(
     const BaseMicroserviceConfigs &config, 
-    const TRTConfigs &engineConfigs) : BaseProcessor<InType>(config), msvc_engineConfigs(engineConfigs) {
+    const TRTConfigs &engineConfigs) : BaseProcessor(config), msvc_engineConfigs(engineConfigs) {
     
-    msvc_inferenceEngine = Engine(engineConfigs);
+    msvc_inferenceEngine = new Engine(engineConfigs);
 
-    msvc_engineInputBuffers = msvc_inferenceEngine.getInputBuffers();
-    msvc_engineOutputBuffers = msvc_inferenceEngine.getOutputBuffers();
+    msvc_engineInputBuffers = msvc_inferenceEngine->getInputBuffers();
+    msvc_engineOutputBuffers = msvc_inferenceEngine->getOutputBuffers();
 }
 
-template<typename InType>
-void YoloV5Inference<InType>::inference() {
+void YoloV5Inference::inference() {
     // The time where the last request was generated.
-    ClockTypeTemp lastReq_genTime;
+    ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
-    ClockTypeTemp currReq_genTime;
+    ClockType currReq_genTime;
     // The time where the current incoming request arrives
-    ClockTypeTemp currReq_recvTime;
-    std::vector<LocalGPUReqDataType> outBuffer;
+    ClockType currReq_recvTime;
 
+    // Vector of GPU Mat to copy data into and out of the TRT Engine
+    std::vector<LocalGPUReqDataType> trtInBuffer, trtOutBuffer;
+
+    // Data package to be sent to and processed at the next microservice
+    std::vector<RequestData<LocalGPUReqDataType>> outReqData;   
+
+    // Instance of data to be packed into `outReqData`
+    RequestData<LocalGPUReqDataType> data;
+
+    Request<LocalGPUReqDataType> outReq;
+
+    // Batch size of current request
     BatchSizeType currReq_batchSize;
     while (true) {
-        if (!this->RUN_THREADS) {
+        // Allowing this thread to naturally come to an end
+        if (this->STOP_THREADS) {
             break;
         }
-        // Processing the next incoming request
-        InType currReq = this->InQueue.pop();
-        this->msvc_inReqCount++;
-        currReq_genTime = currReq.req_origGenTime;
-        // We need to check if the next request is worth processing.
-        // If it's too late, then we can drop and stop processing this request.
-        if (!this->checkReqEligibility(currReq_genTime)) {
+        else if (this->PAUSE_THREADS) {
             continue;
         }
+
+        // Processing the next incoming request
+        // Current incoming equest and request to be sent out to the next
+        Request<LocalGPUReqDataType> currReq = msvc_InQueue.at(0)->pop2();
+        msvc_inReqCount++;
+
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
-        currReq_recvTime = std::chrono::high_resolution_clock::now();
+        currReq_recvTime = std::chrono::system_clock::now();
         if (this->msvc_inReqCount > 1) {
             this->updateReqRate(currReq_genTime);
         }
-        // Do batched inference
-        std::vector<LocalGPUReqDataType> batch;
+
+        // Do batched inference with TRT
         currReq_batchSize = currReq.req_batchSize;
+
         for (std::size_t i = 0; i < currReq_batchSize; ++i) {
-            batch.emplace_back(currReq.req_data[i].content);
+            trtInBuffer.emplace_back(currReq.req_data[i].data);
         }
-        msvc_inferenceEngine.runInference(batch, outBuffer, currReq_batchSize);
+        msvc_inferenceEngine->runInference(trtInBuffer, trtOutBuffer, currReq_batchSize);
 
         // After inference, 4 buffers are filled with memory, which we need to carry to post processor.
         // We put 4 buffers into a vector along with their respective shapes for the post processor to interpret.
-        std::vector<Data<LocalGPUReqDataType>> batchedData;
         for (std::size_t i = 0; i < this->msvc_outReqShape.size(); ++i) {
-            batchedData.emplace_back(
-                {
-                    this->msvc_outReqShape[i],
-                    outBuffer[i]
-                }
-            );
+            data = {
+                this->msvc_outReqShape[i],
+                trtOutBuffer[i]
+            };
+            outReqData.emplace_back(data);
         }
-        DataRequest<Data<LocalGPUReqDataType>> outReq(
-            std::chrono::high_resolution_clock::now(),
+
+        // Packing everything inside the `outReq` to be sent to and processed at the next microservice
+        outReq = {
+            std::chrono::_V2::system_clock::now(),
             currReq.req_e2eSLOLatency,
             "",
             currReq_batchSize,
-            batchedData, //req_data
+            outReqData, //req_data
             currReq.req_data // upstreamReq_data
-        );
-        this->OutQueue.emplace(outReq);
+        };
+        msvc_OutQueue[0]->emplace(outReq);
+        outReqData.clear();
+        trtInBuffer.clear();
+        trtOutBuffer.clear();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }

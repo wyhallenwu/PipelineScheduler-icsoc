@@ -10,23 +10,25 @@ using grpc::ServerCompletionQueue;
 using boost::interprocess::read_only;
 using boost::interprocess::open_only;
 
-class GPULoader : public Microservice<DataRequest<LocalCPUDataType>> {
+class GPULoader : public Microservice {
 public:
-    GPULoader(const BaseMicroserviceConfigs &configs, ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *out);
+    GPULoader(const BaseMicroserviceConfigs &configs, ThreadSafeFixSizedDoubleQueue *out, const CommMethod &m);
 
-    void Schedule() override;
+    void Onloading();
 
-    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *getInQueue() {
+    void Offloading();
+
+    ThreadSafeFixSizedDoubleQueue *getInQueue() {
         return InQueue;
     }
 
 protected:
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *OutQueue;
+    ThreadSafeFixSizedDoubleQueue *InQueue, *OutQueue;
 };
 
-class Receiver : public GPUDataMicroservice<void> {
+class Receiver : public Microservice {
 public:
-    Receiver(const BaseMicroserviceConfigs &configs, const std::string &connection);
+    Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m);
 
     ~Receiver() override {
         server->Shutdown();
@@ -37,8 +39,8 @@ private:
     class RequestHandler {
     public:
         RequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                       ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *lq)
-                : service(service), cq(cq), LoadingQueue(lq), status(CREATE) {};
+                       ThreadSafeFixSizedDoubleQueue *out)
+                : service(service), cq(cq), OutQueue(out), status(CREATE) {};
 
         virtual ~RequestHandler() = default;
 
@@ -52,14 +54,14 @@ private:
         DataTransferService::AsyncService *service;
         ServerCompletionQueue *cq;
         ServerContext ctx;
-        ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *LoadingQueue;
+        ThreadSafeFixSizedDoubleQueue *OutQueue;
         CallStatus status;
     };
 
     class GpuPointerRequestHandler : public RequestHandler {
     public:
         GpuPointerRequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                                 ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *lq);
+                                 ThreadSafeFixSizedDoubleQueue *out);
 
         void Proceed() final;
 
@@ -72,7 +74,7 @@ private:
     class SharedMemoryRequestHandler : public RequestHandler {
     public:
         SharedMemoryRequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                                   ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *lq);
+                                   ThreadSafeFixSizedDoubleQueue *out);
 
         void Proceed() final;
 
@@ -85,7 +87,7 @@ private:
     class SerializedDataRequestHandler : public RequestHandler {
     public:
         SerializedDataRequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                                     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *lq);
+                                     ThreadSafeFixSizedDoubleQueue *out);
 
         void Proceed() final;
 
@@ -96,13 +98,15 @@ private:
     };
 
     // This can be run in multiple threads if needed.
-    void HandleRpcs();
+    void HandleRpcsToGPU();
+
+    void HandleRpcsToCPU();
 
     std::unique_ptr<ServerCompletionQueue> cq;
     DataTransferService::AsyncService service;
     std::unique_ptr<Server> server;
 
-    ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *LoadingQueue;
+    ThreadSafeFixSizedDoubleQueue *LoadingQueue;
 };
 
 #endif //PIPEPLUSPLUS_RECEIVER_H

@@ -3,6 +3,7 @@
 
 #include<vector>
 #include<string>
+#include <cuda_runtime.h>
 
 const std::vector<std::string> cocoClassNames = {
         "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
@@ -21,5 +22,13 @@ enum MODEL_DATA_TYPE {
     fp16 = int(sizeof(float) / 2),
     fp32 = sizeof(float)
 };
+
+inline void checkCudaErrorCode(cudaError_t code) {
+        if (code != 0) {
+            std::string errMsg = "CUDA operation failed with code: " + std::to_string(code) + "(" + cudaGetErrorName(code) + "), with message: " + cudaGetErrorString(code);
+            std::cout << errMsg << std::endl;
+            throw std::runtime_error(errMsg);
+        }
+}
 
 #endif

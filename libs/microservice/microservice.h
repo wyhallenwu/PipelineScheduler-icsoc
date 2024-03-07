@@ -1,4 +1,3 @@
-#include <string>
 #include <chrono>
 #include <queue>
 #include <deque>
@@ -18,71 +17,127 @@ typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
 typedef uint32_t MsvcSLOType;
 typedef uint16_t NumMscvType;
-typedef cv::Mat InterConCPUReqDataType;
-typedef std::string ShmReqDataType;
-typedef std::chrono::high_resolution_clock::time_point ClockTypeTemp;
-typedef int64_t ClockType;
+typedef std::chrono::high_resolution_clock::time_point ClockType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
 typedef const char *InterConGPUReqDataType;
 typedef std::vector<int32_t> RequestShapeType;
 typedef cv::cuda::GpuMat LocalGPUReqDataType;
-typedef cv::Mat LocalCPUDataType;
+typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
 
-template<typename InType, int MaxSize = 100>
-class ThreadSafeFixSizedQueue {
-private:
-    std::queue<InType> queue;
-    std::mutex q_mutex;
-    std::condition_variable q_condition;
 
-public:
-    void emplace(InType request) {
-        std::unique_lock<std::mutex> lock(q_mutex);
-        if (queue.size() == MaxSize) {
-            queue.pop();
+template<typename DataType>
+struct RequestData {
+    RequestShapeType shape;
+    DataType data;
+
+    RequestData(RequestShapeType s, DataType d) : data(d) {
+        shape = s;
+    }
+
+    RequestData() {}
+};
+
+/**
+ * @brief 
+ * 
+ * @tparam RequestData
+ */
+template<typename DataType>
+struct Request {
+    // The moment this request was generated at the begining of the pipeline.
+    ClockType req_origGenTime = std::chrono::_V2::system_clock::now();
+    // The end-to-end service level latency objective to which this request is subject
+    MsvcSLOType req_e2eSLOLatency = 0;
+    // The path that this request and its ancestors have travelled through.
+    // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
+    // For instance, `[YOLOv5Prep-01_05][YOLOv5s_05][YOLOv5post_07]`
+    std::string req_travelPath = "";
+
+    // Batch size
+    BatchSizeType req_batchSize = 0;
+
+    // The Inter-container GPU data of that this request carries.
+    std::vector<RequestData<DataType>> req_data = {};
+    // To carry the data of the upstream microservice in case we need them for further processing.
+    // For instance, for cropping we need both the original image (`upstreamReq_data`) and the output
+    // of the inference engine, which is a result of `req_data`.
+    // If there is nothing to carry, it is a blank vector.
+    std::vector<RequestData<DataType>> upstreamReq_data = {};
+
+    Request() {};
+
+    Request(
+        ClockType genTime,
+        MsvcSLOType latency,
+        std::string path,
+        BatchSizeType batchSize,
+        std::vector<RequestData<DataType>> data,
+        std::vector<RequestData<DataType>> upstream_data
+
+    ) : req_origGenTime(genTime),
+        req_e2eSLOLatency(latency),
+        req_travelPath(std::move(path)),
+        req_batchSize(batchSize) {
+            req_data = data;
+            upstreamReq_data = upstream_data;
+    }
+    
+    // df
+    Request(
+        ClockType genTime,
+        MsvcSLOType latency,
+        std::string path,
+        BatchSizeType batchSize,
+        std::vector<RequestData<DataType>> data
+    ) : req_origGenTime(genTime),
+        req_e2eSLOLatency(latency),
+        req_travelPath(std::move(path)),
+        req_batchSize(batchSize) {
+            req_data = data;
+    }
+
+    /**
+     * @brief making our request 
+     * 
+     * @param other 
+     * @return Request& 
+     */
+    Request& operator=(const Request& other) {
+        if (this != &other) {
+            req_origGenTime = other.req_origGenTime;
+            req_e2eSLOLatency = other.req_e2eSLOLatency;
+            req_travelPath = other.req_travelPath;
+            req_batchSize = other.req_batchSize;
+            req_data = other.req_data;
+            upstreamReq_data = other.upstreamReq_data;
         }
-        queue.emplace(request);
-        q_condition.notify_one();
-    }
-
-    InType pop() {
-        std::unique_lock<std::mutex> lock(q_mutex);
-        q_condition.wait(
-                lock,
-                [this]() { return !queue.empty(); }
-        );
-        InType request = queue.front();
-        queue.pop();
-        return request;
-    }
-
-    int32_t size() {
-        return queue.size();
+        return *this;
     }
 };
 
-template<typename Type1, typename Type2, int MaxSize=100>
+//template<int MaxSize=100>
 class ThreadSafeFixSizedDoubleQueue {
 private:
-    std::queue<Type1> queue1;
-    std::queue<Type2> queue2;
+    std::queue<Request<LocalCPUReqDataType>> cpuQueue;
+    std::queue<Request<LocalGPUReqDataType>> gpuQueue;
     std::mutex q_mutex;
     std::condition_variable q_condition;
     std::uint8_t activeQueueIndex;
+    size_t MaxSize = 100;
 
-protected:
+public:
     /**
      * @brief Emplacing Type 1 requests
      * 
      * @param request 
      */
-    void emplace(Type1 request) {
+    void emplace(Request<LocalCPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
-        if (queue1.size() == MaxSize) {
-            queue1.pop();
+        if (cpuQueue.size() == MaxSize) {
+            cpuQueue.pop();
         }
-        queue1.emplace(request);
+        cpuQueue.emplace(request);
         q_condition.notify_one();
     }
 
@@ -91,12 +146,12 @@ protected:
      * 
      * @param request 
      */
-    void emplace(Type2 request) {
+    void emplace(Request<LocalGPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
-        if (queue2.size() == MaxSize) {
-            queue2.pop();
+        if (gpuQueue.size() == MaxSize) {
+            gpuQueue.pop();
         }
-        queue2.emplace(request);
+        gpuQueue.emplace(request);
         q_condition.notify_one();
     }
 
@@ -105,14 +160,14 @@ protected:
      * 
      * @param request 
      */
-    Type1 pop1() {
+    Request<LocalCPUReqDataType> pop1() {
         std::unique_lock<std::mutex> lock(q_mutex);
         q_condition.wait(
                 lock,
-                [this]() { return !queue1.empty(); }
+                [this]() { return !cpuQueue.empty(); }
         );
-        Type1 request = queue1.front();
-        queue1.pop();
+        Request<LocalCPUReqDataType> request = cpuQueue.front();
+        cpuQueue.pop();
         return request;
     }
 
@@ -121,22 +176,22 @@ protected:
      * 
      * @param request 
      */
-    Type2 pop2() {
+    Request<LocalGPUReqDataType> pop2() {
         std::unique_lock<std::mutex> lock(q_mutex);
         q_condition.wait(
                 lock,
-                [this]() { return !queue2.empty(); }
+                [this]() { return !gpuQueue.empty(); }
         );
-        Type2 request = queue1.front();
-        queue2.pop();
+        Request<LocalGPUReqDataType> request = gpuQueue.front();
+        gpuQueue.pop();
         return request;
     }
 
     int32_t size() {
         if (activeQueueIndex == 1) {
-            return queue1.size();
+            return cpuQueue.size();
         } else if (activeQueueIndex == 2) {
-            return queue2.size();
+            return gpuQueue.size();
         }
     }
 
@@ -145,162 +200,16 @@ protected:
     }
 };
 
-template<typename T, int MaxSize = 100>
-class FixSizedQueue {
-private:
-    std::queue<T> queue;
-public:
-    void emplace(T elem) {
-        if (queue.size() == MaxSize) {
-            queue.pop();
-        }
-        queue.emplace(elem);
-    }
-
-    T pop() {
-        T out = queue.front();
-        queue.pop();
-        return out;
-    }
-};
-
-/**
- * @brief 
- * 
- * @tparam RequestData
- */
-struct MetaRequest {
-    // The moment this request was generated at the begining of the pipeline.
-    ClockType req_origGenTime;
-    // The end-to-end service level latency objective to which this request is subject
-    MsvcSLOType req_e2eSLOLatency;
-    // Shape of data contained in the request. Helps interpret the data.
-    RequestShapeType req_dataShape;
-
-    // The path that this request and its ancestors have travelled through.
-    // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
-    // For instance, `[YOLOv5Prep-01_05][YOLOv5s_05][YOLOv5post_07]`
-    std::string req_travelPath;
-
-    // Batch size
-    BatchSizeType req_batchSize;
-
-    MetaRequest(
-        ClockType genTime,
-        MsvcSLOType latency,
-        std::string path,
-        BatchSizeType batchSize
-    ) : req_origGenTime(genTime),
-        req_e2eSLOLatency(latency),
-        req_travelPath(std::move(path)),
-        req_batchSize(batchSize) {}
-};
-
-struct GPUData {
-    RequestShapeType shape;
-    InterConGPUReqDataType data;
-};
-
-/**
- * @brief Sending CUDA Handle
- * 
- */
-struct GPUDataRequest : MetaRequest {
-    // The Inter-container GPU data of that this request carries.
-    std::vector<GPUData> req_data;
-    // To carry the data of the upstream microservice in case we need them for further processing.
-    // For instance, for cropping we need both the original image (`upstreamReq_data`) and the output
-    // of the inference engine, which is a result of `req_data`.
-    // If there is nothing to carry, it is a blank vector.
-    std::vector<GPUData> upstreamReq_data;
-    GPUDataRequest(
-        ClockType genTime,
-        MsvcSLOType latency,
-        std::string path,
-        BatchSizeType batchSize,
-        std::vector<GPUData> data,
-        std::vector<GPUData> upstream_data
-    ) : MetaRequest(
-        genTime,
-        latency,
-        std::move(path),
-        batchSize), req_data(std::move(data)), upstreamReq_data(std::move(upstream_data)) {};
-    GPUDataRequest(
-        ClockType genTime,
-        MsvcSLOType latency,
-        std::string path,
-        BatchSizeType batchSize,
-        std::vector<GPUData> data
-    ) : MetaRequest(
-        genTime,
-        latency,
-        std::move(path),
-        batchSize), req_data(std::move(data)) {};
-};
-
-template<typename Type>
-struct Data {
-    RequestShapeType shape;
-    Type content;
-};
-
-/**
- * @brief Similar to the `GPUDataRequest` type but for any other type beside GPU Handles
- * 
- * @tparam DataType 
- */
-template<typename DataType>
-struct DataRequest : MetaRequest {
-    std::vector<Data<DataType>> req_data;
-    std::vector<Data<DataType>> upstreamReq_data;
-
-    DataRequest<DataType>(
-        ClockType genTime,
-        MsvcSLOType latency,
-        std::string path,
-        BatchSizeType batchSize,
-        std::vector<Data<DataType>> data,
-        std::vector<Data<DataType>> upstreamData
-    ) : MetaRequest(
-        genTime,
-        latency,
-        path,
-        batchSize), req_data(data), upstreamReq_data(upstreamData) {};
-    DataRequest<DataType>(
-        ClockType genTime,
-        MsvcSLOType latency,
-        std::string path,
-        BatchSizeType batchSize,
-        std::vector<Data<DataType>> data
-    ) : MetaRequest(
-        genTime,
-        latency,
-        path,
-        batchSize), req_data(data) {};
-};
-
 /**
  * @brief 
  * 
  */
 enum class CommMethod {
     sharedMemory,
-    gRPCLocal, // gRPCLocal = GPU
-    gRPC,
-    localQueue,
-};
-
-/**
- * @brief 
- * 
- */
-enum class QueueType {
-    none,
-    localGPUDataQueue,
-    localCPUDataQueue,
-    gpuDataQueue,
-    shmDataQueue,
-    cpuDataQueue,
+    GpuAddress,
+    serialized,
+    localGPU,
+    localCPU,
 };
 
 enum class NeighborType {
@@ -321,8 +230,6 @@ namespace msvcconfigs {
         CommMethod commMethod;
         //
         std::vector<std::string> link;
-        //
-        QueueType queueType;
         //
         QueueLengthType maxQueueSize;
         // For a Downstream Microservice, this is the data class (defined by the current microservice's model) to be sent this neighbor.
@@ -376,7 +283,6 @@ using msvcconfigs::MicroserviceType;
  * @brief 
  * 
  */
-template<typename InType>
 class Microservice {
 public:
     // Constructor that loads a struct args
@@ -389,17 +295,23 @@ public:
     // Another example is the
     std::string msvc_name;
 
-    virtual void SetInQueue(ThreadSafeFixSizedQueue<InType> *queue) {
-        InQueue = queue;
+    void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue*> queue) {
+        msvc_InQueue = std::move(queue);
     };
 
-    virtual QueueLengthType GetOutQueueSize();
+    std::vector<ThreadSafeFixSizedDoubleQueue*> GetOutQueue() {
+        return msvc_OutQueue;
+    };
 
-    virtual void Schedule();
+    virtual QueueLengthType GetOutQueueSize(int i) {return msvc_OutQueue[i]->size();};
 
 protected:
+    std::vector<ThreadSafeFixSizedDoubleQueue*> msvc_InQueue, msvc_OutQueue;
+    uint8_t msvc_activeInQueueIndex = 0, msvc_activeOutQueueIndex = 0;
+
     // Used to signal to thread when not to run and to bring thread to a natural end.
-    bool RUN_THREADS = false;
+    bool STOP_THREADS = false;
+    bool PAUSE_THREADS = false;
 
     /**
      * @brief 
@@ -428,8 +340,10 @@ protected:
     //
     NumMscvType numDnstreamMicroservices = 0;
 
-    //
+    // The expected shape of the data for the next microservice
     std::vector<RequestShapeType> msvc_outReqShape;
+    // The shape of the data to be processed by this microservice
+    std::vector<RequestShapeType> msvc_dataShape;
 
     // Ideal batch size for this microservice, runtime batch size could be smaller though
     BatchSizeType msvc_idealBatchSize;
@@ -442,104 +356,19 @@ protected:
     //
     std::vector<NeighborMicroservice> dnstreamMicroserviceList;
     //
-    std::vector<std::tuple<uint32_t, uint32_t>> classToDnstreamMap;
+    std::vector<std::pair<uint16_t, uint16_t>> classToDnstreamMap;
 
     //
-    ThreadSafeFixSizedQueue<InType> *InQueue;
+    virtual bool isTimeToBatch() {return true;};
 
     //
-    virtual bool isTimeToBatch();
+    virtual bool checkReqEligibility(ClockType currReq_genTime) {return true;};
 
     //
-    virtual bool checkReqEligibility(ClockTypeTemp currReq_genTime);
+    virtual void updateReqRate(ClockType lastInterReqDuration);
 
-    //
-    virtual void updateReqRate(ClockTypeTemp lastInterReqDuration);
-};
 
-template<typename InType>
-class GPUDataMicroservice : public Microservice<InType> {
-public:
-    explicit GPUDataMicroservice(const BaseMicroserviceConfigs &configs);
-
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *getOutQueue() {
-        return OutQueue;
-    }
-
-    QueueLengthType GetOutQueueSize() {
-        return OutQueue->size();
-    }
-
-protected:
-    static ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *OutQueue;
-};
-
-template<typename InType>
-class SerDataMicroservice : public Microservice<InType> {
-public:
-    explicit SerDataMicroservice(const BaseMicroserviceConfigs &configs);
-
-    ThreadSafeFixSizedQueue<DataRequest<InterConCPUReqDataType>> *getOutQueue() {
-        return OutQueue;
-    }
-
-    QueueLengthType GetOutQueueSize() {
-        return OutQueue->size();
-    }
-
-protected:
-    ThreadSafeFixSizedQueue<DataRequest<InterConCPUReqDataType>> *OutQueue;
-};
-
-template<typename InType>
-class LocalGPUDataMicroservice : public Microservice<InType> {
-public:
-    explicit LocalGPUDataMicroservice(const BaseMicroserviceConfigs &configs);
-
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *getOutQueue() {
-        return OutQueue;
-    }
-
-    QueueLengthType GetOutQueueSize() {
-        return OutQueue->size();
-    }
-
-protected:
-    ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *OutQueue;
 };
 
 
-// template <typename InType>
-// class LocalCPUDataMicroservice : public Microservice<InType> {
-// public:
-//     LocalCPUDataMicroservice(const BaseMicroserviceConfigs &configs);
-//     ~LocalCPUDataMicroservice();
-
-//     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getOutQueue () {
-//         return OutQueue;
-//     }
-//     void Schedule() override;
-
-// protected:
-//     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *OutQueue;
-// };
-
-// template <typename InType>
-// class DualLocalDataMicroservice : public Microservice<InType> {
-// public:
-//     DualLocalDataMicroservice(const BaseMicroserviceConfigs &configs);
-//     ~DualLocalDataMicroservice();
-
-//     ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>>* getGPUOutQueue () {
-//         return LocalGPUOutQueue;
-//     }
-//     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>>* getCPUOutQueue () {
-//         return LocalCPUOutQueue;
-//     }
-//     void Schedule() override;
-
-// protected:
-//     ThreadSafeFixSizedQueue<DataRequest<LocalGPUReqDataType>> *LocalGPUOutQueue;
-//     ThreadSafeFixSizedQueue<DataRequest<LocalCPUDataType>> *LocalCPUOutQueue;
-// };
 #endif

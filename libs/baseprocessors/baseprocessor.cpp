@@ -3,11 +3,9 @@
 /**
  * @brief Construct a new Base Preprocessor that inherites the LocalGPUDataMicroservice given the `InType`
  * 
- * @tparam InType 
  * @param configs 
  */
-template<typename InType>
-BaseProcessor<InType>::BaseProcessor(const BaseMicroserviceConfigs &configs) : LocalGPUDataMicroservice<InType>(configs) {}
+BaseProcessor::BaseProcessor(const BaseMicroserviceConfigs &configs) : Microservice(configs) {}
 
 /**
  * @brief Check if the request is still worth being processed.
@@ -17,7 +15,6 @@ BaseProcessor<InType>::BaseProcessor(const BaseMicroserviceConfigs &configs) : L
  * @return true 
  * @return false 
  */
-template<typename InType>
-bool BaseProcessor<InType>::checkReqEligibility(ClockTypeTemp currReq_gentime) {
+bool BaseProcessor::checkReqEligibility(ClockType currReq_gentime) {
     return true;
 }

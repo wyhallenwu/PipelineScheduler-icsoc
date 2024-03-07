@@ -1,4 +1,4 @@
-#include "basepreprocessor.h"
+#include "baseprocessor.h"
 
 /**
  * @brief normalize the input data by subtracting and dividing values from the original pixesl
@@ -51,13 +51,10 @@ cv::cuda::GpuMat resizePadRightBottom(
 /**
  * @brief Construct a new Base Preprocessor that inherites the LocalGPUDataMicroservice given the `InType`
  * 
- * @tparam InType 
  * @param configs 
  */
-template<typename InType>
-BasePreprocessor<InType>::BasePreprocessor(const BaseMicroserviceConfigs &configs) : LocalGPUDataMicroservice<InType>(configs){
+BasePreprocessor::BasePreprocessor(const BaseMicroserviceConfigs &configs) : Microservice(configs){
     this->msvc_idealBatchSize = configs.msvc_idealBatchSize;
-    this->msvc_outReqShape = {configs.msvc_dataShape[0][1], configs.msvc_dataShape[0][2], configs.msvc_dataShape[0][3]};
     // for (BatchSizeType i = 0; i < msvc_idealBatchSize; ++i) {
     //     msvc_batchBuffer.emplace_back(cv::cuda::GpuMat(configs.msvc_dataShape[2], configs.msvc_dataShape[3], CV_32FC3));
     // }
@@ -66,12 +63,11 @@ BasePreprocessor<InType>::BasePreprocessor(const BaseMicroserviceConfigs &config
 /**
  * @brief Simplest function to decide if the requests should be batched and sent to the main processor.
  * 
- * @tparam InType 
  * @return true True if its time to batch
  * @return false if otherwise
  */
-template<typename InType>
-bool BasePreprocessor<InType>::isTimeToBatch() {
+bool BasePreprocessor::isTimeToBatch() {
+    return false;
     if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
         return true;
     }
@@ -81,11 +77,9 @@ bool BasePreprocessor<InType>::isTimeToBatch() {
  * @brief Check if the request is still worth being processed.
  * For instance, if the request is already late at the moment of checking, there is no value in processing it anymore.
  * 
- * @tparam InType 
  * @return true 
  * @return false 
  */
-template<typename InType>
-bool BasePreprocessor<InType>::checkReqEligibility(ClockTypeTemp currReq_gentime) {
+bool BasePreprocessor::checkReqEligibility(ClockType currReq_gentime) {
     return true;
 }

@@ -1,18 +1,19 @@
 #include "sender.h"
 
-template<typename InType>
-Sender<InType>::Sender(const BaseMicroserviceConfigs &configs, const std::string &connection) : Microservice<InType>(
+
+Sender::Sender(const BaseMicroserviceConfigs &configs) : Microservice(
         configs) {
     stubs = std::vector<std::unique_ptr<DataTransferService::Stub>>();
     stubs.push_back(
-            DataTransferService::NewStub(grpc::CreateChannel(connection, grpc::InsecureChannelCredentials())));
+            DataTransferService::NewStub(grpc::CreateChannel(configs.dnstreamMicroservices.front().link[0], grpc::InsecureChannelCredentials())));
     multipleStubs = false;
+    run = true;
 }
 
-template<typename InType>
+
 std::string
-Sender<InType>::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
-                           SimpleConfirm &reply, Status &status) {
+Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
+                   SimpleConfirm &reply, Status &status) {
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
@@ -27,20 +28,32 @@ Sender<InType>::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfi
     }
 }
 
+GPUSender::GPUSender(const BaseMicroserviceConfigs &configs) : Sender(configs) {
+    tagToGpuPointer = std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *>();
+}
+
+void GPUSender::Process() {
+    while (run) {
+        auto request = msvc_InQueue[0]->pop2();
+        SendGpuPointer(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
 std::string GPUSender::SendGpuPointer(
-        std::vector<ImageData> &elements,
-        const int64_t timestamp, const std::string &path, const uint32_t &slo) {
+        std::vector<RequestData<LocalGPUReqDataType>> &elements,
+        const ClockType &timestamp, const std::string &path, const uint32_t &slo) {
     CompletionQueue cq;
 
     GpuPointerPayload request;
-    request.set_timestamp(timestamp);
+    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp));
     request.set_path(path);
     request.set_slo(slo);
-    for (ImageData el: elements) {
+    for (RequestData<LocalGPUReqDataType> el: elements) {
         auto ref = request.add_elements();
         ref->set_data(&el.data, sizeof(el.data));
-        ref->set_width(el.dims.first);
-        ref->set_height(el.dims.second);
+        ref->set_width(el.shape[0]);
+        ref->set_height(el.shape[1]);
     }
     SimpleConfirm reply;
     ClientContext context;
@@ -72,8 +85,8 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Simp
     GPR_ASSERT(ok);
     if (status.ok()) {
         if (got_tag == tag) {
-            for (ImageData el: *tagToGpuPointer[tag]) {
-                cudaFree(el.data);
+            for (RequestData<LocalGPUReqDataType> el: *tagToGpuPointer[tag]) {
+                cudaFree(&el.data);
             }
             delete tagToGpuPointer[tag];
             tagToGpuPointer.erase(tag);
@@ -87,21 +100,36 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Simp
     }
 }
 
+LocalCPUSender::LocalCPUSender(const BaseMicroserviceConfigs &configs) : Sender(
+        configs) {}
 
-std::string LocalCPUSender::SendSharedMemory(const std::vector<MemoryImageData> &elements, const int64_t timestamp,
+void LocalCPUSender::Process() {
+    while (run) {
+        auto request = msvc_InQueue[0]->pop1();
+        SendSharedMemory(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
+std::string LocalCPUSender::SendSharedMemory(const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp,
                                              const std::string &path,
                                              const uint32_t &slo) {
     CompletionQueue cq;
-
     SharedMemPayload request;
-    request.set_timestamp(timestamp);
+    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp));
     request.set_path(path);
     request.set_slo(slo);
-    for (MemoryImageData el: elements) {
+    char* name;
+    for (RequestData<LocalCPUReqDataType> el: elements) {
         auto ref = request.add_elements();
-        ref->set_name(el.name);
-        ref->set_width(el.dims.first);
-        ref->set_height(el.dims.second);
+        sprintf(name, "shared %d", rand_int(0, 1000));
+        boost::interprocess::shared_memory_object shm{create_only, name, read_write};
+        shm.truncate(el.data.total() * el.data.elemSize());
+        boost::interprocess::mapped_region region{shm, read_write};
+        std::memcpy(region.get_address(), el.data.data, el.data.total() * el.data.elemSize());
+        ref->set_name(name);
+        ref->set_width(el.shape[0]);
+        ref->set_height(el.shape[1]);
     }
     SimpleConfirm reply;
     ClientContext context;
@@ -118,21 +146,32 @@ std::string LocalCPUSender::SendSharedMemory(const std::vector<MemoryImageData> 
     return HandleRpcs(rpc, cq, reply, status);
 }
 
+RemoteCPUSender::RemoteCPUSender(const BaseMicroserviceConfigs &configs) : Sender(
+        configs) {}
+
+void RemoteCPUSender::Process() {
+    while (run) {
+        auto request = msvc_InQueue[0]->pop1();
+        SendSerializedData(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
 std::string RemoteCPUSender::SendSerializedData(
-        const std::vector<SerialImageData> &elements, const int64_t timestamp, const std::string &path,
+        const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp, const std::string &path,
         const uint32_t &slo) { // We use unix time encoded to int64
     CompletionQueue cq;
 
     SerializedDataPayload request;
-    request.set_timestamp(timestamp);
+    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp));
     request.set_path(path);
     request.set_slo(slo);
-    for (SerialImageData el: elements) {
+    for (RequestData<LocalCPUReqDataType> el: elements) {
         auto ref = request.add_elements();
-        ref->set_data(el.data);
-        ref->set_width(el.dims.first);
-        ref->set_height(el.dims.second);
-        ref->set_datalen(el.size);
+        ref->set_data(el.data.data, el.data.total() * el.data.elemSize());
+        ref->set_width(el.shape[0]);
+        ref->set_height(el.shape[1]);
+        ref->set_datalen(el.data.total() * el.data.elemSize());
     }
     SimpleConfirm reply;
     ClientContext context;

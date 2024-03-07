@@ -64,7 +64,7 @@ public:
     void SendQueueLengths();
 
 protected:
-    void ReportStart(int port);
+    void ReportStart();
 
     class RequestHandler {
     public:
@@ -106,13 +106,13 @@ protected:
     void HandleRecvRpcs();
 
     std::string name;
-    std::vector<Microservice<void> *> msvcs;
+    std::vector<Microservice*> msvcs;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
     InDeviceCommunication::AsyncService service;
     std::unique_ptr<Server> server;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
-    std::atomic<bool> run{};
+    std::atomic<bool> run;
 };
 
 #endif

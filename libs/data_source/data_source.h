@@ -10,34 +10,18 @@
 
 using namespace cv;
 
-class DataReader : public SerDataMicroservice<void> {
+class DataReader : public Microservice {
 public:
-    DataReader(const BaseMicroserviceConfigs &configs, std::string &datapath);
+    DataReader(const BaseMicroserviceConfigs &config);
 
-    ~DataReader() {
+    ~DataReader() override {
         source.release();
     };
 
-    void Schedule() override;
+    void Process(int wait_time_ms);
 
 private:
     VideoCapture source;
-};
-
-class DataSource {
-public:
-    DataSource(std::string &datapath, std::vector<int32_t> dataShape, uint32_t slo);
-
-    ~DataSource() {
-        delete reader;
-        delete sender;
-    };
-
-    void Run();
-
-private:
-    DataReader *reader;
-    LocalCPUSender *sender;
 };
 
 class DataSourceAgent : public ContainerAgent {
