@@ -60,8 +60,8 @@ void RetinaFaceInference::inference() {
         }
         msvc_inferenceEngine->runInference(trtInBuffer, trtOutBuffer, currReq_batchSize);
 
-        // After inference, 4 buffers are filled with memory, which we need to carry to post processor.
-        // We put 4 buffers into a vector along with their respective shapes for the post processor to interpret.
+        // After inference, 2 buffers are filled with memory, which we need to carry to post processor.
+        // We put 2 buffers into a vector along with their respective shapes for the post processor to interpret.
         for (std::size_t i = 0; i < this->msvc_outReqShape.size(); ++i) {
             data = {
                 this->msvc_outReqShape[i],

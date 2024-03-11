@@ -18,7 +18,8 @@ cv::cuda::GpuMat resizePadRightBottom(
 void normalize(
     cv::cuda::GpuMat &input,
     const std::array<float, 3>& subVals,
-    const std::array<float, 3>& divVals
+    const std::array<float, 3>& divVals,
+    cv::cuda::Stream &stream
 );
 
 

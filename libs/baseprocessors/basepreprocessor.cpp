@@ -6,13 +6,15 @@
  * @param input the input data
  * @param subVals values to be subtracted
  * @param divVals values to be dividing by
+ * @param stream an opencv stream for asynchronous operation on cuda
  */
 void normalize(
     cv::cuda::GpuMat &input,
     const std::array<float, 3>& subVals = {0.f, 0.f, 0.f},
-    const std::array<float, 3>& divVals = {1.f, 1.f, 1.f}
+    const std::array<float, 3>& divVals = {1.f, 1.f, 1.f},
+    cv::cuda::Stream &stream = cv::cuda::Stream::Null()
 ) {
-    input.convertTo(input, CV_32FC3, 1.f / 255.f);
+    input.convertTo(input, CV_32FC3, 1.f / 255.f, stream);
     cv::cuda::subtract(input, cv::Scalar(subVals[0], subVals[1], subVals[2]), input, cv::noArray(), -1);
     cv::cuda::divide(input, cv::Scalar(divVals[0], divVals[1], divVals[2]), input, 1, -1);
 }
@@ -40,7 +42,9 @@ cv::cuda::GpuMat resizePadRightBottom(
     //cv::cuda::GpuMat re(unpad_h, unpad_w, CV_8UC3);
     cv::cuda::resize(input, input, cv::Size(unpad_h, unpad_w));
     cv::cuda::GpuMat out(height, width, CV_8UC3, bgcolor);
-    input.copyTo(out(cv::Rect(0, 0, input.cols, input.rows)));
+    // Creating an opencv stream for asynchronous operation on cuda
+    cv::cuda::Stream stream;
+    input.copyTo(out(cv::Rect(0, 0, input.cols, input.rows)), stream);
     if (toNormalize) {
         normalize(out);
         return out;
