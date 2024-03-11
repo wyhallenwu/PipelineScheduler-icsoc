@@ -63,7 +63,7 @@ void YoloV5Preprocessor::batchRequests() {
         bufferData.emplace_back(data);
         // prevData.emplace_back(currReq.req_data[0]);
 
-        cudaFree(currReq.req_data[0].data.cudaPtr());
+        // cudaFree(currReq.req_data[0].data.cudaPtr());
         // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
         // Waiting more means there is a higher chance the earliest request in the buffer will be late eventually.
         if (this->isTimeToBatch()) {

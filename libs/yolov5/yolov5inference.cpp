@@ -79,10 +79,10 @@ void YoloV5Inference::inference() {
             outReqData, //req_data
             currReq.req_data // upstreamReq_data
         };
-        // After inference, the gpumat inside `inbuffer` is no longer used and can be freed.
-        for (std::size_t i = 0; i < trtInBuffer.size(); i++) {
-            checkCudaErrorCode(cudaFree(trtInBuffer.at(i).cudaPtr()));
-        }
+        // // After inference, the gpumat inside `inbuffer` is no longer used and can be freed.
+        // for (std::size_t i = 0; i < trtInBuffer.size(); i++) {
+        //     checkCudaErrorCode(cudaFree(trtInBuffer.at(i).cudaPtr()));
+        // }
         msvc_OutQueue[0]->emplace(outReq);
         outReqData.clear();
         trtInBuffer.clear();
