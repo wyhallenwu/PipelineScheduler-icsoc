@@ -166,9 +166,15 @@ void YoloV5Postprocessor::postProcessing() {
                 };
                 msvc_OutQueue.at(queueIndex)->emplace(outReq);
             }
+            // After cropping is done for this image in the batch, the image's cuda memory can be freed.
+            checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
             // Clearing out data of the vector
             outReqData.clear();
             singleImageBBoxList.clear();
+        }
+        // Free all the output buffers of trtengine after cropping is done.
+        for (size_t i = 0; i < currReq_data.size(); i++) {
+            checkCudaErrorCode(cudaFree(currReq_data.at(i).data.cudaPtr()));
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
 
