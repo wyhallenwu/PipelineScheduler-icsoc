@@ -117,3 +117,6 @@ target_link_libraries(DeviceAgent device_agent)
 
 add_executable(Container_DataSource libs/data_source/data_source.cpp)
 target_link_libraries(Container_DataSource data_source)
+
+add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
+target_link_libraries(Container_Yolov5 yolov5)

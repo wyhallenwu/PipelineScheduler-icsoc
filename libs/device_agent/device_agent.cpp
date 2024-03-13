@@ -18,8 +18,9 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, uint16_t controller_
     containers = std::map<std::string, ContainerHandle>();
 
 
-    CreateDataSource(0, {{"yolov5_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -1, {{0,0}}}}, 1, "./test.mp4");
-    //CreateYolo5Container(0, {"datasource_0", CommMethod::sharedMemory, {"localhost:55000"}, 10, -2, {{0,0}}}, {}, 1);
+    CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55001"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4");
+    CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{0, 0}}},
+                         {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1);
 
     HandleRecvRpcs();
 }
@@ -53,7 +54,9 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
              {name + "::sender",        MicroserviceType::Sender,        10, -1, {}}},
             slo, upstream, downstreams
     );
-    finishContainer("./Container_Yolov5", name, to_string(j), 49152 + containers.size());
+    TRTConfigs config = {"./models/yolov5s_b32_dynamic_nms.engine.NVIDIAGeForceRTX3090.fp16.5.5"};
+    finishContainer("./Container_Yolov5", name, to_string(j), 49152 + containers.size(), 55000 + containers.size(),
+                    to_string(json(config)));
 }
 
 void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams,
@@ -61,18 +64,18 @@ void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroservic
     std::string name = "datasource_" + std::to_string(id);
     NeighborMicroserviceConfigs upstream = {"video_source", CommMethod::localCPU, {video_path}, 0, -2, {}};
     json j = createConfigs({
-                                   {name + "::data_reader", MicroserviceType::Postprocessor, 10, -1, {{0,0}}},
-                                   {name + "::sender",      MicroserviceType::Sender,        10, -1, {{0,0}}}},
+                                   {name + "::data_reader", MicroserviceType::Postprocessor, 10, -1, {{0, 0}}},
+                                   {name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}}},
                            slo, upstream, downstreams
     );
-    finishContainer("./Container_DataSource", name, to_string(j), 49152 + containers.size());
+    finishContainer("./Container_DataSource", name, to_string(j), 49152 + containers.size(), 55000 + containers.size());
 }
 
-void DeviceAgent::finishContainer(const std::string &executable, const std::string &name, const std::string &start_string, const int &port) {
-    //std::thread container(&DeviceAgent::runDocker, name, start_string, port);
-    //container.detach();
-    runDocker(executable, name, start_string, port);
-    std::string target = absl::StrFormat("%s:%d", "localhost", port);
+void
+DeviceAgent::finishContainer(const std::string &executable, const std::string &name, const std::string &start_string,
+                             const int &control_port, const int &data_port, const std::string &trt_config) {
+    runDocker(executable, name, start_string, control_port);
+    std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
     containers[name] = {{},
                         InDeviceCommunication::NewStub(grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
                         new CompletionQueue()};

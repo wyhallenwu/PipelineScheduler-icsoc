@@ -2,11 +2,9 @@
 #include <trtengine.h>
 #include <misc.h>
 #include <chrono>
-
-struct yoloV5Configs {
-    const TRTConfigs engineConfigs;
-    const std::vector<std::string> classNames = cocoClassNames;
-};
+#include "container_agent.h"
+#include "receiver.h"
+#include "sender.h"
 
 
 class YoloV5Preprocessor : public BasePreprocessor {
@@ -14,6 +12,7 @@ public:
     YoloV5Preprocessor(const BaseMicroserviceConfigs &config);
     ~YoloV5Preprocessor();
 protected:
+    friend class YoloV5Agent;
     void batchRequests();
     // 
     // bool isTimeToBatch() override;
@@ -28,6 +27,7 @@ public:
     YoloV5Inference(const BaseMicroserviceConfigs &config, const TRTConfigs &engineConfigs);
     ~YoloV5Inference();
 protected:
+    friend class YoloV5Agent;
     void inference();
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
     TRTConfigs msvc_engineConfigs;
@@ -36,8 +36,15 @@ protected:
 
 class YoloV5Postprocessor : public BasePostprocessor {
 public:
+    friend class YoloV5Agent;
     YoloV5Postprocessor(const BaseMicroserviceConfigs &config);
     ~YoloV5Postprocessor();
 protected:
     void postProcessing();
+};
+
+class YoloV5Agent : public ContainerAgent {
+public:
+    YoloV5Agent(const std::string &name, uint16_t own_port,
+                std::vector<BaseMicroserviceConfigs> &msvc_configs, const TRTConfigs &yoloConfigs);
 };

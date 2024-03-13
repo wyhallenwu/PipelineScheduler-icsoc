@@ -16,6 +16,7 @@
 
 ABSL_DECLARE_FLAG(std::string, name);
 ABSL_DECLARE_FLAG(std::string, json);
+ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json);
 ABSL_DECLARE_FLAG(uint16_t, port);
 
 using json = nlohmann::json;
@@ -46,7 +47,7 @@ namespace msvcconfigs {
 
 class ContainerAgent {
 public:
-    ContainerAgent(const std::string &name, uint16_t device_port, uint16_t own_port);
+    ContainerAgent(const std::string &name, uint16_t own_port);
 
     ~ContainerAgent() {
         for (auto msvc: msvcs) {

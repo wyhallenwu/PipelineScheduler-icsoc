@@ -79,7 +79,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
         std::vector<RequestData<LocalGPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
             auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3,
-                                              (void *) (&el.data()));
+                                              (void *) (&el.data())).clone();
             elements.push_back({{el.width(), el.height()}, gpu_image});
         }
         Request<LocalGPUReqDataType> req = {

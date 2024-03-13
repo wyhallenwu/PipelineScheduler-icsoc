@@ -1,6 +1,9 @@
 #include "container_agent.h"
 #include "indevicecommunication.grpc.pb.h"
 #include <cstdlib>
+#include <misc.h>
+
+using trt::TRTConfigs;
 
 enum ContainerType {
     DataSource,
@@ -8,7 +11,7 @@ enum ContainerType {
 };
 
 struct ContainerHandle {
-    google::protobuf::RepeatedField<int32_t> queuelengths;
+    google::protobuf::RepeatedField <int32_t> queuelengths;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     CompletionQueue *cq;
 };
@@ -47,7 +50,7 @@ public:
     };
 
     void UpdateQueueLengths(const std::basic_string<char> &container_name,
-                            const google::protobuf::RepeatedField<int32_t> &queuelengths) {
+                            const google::protobuf::RepeatedField <int32_t> &queuelengths) {
         containers[container_name].queuelengths = queuelengths;
     };
 
@@ -58,16 +61,19 @@ private:
     void CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams, const MsvcSLOType &slo,
                           const std::string &video_path);
 
-    json createConfigs(
+    static json createConfigs(
             const std::vector<std::tuple<std::string, MicroserviceType, QueueLengthType, int16_t, std::vector<RequestShapeType>>> &data,
             const MsvcSLOType &slo, const NeighborMicroserviceConfigs &prev_msvc,
             const std::vector<NeighborMicroserviceConfigs> &next_msvc);
 
-    void finishContainer(const std::string &executable, const std::string &name, const std::string &start_string, const int &port);
+    void finishContainer(const std::string &executable, const std::string &name, const std::string &start_string,
+                         const int &control_port, const int &data_port, const std::string &trt_config = "");
 
-    static void runDocker(const std::string &executable, const std::string &name, const std::string &start_string, const int &port) {
-        system(absl::StrFormat(R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
-                               executable, name, start_string, port).c_str());
+    static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
+                         const int &port) {
+        return system(absl::StrFormat(
+                R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
+                executable, name, start_string, port).c_str());
     };
 
     static void StopContainer(const ContainerHandle &container);

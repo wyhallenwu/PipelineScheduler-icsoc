@@ -11,6 +11,7 @@
 #include <cuda_runtime.h>
 #include <misc.h>
 
+using trt::TRTConfigs;
 
 // Utility methods
 namespace Util {
@@ -32,32 +33,6 @@ enum class Precision {
     // Has reduced dynamic range, may result in slight loss in accuracy.
     // If INT8 is selected, must provide path to calibration dataset directory.
     INT8,
-};
-
-// TRTConfigs for the network
-struct TRTConfigs {
-    // Path to the engine or onnx file
-    std::string path = "";
-    // Precision to use for GPU inference.
-    MODEL_DATA_TYPE precision = MODEL_DATA_TYPE::fp32;
-    // If INT8 precision is selected, must provide path to calibration dataset directory.
-    std::string calibrationDataDirectoryPath;
-    // The batch size to be used when computing calibration data for INT8 inference.
-    // Should be set to as large a batch number as your GPU will support.
-    int32_t calibrationBatchSize = 128;
-    // The batch size which should be optimized for.
-    int32_t optBatchSize = 1;
-    // Maximum batch size  we want to use for inference
-    // this will be compared with the maximum batch size set when the engine model was created min(maxBatchSize, engine_max)
-    // This determines the GPU memory buffer sizes allocated upon model loading so CANNOT BE CHANGE DURING RUNTIME.
-    int32_t maxBatchSize = 128;
-    // GPU device index
-    int deviceIndex = 0;
-
-    bool normalize = false;
-    std::array<float, 3> subVals {0.f, 0.f, 0.f};
-    std::array<float, 3> divVals {1.f, 1.f, 1.f};
-
 };
 
 // Class to extend TensorRT logger

@@ -28,6 +28,7 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES 
         yolov5.h
+        ../json/json.h
 )
 
 # All source files and private header files go here.
@@ -36,6 +37,7 @@ set(
         yolov5preprocessor.cpp
         yolov5inference.cpp
         yolov5postprocessor.cpp
+        yolov5.cpp
 )
 
 # Here we define the library.
@@ -70,6 +72,12 @@ find_package(baseprocessors CONFIG REQUIRED)
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
+set(communicator_DIR "${CMAKE_CURRENT_BINARY_DIR}/../communicator")
+find_package(communicator CONFIG REQUIRED)
+
+set(container_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../container_agent")
+find_package(container_agent CONFIG REQUIRED)
+
 set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
 find_package(misc CONFIG REQUIRED)
 
@@ -94,6 +102,8 @@ target_link_libraries(yolov5
         ${CMAKE_THREAD_LIBS_INIT}
         misc
         microservice
+        communicator
+        container_agent
         baseprocessors
         trtengine
 )

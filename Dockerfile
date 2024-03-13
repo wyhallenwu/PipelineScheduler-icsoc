@@ -16,3 +16,4 @@ WORKDIR ${HOME}
 COPY --from=builder ${HOME}/app/build/Container* .
 RUN chmod +x Container*
 COPY ./test.mp4 .
+COPY ./models/ ./models/

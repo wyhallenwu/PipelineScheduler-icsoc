@@ -2,7 +2,8 @@
 
 ABSL_FLAG(std::string, name, "", "base name of container");
 ABSL_FLAG(std::string, json, "", "configurations for microservices");
-ABSL_FLAG(uint16_t, port, 0, "Server port for the service");
+ABSL_FLAG(std::optional<std::string>, trt_json, "", "optional json for TRTConfiguration");
+ABSL_FLAG(uint16_t, port, 0, "server port for the service");
 
 void msvcconfigs::from_json(const json &j, msvcconfigs::NeighborMicroserviceConfigs &val) {
     j.at("name").get_to(val.name);
@@ -23,7 +24,7 @@ void msvcconfigs::from_json(const json &j, msvcconfigs::BaseMicroserviceConfigs 
     j.at("downstrm").get_to(val.dnstreamMicroservices);
 }
 
-ContainerAgent::ContainerAgent(const std::string &name, uint16_t device_port, uint16_t own_port) : name(name) {
+ContainerAgent::ContainerAgent(const std::string &name, uint16_t own_port) : name(name) {
     std::string server_address = absl::StrFormat("%s:%d", "localhost", own_port);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
@@ -33,8 +34,7 @@ ContainerAgent::ContainerAgent(const std::string &name, uint16_t device_port, ui
     server_cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
 
-    std::string target_str = absl::StrFormat("%s:%d", "localhost", device_port);
-    stub = InDeviceCommunication::NewStub(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
+    stub = InDeviceCommunication::NewStub(grpc::CreateChannel("localhost:2000", grpc::InsecureChannelCredentials()));
     sender_cq = new CompletionQueue();
 
     run = true;

@@ -27,14 +27,20 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 # Only public header files go here.
 set(
         HEADER_FILES 
-        misc.h
+        ./misc.h
+        ../json/json.h
 )
 
 # All source files and private header files go here.
+set(
+        SOURCE_FILES
+        ./misc.cpp
+)
 
 # Here we define the library.
 add_library(misc
-        ${HEADER_FILES})
+        ${HEADER_FILES}
+        ${SOURCE_FILES})
 
 # We also add an alias definition so that we shadown
 # the export namespace when using add_subdirectory() instead.

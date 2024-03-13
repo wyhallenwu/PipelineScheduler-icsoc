@@ -93,6 +93,9 @@ find_package(microservice CONFIG REQUIRED)
 set(container_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../container_agent")
 find_package(container_agent CONFIG REQUIRED)
 
+set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
+find_package(misc CONFIG REQUIRED)
+
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(device_agent
@@ -115,6 +118,7 @@ target_link_libraries(device_agent
         ${CMAKE_THREAD_LIBS_INIT}
         container_agent
         microservice
+        misc
 )
 
 # Here we configure variables specifying the target directories.

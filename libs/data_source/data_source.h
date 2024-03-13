@@ -26,7 +26,7 @@ private:
 
 class DataSourceAgent : public ContainerAgent {
 public:
-    DataSourceAgent(const std::string &name, uint16_t device_port, uint16_t own_port,
+    DataSourceAgent(const std::string &name, uint16_t own_port,
                     std::vector<BaseMicroserviceConfigs> &msvc_configs);
 };
 
