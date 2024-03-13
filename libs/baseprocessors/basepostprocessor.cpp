@@ -62,7 +62,7 @@ void crop(
  * @param bbox_coorList 
  * @param croppedBBoxes 
  */
-void crop(
+void cropOneBox(
     const cv::cuda::GpuMat &image,
     int infer_h,
     int infer_w,

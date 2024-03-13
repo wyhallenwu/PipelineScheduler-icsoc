@@ -26,7 +26,9 @@ void normalize(
 class BasePreprocessor : public Microservice {
 public:
     BasePreprocessor(const BaseMicroserviceConfigs &configs);
-    ~BasePreprocessor();
+    ~BasePreprocessor() {
+
+    };
 protected:
     BatchSizeType msvc_onBufferBatchSize;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
@@ -40,7 +42,9 @@ typedef uint16_t BatchSizeType;
 class BaseProcessor : public Microservice {
 public:
     BaseProcessor(const BaseMicroserviceConfigs &configs);
-    ~BaseProcessor();
+    ~BaseProcessor() {
+
+    };
 protected:
     BatchSizeType msvc_onBufferBatchSize;
     bool checkReqEligibility(ClockType currReq_genTime) override;
@@ -65,17 +69,19 @@ void crop(
     std::vector<cv::cuda::GpuMat> &croppedBBoxes
 );
 
-void crop(
+void cropOneBox(
     const cv::cuda::GpuMat &image,
     int infer_h,
     int infer_w,
     int numDetections,
     const float *bbox_coorList,
-    cv::cuda::GpuMat croppedBBoxes
+    cv::cuda::GpuMat &croppedBBoxes
 );
 
 class BasePostprocessor : public Microservice {
 public:
     BasePostprocessor(const BaseMicroserviceConfigs &configs);
-    ~BasePostprocessor();
+    ~BasePostprocessor() {
+
+    };
 };
