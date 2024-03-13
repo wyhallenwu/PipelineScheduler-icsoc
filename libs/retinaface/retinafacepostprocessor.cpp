@@ -115,7 +115,7 @@ void RetinaFacePostprocessor::postProcessing() {
             // Btw, we should have only 1 box to crop thus make singleImageBBoxList
             infer_h = imageList[i].shape[1];
             infer_w = imageList[i].shape[2];
-            crop(imageList[i].data, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i], foundFace);
+            cropOneBox(imageList[i].data, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i], foundFace);
             queueIndex = -1;
 
             // The face we found to the downstreams

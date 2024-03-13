@@ -41,6 +41,7 @@ target_compile_features(trtengine
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX trtengine)
 
+find_package(TensorRT REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(OpenCV REQUIRED)
 
@@ -61,7 +62,6 @@ target_include_directories(trtengine
         PRIVATE
             # Used only when building the library:
             src)
-
 target_link_libraries(trtengine
         PUBLIC
         ${OpenCV_LIBS}

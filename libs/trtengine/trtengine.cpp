@@ -1,13 +1,4 @@
-#include <algorithm>
-#include <fstream>
-#include <filesystem>
-#include <iostream>
-#include <random>
-#include <iterator>
-#include <opencv2/cudaimgproc.hpp>
-#include "trtengine.h"
-#include "NvOnnxParser.h"
-#include "NvInferPlugin.h"
+#include <trtengine.h>
 
 using namespace nvinfer1;
 using namespace Util;

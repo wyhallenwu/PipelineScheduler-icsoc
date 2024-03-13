@@ -1,15 +1,16 @@
-#pragma once
+#ifndef TRTENGINE_H
+#define TRTENGINE_H
 
 #include <fstream>
 #include <chrono>
+#include <misc.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
-#include "NvInfer.h"
-#include "NvInferPluginUtils.h"
+#include <NvInferPlugin.h>
 #include <cuda_runtime.h>
-#include <misc.h>
+#include <NvOnnxParser.h>
 
 using trt::TRTConfigs;
 
@@ -128,3 +129,5 @@ private:
 
     MODEL_DATA_TYPE m_precision;
 };
+
+#endif
