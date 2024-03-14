@@ -38,7 +38,7 @@ set(
 )
 
 # Here we define the library.
-add_library(misc
+add_library(misc SHARED
         ${HEADER_FILES}
         ${SOURCE_FILES})
 

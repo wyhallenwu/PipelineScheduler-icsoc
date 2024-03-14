@@ -41,7 +41,7 @@ set(
 )
 
 # Here we define the library.
-add_library(yolov5
+add_library(yolov5 SHARED
         ${HEADER_FILES}
         ${SOURCE_FILES})
 
@@ -59,12 +59,10 @@ target_compile_features(yolov5
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX yolov5)
 
+find_package(TensorRT REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(OpenCV REQUIRED)
-
 find_package(Threads REQUIRED)
-
-# add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../trtengine" "${PROJECT_BINARY_DIR}/build")
 
 set(baseprocessors_DIR "${CMAKE_CURRENT_BINARY_DIR}/../baseprocessors")
 find_package(baseprocessors CONFIG REQUIRED)
@@ -90,22 +88,30 @@ target_include_directories(yolov5
             # Used when installing the library:
             $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
             ${OpenCV_INCLUDE_DIRS}
-            ${CUDA_INCLUDE_DIRS} 
+            ${CUDA_INCLUDE_DIRS}
+	    	${TensorRT_INCLUDE_DIRS}
+	    	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
         PRIVATE
             # Used only when building the library:
             src)
 
 target_link_libraries(yolov5
         PUBLIC
+		data_grpc_proto
+        device_grpc_proto
         ${OpenCV_LIBS}
         ${CUDA_LIBRARIES}
-        ${CMAKE_THREAD_LIBS_INIT}
-        misc
-        microservice
+		${CMAKE_THREAD_LIBS_INIT}
+		${TensorRT_LIBRARIES}
+		${_GRPC_GRPCPP}
+		${_REFLECTION}
+		${_PROTOBUF_LIBPROTOBUF}
+		microservice
+		misc
+		trtengine
+		baseprocessors
         communicator
         container_agent
-        baseprocessors
-        trtengine
 )
 
 # Here we configure variables specifying the target directories.

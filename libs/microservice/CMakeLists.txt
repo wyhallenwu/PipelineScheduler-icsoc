@@ -37,7 +37,7 @@ set(
 )
 
 # Here we define the library.
-add_library(microservice
+add_library(microservice SHARED
         ${HEADER_FILES}
         ${SOURCE_FILES})
 

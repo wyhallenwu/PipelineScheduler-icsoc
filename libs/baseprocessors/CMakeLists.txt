@@ -41,7 +41,7 @@ set(
 )
 
 # Here we define the library.
-add_library(baseprocessors
+add_library(baseprocessors SHARED
         ${HEADER_FILES}
         ${SOURCE_FILES})
 

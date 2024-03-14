@@ -12,8 +12,6 @@
 #include <cuda_runtime.h>
 #include <NvOnnxParser.h>
 
-using trt::TRTConfigs;
-
 // Utility methods
 namespace Util {
     inline bool doesFileExist(const std::string& filepath) {
@@ -23,6 +21,10 @@ namespace Util {
 
     std::vector<std::string> getFilesInDirectory(const std::string& dirPath);
 }
+
+using namespace nvinfer1;
+using namespace Util;
+using trt::TRTConfigs;
 
 // Precision used for GPU inference
 enum class Precision {

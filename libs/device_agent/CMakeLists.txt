@@ -38,8 +38,8 @@ set(
 )
 
 # Here we define the library.
-add_library(device_agent
-#        ${HEADER_FILES}
+add_library(device_agent SHARED
+        ${HEADER_FILES}
         ${SOURCE_FILES})
 
 # We also add an alias definition so that we shadown

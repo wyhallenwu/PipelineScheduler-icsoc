@@ -23,7 +23,7 @@ set(
 )
 
 # Here we define the library.
-add_library(trtengine
+add_library(trtengine SHARED
         ${HEADER_FILES}
         ${SOURCE_FILES})
 

@@ -39,7 +39,7 @@ set(
 )
 
 # Here we define the library.
-add_library(arcface
+add_library(arcface SHARED
         ${HEADER_FILES}
         ${SOURCE_FILES})
 

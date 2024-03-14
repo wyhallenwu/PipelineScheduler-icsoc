@@ -33,7 +33,7 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     endif ()
 endif ()
 
-# TODO: Specify the path to TensorRT root dir
+# Specify the path to TensorRT root dir
 if (NOT TensorRT_DIR)
     set(TensorRT_DIR /TensorRT/)
 endif ()
@@ -84,7 +84,7 @@ add_subdirectory(libs/retinaface)
 add_subdirectory(libs/arcface)
 add_subdirectory(libs/device_agent)
 
-add_library(PipePlusPlus
+add_library(PipePlusPlus SHARED
         src/main.cpp)
 
 target_include_directories(PipePlusPlus PUBLIC
@@ -93,6 +93,8 @@ target_include_directories(PipePlusPlus PUBLIC
         ${TensorRT_INCLUDE_DIRS}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
 target_link_libraries(PipePlusPlus PUBLIC
+        data_grpc_proto
+        device_grpc_proto
         ${OpenCV_LIBS}
         ${CUDA_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
@@ -100,6 +102,7 @@ target_link_libraries(PipePlusPlus PUBLIC
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
+        misc
         microservice
         trtengine
         baseprocessors
