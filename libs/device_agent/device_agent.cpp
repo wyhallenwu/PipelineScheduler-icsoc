@@ -18,10 +18,11 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, uint16_t controller_
     containers = std::map<std::string, ContainerHandle>();
 
 
-    CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55001"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4");
-    CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{0, 0}}},
-                         {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1);
-
+    //CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55001"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4");
+    // CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{0, 0}}},
+    //                      {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1);
+    CreateDummy(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{0, 0}}},
+                {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1);
     HandleRecvRpcs();
 }
 
@@ -47,11 +48,11 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
                                        const MsvcSLOType &slo) {
     std::string name = "yolov5_" + std::to_string(id);
     json j = createConfigs(
-            {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {}},
-             {name + "::preprocessor",  MicroserviceType::Preprocessor,  10, -1, {}},
-             {name + "::inference",     MicroserviceType::Inference,     10, -1, {}},
-             {name + "::postprocessor", MicroserviceType::Postprocessor, 10, -1, {}},
-             {name + "::sender",        MicroserviceType::Sender,        10, -1, {}}},
+            {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{0, 0}}},
+             {name + "::preprocessor",  MicroserviceType::Preprocessor,  10, -1, {{0, 0}}},
+             {name + "::inference",     MicroserviceType::Inference,     10, -1, {{0, 0}}},
+             {name + "::postprocessor", MicroserviceType::Postprocessor, 10, -1, {{0, 0}}},
+             {name + "::sender",        MicroserviceType::Sender,        10, -1, {{0, 0}}}},
             slo, upstream, downstreams
     );
     TRTConfigs config = {"./models/yolov5s_b32_dynamic_nms.engine.NVIDIAGeForceRTX3090.fp16.5.5"};
@@ -59,10 +60,22 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
                     to_string(json(config)));
 }
 
+void DeviceAgent::CreateDummy(int id, const NeighborMicroserviceConfigs &upstream,
+                              const std::vector<NeighborMicroserviceConfigs> &downstreams,
+                              const MsvcSLOType &slo) {
+    std::string name = "dummy_" + std::to_string(id);
+    json j = createConfigs(
+            {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{0, 0}}},
+             {name + "::sender",        MicroserviceType::Sender,        10, -1, {{0, 0}}}},
+            slo, upstream, downstreams
+    );
+    finishContainer("./Container_Yolov5", name, to_string(j), 49152 + containers.size(), 55000 + containers.size());
+}
+
 void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams,
                                    const MsvcSLOType &slo, const std::string &video_path) {
     std::string name = "datasource_" + std::to_string(id);
-    NeighborMicroserviceConfigs upstream = {"video_source", CommMethod::localCPU, {video_path}, 0, -2, {}};
+    NeighborMicroserviceConfigs upstream = {"video_source", CommMethod::localCPU, {video_path}, 0, -2, {{0, 0}}};
     json j = createConfigs({
                                    {name + "::data_reader", MicroserviceType::Postprocessor, 10, -1, {{0, 0}}},
                                    {name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}}},
@@ -74,7 +87,7 @@ void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroservic
 void
 DeviceAgent::finishContainer(const std::string &executable, const std::string &name, const std::string &start_string,
                              const int &control_port, const int &data_port, const std::string &trt_config) {
-    runDocker(executable, name, start_string, control_port);
+    runDocker(executable, name, start_string, control_port, trt_config);
     std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
     containers[name] = {{},
                         InDeviceCommunication::NewStub(grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
@@ -97,12 +110,15 @@ json DeviceAgent::createConfigs(
                          std::get<3>(data[i + j]), std::get<4>(data[i + j])});
             }
         } else if (std::get<1>(msvc) == MicroserviceType::Sender) {
+            std::cout << "Sender" << std::endl;
             downstream.push_back(next_msvc[j++]);
         } else {
+            std::cout << "else" << std::endl;
             downstream.push_back(
                     {std::get<0>(data[++i]), CommMethod::localGPU, {""}, std::get<2>(msvc), std::get<3>(msvc),
                      std::get<4>(msvc)});
         }
+        std::cout << "push back" << std::endl;
         configs.push_back({std::get<0>(msvc), std::get<1>(msvc), slo, 1, std::get<4>(msvc), {upstream}, downstream});
         //current mvsc becomes upstream for next msvc
         upstream = {std::get<0>(msvc), CommMethod::localGPU, {""}, std::get<2>(msvc), -2, std::get<4>(msvc)};

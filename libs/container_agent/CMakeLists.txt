@@ -38,7 +38,7 @@ set(
 )
 
 # Here we define the library.
-add_library(container_agent SHARED
+add_library(container_agent
         ${HEADER_FILES}
         ${SOURCE_FILES})
 

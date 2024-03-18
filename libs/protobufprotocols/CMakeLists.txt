@@ -51,7 +51,7 @@ add_custom_command(
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
 # data_grpc_proto
-add_library(data_grpc_proto SHARED
+add_library(data_grpc_proto
         ${data_grpc_srcs}
         ${data_grpc_hdrs}
         ${data_proto_srcs}
@@ -84,7 +84,7 @@ add_custom_command(
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
 # device_grpc_proto
-add_library(device_grpc_proto SHARED
+add_library(device_grpc_proto
         ${device_grpc_srcs}
         ${device_grpc_hdrs}
         ${device_proto_srcs}

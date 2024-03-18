@@ -39,7 +39,7 @@ set(
 )
 
 # Here we define the library.
-add_library(retinaface SHARED
+add_library(retinaface
         ${HEADER_FILES}
         ${SOURCE_FILES})
 

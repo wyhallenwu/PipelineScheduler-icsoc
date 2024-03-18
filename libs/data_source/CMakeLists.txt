@@ -38,7 +38,7 @@ set(
 )
 
 # Here we define the library.
-add_library(data_source SHARED
+add_library(data_source
         ${HEADER_FILES}
         ${SOURCE_FILES})
 

@@ -58,6 +58,10 @@ private:
     void CreateYolo5Container(int id, const NeighborMicroserviceConfigs &upstream,
                               const std::vector<NeighborMicroserviceConfigs> &downstreams, const MsvcSLOType &slo);
 
+    void CreateDummy(int id, const NeighborMicroserviceConfigs &upstream,
+                const std::vector<NeighborMicroserviceConfigs> &downstreams,
+                const MsvcSLOType &slo);
+
     void CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams, const MsvcSLOType &slo,
                           const std::string &video_path);
 
@@ -70,10 +74,22 @@ private:
                          const int &control_port, const int &data_port, const std::string &trt_config = "");
 
     static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
-                         const int &port) {
-        return system(absl::StrFormat(
-                R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
-                executable, name, start_string, port).c_str());
+                         const int &port, const std::string &trt_config) {
+        if (trt_config.empty()) {
+            std::cout << absl::StrFormat(
+                    R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
+                    executable, name, start_string, port).c_str() << std::endl;
+            return system(absl::StrFormat(
+                    R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
+                    executable, name, start_string, port).c_str());
+        } else {
+            std::cout << absl::StrFormat(
+                    R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i --trt_json='%s')",
+                    executable, name, start_string, port, trt_config).c_str() << std::endl;
+            return system(absl::StrFormat(
+                    R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i --trt_json='%s')",
+                    executable, name, start_string, port, trt_config).c_str());
+        }
     };
 
     static void StopContainer(const ContainerHandle &container);

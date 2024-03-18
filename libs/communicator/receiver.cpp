@@ -4,7 +4,6 @@ GPULoader::GPULoader(const BaseMicroserviceConfigs &configs, ThreadSafeFixSizedD
         : Microservice(configs) {
     InQueue = new ThreadSafeFixSizedDoubleQueue();
     OutQueue = out;
-    //spawn Thread that calls Schedule
     if (m == CommMethod::localGPU) {
         std::thread t(&GPULoader::Onloading, this);
         t.detach();
@@ -58,7 +57,7 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
         msvc_OutQueue[0]->setActiveQueueIndex(1);
         handler = std::thread(&Receiver::HandleRpcsToCPU, this);
     }
-    handler.detach();
+    //handler.detach();
 }
 
 Receiver::GpuPointerRequestHandler::GpuPointerRequestHandler(DataTransferService::AsyncService *service,
@@ -173,15 +172,17 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 
 // This can be run in multiple threads if needed.
 void Receiver::HandleRpcsToGPU() {
-    new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
-    new SharedMemoryRequestHandler(&service, cq.get(), LoadingQueue);
-    new SerializedDataRequestHandler(&service, cq.get(), LoadingQueue);
-    void *tag;  // uniquely identifies a request.
-    bool ok;
+    std::cout << "Handling To GPU" << std::endl;
+//    new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
+//    new SharedMemoryRequestHandler(&service, cq.get(), LoadingQueue);
+//    new SerializedDataRequestHandler(&service, cq.get(), LoadingQueue);
+//    void *tag;  // uniquely identifies a request.
+//    bool ok;
     while (true) {
-        GPR_ASSERT(cq->Next(&tag, &ok));
-        GPR_ASSERT(ok);
-        static_cast<RequestHandler *>(tag)->Proceed();
+          std::cout << "in loop" << std::endl;
+//        GPR_ASSERT(cq->Next(&tag, &ok));
+//        GPR_ASSERT(ok);
+//        static_cast<RequestHandler *>(tag)->Proceed();
     }
 }
 

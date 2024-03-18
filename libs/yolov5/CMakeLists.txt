@@ -41,7 +41,7 @@ set(
 )
 
 # Here we define the library.
-add_library(yolov5 SHARED
+add_library(yolov5
         ${HEADER_FILES}
         ${SOURCE_FILES})
 

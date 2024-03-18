@@ -84,7 +84,7 @@ add_subdirectory(libs/retinaface)
 add_subdirectory(libs/arcface)
 add_subdirectory(libs/device_agent)
 
-add_library(PipePlusPlus SHARED
+add_library(PipePlusPlus
         src/main.cpp)
 
 target_include_directories(PipePlusPlus PUBLIC
@@ -104,13 +104,8 @@ target_link_libraries(PipePlusPlus PUBLIC
         ${_PROTOBUF_LIBPROTOBUF}
         misc
         microservice
-        trtengine
-        baseprocessors
         communicator
         data_source
-        yolov5
-        retinaface
-        arcface
         container_agent
         device_agent
 )

@@ -39,7 +39,7 @@ set(
 )
 
 # Here we define the library.
-add_library(communicator SHARED
+add_library(communicator
         ${HEADER_FILES}
         ${SOURCE_FILES})
 

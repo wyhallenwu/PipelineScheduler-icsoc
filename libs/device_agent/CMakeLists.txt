@@ -38,7 +38,7 @@ set(
 )
 
 # Here we define the library.
-add_library(device_agent SHARED
+add_library(device_agent
         ${HEADER_FILES}
         ${SOURCE_FILES})
 
