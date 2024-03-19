@@ -110,15 +110,12 @@ json DeviceAgent::createConfigs(
                          std::get<3>(data[i + j]), std::get<4>(data[i + j])});
             }
         } else if (std::get<1>(msvc) == MicroserviceType::Sender) {
-            std::cout << "Sender" << std::endl;
             downstream.push_back(next_msvc[j++]);
         } else {
-            std::cout << "else" << std::endl;
             downstream.push_back(
                     {std::get<0>(data[++i]), CommMethod::localGPU, {""}, std::get<2>(msvc), std::get<3>(msvc),
                      std::get<4>(msvc)});
         }
-        std::cout << "push back" << std::endl;
         configs.push_back({std::get<0>(msvc), std::get<1>(msvc), slo, 1, std::get<4>(msvc), {upstream}, downstream});
         //current mvsc becomes upstream for next msvc
         upstream = {std::get<0>(msvc), CommMethod::localGPU, {""}, std::get<2>(msvc), -2, std::get<4>(msvc)};
