@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <thread>
+#include <fstream>
 #include "absl/strings/str_format.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/flag.h"
@@ -15,7 +16,8 @@
 #include "indevicecommunication.grpc.pb.h"
 
 ABSL_DECLARE_FLAG(std::string, name);
-ABSL_DECLARE_FLAG(std::string, json);
+ABSL_DECLARE_FLAG(std::optional<std::string>, json);
+ABSL_DECLARE_FLAG(std::optional<std::string>, json_path);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json);
 ABSL_DECLARE_FLAG(uint16_t, port);
 
@@ -43,6 +45,8 @@ namespace msvcconfigs {
     void from_json(const json &j, NeighborMicroserviceConfigs &val);
 
     void from_json(const json &j, BaseMicroserviceConfigs &val);
+
+    std::vector<BaseMicroserviceConfigs> LoadFromJson();
 }
 
 class ContainerAgent {

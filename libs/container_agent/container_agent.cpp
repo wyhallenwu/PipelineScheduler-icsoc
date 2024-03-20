@@ -1,8 +1,9 @@
 #include "container_agent.h"
 
 ABSL_FLAG(std::string, name, "", "base name of container");
-ABSL_FLAG(std::string, json, "", "configurations for microservices");
-ABSL_FLAG(std::optional<std::string>, trt_json, "", "optional json for TRTConfiguration");
+ABSL_FLAG(std::optional<std::string>, json, std::nullopt, "configurations for microservices as json");
+ABSL_FLAG(std::optional<std::string>, json_path, std::nullopt, "json for configuration inside a file");
+ABSL_FLAG(std::optional<std::string>, trt_json, std::nullopt, "optional json for TRTConfiguration");
 ABSL_FLAG(uint16_t, port, 0, "server port for the service");
 
 void msvcconfigs::from_json(const json &j, msvcconfigs::NeighborMicroserviceConfigs &val) {
@@ -22,6 +23,27 @@ void msvcconfigs::from_json(const json &j, msvcconfigs::BaseMicroserviceConfigs 
     j.at("ds").get_to(val.msvc_dataShape);
     j.at("upstrm").get_to(val.upstreamMicroservices);
     j.at("downstrm").get_to(val.dnstreamMicroservices);
+}
+
+std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
+    if (!absl::GetFlag(FLAGS_json).has_value()) {
+        std::cout << "Json not set" << std::endl;
+        if (absl::GetFlag(FLAGS_json_path).has_value()) {
+            std::ifstream file(absl::GetFlag(FLAGS_json_path).value());
+            return json::parse(file).get<std::vector<BaseMicroserviceConfigs>>();
+        } else {
+            std::cerr << "Please provide configuration either as json or file." << std::endl;
+            exit(1);
+        }
+    } else {
+        std::cout << "Json is set" << std::endl;
+        if (absl::GetFlag(FLAGS_json_path).has_value()) {
+            std::cerr << "Please provide configuration either as json or file." << std::endl;
+            exit(1);
+        } else {
+            return json::parse(absl::GetFlag(FLAGS_json).value()).get<std::vector<BaseMicroserviceConfigs>>();
+        }
+    }
 }
 
 ContainerAgent::ContainerAgent(const std::string &name, uint16_t own_port) : name(name) {

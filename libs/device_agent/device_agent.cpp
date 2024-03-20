@@ -47,7 +47,7 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
     std::string name = "yolov5_" + std::to_string(id);
     json j = createConfigs(
             {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{0, 0}}},
-             {name + "::preprocessor",  MicroserviceType::Preprocessor,  10, -1, {{0, 0}}},
+             {name + "::preprocessor",  MicroserviceType::Preprocessor,  10, -1, {{640, 640}}},
              {name + "::inference",     MicroserviceType::Inference,     10, -1, {{0, 0}}},
              {name + "::postprocessor", MicroserviceType::Postprocessor, 10, -1, {{0, 0}}},
              {name + "::sender",        MicroserviceType::Sender,        10, -1, {{0, 0}}}},

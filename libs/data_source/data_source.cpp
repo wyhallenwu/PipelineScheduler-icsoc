@@ -36,7 +36,7 @@ DataSourceAgent::DataSourceAgent(const std::string &name, uint16_t own_port,
 
 int main(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
-    auto msvc_configs = json::parse(absl::GetFlag(FLAGS_json)).get<std::vector<BaseMicroserviceConfigs>>();
+    std::vector<BaseMicroserviceConfigs> msvc_configs = msvcconfigs::LoadFromJson();
     std::string name = absl::GetFlag(FLAGS_name);
     ContainerAgent *agent = new DataSourceAgent(name, absl::GetFlag(FLAGS_port), msvc_configs);
     while (agent->running()) {

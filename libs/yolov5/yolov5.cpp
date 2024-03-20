@@ -19,7 +19,7 @@ YoloV5Agent::YoloV5Agent(const std::string &name, uint16_t own_port, std::vector
 
 int main(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
-    auto msvc_configs = json::parse(absl::GetFlag(FLAGS_json)).get<std::vector<BaseMicroserviceConfigs>>();
+    std::vector<BaseMicroserviceConfigs> msvc_configs = msvcconfigs::LoadFromJson();
     TRTConfigs yoloConfigs = json::parse(absl::GetFlag(FLAGS_trt_json).value()).get<TRTConfigs>();
     std::string name = absl::GetFlag(FLAGS_name);
     std::vector<Microservice*> msvcs;
