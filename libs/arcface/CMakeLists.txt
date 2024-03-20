@@ -28,6 +28,7 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES 
         arcface.h
+        ../json/json.h
 )
 
 # All source files and private header files go here.
@@ -36,6 +37,7 @@ set(
         arcfacepreprocessor.cpp
         arcfaceinference.cpp
         arcfacepostprocessor.cpp
+        arcface.cpp
 )
 
 # Here we define the library.
@@ -57,12 +59,10 @@ target_compile_features(arcface
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX arcface)
 
+find_package(TensorRT REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(OpenCV REQUIRED)
-
 find_package(Threads REQUIRED)
-
-# add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../trtengine" "${PROJECT_BINARY_DIR}/build")
 
 set(baseprocessors_DIR "${CMAKE_CURRENT_BINARY_DIR}/../baseprocessors")
 find_package(baseprocessors CONFIG REQUIRED)
@@ -73,6 +73,12 @@ find_package(microservice CONFIG REQUIRED)
 set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
 find_package(misc CONFIG REQUIRED)
 
+set(container_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../container_agent")
+find_package(container_agent CONFIG REQUIRED)
+
+set(communicator_DIR "${CMAKE_CURRENT_BINARY_DIR}/../communicator")
+find_package(communicator CONFIG REQUIRED)
+
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(arcface
@@ -82,20 +88,27 @@ target_include_directories(arcface
             # Used when installing the library:
             $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
             ${OpenCV_INCLUDE_DIRS}
-            ${CUDA_INCLUDE_DIRS} 
+            ${CUDA_INCLUDE_DIRS}
+            ${TensorRT_INCLUDE_DIRS}
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
         PRIVATE
             # Used only when building the library:
             src)
 
 target_link_libraries(arcface
         PUBLIC
+        data_grpc_proto
+        device_grpc_proto
         ${OpenCV_LIBS}
         ${CUDA_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
-        misc
+        ${TensorRT_LIBRARIES}
         microservice
-        baseprocessors
+        misc
         trtengine
+        baseprocessors
+        communicator
+        container_agent
 )
 
 # Here we configure variables specifying the target directories.

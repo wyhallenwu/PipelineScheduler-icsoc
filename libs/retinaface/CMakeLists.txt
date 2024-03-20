@@ -89,7 +89,7 @@ target_include_directories(retinaface
             $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
             ${OpenCV_INCLUDE_DIRS}
             ${CUDA_INCLUDE_DIRS}
-        ${TensorRT_INCLUDE_DIRS}
+            ${TensorRT_INCLUDE_DIRS}
             $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
         PRIVATE
             # Used only when building the library:

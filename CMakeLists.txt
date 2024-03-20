@@ -123,3 +123,6 @@ target_link_libraries(Container_Yolov5 yolov5)
 
 add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
 target_link_libraries(Container_RetinaFace retinaface)
+
+add_executable(Container_ArcFace libs/arcface/arcface.cpp)
+target_link_libraries(Container_ArcFace arcface)
