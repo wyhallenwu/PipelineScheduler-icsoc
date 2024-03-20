@@ -249,6 +249,9 @@ bool Engine::build(const TRTConfigs &configs) {
  */
 bool Engine::loadNetwork() {
     std::ifstream file(m_configs.path, std::ios::binary | std::ios::ate);
+    if (!file.good()) {
+        throw std::runtime_error("File does not exist or cannot be opened: " + m_enginePath);
+    }
     std::streamsize size = file.tellg();
     file.seekg(0, std::ios::beg);
 
