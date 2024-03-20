@@ -58,10 +58,6 @@ private:
     void CreateYolo5Container(int id, const NeighborMicroserviceConfigs &upstream,
                               const std::vector<NeighborMicroserviceConfigs> &downstreams, const MsvcSLOType &slo);
 
-    void CreateDummy(int id, const NeighborMicroserviceConfigs &upstream,
-                const std::vector<NeighborMicroserviceConfigs> &downstreams,
-                const MsvcSLOType &slo);
-
     void CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams, const MsvcSLOType &slo,
                           const std::string &video_path);
 

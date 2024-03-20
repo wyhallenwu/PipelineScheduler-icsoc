@@ -16,7 +16,7 @@ void Logger::log(Severity severity, const char *msg) noexcept {
  * @param configs 
  */
 Engine::Engine(const TRTConfigs &configs) : m_configs(configs) {
-    if (m_configs.path.find(".onnx")) {
+    if (m_configs.path.find(".onnx") != std::string::npos) {
         build(configs);
     }
     loadNetwork();
@@ -248,7 +248,7 @@ bool Engine::build(const TRTConfigs &configs) {
  * @return false if shit goes south
  */
 bool Engine::loadNetwork() {
-    std::ifstream file(m_enginePath, std::ios::binary | std::ios::ate);
+    std::ifstream file(m_configs.path, std::ios::binary | std::ios::ate);
     std::streamsize size = file.tellg();
     file.seekg(0, std::ios::beg);
 

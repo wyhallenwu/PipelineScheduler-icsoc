@@ -40,7 +40,9 @@ cv::cuda::GpuMat resizePadRightBottom(
     int unpad_h = r * input.rows;
     //Create a new GPU Mat 
     //cv::cuda::GpuMat re(unpad_h, unpad_w, CV_8UC3);
+    std::cout << "To Resize: " << unpad_h << " " << unpad_w << std::endl;
     cv::cuda::resize(input, input, cv::Size(unpad_h, unpad_w));
+    std::cout << "Resized: " << input.rows << " " << input.cols << std::endl;
     cv::cuda::GpuMat out(height, width, CV_8UC3, bgcolor);
     // Creating an opencv stream for asynchronous operation on cuda
     cv::cuda::Stream stream;

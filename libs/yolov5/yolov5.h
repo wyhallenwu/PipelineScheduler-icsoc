@@ -51,6 +51,5 @@ protected:
 
 class YoloV5Agent : public ContainerAgent {
 public:
-    YoloV5Agent(const std::string &name, uint16_t own_port,
-                std::vector<BaseMicroserviceConfigs> &msvc_configs, const TRTConfigs &yoloConfigs, Microservice *receiver);
+    YoloV5Agent(const std::string &name, uint16_t own_port, std::vector<Microservice*> services);
 };

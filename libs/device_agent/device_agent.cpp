@@ -17,12 +17,10 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, uint16_t controller_
 
     containers = std::map<std::string, ContainerHandle>();
 
-
-    //CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55001"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4");
-    // CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{0, 0}}},
-    //                      {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1);
-    CreateDummy(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{0, 0}}},
-                {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1);
+    // test code that will eventually be replaced by the controller
+    CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55001"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4");
+    CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{0, 0}}},
+                          {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1);
     HandleRecvRpcs();
 }
 
@@ -58,18 +56,6 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
     TRTConfigs config = {"./models/yolov5s_b32_dynamic_nms.engine.NVIDIAGeForceRTX3090.fp16.5.5"};
     finishContainer("./Container_Yolov5", name, to_string(j), 49152 + containers.size(), 55000 + containers.size(),
                     to_string(json(config)));
-}
-
-void DeviceAgent::CreateDummy(int id, const NeighborMicroserviceConfigs &upstream,
-                              const std::vector<NeighborMicroserviceConfigs> &downstreams,
-                              const MsvcSLOType &slo) {
-    std::string name = "dummy_" + std::to_string(id);
-    json j = createConfigs(
-            {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{0, 0}}},
-             {name + "::sender",        MicroserviceType::Sender,        10, -1, {{0, 0}}}},
-            slo, upstream, downstreams
-    );
-    finishContainer("./Container_Yolov5", name, to_string(j), 49152 + containers.size(), 55000 + containers.size());
 }
 
 void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams,
