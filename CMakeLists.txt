@@ -120,3 +120,6 @@ target_link_libraries(Container_DataSource data_source)
 
 add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
 target_link_libraries(Container_Yolov5 yolov5)
+
+add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
+target_link_libraries(Container_RetinaFace retinaface)

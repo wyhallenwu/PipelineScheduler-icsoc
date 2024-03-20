@@ -10,9 +10,7 @@
 class YoloV5Preprocessor : public BasePreprocessor {
 public:
     YoloV5Preprocessor(const BaseMicroserviceConfigs &config);
-    ~YoloV5Preprocessor() {
-
-    };
+    ~YoloV5Preprocessor() = default;
 protected:
     friend class YoloV5Agent;
     void batchRequests();
@@ -27,9 +25,7 @@ protected:
 class YoloV5Inference : public BaseProcessor {
 public:
     YoloV5Inference(const BaseMicroserviceConfigs &config, const TRTConfigs &engineConfigs);
-    ~YoloV5Inference() {
-
-    };
+    ~YoloV5Inference() = default;
 protected:
     friend class YoloV5Agent;
     void inference();
@@ -42,9 +38,7 @@ class YoloV5Postprocessor : public BasePostprocessor {
 public:
     friend class YoloV5Agent;
     YoloV5Postprocessor(const BaseMicroserviceConfigs &config);
-    ~YoloV5Postprocessor() {
-        
-    };
+    ~YoloV5Postprocessor() = default;
 protected:
     void postProcessing();
 };
