@@ -32,8 +32,8 @@ namespace msvcconfigs {
         j["slo"] = val.msvc_svcLevelObjLatency;
         j["bs"] = val.msvc_idealBatchSize;
         j["ds"] = val.msvc_dataShape;
-        j["upstrm"] = val.upstreamMicroservices;
-        j["downstrm"] = val.dnstreamMicroservices;
+        j["upstrm"] = val.msvc_upstreamMicroservices;
+        j["downstrm"] = val.msvc_dnstreamMicroservices;
     }
 }
 

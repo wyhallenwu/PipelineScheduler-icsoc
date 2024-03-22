@@ -270,8 +270,8 @@ namespace msvcconfigs {
         // Shape of data produced by this microservice
         std::vector<RequestShapeType> msvc_dataShape;
         // List of upstream microservices
-        std::list<NeighborMicroserviceConfigs> upstreamMicroservices;
-        std::list<NeighborMicroserviceConfigs> dnstreamMicroservices;
+        std::list<NeighborMicroserviceConfigs> msvc_upstreamMicroservices;
+        std::list<NeighborMicroserviceConfigs> msvc_dnstreamMicroservices;
     };
 }
 
@@ -337,9 +337,9 @@ protected:
     uint32_t msvc_outReqCount = 0;
 
     //
-    NumMscvType numUpstreamMicroservices = 0;
+    NumMscvType nummsvc_upstreamMicroservices = 0;
     //
-    NumMscvType numDnstreamMicroservices = 0;
+    NumMscvType nummsvc_dnstreamMicroservices = 0;
 
     // The expected shape of the data for the next microservice
     std::vector<RequestShapeType> msvc_outReqShape;

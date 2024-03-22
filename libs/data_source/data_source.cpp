@@ -1,7 +1,7 @@
 #include "data_source.h"
 
 DataReader::DataReader(const BaseMicroserviceConfigs &configs) : Microservice(configs), source(VideoCapture(
-        configs.upstreamMicroservices.front().link[0])) {};
+        configs.msvc_upstreamMicroservices.front().link[0])) {};
 
 void DataReader::Process(int wait_time_ms) {
     while (true) {
