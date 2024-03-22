@@ -342,7 +342,7 @@ protected:
     NumMscvType nummsvc_dnstreamMicroservices = 0;
 
     // The expected shape of the data for the next microservice
-    std::vector<RequestShapeType> msvc_outReqShape;
+    std::vector<std::vector<RequestShapeType>> msvc_outReqShape;
     // The shape of the data to be processed by this microservice
     std::vector<RequestShapeType> msvc_dataShape;
 

@@ -29,11 +29,11 @@ int main(int argc, char **argv) {
     msvcs.push_back(new RetinaFacePostprocessor(msvc_configs[3]));
     msvcs[3]->SetInQueue(msvcs[2]->GetOutQueue());
     for (int i = 4; i < msvc_configs.size(); i++) {
-        if (msvc_configs[i].dnstreamMicroservices.front().commMethod == CommMethod::localGPU) {
+        if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::localGPU) {
             msvcs.push_back(new GPUSender(msvc_configs[i]));
-        } else if (msvc_configs[i].dnstreamMicroservices.front().commMethod == CommMethod::sharedMemory) {
+        } else if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::sharedMemory) {
             msvcs.push_back(new LocalCPUSender(msvc_configs[i]));
-        } else if (msvc_configs[i].dnstreamMicroservices.front().commMethod == CommMethod::sharedMemory) {
+        } else if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::sharedMemory) {
             msvcs.push_back(new RemoteCPUSender(msvc_configs[i]));
         }
         msvcs[i]->SetInQueue(msvcs[i - 1]->GetOutQueue());

@@ -61,21 +61,27 @@ void YoloV5Inference::inference() {
 
         // Do batched inference with TRT
         currReq_batchSize = currReq.req_batchSize;
+        trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
         for (std::size_t i = 0; i < currReq_batchSize; ++i) {
             trtInBuffer.emplace_back(currReq.req_data[i].data);
         }
+        info("{0:s} extracts inference data from message. Run inference!", msvc_name);
         msvc_inferenceEngine->runInference(trtInBuffer, trtOutBuffer, currReq_batchSize);
+        trace("{0:s} finished INFERENCE.", msvc_name);
+
 
         // After inference, 4 buffers are filled with memory, which we need to carry to post processor.
         // We put 4 buffers into a vector along with their respective shapes for the post processor to interpret.
-        for (std::size_t i = 0; i < this->msvc_outReqShape.size(); ++i) {
+        for (std::size_t i = 0; i < this->msvc_outReqShape.at(0).size(); ++i) {
             data = {
-                this->msvc_outReqShape[i],
+                this->msvc_outReqShape.at(0).at(i),
                 trtOutBuffer[i]
             };
             outReqData.emplace_back(data);
         }
+        
+
 
         // Packing everything inside the `outReq` to be sent to and processed at the next microservice
         outReq = {
