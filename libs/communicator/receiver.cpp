@@ -65,7 +65,12 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder builder;
-    builder.AddListeningPort(configs.upstreamMicroservices.front().link[0], grpc::InsecureServerCredentials());
+    builder.AddListeningPort(configs.msvc_upstreamMicroservices.front().link[0], grpc::InsecureServerCredentials());
+    builder.SetMaxSendMessageSize(1024 * 1024 * 1024);
+    builder.SetMaxSendMessageSize(1024 * 1024 * 1024);
+    builder.SetMaxMessageSize(1024 * 1024 * 1024);
+    builder.SetMaxReceiveMessageSize(1024 * 1024 * 1024);
+
     builder.RegisterService(&service);
     LoadingQueue = (new GPULoader(configs, msvc_OutQueue[0], m))->getInQueue();
     cq = builder.AddCompletionQueue();
