@@ -140,6 +140,7 @@ public:
         }
         cpuQueue.emplace(request);
         q_condition.notify_one();
+        q_mutex.unlock();
     }
 
     /**
@@ -154,6 +155,7 @@ public:
         }
         gpuQueue.emplace(request);
         q_condition.notify_one();
+        q_mutex.unlock();
     }
 
     /**
@@ -169,6 +171,7 @@ public:
         );
         Request<LocalCPUReqDataType> request = cpuQueue.front();
         cpuQueue.pop();
+        q_mutex.unlock();
         return request;
     }
 
@@ -185,6 +188,7 @@ public:
         );
         Request<LocalGPUReqDataType> request = gpuQueue.front();
         gpuQueue.pop();
+        q_mutex.unlock();
         return request;
     }
 
@@ -329,7 +333,7 @@ protected:
     //
     MsvcSLOType msvc_svcLevelObjLatency;
     //
-    MsvcSLOType msvc_interReqTime;
+    MsvcSLOType msvc_interReqTime = 1;
 
     //
     uint32_t msvc_inReqCount = 0;
