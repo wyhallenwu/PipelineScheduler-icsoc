@@ -19,7 +19,9 @@ ABSL_DECLARE_FLAG(std::string, name);
 ABSL_DECLARE_FLAG(std::optional<std::string>, json);
 ABSL_DECLARE_FLAG(std::optional<std::string>, json_path);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json);
+ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json_path);
 ABSL_DECLARE_FLAG(uint16_t, port);
+ABSL_DECLARE_FLAG(uint16_t, verbose);
 
 using json = nlohmann::json;
 

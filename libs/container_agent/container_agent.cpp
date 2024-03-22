@@ -4,7 +4,9 @@ ABSL_FLAG(std::string, name, "", "base name of container");
 ABSL_FLAG(std::optional<std::string>, json, std::nullopt, "configurations for microservices as json");
 ABSL_FLAG(std::optional<std::string>, json_path, std::nullopt, "json for configuration inside a file");
 ABSL_FLAG(std::optional<std::string>, trt_json, std::nullopt, "optional json for TRTConfiguration");
+ABSL_FLAG(std::optional<std::string>, trt_json_path, std::nullopt, "json for TRTConfiguration");
 ABSL_FLAG(uint16_t, port, 0, "server port for the service");
+ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
 
 void msvcconfigs::from_json(const json &j, msvcconfigs::NeighborMicroserviceConfigs &val) {
     j.at("name").get_to(val.name);
