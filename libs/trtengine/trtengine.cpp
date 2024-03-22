@@ -304,6 +304,7 @@ bool Engine::loadNetwork() {
     std::int32_t batchSize = m_configs.maxBatchSize;
     // Allocate GPU memory for input and output buffers
     m_outputLengthsFloat.clear();
+    uint32_t alloMemSize;
     for (uint32_t i = 0; i < m_buffers.size(); ++i) {
         const auto tensorName = m_engine->getBindingName(i);
         m_IOTensorNames.emplace_back(tensorName);
@@ -320,13 +321,15 @@ bool Engine::loadNetwork() {
             // cuz the batch size with which we generated the engine is smaller than on in `m_configs`.
             std::int32_t m_engineMaxBatchSize = m_engine->getProfileDimensions(i, 0, nvinfer1::OptProfileSelector::kMAX).d[0];
             batchSize = std::min(m_engineMaxBatchSize, batchSize);
+
             // Allocate enough to fit the max batch size we chose (we could end up using less later)
-            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], batchSize * tensorShape.d[1] * tensorShape.d[2] * tensorShape.d[3] * m_precision, stream));
+            alloMemSize = batchSize * tensorShape.d[1] * tensorShape.d[2] * tensorShape.d[3] * m_precision;
+            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], alloMemSize, stream));
             
             // Store the input dims for later use
             m_inputDims.emplace_back(tensorShape.d[1], tensorShape.d[2], tensorShape.d[3]);
             m_inputBatchSize = batchSize;
-            
+            m_inputBuffers.emplace_back(m_buffers[i]);
         }
     }
     for (uint32_t i = 0; i < m_buffers.size(); i++) {
