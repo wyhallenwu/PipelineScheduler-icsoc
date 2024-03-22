@@ -145,8 +145,8 @@ void YoloV5Postprocessor::postProcessing() {
                 // in the constructor of each microservice, we map the class number to the corresponding queue index in 
                 // `classToDntreamMap`.
                 for (size_t k = 0; k < this->classToDnstreamMap.size(); ++k) {
-                    if (classToDnstreamMap.at(k).second == bboxClass) {
-                        queueIndex = this->classToDnstreamMap.at(i).second; 
+                    if ((classToDnstreamMap.at(k).first == bboxClass) || (classToDnstreamMap.at(k).first == -1)) {
+                        queueIndex = this->classToDnstreamMap.at(k).second; 
                         // Breaking is only appropriate if case we assume the downstream only wants to take one class
                         // TODO: More than class-of-interests for 1 queue
                         break;
