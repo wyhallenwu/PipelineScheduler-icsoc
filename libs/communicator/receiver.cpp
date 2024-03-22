@@ -14,29 +14,50 @@ GPULoader::GPULoader(const BaseMicroserviceConfigs &configs, ThreadSafeFixSizedD
 }
 
 void GPULoader::Onloading() {
-    Request<LocalCPUReqDataType> req = InQueue->pop1();
-    // copy data to gpu using cuda
-    std::vector<RequestData<LocalGPUReqDataType>> elements = {};
-    for (const auto &el: req.req_data) {
-        auto gpu_image = cv::cuda::GpuMat(el.shape[0], el.shape[1], CV_8UC3);
-        gpu_image.upload(el.data);
-        elements.push_back({el.shape, gpu_image});
+    while (true) {
+        if (this->STOP_THREADS) {
+                spdlog::info("{0:s} STOPS.", msvc_name);
+                break;
+        }
+        else if (this->PAUSE_THREADS) {
+            spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            continue;
+        }
+        Request<LocalCPUReqDataType> req = InQueue->pop1();
+        // copy data to gpu using cuda
+        std::vector<RequestData<LocalGPUReqDataType>> elements = {};
+        for (const auto &el: req.req_data) {
+            auto gpu_image = cv::cuda::GpuMat(el.shape[0], el.shape[1], CV_8UC3);
+            gpu_image.upload(el.data);
+            elements.push_back({el.shape, gpu_image});
+        }
+        OutQueue->emplace(
+                {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
     }
-    OutQueue->emplace(
-            {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
 }
 
 void GPULoader::Offloading() {
-    Request<LocalGPUReqDataType> req = InQueue->pop2();
-    // copy data from gpu using cuda
-    std::vector<RequestData<LocalCPUReqDataType>> elements = {};
-    for (const auto &el: req.req_data) {
-        cv::Mat image;
-        el.data.download(image);
-        elements.push_back({el.shape, image});
+    while (true) {
+
+        if (this->STOP_THREADS) {
+                spdlog::info("{0:s} STOPS.", msvc_name);
+                break;
+        }
+        else if (this->PAUSE_THREADS) {
+            spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            continue;
+        }
+        Request<LocalGPUReqDataType> req = InQueue->pop2();
+        // copy data from gpu using cuda
+        std::vector<RequestData<LocalCPUReqDataType>> elements = {};
+        for (const auto &el: req.req_data) {
+            cv::Mat image;
+            el.data.download(image);
+            elements.push_back({el.shape, image});
+        }
+        OutQueue->emplace(
+                {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
     }
-    OutQueue->emplace(
-            {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
 }
 
 Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
