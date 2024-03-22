@@ -6,6 +6,7 @@
 #include <cuda_runtime.h>
 #include <iostream>
 #include "../json/json.h"
+#include "spdlog/spdlog.h"
 
 const std::vector<std::string> cocoClassNames = {
         "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",

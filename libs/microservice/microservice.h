@@ -9,6 +9,7 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <utility>
+#include <spdlog/spdlog.h>
 
 #ifndef MICROSERVICE_H
 #define MICROSERVICE_H

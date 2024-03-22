@@ -30,7 +30,7 @@ public:
 
     };
 protected:
-    BatchSizeType msvc_onBufferBatchSize;
+    BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
     bool isTimeToBatch() override;
     bool checkReqEligibility(ClockType currReq_genTime) override;

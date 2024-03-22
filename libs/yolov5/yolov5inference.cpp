@@ -1,5 +1,7 @@
 #include "yolov5.h"
 
+using namespace spdlog;
+
 YoloV5Inference::YoloV5Inference(
     const BaseMicroserviceConfigs &config, 
     const TRTConfigs &engineConfigs) : BaseProcessor(config), msvc_engineConfigs(engineConfigs) {
@@ -8,6 +10,8 @@ YoloV5Inference::YoloV5Inference(
 
     msvc_engineInputBuffers = msvc_inferenceEngine->getInputBuffers();
     msvc_engineOutputBuffers = msvc_inferenceEngine->getOutputBuffers();
+
+    info("{0:s} is created.", msvc_name); 
 }
 
 void YoloV5Inference::inference() {
@@ -31,12 +35,15 @@ void YoloV5Inference::inference() {
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
+    spdlog::info("{0:s} STARTS.", msvc_name); 
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
+            spdlog::info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
+            spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
 
@@ -83,11 +90,14 @@ void YoloV5Inference::inference() {
         // for (std::size_t i = 0; i < trtInBuffer.size(); i++) {
         //     checkCudaErrorCode(cudaFree(trtInBuffer.at(i).cudaPtr()));
         // }
+        info("{0:s} emplaced a request for a batch size of {1:d}", msvc_name, currReq_batchSize);
+
         msvc_OutQueue[0]->emplace(outReq);
         outReqData.clear();
         trtInBuffer.clear();
         trtOutBuffer.clear();
 
+        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }
 }

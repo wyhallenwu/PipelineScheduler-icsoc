@@ -83,6 +83,7 @@ target_link_libraries(microservice
         ${CUDA_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
         misc
+        spdlog
 )
 
 # Here we configure variables specifying the target directories.

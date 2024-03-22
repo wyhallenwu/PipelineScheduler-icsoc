@@ -27,20 +27,22 @@ void msvcconfigs::from_json(const json &j, msvcconfigs::BaseMicroserviceConfigs 
 
 std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
     if (!absl::GetFlag(FLAGS_json).has_value()) {
-        std::cout << "Json not set" << std::endl;
+        spdlog::trace("{0:s} attempts to parse Microservice Configs from command line.", __func__);
         if (absl::GetFlag(FLAGS_json_path).has_value()) {
             std::ifstream file(absl::GetFlag(FLAGS_json_path).value());
+            spdlog::trace("{0:s} finished parsing Microservice Configs from command line.", __func__);
             return json::parse(file).get<std::vector<BaseMicroserviceConfigs>>();
         } else {
-            std::cerr << "Please provide configuration either as json or file." << std::endl;
+            spdlog::error("No Configurations found. Please provide configuration either as json or file.");
             exit(1);
         }
     } else {
-        std::cout << "Json is set" << std::endl;
+        spdlog::trace("{0:s} attempts to parse Microservice Configs from file.", __func__);
         if (absl::GetFlag(FLAGS_json_path).has_value()) {
-            std::cerr << "Please provide configuration either as json or file." << std::endl;
+            spdlog::error("No Configurations found. Please provide configuration either as json or file.");
             exit(1);
         } else {
+            spdlog::trace("{0:s} finished parsing Microservice Configs from file.", __func__);
             return json::parse(absl::GetFlag(FLAGS_json).value()).get<std::vector<BaseMicroserviceConfigs>>();
         }
     }
@@ -80,6 +82,7 @@ void ContainerAgent::SendQueueLengths() {
     QueueSize request;
     for (auto msvc: msvcs) {
         request.add_size(msvc->GetOutQueueSize(0));
+        spdlog::trace("{0:s} Length of queue is {1:d}", msvc->msvc_name, msvc->GetOutQueueSize(0));
     }
     StaticConfirm reply;
     ClientContext context;

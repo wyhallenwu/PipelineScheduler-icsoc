@@ -14,9 +14,11 @@ void normalize(
     const std::array<float, 3>& divVals = {1.f, 1.f, 1.f},
     cv::cuda::Stream &stream = cv::cuda::Stream::Null()
 ) {
+    spdlog::trace("Going into {0:s}", __func__);
     input.convertTo(input, CV_32FC3, 1.f / 255.f, stream);
     cv::cuda::subtract(input, cv::Scalar(subVals[0], subVals[1], subVals[2]), input, cv::noArray(), -1);
     cv::cuda::divide(input, cv::Scalar(divVals[0], divVals[1], divVals[2]), input, 1, -1);
+    spdlog::trace("Finished {0:s}", __func__);
 }
 
 /**
@@ -35,20 +37,23 @@ cv::cuda::GpuMat resizePadRightBottom(
     const cv::Scalar &bgcolor,
     bool toNormalize
 ) {
+    spdlog::trace("Going into {0:s}", __func__);
     float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
     int unpad_h = r * input.rows;
     //Create a new GPU Mat 
-    //cv::cuda::GpuMat re(unpad_h, unpad_w, CV_8UC3);
-    cv::cuda::resize(input, input, cv::Size(unpad_h, unpad_w));
+    cv::cuda::GpuMat resized(unpad_h, unpad_w, CV_8UC3);
+    cv::cuda::resize(input, resized, cv::Size(unpad_h, unpad_w));
     cv::cuda::GpuMat out(height, width, CV_8UC3, bgcolor);
     // Creating an opencv stream for asynchronous operation on cuda
     cv::cuda::Stream stream;
-    input.copyTo(out(cv::Rect(0, 0, input.cols, input.rows)), stream);
+    resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
     if (toNormalize) {
         normalize(out);
+        spdlog::trace("Finished {0:s}", __func__);
         return out;
     }
+    spdlog::trace("Finished {0:s}", __func__);
     return out;
 }
 
@@ -71,10 +76,10 @@ BasePreprocessor::BasePreprocessor(const BaseMicroserviceConfigs &configs) : Mic
  * @return false if otherwise
  */
 bool BasePreprocessor::isTimeToBatch() {
-    return false;
     if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
         return true;
     }
+    return false;
 }
 
 /**

@@ -18,10 +18,25 @@ YoloV5Agent::YoloV5Agent(const std::string &name, uint16_t own_port, std::vector
 }
 
 int main(int argc, char **argv) {
+    spdlog::set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
+
     absl::ParseCommandLine(argc, argv);
     std::vector<BaseMicroserviceConfigs> msvc_configs = msvcconfigs::LoadFromJson();
-    TRTConfigs yoloConfigs = json::parse(absl::GetFlag(FLAGS_trt_json).value()).get<TRTConfigs>();
+    TRTConfigs yoloConfigs;
+    if (absl::GetFlag(FLAGS_trt_json).has_value()) {
+        spdlog::trace("{0:s} attempts to parse TRT Config from command line.", __func__);
+        yoloConfigs = json::parse(absl::GetFlag(FLAGS_trt_json).value()).get<TRTConfigs>();
+        spdlog::trace("{0:s} finished parsing TRT Config from file.", __func__);
+    } else {
+        spdlog::trace("{0:s} attempts to parse TRT Config from command line.", __func__);
+        std::ifstream file(absl::GetFlag(FLAGS_trt_json_path).value());
+        yoloConfigs = json::parse(file).get<TRTConfigs>();
+        spdlog::trace("{0:s} finished parsing TRT Config from file.", __func__);
+        
+    }
     std::string name = absl::GetFlag(FLAGS_name);
+    uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
+    spdlog::set_level(spdlog::level::level_enum(logLevel));
     std::vector<Microservice*> msvcs;
     msvcs.push_back(new Receiver(msvc_configs[0], CommMethod::localGPU));
     msvcs.push_back(new YoloV5Preprocessor(msvc_configs[1]));

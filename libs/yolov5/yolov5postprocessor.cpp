@@ -1,6 +1,7 @@
 #include <yolov5.h>
 
 YoloV5Postprocessor::YoloV5Postprocessor(const BaseMicroserviceConfigs &config) : BasePostprocessor(config) {
+    spdlog::info("{0:s} is created.", msvc_name); 
 }
 
 void YoloV5Postprocessor::postProcessing() {
@@ -29,13 +30,15 @@ void YoloV5Postprocessor::postProcessing() {
 
     // Shape of cropped bounding boxes
     RequestShapeType bboxShape;
-
+    spdlog::info("{0:s} STARTS.", msvc_name); 
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
+            spdlog::info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
+            spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
 
@@ -56,6 +59,8 @@ void YoloV5Postprocessor::postProcessing() {
             this->updateReqRate(currReq_genTime);
         }
         currReq_batchSize = currReq.req_batchSize;
+        trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
+
 
         /**
          * @brief Each request to the postprocessing microservice of YOLOv5 contains the buffers which are results of TRT inference 
@@ -104,6 +109,7 @@ void YoloV5Postprocessor::postProcessing() {
                 postProcStream
             ));
         }
+        trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
 
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
@@ -114,6 +120,7 @@ void YoloV5Postprocessor::postProcessing() {
         NumQueuesType queueIndex;
 
         // Doing post processing for the whole batch
+        std::cout << numDetList[0] << " " <<numDetList[1] << " " << numDetList[2] << std::endl;
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
             // Height and width of the image used for inference
             int infer_h, infer_w;
@@ -129,6 +136,7 @@ void YoloV5Postprocessor::postProcessing() {
             infer_h = imageList[i].shape[1];
             infer_w = imageList[i].shape[2];
             crop(imageList[i].data, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
+            trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, currReq_batchSize, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++i) {
@@ -165,6 +173,7 @@ void YoloV5Postprocessor::postProcessing() {
                     currReq.req_data // upstreamReq_data
                 };
                 msvc_OutQueue.at(queueIndex)->emplace(outReq);
+                trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, queueIndex, bboxClass);
             }
             // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
             // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
@@ -176,6 +185,7 @@ void YoloV5Postprocessor::postProcessing() {
         // for (size_t i = 0; i < currReq_data.size(); i++) {
         //     checkCudaErrorCode(cudaFree(currReq_data.at(i).data.cudaPtr()));
         // }
+        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
 
     }

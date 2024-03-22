@@ -5,7 +5,7 @@ Sender::Sender(const BaseMicroserviceConfigs &configs) : Microservice(
         configs) {
     stubs = std::vector<std::unique_ptr<DataTransferService::Stub>>();
     stubs.push_back(
-            DataTransferService::NewStub(grpc::CreateChannel(configs.dnstreamMicroservices.front().link[0], grpc::InsecureChannelCredentials())));
+            DataTransferService::NewStub(grpc::CreateChannel(configs.msvc_dnstreamMicroservices.front().link[0], grpc::InsecureChannelCredentials())));
     multipleStubs = false;
     run = true;
 }

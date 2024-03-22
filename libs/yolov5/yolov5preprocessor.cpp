@@ -1,7 +1,9 @@
 #include <yolov5.h>
 
+using namespace spdlog;
+
 YoloV5Preprocessor::YoloV5Preprocessor(const BaseMicroserviceConfigs &configs) : BasePreprocessor(configs) {
-    
+    spdlog::info("{0:s} is created.", msvc_name); 
 }
 
 void YoloV5Preprocessor::batchRequests() {
@@ -26,12 +28,15 @@ void YoloV5Preprocessor::batchRequests() {
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
+    spdlog::info("{0:s} STARTS.", msvc_name); 
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
+            spdlog::info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
+            spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
         // Processing the next incoming request
@@ -49,10 +54,20 @@ void YoloV5Preprocessor::batchRequests() {
         if (this->msvc_inReqCount > 1) {
             this->updateReqRate(currReq_genTime);
         }
+        currReq_batchSize = currReq.req_batchSize;
+        info("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
         msvc_onBufferBatchSize++;
         // Resize the incoming request image the padd with the grey color
         // The resize image will be copied into a reserved buffer
+
+        trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
+            msvc_name,
+            currReq.req_data[0].data.rows,
+            currReq.req_data[0].data.cols,
+            (this->msvc_outReqShape.at(0))[0][1],
+            (this->msvc_outReqShape.at(0))[0][2]
+        );
         data.data = resizePadRightBottom(
             currReq.req_data[0].data,
             this->msvc_outReqShape[0][1],
@@ -61,7 +76,7 @@ void YoloV5Preprocessor::batchRequests() {
         );
         data.shape = RequestShapeType({3, msvc_outReqShape[0][1], msvc_outReqShape[0][2]});
         bufferData.emplace_back(data);
-        // prevData.emplace_back(currReq.req_data[0]);
+        trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
 
         // cudaFree(currReq.req_data[0].data.cudaPtr());
         // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
@@ -74,14 +89,15 @@ void YoloV5Preprocessor::batchRequests() {
                 "",
                 msvc_onBufferBatchSize,
                 bufferData,
-                prevData
+                currReq.req_data
             };
+            trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
             msvc_OutQueue[0]->emplace(outReq);
             msvc_onBufferBatchSize = 0;
             bufferData.clear();
             prevData.clear();
         }
-
+        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }
 }
