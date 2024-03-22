@@ -311,7 +311,6 @@ bool Engine::loadNetwork() {
         // const auto tensorType = m_engine->getTensorIOMode(tensorName);
         const auto tensorShape = m_engine->getBindingDimensions(i);
         if (m_engine->bindingIsInput(i)) {
-            m_inputBuffers.emplace_back(m_buffers[i]);
             //
             if (tensorShape.d[0] == -1) {
                 isDynamic = true;
@@ -338,7 +337,6 @@ bool Engine::loadNetwork() {
         // const auto tensorType = m_engine->getTensorIOMode(tensorName);
         const auto tensorShape = m_engine->getBindingDimensions(i);
         if (!m_engine->bindingIsInput(i)) {
-            m_outputBuffers.emplace_back(m_buffers[i]);
             // The binding is an output
             uint32_t outputLenFloat = 1;
             m_outputDims.push_back(tensorShape);
@@ -351,6 +349,8 @@ bool Engine::loadNetwork() {
             m_outputLengthsFloat.push_back(outputLenFloat);
             // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
             checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * batchSize * m_precision, stream));
+
+            m_outputBuffers.emplace_back(m_buffers[i]);
         }
     }
 
@@ -415,9 +415,10 @@ void Engine::copyToBuffer(
          * like batch = {input1.1,input1.2,...,input1.M,...,inputN.1,inputN.2,...,inputN.M}, where
          * N is batch size and M is the `numInputs`.
          */
-        for (std::size_t j = i; j < batch.size(); j += numInputs) {
-            const void * dataPtr = batch[j].ptr<void>();
-            void * bufferPtr = (void *) (inputBufferPtr + j * singleDataSize);
+        for (std::size_t j = i; j < (batch.size() * numInputs); j += numInputs) {
+            const void * dataPtr = batch.at(j).ptr<void>();
+            inputBufferPtr += j * singleDataSize;
+            void * bufferPtr = (void *)(inputBufferPtr);
             checkCudaErrorCode(
                 cudaMemcpyAsync(
                     bufferPtr,
