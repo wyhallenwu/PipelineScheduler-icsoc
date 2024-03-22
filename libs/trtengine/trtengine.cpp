@@ -78,6 +78,11 @@ bool Engine::build(const TRTConfigs &configs) {
     const std::string& onnxModelPath = m_configs.path;
     // Only regenerate the engine file if it has not already been generated for the specified options
     serializeEngineOptions(m_configs);
+
+    m_subVals = configs.subVals;
+    m_divVals = configs.divVals;
+    m_normalize = configs.normalize;
+    m_precision = configs.precision;
     std::cout << "Searching for engine file with name: " << m_engineName << std::endl;
 
     if (doesFileExist(m_enginePath)) {
@@ -235,9 +240,6 @@ bool Engine::build(const TRTConfigs &configs) {
 
     checkCudaErrorCode(cudaStreamDestroy(profileStream));
 
-    m_subVals = configs.subVals;
-    m_divVals = configs.divVals;
-    m_normalize = configs.normalize;
     return true;
 }
 
@@ -266,6 +268,7 @@ bool Engine::loadNetwork() {
         return false;
     }
 
+    m_precision = m_configs.precision;
     // Set the device index
     auto ret = cudaSetDevice(m_configs.deviceIndex);
     if (ret != 0) {
