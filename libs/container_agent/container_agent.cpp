@@ -9,22 +9,22 @@ ABSL_FLAG(uint16_t, port, 0, "server port for the service");
 ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
 
 void msvcconfigs::from_json(const json &j, msvcconfigs::NeighborMicroserviceConfigs &val) {
-    j.at("name").get_to(val.name);
-    j.at("comm").get_to(val.commMethod);
-    j.at("link").get_to(val.link);
-    j.at("maxqs").get_to(val.maxQueueSize);
-    j.at("coi").get_to(val.classOfInterest);
-    j.at("shape").get_to(val.expectedShape);
+    j.at("nb_name").get_to(val.name);
+    j.at("nb_commMethod").get_to(val.commMethod);
+    j.at("nb_link").get_to(val.link);
+    j.at("nb_maxQueueSize").get_to(val.maxQueueSize);
+    j.at("nb_classOfInterest").get_to(val.classOfInterest);
+    j.at("nb_expectedShape").get_to(val.expectedShape);
 }
 
 void msvcconfigs::from_json(const json &j, msvcconfigs::BaseMicroserviceConfigs &val) {
-    j.at("name").get_to(val.msvc_name);
-    j.at("type").get_to(val.msvc_type);
-    j.at("slo").get_to(val.msvc_svcLevelObjLatency);
-    j.at("bs").get_to(val.msvc_idealBatchSize);
-    j.at("ds").get_to(val.msvc_dataShape);
-    j.at("upstrm").get_to(val.upstreamMicroservices);
-    j.at("downstrm").get_to(val.dnstreamMicroservices);
+    j.at("msvc_name").get_to(val.msvc_name);
+    j.at("msvc_type").get_to(val.msvc_type);
+    j.at("msvc_svcLevelObjLatency").get_to(val.msvc_svcLevelObjLatency);
+    j.at("msvc_idealBatchSize").get_to(val.msvc_idealBatchSize);
+    j.at("msvc_dataShape").get_to(val.msvc_dataShape);
+    j.at("msvc_upstreamMicroservices").get_to(val.msvc_upstreamMicroservices);
+    j.at("msvc_dnstreamMicroservices").get_to(val.msvc_dnstreamMicroservices);
 }
 
 std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
