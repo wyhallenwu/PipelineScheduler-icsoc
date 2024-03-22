@@ -393,6 +393,7 @@ void Engine::copyToBuffer(
     cudaStream_t &inferenceStream
 ) {
     // Number of the batch predefined within the trt engine when built
+    spdlog::trace("[{0:s}] going in. ", __func__);
     const auto numInputs = m_inputBuffers.size();
     // We need to copy batched data to all pre-defined batch
     for (std::size_t i = 0; i < numInputs; ++i) {
@@ -402,7 +403,8 @@ void Engine::copyToBuffer(
          * to the buffer.
          */
         float * inputBufferPtr;
-        inputBufferPtr = (float *)&m_inputBuffers[i];
+
+        inputBufferPtr = (float *)(m_inputBuffers[i]);
 
         uint32_t singleDataSize = 1;
         // Calculating the size of each image in memory.
@@ -430,6 +432,7 @@ void Engine::copyToBuffer(
             );
         }
     }
+    spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
 }
 
 /**
@@ -443,7 +446,7 @@ void Engine::copyFromBuffer(
     const uint16_t batchSize,
     cudaStream_t &inferenceStream
 ) {
-
+    spdlog::trace("[{0:s}] going in. ", __func__);
     for (std::size_t i = 0; i < m_outputBuffers.size(); ++i) {
         // After inference the 4 buffers, namely `num_detections`, `nmsed_boxes`, `nmsed_scores`, `nmsed_classes`
         // will be filled with inference results.
@@ -461,12 +464,13 @@ void Engine::copyFromBuffer(
             cudaMemcpyAsync(
                 ptr,
                 m_outputBuffers[i],
-                bufferMemSize * m_precision,
+                bufferMemSize * m_precision * batchSize,
                 cudaMemcpyDeviceToDevice,
                 inferenceStream
             )
         );
     }
+    spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
 }
 
 /**
@@ -488,6 +492,7 @@ bool Engine::runInference(
         return false;
     }
 
+    spdlog::trace("[{0:s}] going in. ", __func__);
     // Cuda stream that will be used for inference
     cudaStream_t inferenceStream;
     checkCudaErrorCode(cudaStreamCreate(&inferenceStream));
@@ -497,6 +502,7 @@ bool Engine::runInference(
     for (size_t i = 0; i < numInputs; ++i) {
         const auto& engineInputDims = m_inputDims[i];
         nvinfer1::Dims4 inputDims = {batchSize, engineInputDims.d[0], engineInputDims.d[1], engineInputDims.d[2]};
+        spdlog::trace("{0:s} has inputDims of [{1:d}, {2:d}, {3:d}, {4:d}] ", __func__, batchSize, engineInputDims.d[0], engineInputDims.d[1], engineInputDims.d[2]);
         m_context->setBindingDimensions(i, inputDims);
         // const void *dataPointer = batch.ptr<void>();
         // const int32_t inputMemSize = batchSize * engineInputDims.d[0] * engineInputDims.d[1] * engineInputDims.d[2] * sizeof(float);
@@ -526,6 +532,7 @@ bool Engine::runInference(
     checkCudaErrorCode(cudaStreamSynchronize(inferenceStream));
     checkCudaErrorCode(cudaStreamDestroy(inferenceStream));
 
+    spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
     return inferenceStatus;
 
 
