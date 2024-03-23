@@ -3,6 +3,7 @@
 #include <cuda_runtime.h>
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
+#include <opencv2/cudaimgproc.hpp>
 #include <thread>
 
 typedef uint16_t BatchSizeType;

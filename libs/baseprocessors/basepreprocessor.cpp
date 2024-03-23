@@ -9,13 +9,17 @@
  * @param stream an opencv stream for asynchronous operation on cuda
  */
 void normalize(
-    cv::cuda::GpuMat &input,
+    const cv::cuda::GpuMat &input,
+    cv::cuda::GpuMat &normalized,
+    cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
     const std::array<float, 3>& subVals = {0.f, 0.f, 0.f},
-    const std::array<float, 3>& divVals = {1.f, 1.f, 1.f},
-    cv::cuda::Stream &stream = cv::cuda::Stream::Null()
+    const std::array<float, 3>& divVals = {1.f, 1.f, 1.f}
 ) {
     spdlog::trace("Going into {0:s}", __func__);
-    input.convertTo(input, CV_32FC3, 1.f / 255.f, stream);
+    
+    cv::cuda::cvtColor(input, input, cv::COLOR_BGR2RGB);
+    input.convertTo(normalized, CV_32FC3, 1.f / 255.f, stream);
+
     cv::cuda::subtract(input, cv::Scalar(subVals[0], subVals[1], subVals[2]), input, cv::noArray(), -1);
     cv::cuda::divide(input, cv::Scalar(divVals[0], divVals[1], divVals[2]), input, 1, -1);
     spdlog::trace("Finished {0:s}", __func__);
@@ -32,8 +36,8 @@ void normalize(
  */
 cv::cuda::GpuMat resizePadRightBottom(
     const cv::cuda::GpuMat &input,
-    size_t height,
-    size_t width,
+    const size_t height,
+    const size_t width,
     const cv::Scalar &bgcolor,
     bool toNormalize
 ) {
@@ -43,15 +47,17 @@ cv::cuda::GpuMat resizePadRightBottom(
     int unpad_h = r * input.rows;
     //Create a new GPU Mat 
     cv::cuda::GpuMat resized(unpad_h, unpad_w, CV_8UC3);
-    cv::cuda::resize(input, resized, cv::Size(unpad_h, unpad_w));
+    cv::cuda::resize(input, resized, resized.size());
     cv::cuda::GpuMat out(height, width, CV_8UC3, bgcolor);
     // Creating an opencv stream for asynchronous operation on cuda
     cv::cuda::Stream stream;
     resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
+
     if (toNormalize) {
-        normalize(out);
+        cv::cuda::GpuMat normalized;
+        normalize(out, normalized, stream);
         spdlog::trace("Finished {0:s}", __func__);
-        return out;
+        return normalized;
     }
     spdlog::trace("Finished {0:s}", __func__);
     return out;
