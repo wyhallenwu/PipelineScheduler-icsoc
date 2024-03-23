@@ -419,7 +419,7 @@ void Engine::copyToBuffer(
          */
         for (std::size_t j = i; j < (batch.size() * numInputs); j += numInputs) {
             const void * dataPtr = batch.at(j).ptr<void>();
-            inputBufferPtr += j * singleDataSize;
+            inputBufferPtr += singleDataSize;
             void * bufferPtr = (void *)(inputBufferPtr);
             checkCudaErrorCode(
                 cudaMemcpyAsync(
