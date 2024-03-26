@@ -9,18 +9,22 @@
 typedef uint16_t BatchSizeType;
 
 cv::cuda::GpuMat resizePadRightBottom(
-    const cv::cuda::GpuMat &input,
+    cv::cuda::GpuMat &input,
     size_t height,
     size_t width,
     const cv::Scalar &bgcolor = cv::Scalar(128, 128, 128),
     bool toNormalize = true
 );
 
-void normalize(
+cv::cuda::GpuMat normalize(
     cv::cuda::GpuMat &input,
+    cv::cuda::Stream &stream,
     const std::array<float, 3>& subVals,
-    const std::array<float, 3>& divVals,
-    cv::cuda::Stream &stream
+    const std::array<float, 3>& divVals
+);
+
+cv::cuda::GpuMat cvtHWCToCHW(
+    cv::cuda::GpuMat &input
 );
 
 
