@@ -392,6 +392,8 @@ void Engine::copyToBuffer(
     const std::vector<cv::cuda::GpuMat>& batch,
     cudaStream_t &inferenceStream
 ) {
+    spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
+
     // Number of the batch predefined within the trt engine when built
     spdlog::trace("[{0:s}] going in. ", __func__);
     const auto numInputs = m_inputBuffers.size();
@@ -430,9 +432,10 @@ void Engine::copyToBuffer(
                     inferenceStream
                 )
             );
+            inputBufferPtr += singleDataSize;
         }
     }
-    spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
+
 }
 
 /**
@@ -488,9 +491,10 @@ bool Engine::runInference(
 ) {
     // If we give the engine an input bigger than the previous allocated buffer, it would throw a runtime error
     if (m_inputBatchSize < batchSize) {
-        std::cout << "Input's batchsize is bigger than the allocated input buffer's" << std::endl;
+        std::cout << "Input's batchsize is bigger than the allocated input buffer's, which is " << m_inputBatchSize << std::endl;
         return false;
     }
+    // saveGPUAsImg(batch[0], "in_reference.jpg", 255.f);
 
     spdlog::trace("[{0:s}] going in. ", __func__);
     // Cuda stream that will be used for inference
