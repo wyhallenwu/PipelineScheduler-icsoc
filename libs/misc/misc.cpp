@@ -19,3 +19,19 @@ void trt::from_json(const nlohmann::json &j, trt::TRTConfigs &val) {
     j.at("di").get_to(val.deviceIndex);
     j.at("normalize").get_to(val.normalize);
 }
+
+void saveGPUAsImg(const cv::cuda::GpuMat &img, std::string name, float scale) {
+
+    cv::Mat cpuImg;
+    cv::cuda::GpuMat tempImg;
+    img.convertTo(tempImg, CV_8UC3, scale);
+    tempImg.download(cpuImg);
+    cv::imwrite(name, cpuImg);
+}
+
+void saveCPUAsImg(const cv::Mat &img, std::string name, float scale) {
+    cv::Mat cpuImg;
+    img.convertTo(cpuImg, CV_8UC3, scale);
+    cv::imwrite(name, img);
+}
+

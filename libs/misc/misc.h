@@ -7,6 +7,11 @@
 #include <iostream>
 #include "../json/json.h"
 #include "spdlog/spdlog.h"
+#include "opencv2/opencv.hpp"
+
+void saveGPUAsImg(const cv::cuda::GpuMat &img, std::string name = "test.jpg", float scale = 1.f);
+
+void saveCPUAsImg(const cv::Mat &img, std::string name = "test.jpg", float scale = 1.f);
 
 const std::vector<std::string> cocoClassNames = {
         "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
