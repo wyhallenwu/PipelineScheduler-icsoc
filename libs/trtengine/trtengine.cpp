@@ -460,18 +460,35 @@ void Engine::copyFromBuffer(
             bufferMemSize *= m_outputDims[i].d[j];
         }
         // Creating a GpuMat to which we would copy the memory in output buffer.
-        cv::cuda::GpuMat batch_outputBuffer(batchSize, bufferMemSize, CV_32F);
-        outputs.emplace_back(batch_outputBuffer);
-        void * ptr = batch_outputBuffer.ptr<void>();
-        checkCudaErrorCode(
-            cudaMemcpyAsync(
-                ptr,
-                m_outputBuffers[i],
-                bufferMemSize * m_precision * batchSize,
-                cudaMemcpyDeviceToDevice,
-                inferenceStream
-            )
-        );
+        if (i == 0) {
+            cv::cuda::GpuMat batch_outputBuffer(batchSize, bufferMemSize * 2, CV_16U);
+            outputs.emplace_back(batch_outputBuffer);
+
+            void * ptr = batch_outputBuffer.ptr<void>();
+            checkCudaErrorCode(
+                cudaMemcpyAsync(
+                    ptr,
+                    m_outputBuffers[i],
+                    bufferMemSize * m_precision * batchSize,
+                    cudaMemcpyDeviceToDevice,
+                    inferenceStream
+                )
+            );
+        } else {
+            cv::cuda::GpuMat batch_outputBuffer(batchSize, bufferMemSize, CV_32F);
+            outputs.emplace_back(batch_outputBuffer);
+
+            void * ptr = batch_outputBuffer.ptr<void>();
+            checkCudaErrorCode(
+                cudaMemcpyAsync(
+                    ptr,
+                    m_outputBuffers[i],
+                    bufferMemSize * m_precision * batchSize,
+                    cudaMemcpyDeviceToDevice,
+                    inferenceStream
+                )
+            );
+        }
     }
     spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
 }

@@ -76,11 +76,11 @@ void YoloV5Postprocessor::postProcessing() {
         uint16_t maxNumDets = msvc_dataShape[2][0];
 
         std::vector<RequestData<LocalGPUReqDataType>> currReq_data = currReq.req_data;
-        float num_detections[currReq_batchSize];
+        int32_t num_detections[currReq_batchSize];
         float nmsed_boxes[currReq_batchSize][maxNumDets][4];
         float nmsed_scores[currReq_batchSize][maxNumDets];
         float nmsed_classes[currReq_batchSize][maxNumDets];
-        float *numDetList = num_detections;
+        int32_t *numDetList = num_detections;
         float *nmsedBoxesList = &nmsed_boxes[0][0][0];
         float *nmsedScoresList = &nmsed_scores[0][0];
         float *nmsedClassesList = &nmsed_classes[0][0];
@@ -89,7 +89,7 @@ void YoloV5Postprocessor::postProcessing() {
         // float nmsedBoxesList[currReq_batchSize][maxNumDets][4];
         // float nmsedScoresList[currReq_batchSize][maxNumDets];
         // float nmsedClassesList[currReq_batchSize][maxNumDets];
-        std::vector<float *> ptrList{numDetList, nmsedBoxesList, nmsedScoresList, nmsedClassesList};
+        std::vector<float *> ptrList{nmsedBoxesList, nmsedScoresList, nmsedClassesList};
         std::vector<size_t> bufferSizeList;
 
         cudaStream_t postProcStream;
@@ -101,13 +101,23 @@ void YoloV5Postprocessor::postProcessing() {
                 bufferSize *= shape[j];
             }
             bufferSizeList.emplace_back(bufferSize);
-            checkCudaErrorCode(cudaMemcpyAsync(
-                (void *) ptrList[i],
-                currReq_data[i].data.cudaPtr(),
-                bufferSize,
-                cudaMemcpyDeviceToHost,
-                postProcStream
-            ));
+            if (i == 0) {
+                checkCudaErrorCode(cudaMemcpyAsync(
+                    (void *) num_detections,
+                    currReq_data[i].data.cudaPtr(),
+                    bufferSize,
+                    cudaMemcpyDeviceToHost,
+                    postProcStream
+                ));
+            } else {
+                checkCudaErrorCode(cudaMemcpyAsync(
+                    (void *) ptrList[i - 1],
+                    currReq_data[i].data.cudaPtr(),
+                    bufferSize,
+                    cudaMemcpyDeviceToHost,
+                    postProcStream
+                ));
+            }
         }
         trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
 
@@ -120,7 +130,6 @@ void YoloV5Postprocessor::postProcessing() {
         NumQueuesType queueIndex;
 
         // Doing post processing for the whole batch
-        std::cout << numDetList[0] << " " <<numDetList[1] << " " << numDetList[2] << std::endl;
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
             // Height and width of the image used for inference
             int infer_h, infer_w;
