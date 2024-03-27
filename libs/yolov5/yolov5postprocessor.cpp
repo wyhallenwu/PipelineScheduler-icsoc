@@ -132,7 +132,7 @@ void YoloV5Postprocessor::postProcessing() {
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
             // Height and width of the image used for inference
-            int infer_h, infer_w;
+            int orig_h, orig_w, infer_h, infer_w;
 
             // If there is no object in frame, we don't have to do nothing.
             int numDetsInFrame = (int)numDetList[i];
@@ -141,11 +141,20 @@ void YoloV5Postprocessor::postProcessing() {
             }
 
             // Otherwise, we need to do some cropping.
+            orig_h = imageList[i].shape[1];
+            orig_w = imageList[i].shape[2];
 
-            infer_h = imageList[i].shape[1];
-            infer_w = imageList[i].shape[2];
-            crop(imageList[i].data, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
-            trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, currReq_batchSize, i);
+            /**
+             * @brief TODOs:
+             * Hardcoding because we hvent been able to properly carry the image to be cropped.
+             * The cropping logic is ok though.
+             * Need to figure out a way.
+             */
+            infer_h = 640;
+            infer_w = 640;
+
+            crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
+            trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {

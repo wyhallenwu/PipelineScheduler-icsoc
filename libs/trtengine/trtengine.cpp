@@ -458,7 +458,7 @@ void Engine::copyFromBuffer(
         }
         // Creating a GpuMat to which we would copy the memory in output buffer.
         if (i == 0) {
-            cv::cuda::GpuMat batch_outputBuffer(batchSize, bufferMemSize * 2, CV_16U);
+            cv::cuda::GpuMat batch_outputBuffer(batchSize, bufferMemSize, CV_32F);
             outputs.emplace_back(batch_outputBuffer);
 
             void * ptr = batch_outputBuffer.ptr<void>();

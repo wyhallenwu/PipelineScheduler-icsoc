@@ -43,15 +43,14 @@ void scaleBBox(
  */
 void crop(
     const cv::cuda::GpuMat &image,
+    int orig_h,
+    int orig_w,
     int infer_h,
     int infer_w,
     int numDetections,
     const float *bbox_coorList,
     std::vector<cv::cuda::GpuMat> &croppedBBoxes
 ) {
-    int orig_h, orig_w;
-    orig_h = image.rows;
-    orig_w = image.cols;
     int orig_bboxCoors[4];
     for (uint16_t i = 0; i < numDetections; ++i) {
         scaleBBox(orig_h, orig_w, infer_h, infer_w, bbox_coorList + i * 4, orig_bboxCoors);

@@ -67,6 +67,8 @@ protected:
  */
 void crop(
     const cv::cuda::GpuMat &image,
+    int orig_h,
+    int orig_w,
     int infer_h,
     int infer_w,
     int numDetections,

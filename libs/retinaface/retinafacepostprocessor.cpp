@@ -75,7 +75,7 @@ void RetinaFacePostprocessor::postProcessing() {
         std::vector<size_t> bufferSizeList;
 
         cudaStream_t postProcStream;
-        checkCudaErrorCode(cudaStreamCreate(&postProcStream));
+        checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
         for (std::size_t i = 0; i < currReq_data.size(); ++i) {
             size_t bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
             RequestShapeType shape = currReq_data[i].shape;
@@ -89,7 +89,7 @@ void RetinaFacePostprocessor::postProcessing() {
                 bufferSize,
                 cudaMemcpyDeviceToHost,
                 postProcStream
-            ));
+            ), __func__);
         }
 
         // List of images to be cropped from
