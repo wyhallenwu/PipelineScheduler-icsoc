@@ -19,7 +19,15 @@ void scaleBBox(
 ) {
     // TO BE IMPLEMENTED
     for (uint8_t i = 0; i < 4; ++i) {
-        *(orig_bboxCoors + i) = (int)*(infer_bboxCoors + i);
+        int coor = (int)(*(infer_bboxCoors + i));
+        int maxcoor = (i % 2 == 0) ? orig_w : orig_h;
+        if (coor >= maxcoor) {
+            coor = maxcoor - 1;
+        }
+        if (coor < 0) {
+            coor = 0;
+        }
+        *(orig_bboxCoors + i) = coor;
     }
 }
 
@@ -45,9 +53,10 @@ void crop(
     orig_h = image.rows;
     orig_w = image.cols;
     int orig_bboxCoors[4];
-    for (int i = 0; i < numDetections; ++i) {
+    for (uint16_t i = 0; i < numDetections; ++i) {
         scaleBBox(orig_h, orig_w, infer_h, infer_w, bbox_coorList + i * 4, orig_bboxCoors);
-        cv::cuda::GpuMat croppedBBox = image(cv::Range((int)orig_bboxCoors[0], (int)orig_bboxCoors[2]), cv::Range((int)orig_bboxCoors[1], (int)orig_bboxCoors[3])).clone();
+        std::cout << (int)orig_bboxCoors[0] << " " << (int)orig_bboxCoors[1] << " " << (int)orig_bboxCoors[2] << " " << (int)orig_bboxCoors[3] << std::endl;
+        cv::cuda::GpuMat croppedBBox = image(cv::Range((int)orig_bboxCoors[1], (int)orig_bboxCoors[3]), cv::Range((int)orig_bboxCoors[0], (int)orig_bboxCoors[2])).clone();
         croppedBBoxes.emplace_back(croppedBBox);
     }
 }
