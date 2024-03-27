@@ -32,7 +32,14 @@ cv::cuda::GpuMat cvtHWCToCHW(
     spdlog::trace("Going into {0:s}", __func__);
     uint16_t height = input.rows;
     uint16_t width = input.cols;
-    cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
+    /**
+     * @brief TODOs
+     * This is the correct way but since we haven't figured out how to carry to image to be cropped
+     * it screws things up a bit.
+     * cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
+     */
+    // cv::cuda::GpuMat transposed(height, width, CV_8UC3);
+    cv::cuda::GpuMat transposed(height, width, CV_8UC3);
     size_t channel_mem_width = height * width;
     std::vector<cv::cuda::GpuMat> channels {
         cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[0])),
@@ -81,7 +88,7 @@ cv::cuda::GpuMat resizePadRightBottom(
 
     if (toNormalize) {
         cv::cuda::GpuMat normalized;
-        normalized = normalize(out);
+        normalized = normalize(transposed);
         spdlog::trace("Finished {0:s}", __func__);
 
         return normalized;
