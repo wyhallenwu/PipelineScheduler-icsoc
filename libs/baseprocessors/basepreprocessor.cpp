@@ -32,7 +32,7 @@ cv::cuda::GpuMat cvtHWCToCHW(
     spdlog::trace("Going into {0:s}", __func__);
     uint16_t height = input.rows;
     uint16_t width = input.cols;
-    cv::cuda::GpuMat transposed(height, width, CV_8UC3);
+    cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
     size_t channel_mem_width = height * width;
     std::vector<cv::cuda::GpuMat> channels {
         cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[0])),
