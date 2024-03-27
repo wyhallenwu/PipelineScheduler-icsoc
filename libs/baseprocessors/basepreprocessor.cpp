@@ -81,7 +81,7 @@ cv::cuda::GpuMat resizePadRightBottom(
     cv::cuda::resize(input, resized, resized.size());
     cv::cuda::GpuMat out(height, width, CV_8UC3, bgcolor);
     // Creating an opencv stream for asynchronous operation on cuda
-    // cv::cuda::Stream stream;
+    //cv::cuda::Stream stream;
     resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)));
 
     cv::cuda::GpuMat transposed = cvtHWCToCHW(out);

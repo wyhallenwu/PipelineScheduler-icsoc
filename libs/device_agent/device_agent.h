@@ -18,22 +18,22 @@ struct ContainerHandle {
 
 namespace msvcconfigs {
     void to_json(json &j, const NeighborMicroserviceConfigs &val) {
-        j["name"] = val.name;
-        j["comm"] = val.commMethod;
-        j["link"] = val.link;
-        j["maxqs"] = val.maxQueueSize;
-        j["coi"] = val.classOfInterest;
-        j["shape"] = val.expectedShape;
+        j["nb_name"] = val.name;
+        j["nb_commMethod"] = val.commMethod;
+        j["nb_link"] = val.link;
+        j["nb_maxQueueSize"] = val.maxQueueSize;
+        j["nb_classOfInterest"] = val.classOfInterest;
+        j["nb_expectedShape"] = val.expectedShape;
     }
 
     void to_json(json &j, const BaseMicroserviceConfigs &val) {
-        j["name"] = val.msvc_name;
-        j["type"] = val.msvc_type;
-        j["slo"] = val.msvc_svcLevelObjLatency;
-        j["bs"] = val.msvc_idealBatchSize;
-        j["ds"] = val.msvc_dataShape;
-        j["upstrm"] = val.msvc_upstreamMicroservices;
-        j["downstrm"] = val.msvc_dnstreamMicroservices;
+        j["msvc_name"] = val.msvc_name;
+        j["msvc_type"] = val.msvc_type;
+        j["msvc_svcLevelObjLatency"] = val.msvc_svcLevelObjLatency;
+        j["msvc_idealBatchSize"] = val.msvc_idealBatchSize;
+        j["msvc_dataShape"] = val.msvc_dataShape;
+        j["msvc_upstreamMicroservices"] = val.msvc_upstreamMicroservices;
+        j["msvc_dnstreamMicroservices"] = val.msvc_dnstreamMicroservices;
     }
 }
 
