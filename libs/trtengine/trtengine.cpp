@@ -221,7 +221,7 @@ bool Engine::build(const TRTConfigs &configs) {
 
     // CUDA stream used for profiling by the builder.
     cudaStream_t profileStream;
-    checkCudaErrorCode(cudaStreamCreate(&profileStream));
+    checkCudaErrorCode(cudaStreamCreate(&profileStream), __func__);
     builderConfig->setProfileStream(profileStream);
 
     // Build the engine
@@ -238,7 +238,7 @@ bool Engine::build(const TRTConfigs &configs) {
 
     std::cout << "Success, saved engine to " << m_engineName << std::endl;
 
-    checkCudaErrorCode(cudaStreamDestroy(profileStream));
+    checkCudaErrorCode(cudaStreamDestroy(profileStream), __func__);
 
     return true;
 }
@@ -299,7 +299,7 @@ bool Engine::loadNetwork() {
 
     // Create a cuda stream
     cudaStream_t stream;
-    checkCudaErrorCode(cudaStreamCreate(&stream));
+    checkCudaErrorCode(cudaStreamCreate(&stream), __func__);
 
     std::int32_t batchSize = m_configs.maxBatchSize;
     // Allocate GPU memory for input and output buffers
@@ -323,7 +323,7 @@ bool Engine::loadNetwork() {
 
             // Allocate enough to fit the max batch size we chose (we could end up using less later)
             alloMemSize = batchSize * tensorShape.d[1] * tensorShape.d[2] * tensorShape.d[3] * m_precision;
-            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], alloMemSize, stream));
+            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], alloMemSize, stream), __func__);
             
             // Store the input dims for later use
             m_inputDims.emplace_back(tensorShape.d[1], tensorShape.d[2], tensorShape.d[3]);
@@ -348,15 +348,15 @@ bool Engine::loadNetwork() {
 
             m_outputLengthsFloat.push_back(outputLenFloat);
             // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
-            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * batchSize * m_precision, stream));
+            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * batchSize * m_precision, stream), __func__);
 
             m_outputBuffers.emplace_back(m_buffers[i]);
         }
     }
 
     // Synchronize and destroy the cuda stream
-    checkCudaErrorCode(cudaStreamSynchronize(stream));
-    checkCudaErrorCode(cudaStreamDestroy(stream));
+    checkCudaErrorCode(cudaStreamSynchronize(stream), __func__);
+    checkCudaErrorCode(cudaStreamDestroy(stream), __func__);
 
     return true;
 }
@@ -376,7 +376,7 @@ std::vector<void *>& Engine::getOutputBuffers() {
 Engine::~Engine() {
     // Free the GPU memory
     for (auto & buffer : m_buffers) {
-        checkCudaErrorCode(cudaFree(buffer));
+        checkCudaErrorCode(cudaFree(buffer), __func__);
     }
 
     m_buffers.clear();
@@ -392,8 +392,6 @@ void Engine::copyToBuffer(
     const std::vector<cv::cuda::GpuMat>& batch,
     cudaStream_t &inferenceStream
 ) {
-    spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
-
     // Number of the batch predefined within the trt engine when built
     spdlog::trace("[{0:s}] going in. ", __func__);
     const auto numInputs = m_inputBuffers.size();
@@ -421,7 +419,6 @@ void Engine::copyToBuffer(
          */
         for (std::size_t j = i; j < (batch.size() * numInputs); j += numInputs) {
             const void * dataPtr = batch.at(j).ptr<void>();
-            inputBufferPtr += singleDataSize;
             void * bufferPtr = (void *)(inputBufferPtr);
             checkCudaErrorCode(
                 cudaMemcpyAsync(
@@ -430,12 +427,12 @@ void Engine::copyToBuffer(
                     singleDataSize * m_precision,
                     cudaMemcpyDeviceToDevice,
                     inferenceStream
-                )
+                ), __func__
             );
             inputBufferPtr += singleDataSize;
         }
     }
-
+    spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
 }
 
 /**
@@ -472,7 +469,8 @@ void Engine::copyFromBuffer(
                     bufferMemSize * m_precision * batchSize,
                     cudaMemcpyDeviceToDevice,
                     inferenceStream
-                )
+                ),
+                __func__
             );
         } else {
             cv::cuda::GpuMat batch_outputBuffer(batchSize, bufferMemSize, CV_32F);
@@ -486,7 +484,8 @@ void Engine::copyFromBuffer(
                     bufferMemSize * m_precision * batchSize,
                     cudaMemcpyDeviceToDevice,
                     inferenceStream
-                )
+                ),
+                __func__
             );
         }
     }
@@ -516,7 +515,7 @@ bool Engine::runInference(
     spdlog::trace("[{0:s}] going in. ", __func__);
     // Cuda stream that will be used for inference
     cudaStream_t inferenceStream;
-    checkCudaErrorCode(cudaStreamCreate(&inferenceStream));
+    checkCudaErrorCode(cudaStreamCreate(&inferenceStream), __func__);
 
     // As we support dynamic batching, we need to reset the shape of the input binding everytime.
     const auto numInputs = m_inputDims.size();
@@ -550,8 +549,8 @@ bool Engine::runInference(
     copyFromBuffer(outputs, batchSize, inferenceStream);
     
     // Synchronize the cuda stream
-    checkCudaErrorCode(cudaStreamSynchronize(inferenceStream));
-    checkCudaErrorCode(cudaStreamDestroy(inferenceStream));
+    checkCudaErrorCode(cudaStreamSynchronize(inferenceStream), __func__);
+    checkCudaErrorCode(cudaStreamDestroy(inferenceStream), __func__);
 
     spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
     return inferenceStatus;

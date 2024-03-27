@@ -31,9 +31,9 @@ enum MODEL_DATA_TYPE {
     fp32 = sizeof(float)
 };
 
-inline void checkCudaErrorCode(cudaError_t code) {
+inline void checkCudaErrorCode(cudaError_t code, std::string func_name) {
     if (code != 0) {
-        std::string errMsg = "CUDA operation failed with code: " + std::to_string(code) + "(" + cudaGetErrorName(code) +
+        std::string errMsg = "At " + func_name + "CUDA operation failed with code: " + std::to_string(code) + "(" + cudaGetErrorName(code) +
                              "), with message: " + cudaGetErrorString(code);
         std::cout << errMsg << std::endl;
         throw std::runtime_error(errMsg);
