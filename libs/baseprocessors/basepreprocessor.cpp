@@ -81,7 +81,7 @@ cv::cuda::GpuMat resizePadRightBottom(
 
     if (toNormalize) {
         cv::cuda::GpuMat normalized;
-        normalize(out, normalized, stream);
+        normalized = normalize(out);
         spdlog::trace("Finished {0:s}", __func__);
 
         return normalized;

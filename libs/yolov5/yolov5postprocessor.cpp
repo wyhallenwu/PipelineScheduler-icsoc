@@ -148,7 +148,7 @@ void YoloV5Postprocessor::postProcessing() {
             trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, currReq_batchSize, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in
-            for (int j = 0; j < numDetsInFrame; ++i) {
+            for (int j = 0; j < numDetsInFrame; ++j) {
                 bboxClass = (int16_t)nmsed_classes[i][j];
                 queueIndex = -1;
                 // in the constructor of each microservice, we map the class number to the corresponding queue index in 
@@ -181,8 +181,8 @@ void YoloV5Postprocessor::postProcessing() {
                     outReqData, //req_data
                     currReq.req_data // upstreamReq_data
                 };
-                msvc_OutQueue.at(queueIndex)->emplace(outReq);
-                trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, queueIndex, bboxClass);
+                // msvc_OutQueue.at(queueIndex)->emplace(outReq);
+                trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, bboxClass, queueIndex);
             }
             // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
             // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
