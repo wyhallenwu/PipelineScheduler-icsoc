@@ -19,7 +19,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, uint16_t controller_
 
     // test code that will eventually be replaced by the controller
     CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55001"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4");
-    CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{0, 0}}},
+    CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{-1, -1, -1}}},
                           {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1);
     HandleRecvRpcs();
 }
@@ -46,14 +46,14 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
                                        const MsvcSLOType &slo) {
     std::string name = "yolov5_" + std::to_string(id);
     json j = createConfigs(
-            {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{0, 0}}},
-             {name + "::preprocessor",  MicroserviceType::Preprocessor,  10, -1, {{640, 640}}},
-             {name + "::inference",     MicroserviceType::Inference,     10, -1, {{0, 0}}},
-             {name + "::postprocessor", MicroserviceType::Postprocessor, 10, -1, {{0, 0}}},
-             {name + "::sender",        MicroserviceType::Sender,        10, -1, {{0, 0}}}},
+            {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{-1, -1}}},
+             {name + "::preprocessor",  MicroserviceType::Preprocessor,  10, -1, {{-1, -1, -1}}},
+             {name + "::inference",     MicroserviceType::Inference,     10, -1, {{3, 640, 640}}},
+             {name + "::postprocessor", MicroserviceType::Postprocessor, 10, -1, {{1},{100,4},{100},{100}}},
+             {name + "::sender",        MicroserviceType::Sender,        10, -1, {{-1, -1}}}},
             slo, upstream, downstreams
     );
-    TRTConfigs config = {"./models/yolov5s_b32_dynamic_nms.engine.NVIDIAGeForceRTX3090.fp16.5.5"};
+    TRTConfigs config = {"./models/yolov5s_b32_dynamic_NVIDIAGeForceRTX3090_fp32_32_1.engine", MODEL_DATA_TYPE::fp32, "", 128, 1, 1, 0, true};
     finishContainer("./Container_Yolov5", name, to_string(j), 49152 + containers.size(), 55000 + containers.size(),
                     to_string(json(config)));
 }
@@ -99,8 +99,8 @@ json DeviceAgent::createConfigs(
             downstream.push_back(next_msvc[j++]);
         } else {
             downstream.push_back(
-                    {std::get<0>(data[++i]), CommMethod::localGPU, {""}, std::get<2>(msvc), std::get<3>(msvc),
-                     std::get<4>(msvc)});
+                    {std::get<0>(data[++i]), CommMethod::localGPU, {""}, std::get<2>(data[i]), std::get<3>(data[i]),
+                     std::get<4>(data[i])});
         }
         configs.push_back({std::get<0>(msvc), std::get<1>(msvc), slo, 1, std::get<4>(msvc), {upstream}, downstream});
         //current mvsc becomes upstream for next msvc
