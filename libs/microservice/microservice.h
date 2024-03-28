@@ -222,8 +222,8 @@ public:
     }
 
     ~ThreadSafeFixSizedDoubleQueue() {
-        cpuQueue.empty();
-        gpuQueue.empty();
+        std::queue<Request<LocalGPUReqDataType>>().swap(gpuQueue);
+        std::queue<Request<LocalCPUReqDataType>>().swap(cpuQueue);
     }
     uint8_t getActiveQueueIndex() {
         return activeQueueIndex;
