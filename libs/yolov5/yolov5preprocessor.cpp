@@ -23,6 +23,8 @@ void YoloV5Preprocessor::batchRequests() {
     // Incoming request
     Request<LocalGPUReqDataType> currReq;
 
+    Request<LocalCPUReqDataType> currCPUReq;
+
     // Request sent to a downstream microservice
     Request<LocalGPUReqDataType> outReq;   
 
@@ -41,9 +43,22 @@ void YoloV5Preprocessor::batchRequests() {
             continue;
         }
         // Processing the next incoming request
-        currReq = msvc_InQueue.at(0)->pop2();
+        if (msvc_InQueue.at(0)->getActiveQueueIndex() != msvc_activeInQueueIndex.at(0)) {
+            if (msvc_InQueue.at(0)->size(msvc_activeInQueueIndex.at(0)) == 0) {
+                msvc_activeInQueueIndex.at(0) = msvc_InQueue.at(0)->getActiveQueueIndex();
+                spdlog::trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+            }
+        }
+        spdlog::trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+        if (msvc_activeInQueueIndex.at(0) == 1) {
+            currCPUReq = msvc_InQueue.at(0)->pop1();
+            currReq = uploadReq(currCPUReq);
+        } else if (msvc_activeInQueueIndex.at(0) == 2) {
+            currReq = msvc_InQueue.at(0)->pop2();
+        }
         msvc_inReqCount++;
         currReq_genTime = currReq.req_origGenTime;
+
         // We need to check if the next request is worth processing.
         // If it's too late, then we can drop and stop processing this request.
         if (!this->checkReqEligibility(currReq_genTime)) {
