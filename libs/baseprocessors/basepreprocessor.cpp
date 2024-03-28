@@ -10,23 +10,24 @@
  */
 cv::cuda::GpuMat normalize(
     cv::cuda::GpuMat &input,
-    cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
-    const std::array<float, 3>& subVals = {0.f, 0.f, 0.f},
-    const std::array<float, 3>& divVals = {1.f, 1.f, 1.f}
+    cv::cuda::Stream &stream,
+    const std::array<float, 3>& subVals,
+    const std::array<float, 3>& divVals
 ) {
     spdlog::trace("Going into {0:s}", __func__);
     cv::cuda::GpuMat normalized;
     input.convertTo(normalized, CV_32FC3, 1.f / 255.f, stream);
-
-    cv::cuda::subtract(normalized, cv::Scalar(subVals[0], subVals[1], subVals[2]), normalized, cv::noArray(), -1);
-    cv::cuda::divide(normalized, cv::Scalar(divVals[0], divVals[1], divVals[2]), normalized, 1, -1);
+    stream.waitForCompletion();
+    // cv::cuda::subtract(normalized, cv::Scalar(subVals[0], subVals[1], subVals[2]), normalized, cv::noArray(), -1);
+    // cv::cuda::divide(normalized, cv::Scalar(divVals[0], divVals[1], divVals[2]), normalized, 1, -1);
     spdlog::trace("Finished {0:s}", __func__);
 
     return normalized;
 }
 
 cv::cuda::GpuMat cvtHWCToCHW(
-    cv::cuda::GpuMat &input
+    cv::cuda::GpuMat &input,
+    cv::cuda::Stream &stream
 ) {
 
     spdlog::trace("Going into {0:s}", __func__);
@@ -46,7 +47,8 @@ cv::cuda::GpuMat cvtHWCToCHW(
         cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[channel_mem_width])),
         cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[channel_mem_width * 2]))
     };
-    cv::cuda::split(input, channels);
+    cv::cuda::split(input, channels, stream);
+    stream.waitForCompletion();    
 
     spdlog::trace("Finished {0:s}", __func__);
 
@@ -67,32 +69,34 @@ cv::cuda::GpuMat resizePadRightBottom(
     const size_t height,
     const size_t width,
     const cv::Scalar &bgcolor,
-    bool toNormalize
+    bool toNormalize,
+    cv::cuda::Stream &stream
 ) {
     spdlog::trace("Going into {0:s}", __func__);
 
-    cv::cuda::cvtColor(input, input, cv::COLOR_BGR2RGB);
+    cv::cuda::cvtColor(input, input, cv::COLOR_BGR2RGB, 0, stream);
 
     float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
     int unpad_h = r * input.rows;
     //Create a new GPU Mat 
     cv::cuda::GpuMat resized(unpad_h, unpad_w, CV_8UC3);
-    cv::cuda::resize(input, resized, resized.size());
+    cv::cuda::resize(input, input, resized.size(), 0, 0, cv::INTER_AREA, stream);
     cv::cuda::GpuMat out(height, width, CV_8UC3, bgcolor);
     // Creating an opencv stream for asynchronous operation on cuda
-    //cv::cuda::Stream stream;
-    resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)));
+    input.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
 
-    cv::cuda::GpuMat transposed = cvtHWCToCHW(out);
+    cv::cuda::GpuMat transposed = cvtHWCToCHW(out, stream);
 
     if (toNormalize) {
         cv::cuda::GpuMat normalized;
-        normalized = normalize(transposed);
-        spdlog::trace("Finished {0:s}", __func__);
+        normalized = normalize(transposed, stream);
+        stream.waitForCompletion();
+        spdlog::trace("Finished {0:s} with normalization.", __func__);
 
         return normalized;
     }
+    stream.waitForCompletion();
     spdlog::trace("Finished {0:s}", __func__);
 
     return transposed;

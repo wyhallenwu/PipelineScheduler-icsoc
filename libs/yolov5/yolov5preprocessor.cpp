@@ -29,6 +29,7 @@ void YoloV5Preprocessor::batchRequests() {
     // Batch size of current request
     BatchSizeType currReq_batchSize;
     spdlog::info("{0:s} STARTS.", msvc_name); 
+    cv::cuda::Stream preProcStream;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -55,7 +56,7 @@ void YoloV5Preprocessor::batchRequests() {
             this->updateReqRate(currReq_genTime);
         }
         currReq_batchSize = currReq.req_batchSize;
-        info("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
+        trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
         msvc_onBufferBatchSize++;
         // Resize the incoming request image the padd with the grey color
@@ -72,7 +73,8 @@ void YoloV5Preprocessor::batchRequests() {
             currReq.req_data[0].data,
             (this->msvc_outReqShape.at(0))[0][1],
             (this->msvc_outReqShape.at(0))[0][2],
-            cv::Scalar(128, 128, 128)
+            cv::Scalar(128, 128, 128),
+            preProcStream
         );
 
         trace("{0:s} finished resizing a frame", msvc_name);
