@@ -10,22 +10,6 @@ using grpc::ServerCompletionQueue;
 using boost::interprocess::read_only;
 using boost::interprocess::open_only;
 
-class GPULoader : public Microservice {
-public:
-    GPULoader(const BaseMicroserviceConfigs &configs, ThreadSafeFixSizedDoubleQueue *out, const CommMethod &m);
-
-    void Onloading();
-
-    void Offloading();
-
-    ThreadSafeFixSizedDoubleQueue *getInQueue() {
-        return InQueue;
-    }
-
-protected:
-    ThreadSafeFixSizedDoubleQueue *InQueue, *OutQueue;
-};
-
 class Receiver : public Microservice {
 public:
     Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m);
@@ -78,6 +62,10 @@ private:
 
         void Proceed() final;
 
+        void test() {
+            SharedMemPayload request;
+        }
+
     private:
         SharedMemPayload request;
         SimpleConfirm reply;
@@ -98,15 +86,11 @@ private:
     };
 
     // This can be run in multiple threads if needed.
-    void HandleRpcsToGPU();
-
-    void HandleRpcsToCPU();
+    void HandleRpcs();
 
     std::unique_ptr<ServerCompletionQueue> cq;
     DataTransferService::AsyncService service;
     std::unique_ptr<Server> server;
-
-    ThreadSafeFixSizedDoubleQueue *LoadingQueue;
 };
 
 #endif //PIPEPLUSPLUS_RECEIVER_H

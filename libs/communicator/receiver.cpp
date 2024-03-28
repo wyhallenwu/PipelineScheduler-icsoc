@@ -1,76 +1,5 @@
 #include "receiver.h"
 
-GPULoader::GPULoader(const BaseMicroserviceConfigs &configs, ThreadSafeFixSizedDoubleQueue *out, const CommMethod &m)
-        : Microservice(configs) {
-    InQueue = new ThreadSafeFixSizedDoubleQueue();
-    OutQueue = out;
-    if (m == CommMethod::localGPU) {
-        std::thread t(&GPULoader::Onloading, this);
-        t.detach();
-    } else if (m == CommMethod::localCPU) {
-        std::thread t(&GPULoader::Offloading, this);
-        t.detach();
-    }
-}
-
-void GPULoader::Onloading() {
-    while (true) {
-        if (this->STOP_THREADS) {
-                spdlog::info("{0:s} STOPS.", msvc_name);
-                break;
-        }
-        else if (this->PAUSE_THREADS) {
-            spdlog::info("{0:s} is being PAUSED.", msvc_name);
-            continue;
-        }
-        Stopwatch stopwatch;
-        stopwatch.start();
-        Request<LocalCPUReqDataType> req = InQueue->pop1();
-        stopwatch.stop();
-        std::cout << "Time to wait for a req is " << stopwatch.elapsed_seconds() << std::endl;
-        // copy data to gpu using cuda
-        std::vector<RequestData<LocalGPUReqDataType>> elements = {};
-        for (const auto &el: req.req_data) {
-            stopwatch.start();
-            auto gpu_image = cv::cuda::GpuMat(el.shape[0], el.shape[1], CV_8UC3);
-            stopwatch.stop();
-            std::cout << "Time taken to allocate is " << stopwatch.elapsed_seconds() << std::endl;
-
-            stopwatch.start();
-            gpu_image.upload(el.data);
-            elements.push_back({el.shape, gpu_image});
-            stopwatch.stop();
-            std::cout << "Time taken to upload is " << stopwatch.elapsed_seconds() << std::endl;
-        }
-        OutQueue->emplace(
-                {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
-    }
-}
-
-void GPULoader::Offloading() {
-    while (true) {
-
-        if (this->STOP_THREADS) {
-                spdlog::info("{0:s} STOPS.", msvc_name);
-                break;
-        }
-        else if (this->PAUSE_THREADS) {
-            spdlog::info("{0:s} is being PAUSED.", msvc_name);
-            continue;
-        }
-        Request<LocalGPUReqDataType> req = InQueue->pop2();
-        // copy data from gpu using cuda
-        std::vector<RequestData<LocalCPUReqDataType>> elements = {};
-        for (const auto &el: req.req_data) {
-            cv::Mat image;
-            el.data.download(image);
-            elements.push_back({el.shape, image});
-        }
-        OutQueue->emplace(
-                {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
-    }
-}
-
 Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
         : Microservice(configs) {
     grpc::EnableDefaultHealthCheckService(true);
@@ -83,17 +12,15 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
     builder.SetMaxReceiveMessageSize(1024 * 1024 * 1024);
 
     builder.RegisterService(&service);
-    LoadingQueue = (new GPULoader(configs, msvc_OutQueue[0], m))->getInQueue();
     cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
-    std::thread handler;
     if (m == CommMethod::localGPU) {
         msvc_OutQueue[0]->setActiveQueueIndex(2);
-        handler = std::thread(&Receiver::HandleRpcsToGPU, this);
+
     } else if (m == CommMethod::localCPU) {
         msvc_OutQueue[0]->setActiveQueueIndex(1);
-        handler = std::thread(&Receiver::HandleRpcsToCPU, this);
     }
+    auto handler = std::thread(&Receiver::HandleRpcs, this);
     handler.detach();
 }
 
@@ -110,6 +37,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
         service->RequestGpuPointerTransfer(&ctx, &request, &responder, cq, cq,
                                            this);
     } else if (status == PROCESS) {
+        if (OutQueue->getActiveQueueIndex() != 2) OutQueue->setActiveQueueIndex(2);
         new GpuPointerRequestHandler(service, cq, OutQueue);
 
         std::vector<RequestData<LocalGPUReqDataType>> elements = {};
@@ -144,6 +72,7 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
         service->RequestSharedMemTransfer(&ctx, &request, &responder, cq, cq,
                                           this);
     } else if (status == PROCESS) {
+        if (OutQueue->getActiveQueueIndex() != 1) OutQueue->setActiveQueueIndex(1);
         new SharedMemoryRequestHandler(service, cq, OutQueue);
 
         std::vector<RequestData<LocalCPUReqDataType>> elements = {};
@@ -182,6 +111,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
         service->RequestSerializedDataTransfer(&ctx, &request, &responder, cq, cq,
                                                this);
     } else if (status == PROCESS) {
+        if (OutQueue->getActiveQueueIndex() != 1) OutQueue->setActiveQueueIndex(1);
         new SerializedDataRequestHandler(service, cq, OutQueue);
 
         std::vector<RequestData<LocalCPUReqDataType>> elements = {};
@@ -208,24 +138,11 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 }
 
 // This can be run in multiple threads if needed.
-void Receiver::HandleRpcsToGPU() {
+void Receiver::HandleRpcs() {
     new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
-    new SharedMemoryRequestHandler(&service, cq.get(), LoadingQueue);
-    new SerializedDataRequestHandler(&service, cq.get(), LoadingQueue);
-    void *tag;  // uniquely identifies a request.
-    bool ok;
-    while (true) {
-        GPR_ASSERT(cq->Next(&tag, &ok));
-        GPR_ASSERT(ok);
-        static_cast<RequestHandler *>(tag)->Proceed();
-    }
-}
-
-void Receiver::HandleRpcsToCPU() {
-    new GpuPointerRequestHandler(&service, cq.get(), LoadingQueue);
     new SharedMemoryRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
     new SerializedDataRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
-    void *tag;
+    void *tag;  // uniquely identifies a request.
     bool ok;
     while (true) {
         GPR_ASSERT(cq->Next(&tag, &ok));

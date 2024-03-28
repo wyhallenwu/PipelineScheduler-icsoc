@@ -217,6 +217,9 @@ public:
         cpuQueue.empty();
         gpuQueue.empty();
     }
+    uint8_t getActiveQueueIndex() {
+        return activeQueueIndex;
+    }
 };
 
 /**

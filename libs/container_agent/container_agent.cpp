@@ -84,7 +84,7 @@ void ContainerAgent::SendQueueLengths() {
     QueueSize request;
     for (auto msvc: msvcs) {
         request.add_size(msvc->GetOutQueueSize(0));
-        spdlog::trace("{0:s} Length of queue is {1:d}", msvc->msvc_name, msvc->GetOutQueueSize(0));
+        spdlog::info("{0:s} Length of queue is {1:d}", msvc->msvc_name, msvc->GetOutQueueSize(0));
     }
     StaticConfirm reply;
     ClientContext context;

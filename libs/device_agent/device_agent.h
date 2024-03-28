@@ -17,24 +17,9 @@ struct ContainerHandle {
 };
 
 namespace msvcconfigs {
-    void to_json(json &j, const NeighborMicroserviceConfigs &val) {
-        j["nb_name"] = val.name;
-        j["nb_commMethod"] = val.commMethod;
-        j["nb_link"] = val.link;
-        j["nb_maxQueueSize"] = val.maxQueueSize;
-        j["nb_classOfInterest"] = val.classOfInterest;
-        j["nb_expectedShape"] = val.expectedShape;
-    }
+    void to_json(json &j, const NeighborMicroserviceConfigs &val);
 
-    void to_json(json &j, const BaseMicroserviceConfigs &val) {
-        j["msvc_name"] = val.msvc_name;
-        j["msvc_type"] = val.msvc_type;
-        j["msvc_svcLevelObjLatency"] = val.msvc_svcLevelObjLatency;
-        j["msvc_idealBatchSize"] = val.msvc_idealBatchSize;
-        j["msvc_dataShape"] = val.msvc_dataShape;
-        j["msvc_upstreamMicroservices"] = val.msvc_upstreamMicroservices;
-        j["msvc_dnstreamMicroservices"] = val.msvc_dnstreamMicroservices;
-    }
+    void to_json(json &j, const BaseMicroserviceConfigs &val);
 }
 
 class DeviceAgent {

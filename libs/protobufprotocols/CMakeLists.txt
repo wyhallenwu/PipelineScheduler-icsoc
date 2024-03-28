@@ -28,7 +28,7 @@ else ()
     set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
 endif ()
 
-# Proto file
+##################################################################### data_grpc_proto
 get_filename_component(data_proto "pipelinescheduler.proto" ABSOLUTE)
 get_filename_component(data_proto_path "${data_proto}" PATH)
 
@@ -50,7 +50,6 @@ add_custom_command(
 # Include generated *.pb.h files
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
-# data_grpc_proto
 add_library(data_grpc_proto
         ${data_grpc_srcs}
         ${data_grpc_hdrs}
@@ -61,7 +60,7 @@ target_link_libraries(data_grpc_proto
         ${_GRPC_GRPCPP}
         ${_PROTOBUF_LIBPROTOBUF})
 
-# Proto file
+##################################################################### device_grpc_proto
 get_filename_component(device_proto "indevicecommunication.proto" ABSOLUTE)
 get_filename_component(device_proto_path "${device_proto}" PATH)
 
@@ -75,7 +74,7 @@ add_custom_command(
         COMMAND ${_PROTOBUF_PROTOC}
         ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}"
         --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
-        -I "${data_proto_path}"
+        -I "${device_proto_path}"
         --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
         "${device_proto}"
         DEPENDS "${device_proto}")
@@ -83,7 +82,6 @@ add_custom_command(
 # Include generated *.pb.h files
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
-# device_grpc_proto
 add_library(device_grpc_proto
         ${device_grpc_srcs}
         ${device_grpc_hdrs}
@@ -95,10 +93,43 @@ target_link_libraries(device_grpc_proto
         ${_PROTOBUF_LIBPROTOBUF})
 
 
+##################################################################### control_grpc_proto
+get_filename_component(control_proto "controlcommunication.proto" ABSOLUTE)
+get_filename_component(control_proto_path "${control_proto}" PATH)
+
+# Generated sources
+set(control_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/controlcommunication.pb.cc")
+set(control_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/controlcommunication.pb.h")
+set(control_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/controlcommunication.grpc.pb.cc")
+set(control_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/controlcommunication.grpc.pb.h")
+add_custom_command(
+        OUTPUT "${control_proto_srcs}" "${control_proto_hdrs}" "${control_grpc_srcs}" "${control_grpc_hdrs}"
+        COMMAND ${_PROTOBUF_PROTOC}
+        ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}"
+        --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
+        -I "${control_proto_path}"
+        --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
+        "${control_proto}"
+        DEPENDS "${control_proto}")
+
+# Include generated *.pb.h files
+include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+
+add_library(control_grpc_proto
+        ${control_grpc_srcs}
+        ${control_grpc_hdrs}
+        ${control_proto_srcs}
+        ${control_proto_hdrs})
+target_link_libraries(control_grpc_proto
+        ${_REFLECTION}
+        ${_GRPC_GRPCPP}
+        ${_PROTOBUF_LIBPROTOBUF})
+
 set(
         HEADER_FILES
         data_grpc_hdrs
         device_grpc_hdrs
+        control_grpc_hdrs
 )
 
 
@@ -121,7 +152,7 @@ configure_package_config_file(cmake/protobufprotocols-config.cmake.in
 
 # The INSTALL(TARGET) command specifies where to install specific targets.
 # By specifying EXPORT here, we add these targets to an export group.
-install(TARGETS data_grpc_proto device_grpc_proto
+install(TARGETS data_grpc_proto device_grpc_proto control_grpc_proto
         EXPORT protobufprotocols-targets
         RUNTIME DESTINATION ${INSTALL_RUNTIME_DIR}
         LIBRARY DESTINATION ${INSTALL_LIBRARY_DIR}

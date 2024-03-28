@@ -85,6 +85,7 @@ add_subdirectory(libs/yolov5)
 #add_subdirectory(libs/retinaface)
 #add_subdirectory(libs/arcface)
 add_subdirectory(libs/device_agent)
+add_subdirectory(libs/controller)
 
 add_library(PipePlusPlus
         src/main.cpp)
@@ -110,12 +111,16 @@ target_link_libraries(PipePlusPlus PUBLIC
         data_source
         container_agent
         device_agent
+        controller
 )
 add_executable(run src/main.cpp)
 target_link_libraries(run PipePlusPlus)
 
 add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
 target_link_libraries(DeviceAgent device_agent)
+
+add_executable(Controller libs/controller/controller.cpp)
+target_link_libraries(Controller controller)
 
 add_executable(Container_DataSource libs/data_source/data_source.cpp)
 target_link_libraries(Container_DataSource data_source)
