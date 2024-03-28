@@ -329,7 +329,8 @@ public:
 
 protected:
     std::vector<ThreadSafeFixSizedDoubleQueue*> msvc_InQueue, msvc_OutQueue;
-    uint8_t msvc_activeInQueueIndex = 0, msvc_activeOutQueueIndex = 0;
+    //
+    std::vector<uint8_t> msvc_activeInQueueIndex = {}, msvc_activeOutQueueIndex = {};
 
     // Used to signal to thread when not to run and to bring thread to a natural end.
     bool STOP_THREADS = false;
