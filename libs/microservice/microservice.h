@@ -37,6 +37,10 @@ struct RequestData {
     }
 
     RequestData() {}
+    ~RequestData() {
+        data.release();
+        shape.clear();
+    }
 };
 
 /**
@@ -114,6 +118,11 @@ struct Request {
             upstreamReq_data = other.upstreamReq_data;
         }
         return *this;
+    }
+
+    ~Request() {
+        req_data.clear();
+        upstreamReq_data.clear();
     }
 };
 
@@ -202,6 +211,11 @@ public:
 
     void setActiveQueueIndex(uint8_t index) {
         activeQueueIndex = index;
+    }
+
+    ~ThreadSafeFixSizedDoubleQueue() {
+        cpuQueue.empty();
+        gpuQueue.empty();
     }
 };
 

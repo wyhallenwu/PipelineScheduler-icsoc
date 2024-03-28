@@ -137,6 +137,7 @@ void YoloV5Postprocessor::postProcessing() {
             // If there is no object in frame, we don't have to do nothing.
             int numDetsInFrame = (int)numDetList[i];
             if (numDetsInFrame <= 0) {
+                outReqData.clear();
                 continue;
             }
 
