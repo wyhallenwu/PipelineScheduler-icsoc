@@ -31,6 +31,10 @@ void YoloV5Postprocessor::postProcessing() {
     // Shape of cropped bounding boxes
     RequestShapeType bboxShape;
     spdlog::info("{0:s} STARTS.", msvc_name); 
+
+
+    cudaStream_t postProcStream;
+    checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -92,8 +96,6 @@ void YoloV5Postprocessor::postProcessing() {
         std::vector<float *> ptrList{nmsedBoxesList, nmsedScoresList, nmsedClassesList};
         std::vector<size_t> bufferSizeList;
 
-        cudaStream_t postProcStream;
-        checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
         for (std::size_t i = 0; i < currReq_data.size(); ++i) {
             size_t bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
             RequestShapeType shape = currReq_data[i].shape;
@@ -119,6 +121,8 @@ void YoloV5Postprocessor::postProcessing() {
                 ), __func__);
             }
         }
+
+        checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
         trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
 
         // List of images to be cropped from
@@ -197,6 +201,7 @@ void YoloV5Postprocessor::postProcessing() {
             // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
             // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
             // Clearing out data of the vector
+
             outReqData.clear();
             singleImageBBoxList.clear();
         }
@@ -204,10 +209,14 @@ void YoloV5Postprocessor::postProcessing() {
         // for (size_t i = 0; i < currReq_data.size(); i++) {
         //     checkCudaErrorCode(cudaFree(currReq_data.at(i).data.cudaPtr()));
         // }
+
+
+        
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
-
+        // Synchronize the cuda stream
     }
 
 
+    checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
 }
