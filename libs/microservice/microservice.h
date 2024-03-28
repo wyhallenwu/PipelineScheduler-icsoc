@@ -203,6 +203,10 @@ public:
     void setActiveQueueIndex(uint8_t index) {
         activeQueueIndex = index;
     }
+
+    uint8_t getActiveQueueIndex() {
+        return activeQueueIndex;
+    }
 };
 
 /**
