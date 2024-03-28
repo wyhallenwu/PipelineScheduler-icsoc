@@ -62,6 +62,9 @@ void YoloV5Preprocessor::batchRequests() {
         // Resize the incoming request image the padd with the grey color
         // The resize image will be copied into a reserved buffer
 
+        Stopwatch stopwatch;
+        stopwatch.start();
+
         trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
             msvc_name,
             currReq.req_data[0].data.rows,
@@ -82,6 +85,8 @@ void YoloV5Preprocessor::batchRequests() {
         bufferData.emplace_back(data);
         trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
 
+        stopwatch.stop();
+        std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
         // cudaFree(currReq.req_data[0].data.cudaPtr());
         // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
         // Waiting more means there is a higher chance the earliest request in the buffer will be late eventually.

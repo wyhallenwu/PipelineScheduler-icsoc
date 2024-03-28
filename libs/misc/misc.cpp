@@ -36,4 +36,3 @@ void saveCPUAsImg(const cv::Mat &img, std::string name, float scale) {
     img.convertTo(cpuImg, CV_8UC3, scale);
     cv::imwrite(name, img);
 }
-

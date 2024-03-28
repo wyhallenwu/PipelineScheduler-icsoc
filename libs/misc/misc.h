@@ -71,4 +71,42 @@ namespace trt {
     void from_json(const nlohmann::json &j, TRTConfigs &val);
 }
 
+class Stopwatch {
+private:
+    std::chrono::high_resolution_clock::time_point start_time;
+    std::chrono::high_resolution_clock::time_point stop_time;
+    bool running;
+
+public:
+    Stopwatch() : running(false) {}
+
+    void start() {
+        if (!running) {
+            start_time = std::chrono::high_resolution_clock::now();
+            running = true;
+        }
+    }
+
+    void stop() {
+        if (running) {
+            stop_time = std::chrono::high_resolution_clock::now();
+            running = false;
+        }
+    }
+
+    void reset() {
+        running = false;
+    }
+
+    double elapsed_seconds() const {
+        if (running) {
+            auto elapsed = std::chrono::high_resolution_clock::now() - start_time;
+            return std::chrono::duration<double>(elapsed).count();
+        } else {
+            auto elapsed = stop_time - start_time;
+            return std::chrono::duration<double>(elapsed).count();
+        }
+    }
+};
+
 #endif

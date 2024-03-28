@@ -23,13 +23,24 @@ void GPULoader::Onloading() {
             spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
+        Stopwatch stopwatch;
+        stopwatch.start();
         Request<LocalCPUReqDataType> req = InQueue->pop1();
+        stopwatch.stop();
+        std::cout << "Time to wait for a req is " << stopwatch.elapsed_seconds() << std::endl;
         // copy data to gpu using cuda
         std::vector<RequestData<LocalGPUReqDataType>> elements = {};
         for (const auto &el: req.req_data) {
+            stopwatch.start();
             auto gpu_image = cv::cuda::GpuMat(el.shape[0], el.shape[1], CV_8UC3);
+            stopwatch.stop();
+            std::cout << "Time taken to allocate is " << stopwatch.elapsed_seconds() << std::endl;
+
+            stopwatch.start();
             gpu_image.upload(el.data);
             elements.push_back({el.shape, gpu_image});
+            stopwatch.stop();
+            std::cout << "Time taken to upload is " << stopwatch.elapsed_seconds() << std::endl;
         }
         OutQueue->emplace(
                 {req.req_origGenTime, req.req_e2eSLOLatency, req.req_travelPath, req.req_batchSize, elements});
