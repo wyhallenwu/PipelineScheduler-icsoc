@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option objc_class_prefix = "HLW";
+
+package indevicecommunication;
+
+service InDeviceCommunication {
+  rpc SendQueueSize(QueueSize) returns (StaticConfirm) {}
+  rpc ReportMsvcStart(ConnectionConfigs) returns (StaticConfirm) {}
+  rpc StopExecution(StaticConfirm) returns (StaticConfirm) {}
+}
+
+message QueueSize {
+  string name = 1;
+  repeated int32 size = 2;
+}
+
+message ConnectionConfigs {
+  string msvc_name = 1;
+}
+
+// The response message confirming transfer
+message StaticConfirm {
+}
