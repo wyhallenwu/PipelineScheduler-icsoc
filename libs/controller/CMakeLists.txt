@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(container_agent)
+project(controller)
 
 # This include defines standard install locations.
 # https://cmake.org/cmake/help/v3.11/module/GNUInstallDirs.html
@@ -27,34 +27,33 @@ endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 # Only public header files go here.
 set(
         HEADER_FILES
-        ../json/json.h
-        container_agent.h
+        controller.h
 )
 
 # All source files and private header files go here.
 set(
         SOURCE_FILES
-        container_agent.cpp
+        controller.cpp
 )
 
 # Here we define the library.
-add_library(container_agent
+add_library(controller
         ${HEADER_FILES}
         ${SOURCE_FILES})
 
 # We also add an alias definition so that we shadown
 # the export namespace when using add_subdirectory() instead.
-add_library(container_agent::container_agent ALIAS container_agent)
+add_library(controller::controller ALIAS controller)
 
 
 # Required compiler features.
 # https://cmake.org/cmake/help/v3.1/manual/cmake-compile-features.7.html
-target_compile_features(container_agent
+target_compile_features(controller
         # Features required to compile the library itself.
         PRIVATE cxx_std_11)
 # By prefixing the installation paths with our name and version
 # we can have multiple versions installed at the same time.
-set(PROJECT_PREFIX container_agent)
+set(PROJECT_PREFIX controller)
 
 # Find Protobuf installation
 # Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
@@ -86,16 +85,15 @@ find_package(Threads REQUIRED)
 
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
-
-set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
-find_package(misc CONFIG REQUIRED)
+set(device_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../device_agent")
+find_package(device_agent CONFIG REQUIRED)
 
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
-target_include_directories(container_agent
+target_include_directories(controller
         PUBLIC
         # Used when building the library:
-        $<BUILD_INTERFACE:${container_agent_SOURCE_DIR}/>
+        $<BUILD_INTERFACE:${controller_SOURCE_DIR}/>
         # Used when installing the library:
         $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
         ${OpenCV_INCLUDE_DIRS}
@@ -104,39 +102,37 @@ target_include_directories(container_agent
         # Used only when building the library:
         src)
 
-target_link_libraries(container_agent
+target_link_libraries(controller
         PUBLIC
-        device_grpc_proto
+        control_grpc_proto
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
         microservice
+        device_agent
 )
-
-# add_executable(ContainerAgent container_agent.cpp)
-# target_link_libraries(ContainerAgent container_agent)
 
 # Here we configure variables specifying the target directories.
 set(INSTALL_RUNTIME_DIR ${CMAKE_INSTALL_BINDIR})
 set(INSTALL_CONFIG_DIR ${CMAKE_INSTALL_LIBDIR}/${PROJECT_PREFIX}/cmake)
 set(INSTALL_LIBRARY_DIR ${CMAKE_INSTALL_LIBDIR}/${PROJECT_PREFIX}/${CMAKE_BUILD_TYPE})
 set(INSTALL_ARCHIVE_DIR ${CMAKE_INSTALL_LIBDIR}/${PROJECT_PREFIX}/${CMAKE_BUILD_TYPE}/static)
-set(INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_PREFIX}/container_agent)
+set(INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_PREFIX}/controller)
 
 # Define the configuration file locations.
-set(PROJECT_CONFIG_VERSION_FILE "${PROJECT_BINARY_DIR}/container_agent-config-version.cmake")
-set(PROJECT_CONFIG_FILE "${PROJECT_BINARY_DIR}/container_agent-config.cmake")
+set(PROJECT_CONFIG_VERSION_FILE "${PROJECT_BINARY_DIR}/controller-config-version.cmake")
+set(PROJECT_CONFIG_FILE "${PROJECT_BINARY_DIR}/controller-config.cmake")
 
-configure_package_config_file(cmake/container_agent-config.cmake.in
+configure_package_config_file(cmake/controller-config.cmake.in
         ${PROJECT_CONFIG_FILE}
         INSTALL_DESTINATION ${INSTALL_CONFIG_DIR})
 
 
 # The INSTALL(TARGET) command specifies where to install specific targets.
 # By specifying EXPORT here, we add these targets to an export group.
-install(TARGETS container_agent
-        EXPORT container_agent-targets
+install(TARGETS controller
+        EXPORT controller-targets
         RUNTIME DESTINATION ${INSTALL_RUNTIME_DIR}
         LIBRARY DESTINATION ${INSTALL_LIBRARY_DIR}
         ARCHIVE DESTINATION ${INSTALL_ARCHIVE_DIR})
@@ -152,15 +148,15 @@ install(FILES
         DESTINATION ${INSTALL_CONFIG_DIR})
 
 # The INSTALL(EXPORT) command installs a previously defined export group to a script.
-install(EXPORT container_agent-targets
-        FILE container_agent-targets.cmake
-        NAMESPACE container_agent::
+install(EXPORT controller-targets
+        FILE controller-targets.cmake
+        NAMESPACE controller::
         DESTINATION ${INSTALL_CONFIG_DIR})
 
-export(EXPORT container_agent-targets
-        FILE ${CMAKE_CURRENT_BINARY_DIR}/container_agent-targets.cmake
-        NAMESPACE container_agent::)
+export(EXPORT controller-targets
+        FILE ${CMAKE_CURRENT_BINARY_DIR}/controller-targets.cmake
+        NAMESPACE controller::)
 
 # Register the package in the user's package registry.
 # https://cmake.org/cmake/help/v3.11/command/export.html
-export(PACKAGE container_agent)
+export(PACKAGE controller)

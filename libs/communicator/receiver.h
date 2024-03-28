@@ -78,6 +78,10 @@ private:
 
         void Proceed() final;
 
+        void test() {
+            SharedMemPayload request;
+        }
+
     private:
         SharedMemPayload request;
         SimpleConfirm reply;

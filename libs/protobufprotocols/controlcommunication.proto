@@ -3,12 +3,13 @@ syntax = "proto3";
 option java_multiple_files = true;
 option objc_class_prefix = "HLW";
 
-package indevicecommunication;
+package controlcommunication;
 
-service InDeviceCommunication {
-  rpc SendQueueSize(QueueSize) returns (StaticConfirm) {}
-  rpc ReportMsvcStart(ConnectionConfigs) returns (StaticConfirm) {}
-  rpc StopExecution(StaticConfirm) returns (StaticConfirm) {}
+service ControlCommunication {
+  rpc ReportQueueSizes(QueueSize) returns (StaticConfirm) {}
+  rpc SayHello(ConnectionConfigs) returns (StaticConfirm) {}
+  rpc StartMicroservice(MicroserviceConfig) returns (StaticConfirm) {}
+  rpc StopExecution(StopSignal) returns (StaticConfirm) {}
 }
 
 message QueueSize {
@@ -17,6 +18,20 @@ message QueueSize {
 }
 
 message ConnectionConfigs {
+  string device_handle = 1;
+  string device_type = 2;
+  string ip_address = 3;
+}
+
+message MicroserviceConfig {
+  string msvc_name = 1;
+  string msvc_type = 2;
+  string msvc_version = 3;
+  string msvc_host = 4;
+  int32 msvc_port = 5;
+}
+
+message StopSignal {
   string msvc_name = 1;
 }
 
