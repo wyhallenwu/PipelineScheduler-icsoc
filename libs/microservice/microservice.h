@@ -209,6 +209,14 @@ public:
         //}
     }
 
+    int32_t size(uint8_t queueIndex) {
+        if (queueIndex == 1) {
+            return cpuQueue.size();
+        } //else if (activeQueueIndex == 2) {
+        return gpuQueue.size();
+        //}
+    }
+
     void setActiveQueueIndex(uint8_t index) {
         activeQueueIndex = index;
     }
