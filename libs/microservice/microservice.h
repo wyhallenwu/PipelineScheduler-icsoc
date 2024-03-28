@@ -398,8 +398,20 @@ protected:
     //
     virtual void updateReqRate(ClockType lastInterReqDuration);
 
-
 };
+
+
+RequestData<LocalGPUReqDataType> uploadReqData(
+    const RequestData<LocalCPUReqDataType>& cpuData,
+    void * cudaPtr = NULL,
+    cv::cuda::Stream &stream = cv::cuda::Stream::Null()
+);
+
+Request<LocalGPUReqDataType> uploadReq(
+    const Request<LocalCPUReqDataType>& cpuReq,
+    std::vector<void *> cudaPtr = {},
+    cv::cuda::Stream &stream = cv::cuda::Stream::Null()
+);
 
 
 #endif

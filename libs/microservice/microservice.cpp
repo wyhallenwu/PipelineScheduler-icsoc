@@ -53,3 +53,56 @@ Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
 void Microservice::updateReqRate(ClockType lastInterReqDuration) {
     msvc_interReqTime = 1;
 }
+
+RequestData<LocalGPUReqDataType> uploadReqData(
+    const RequestData<LocalCPUReqDataType>& cpuData,
+    void * cudaPtr,
+    cv::cuda::Stream &stream
+) {
+    RequestData<LocalGPUReqDataType> gpuData;
+
+    gpuData.shape = cpuData.shape;
+    if (cudaPtr != NULL) {
+        gpuData.data = cv::cuda::GpuMat(
+            cpuData.data.rows,
+            cpuData.data.cols,
+            cpuData.data.type(),
+            cudaPtr
+        );
+    } else {
+        gpuData.data = cv::cuda::GpuMat(
+            cpuData.data.rows,
+            cpuData.data.cols,
+            cpuData.data.type()
+        );
+    }
+
+    gpuData.data.upload(cpuData.data);
+
+    return gpuData;
+}
+
+
+Request<LocalGPUReqDataType> uploadReq(
+    
+    const Request<LocalCPUReqDataType>& cpuReq,
+    std::vector<void *> cudaPtr,
+    cv::cuda::Stream &stream
+) {
+    Request<LocalGPUReqDataType> gpuReq;
+    gpuReq.req_origGenTime = cpuReq.req_origGenTime;
+    gpuReq.req_e2eSLOLatency = cpuReq.req_e2eSLOLatency;
+    gpuReq.req_travelPath = cpuReq.req_travelPath;
+    gpuReq.req_batchSize = cpuReq.req_batchSize;
+
+    for (uint16_t i = 0; i < cpuReq.req_data.size(); i++) {
+        RequestData<LocalGPUReqDataType> req_data;
+        if (cudaPtr.size() > 0) {
+            req_data = uploadReqData(cpuReq.req_data[i], cudaPtr[i]);
+        } else {
+            req_data = uploadReqData(cpuReq.req_data[i]);
+        }
+        gpuReq.req_data.emplace_back(req_data);
+    }
+    return gpuReq;
+}
