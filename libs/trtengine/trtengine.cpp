@@ -503,7 +503,8 @@ void Engine::copyFromBuffer(
 bool Engine::runInference(
     const std::vector<cv::cuda::GpuMat>& batch,
     std::vector<cv::cuda::GpuMat> &outputs,
-    const int32_t batchSize
+    const int32_t batchSize,
+    cudaStream_t &inferenceStream
 ) {
     // If we give the engine an input bigger than the previous allocated buffer, it would throw a runtime error
     if (m_inputBatchSize < batchSize) {
@@ -514,8 +515,6 @@ bool Engine::runInference(
 
     spdlog::trace("[{0:s}] going in. ", __func__);
     // Cuda stream that will be used for inference
-    cudaStream_t inferenceStream;
-    checkCudaErrorCode(cudaStreamCreate(&inferenceStream), __func__);
 
     // As we support dynamic batching, we need to reset the shape of the input binding everytime.
     const auto numInputs = m_inputDims.size();
@@ -550,7 +549,6 @@ bool Engine::runInference(
     
     // Synchronize the cuda stream
     checkCudaErrorCode(cudaStreamSynchronize(inferenceStream), __func__);
-    checkCudaErrorCode(cudaStreamDestroy(inferenceStream), __func__);
 
     spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
     return inferenceStatus;

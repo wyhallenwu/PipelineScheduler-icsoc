@@ -36,6 +36,9 @@ void YoloV5Inference::inference() {
     // Batch size of current request
     BatchSizeType currReq_batchSize;
     spdlog::info("{0:s} STARTS.", msvc_name); 
+
+    cudaStream_t inferenceStream;
+    checkCudaErrorCode(cudaStreamCreate(&inferenceStream), __func__);
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -67,7 +70,7 @@ void YoloV5Inference::inference() {
             trtInBuffer.emplace_back(currReq.req_data[i].data);
         }
         info("{0:s} extracts inference data from message. Run inference!", msvc_name);
-        msvc_inferenceEngine->runInference(trtInBuffer, trtOutBuffer, currReq_batchSize);
+        msvc_inferenceEngine->runInference(trtInBuffer, trtOutBuffer, currReq_batchSize, inferenceStream);
         trace("{0:s} finished INFERENCE.", msvc_name);
 
 
@@ -106,4 +109,5 @@ void YoloV5Inference::inference() {
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }
+    checkCudaErrorCode(cudaStreamDestroy(inferenceStream), __func__);
 }

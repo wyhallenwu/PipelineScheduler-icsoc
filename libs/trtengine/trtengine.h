@@ -72,7 +72,7 @@ public:
     // Input format [input][batch][cv::cuda::GpuMat]
     // Output format [batch][output][feature_vector]
     // bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<std::vector<float>>& outputs);
-    bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<cv::cuda::GpuMat>& outputs, const int32_t batchSize);
+    bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<cv::cuda::GpuMat>& outputs, const int32_t batchSize, cudaStream_t &inferenceStream);
 
     void copyToBuffer(const std::vector<cv::cuda::GpuMat>& inputs, cudaStream_t &inferenceStream);
     void copyFromBuffer(std::vector<cv::cuda::GpuMat>& outputs, const uint16_t batchSize, cudaStream_t &inferenceStream);
