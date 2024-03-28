@@ -12,7 +12,7 @@ using boost::interprocess::open_only;
 
 class Receiver : public Microservice {
 public:
-    Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m);
+    Receiver(const BaseMicroserviceConfigs &configs);
 
     ~Receiver() override {
         server->Shutdown();

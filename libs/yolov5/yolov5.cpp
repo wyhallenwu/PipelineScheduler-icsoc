@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     spdlog::set_level(spdlog::level::level_enum(logLevel));
     std::vector<Microservice*> msvcs;
-    msvcs.push_back(new Receiver(msvc_configs[0], CommMethod::localGPU));
+    msvcs.push_back(new Receiver(msvc_configs[0]));
     msvcs.push_back(new YoloV5Preprocessor(msvc_configs[1]));
     msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
     msvcs.push_back(new YoloV5Inference(msvc_configs[2], yoloConfigs));

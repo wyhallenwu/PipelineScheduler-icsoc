@@ -1,6 +1,6 @@
 #include "receiver.h"
 
-Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
+Receiver::Receiver(const BaseMicroserviceConfigs &configs)
         : Microservice(configs) {
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
@@ -14,12 +14,7 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs, const CommMethod &m)
     builder.RegisterService(&service);
     cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
-    if (m == CommMethod::localGPU) {
-        msvc_OutQueue[0]->setActiveQueueIndex(2);
-
-    } else if (m == CommMethod::localCPU) {
-        msvc_OutQueue[0]->setActiveQueueIndex(1);
-    }
+    msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
     auto handler = std::thread(&Receiver::HandleRpcs, this);
     handler.detach();
 }
