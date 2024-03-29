@@ -321,6 +321,10 @@ public:
         return msvc_OutQueue;
     };
 
+    MicroserviceType getMsvcType() {
+        return msvc_type;
+    }
+
     virtual QueueLengthType GetOutQueueSize(int i) {return msvc_OutQueue[i]->size();};
 
 protected:
@@ -343,6 +347,9 @@ protected:
                 : NeighborMicroserviceConfigs(configs),
                   queueNum(queueNum) {}
     };
+
+    //type
+    MicroserviceType msvc_type;
 
     //
     MsvcSLOType msvc_svcLevelObjLatency;

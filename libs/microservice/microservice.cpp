@@ -16,6 +16,7 @@ Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
     msvc_InQueue = {};
     msvc_OutQueue = {};
     msvc_outReqShape = {};
+    msvc_type = configs.msvc_type;
 
     std::list<NeighborMicroserviceConfigs>::const_iterator it;
     for (it = configs.msvc_dnstreamMicroservices.begin(); it != configs.msvc_dnstreamMicroservices.end(); ++it) {
