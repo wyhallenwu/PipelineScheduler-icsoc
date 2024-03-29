@@ -1,9 +1,13 @@
 #include "container_agent.h"
 #include "indevicecommunication.grpc.pb.h"
+#include "controlcommunication.grpc.pb.h"
 #include <cstdlib>
 #include <misc.h>
 
 using trt::TRTConfigs;
+
+int CONTAINER_BASE_PORT = 50001;
+int RECEIVER_BASE_PORT = 55001;
 
 enum ContainerType {
     DataSource,
@@ -24,14 +28,14 @@ namespace msvcconfigs {
 
 class DeviceAgent {
 public:
-    DeviceAgent(const std::string &controller_url, uint16_t controller_port);
+    DeviceAgent(const std::string &controller_url);
 
     ~DeviceAgent() {
         for (const auto &c: containers) {
             StopContainer(c.second);
         }
-        server->Shutdown();
-        server_cq->Shutdown();
+        device_server->Shutdown();
+        device_cq->Shutdown();
     };
 
     void UpdateQueueLengths(const std::basic_string<char> &container_name,
@@ -129,12 +133,50 @@ private:
         DeviceAgent *device_agent;
     };
 
-    void HandleRecvRpcs();
+    class StartMicroserviceRequestHandler : public RequestHandler {
+    public:
+        StartMicroserviceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                       DeviceAgent *device)
+                : RequestHandler(service, cq), responder(&ctx), device_agent(device) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        indevicecommunication::ConnectionConfigs request;
+        StaticConfirm reply;
+        grpc::ServerAsyncResponseWriter<StaticConfirm> responder;
+        DeviceAgent *device_agent;
+    };
+
+    class StopMicroserviceRequestHandler : public RequestHandler {
+    public:
+        StopMicroserviceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                  DeviceAgent *device)
+                : RequestHandler(service, cq), responder(&ctx), device_agent(device) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        indevicecommunication::ConnectionConfigs request;
+        StaticConfirm reply;
+        grpc::ServerAsyncResponseWriter<StaticConfirm> responder;
+        DeviceAgent *device_agent;
+    };
+
+    void HandleDeviceRecvRpcs();
+    void HandleControlRecvRpcs();
 
     std::map<std::string, ContainerHandle> containers;
-    std::unique_ptr<ServerCompletionQueue> server_cq;
-    std::unique_ptr<Server> server;
-    CompletionQueue *sender_cq;
-    std::unique_ptr<InDeviceCommunication::Stub> controller_stub;
-    InDeviceCommunication::AsyncService service;
+    std::unique_ptr<ServerCompletionQueue> device_cq;
+    std::unique_ptr<Server> device_server;
+    InDeviceCommunication::AsyncService device_service;
+    std::unique_ptr<ControlCommunication::Stub> controller_stub;
+    std::unique_ptr<ServerCompletionQueue> controller_cq;
+    std::unique_ptr<Server> controller_server;
+    CompletionQueue *controller_sending_cq;
+    ControlCommunication::AsyncService controller_service;
 };

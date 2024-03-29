@@ -60,7 +60,7 @@ ContainerAgent::ContainerAgent(const std::string &name, uint16_t own_port) : nam
     server_cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
 
-    stub = InDeviceCommunication::NewStub(grpc::CreateChannel("localhost:2000", grpc::InsecureChannelCredentials()));
+    stub = InDeviceCommunication::NewStub(grpc::CreateChannel("localhost:60003", grpc::InsecureChannelCredentials()));
     sender_cq = new CompletionQueue();
 
     run = true;
