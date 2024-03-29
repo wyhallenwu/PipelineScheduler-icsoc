@@ -13,7 +13,6 @@ cv::cuda::GpuMat resizePadRightBottom(
     size_t height,
     size_t width,
     const cv::Scalar &bgcolor = cv::Scalar(128, 128, 128),
-    bool toNormalize = true,
     cv::cuda::Stream &stream = cv::cuda::Stream::Null()
 );
 

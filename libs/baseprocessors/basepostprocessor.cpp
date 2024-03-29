@@ -17,17 +17,48 @@ void scaleBBox(
     const float *infer_bboxCoors,
     int * orig_bboxCoors
 ) {
+    float ratio = std::min(1.f * infer_h / orig_h, 1.f * infer_w / orig_w);
+    infer_h = (int) (ratio * orig_h);
+    infer_w = (int) (ratio * orig_w);
+
     // TO BE IMPLEMENTED
+    float coor[4];
     for (uint8_t i = 0; i < 4; ++i) {
-        int coor = (int)(*(infer_bboxCoors + i));
+        coor[i] = (*(infer_bboxCoors + i));
+    }
+
+    float gain = std::min(1.f * infer_h / orig_h, 1.f * infer_w / orig_w);
+
+    float pad_w = (1.f * infer_w - orig_w * gain) / 2.f;
+    float pad_h = (1.f * infer_h - orig_h * gain) / 2.f;
+
+    coor[0] -= pad_w;
+    coor[1] -= pad_h;
+    coor[2] -= pad_w;
+    coor[3] -= pad_h;
+
+    // if (scale_h > scale_w) {
+    //     coor[1]= coor[1] / scale_w;
+    //     coor[3]= coor[3] / scale_w;
+    //     coor[0]= (coor[0] - (infer_h - scale_w * orig_h) / 2) / scale_w;
+    //     coor[2]= (coor[2] - (infer_h - scale_w * orig_h) / 2) / scale_w;
+    // } else {
+    //     coor[1]= (coor[1] - (infer_w - scale_h * orig_w) / 2) / scale_h;
+    //     coor[3]= (coor[3] - (infer_w - scale_h * orig_w) / 2) / scale_h;
+    //     coor[0]= coor[0] / scale_h;
+    //     coor[2]= coor[2] / scale_h;
+    // }
+
+    for (uint8_t i = 0; i < 4; ++i) {
+        coor[i] /= gain;
         int maxcoor = (i % 2 == 0) ? orig_w : orig_h;
-        if (coor >= maxcoor) {
-            coor = maxcoor - 1;
+        if (coor[i] >= maxcoor) {
+            coor[i] = maxcoor - 1;
         }
-        if (coor < 0) {
-            coor = 0;
+        if (coor[i] < 0) {
+            coor[i] = 0;
         }
-        *(orig_bboxCoors + i) = coor;
+        *(orig_bboxCoors + i) = (int)coor[i];
     }
 }
 

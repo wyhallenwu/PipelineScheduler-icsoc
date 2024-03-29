@@ -40,7 +40,7 @@ cv::cuda::GpuMat cvtHWCToCHW(
      * cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
      */
     // cv::cuda::GpuMat transposed(height, width, CV_8UC3);
-    cv::cuda::GpuMat transposed(height, width, CV_8UC3);
+    cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
     size_t channel_mem_width = height * width;
     std::vector<cv::cuda::GpuMat> channels {
         cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[0])),
