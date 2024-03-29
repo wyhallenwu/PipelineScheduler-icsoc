@@ -21,6 +21,7 @@ __pycache__/
 *.o
 build
 runs
+abseil-cpp/
 tensorrt-cpp-api/
 face-recognition-cpp-tensorrt/
 face-recognition/
