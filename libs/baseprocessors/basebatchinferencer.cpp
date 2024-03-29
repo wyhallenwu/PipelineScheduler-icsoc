@@ -1,10 +1,15 @@
-#include "yolov5.h"
+#include "baseprocessor.h"
 
 using namespace spdlog;
 
-YoloV5Inference::YoloV5Inference(
+/**
+ * @brief Construct a new Base Preprocessor that inherites the LocalGPUDataMicroservice given the `InType`
+ * 
+ * @param configs 
+ */
+BaseBatchInferencer::BaseBatchInferencer(
     const BaseMicroserviceConfigs &config, 
-    const TRTConfigs &engineConfigs) : BaseBatchInferencer(config), msvc_engineConfigs(engineConfigs) {
+    const TRTConfigs &engineConfigs) : Microservice(config), msvc_engineConfigs(engineConfigs) {
     
     msvc_inferenceEngine = new Engine(engineConfigs);
 
@@ -14,7 +19,19 @@ YoloV5Inference::YoloV5Inference(
     info("{0:s} is created.", msvc_name); 
 }
 
-void YoloV5Inference::inference() {
+/**
+ * @brief Check if the request is still worth being processed.
+ * For instance, if the request is already late at the moment of checking, there is no value in processing it anymore.
+ * 
+ * @tparam InType 
+ * @return true 
+ * @return false 
+ */
+bool BaseBatchInferencer::checkReqEligibility(ClockType currReq_gentime) {
+    return true;
+}
+
+void BaseBatchInferencer::inference() {
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.

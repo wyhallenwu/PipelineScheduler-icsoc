@@ -7,7 +7,7 @@ YoloV5Agent::YoloV5Agent(const std::string &name, uint16_t own_port, std::vector
     msvcs = std::move(services);
     std::thread preprocessor(&BaseReqBatcher::batchRequests, dynamic_cast<BaseReqBatcher*>(msvcs[1]));
     preprocessor.detach();
-    std::thread inference(&YoloV5Inference::inference, dynamic_cast<YoloV5Inference*>(msvcs[2]));
+    std::thread inference(&BaseBatchInferencer::inference, dynamic_cast<BaseBatchInferencer*>(msvcs[2]));
     inference.detach();
     std::thread postprocessor(&YoloV5Postprocessor::postProcessing, dynamic_cast<YoloV5Postprocessor*>(msvcs[3]));
     postprocessor.detach();
@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
     msvcs.push_back(new Receiver(msvc_configs[0]));
     msvcs.push_back(new BaseReqBatcher(msvc_configs[1]));
     msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
-    msvcs.push_back(new YoloV5Inference(msvc_configs[2], yoloConfigs));
+    msvcs.push_back(new BaseBatchInferencer(msvc_configs[2], yoloConfigs));
     msvcs[2]->SetInQueue(msvcs[1]->GetOutQueue());
     msvcs.push_back(new YoloV5Postprocessor(msvc_configs[3]));
     msvcs[3]->SetInQueue(msvcs[2]->GetOutQueue());

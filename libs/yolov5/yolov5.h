@@ -25,17 +25,17 @@ using namespace spdlog;
 //     // void updateReqRate(ClockTypeTemp lastInterReqDuration) override;
 // };
 
-class YoloV5Inference : public BaseProcessor {
-public:
-    YoloV5Inference(const BaseMicroserviceConfigs &config, const TRTConfigs &engineConfigs);
-    ~YoloV5Inference() = default;
-protected:
-    friend class YoloV5Agent;
-    void inference();
-    std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
-    TRTConfigs msvc_engineConfigs;
-    Engine* msvc_inferenceEngine;
-};
+// class YoloV5Inference : public BaseBatchInferencer {
+// public:
+//     YoloV5Inference(const BaseMicroserviceConfigs &config, const TRTConfigs &engineConfigs);
+//     ~YoloV5Inference() = default;
+// protected:
+//     friend class YoloV5Agent;
+//     void inference();
+//     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
+//     TRTConfigs msvc_engineConfigs;
+//     Engine* msvc_inferenceEngine;
+// };
 
 class YoloV5Postprocessor : public BasePostprocessor {
 public:

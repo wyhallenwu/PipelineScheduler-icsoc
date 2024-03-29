@@ -47,14 +47,17 @@ protected:
 
 typedef uint16_t BatchSizeType;
 
-class BaseProcessor : public Microservice {
+class BaseBatchInferencer : public Microservice {
 public:
-    BaseProcessor(const BaseMicroserviceConfigs &configs);
-    ~BaseProcessor() {
-
-    };
+    BaseBatchInferencer(const BaseMicroserviceConfigs &configs, const TRTConfigs &engineConfigs);
+    ~BaseBatchInferencer() = default;
+    virtual void inference();
 protected:
     BatchSizeType msvc_onBufferBatchSize;
+    std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
+    TRTConfigs msvc_engineConfigs;
+    Engine* msvc_inferenceEngine;
+
     bool checkReqEligibility(ClockType currReq_genTime) override;
 };
 
