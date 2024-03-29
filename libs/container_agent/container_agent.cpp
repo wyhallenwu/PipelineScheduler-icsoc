@@ -119,3 +119,20 @@ void ContainerAgent::StopRequestHandler::Proceed() {
         delete this;
     }
 }
+
+void ContainerAgent::checkReady() {
+    bool ready = false;
+    while (!ready) {
+        ready = true;
+        
+        spdlog::info("{0:s} waiting for all microservices to be ready.", __func__);
+        for (auto msvc : msvcs) {
+            if (!msvc->checkReady()) {
+                ready = false;
+                break;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    }
+    START();
+}

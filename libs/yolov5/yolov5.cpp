@@ -56,6 +56,9 @@ int main(int argc, char **argv) {
         msvcs[i]->SetInQueue(msvcs[i - 1]->GetOutQueue());
     }
     ContainerAgent *agent = new YoloV5Agent(name, absl::GetFlag(FLAGS_port), msvcs);
+
+    agent->checkReady();
+    
     while (agent->running()) {
         std::this_thread::sleep_for(std::chrono::seconds(4));
         agent->SendQueueLengths();
