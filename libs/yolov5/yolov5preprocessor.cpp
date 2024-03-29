@@ -80,6 +80,9 @@ void YoloV5Preprocessor::batchRequests() {
         Stopwatch stopwatch;
         stopwatch.start();
 
+
+        prevData.emplace_back(currReq.req_data[0]);
+
         trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
             msvc_name,
             currReq.req_data[0].data.rows,
@@ -113,7 +116,7 @@ void YoloV5Preprocessor::batchRequests() {
                 "",
                 msvc_onBufferBatchSize,
                 bufferData,
-                currReq.req_data
+                prevData
             };
             trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
             msvc_OutQueue[0]->emplace(outReq);

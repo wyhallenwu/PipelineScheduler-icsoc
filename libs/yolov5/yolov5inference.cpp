@@ -93,7 +93,7 @@ void YoloV5Inference::inference() {
             "",
             currReq_batchSize,
             outReqData, //req_data
-            currReq.req_data // upstreamReq_data
+            currReq.upstreamReq_data // upstreamReq_data
         };
         // // After inference, the gpumat inside `inbuffer` is no longer used and can be freed.
         // for (std::size_t i = 0; i < trtInBuffer.size(); i++) {
