@@ -3,174 +3,159 @@
 using namespace spdlog;
 
 /**
- * @brief Scale the bounding box coordinates to the original aspect ratio of the image
+ * @brief normalize the input data by subtracting and dividing values from the original pixesl
  * 
- * @param orig_h Original height of the image
- * @param orig_w Original width of the image
- * @param infer_h Height of the image used for inference
- * @param infer_w Width of the image used for inference
- * @param bbox_coors [x1, y1, x2, y2]
+ * @param input the input data
+ * @param subVals values to be subtracted
+ * @param divVals values to be dividing by
+ * @param stream an opencv stream for asynchronous operation on cuda
  */
-void scaleBBox(
-    int orig_h,
-    int orig_w,
-    int infer_h,
-    int infer_w,
-    const float *infer_bboxCoors,
-    int * orig_bboxCoors
+cv::cuda::GpuMat normalize(
+    cv::cuda::GpuMat &input,
+    cv::cuda::Stream &stream,
+    const std::array<float, 3>& subVals,
+    const std::array<float, 3>& divVals
 ) {
-    float ratio = std::min(1.f * infer_h / orig_h, 1.f * infer_w / orig_w);
-    infer_h = (int) (ratio * orig_h);
-    infer_w = (int) (ratio * orig_w);
+    trace("Going into {0:s}", __func__);
+    cv::cuda::GpuMat normalized;
+    input.convertTo(normalized, CV_32FC3, 1.f / 255.f, stream);
+    stream.waitForCompletion();
+    // cv::cuda::subtract(normalized, cv::Scalar(subVals[0], subVals[1], subVals[2]), normalized, cv::noArray(), -1);
+    // cv::cuda::divide(normalized, cv::Scalar(divVals[0], divVals[1], divVals[2]), normalized, 1, -1);
+    trace("Finished {0:s}", __func__);
 
-    // TO BE IMPLEMENTED
-    float coor[4];
-    for (uint8_t i = 0; i < 4; ++i) {
-        coor[i] = (*(infer_bboxCoors + i));
-    }
+    return normalized;
+}
 
-    float gain = std::min(1.f * infer_h / orig_h, 1.f * infer_w / orig_w);
+cv::cuda::GpuMat cvtHWCToCHW(
+    cv::cuda::GpuMat &input,
+    cv::cuda::Stream &stream
+) {
 
-    float pad_w = (1.f * infer_w - orig_w * gain) / 2.f;
-    float pad_h = (1.f * infer_h - orig_h * gain) / 2.f;
+    trace("Going into {0:s}", __func__);
+    uint16_t height = input.rows;
+    uint16_t width = input.cols;
+    /**
+     * @brief TODOs
+     * This is the correct way but since we haven't figured out how to carry to image to be cropped
+     * it screws things up a bit.
+     * cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
+     */
+    // cv::cuda::GpuMat transposed(height, width, CV_8UC3);
+    cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
+    size_t channel_mem_width = height * width;
+    std::vector<cv::cuda::GpuMat> channels {
+        cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[0])),
+        cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[channel_mem_width])),
+        cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[channel_mem_width * 2]))
+    };
+    cv::cuda::split(input, channels, stream);
+    stream.waitForCompletion();    
 
-    coor[0] -= pad_w;
-    coor[1] -= pad_h;
-    coor[2] -= pad_w;
-    coor[3] -= pad_h;
+    trace("Finished {0:s}", __func__);
 
-    // if (scale_h > scale_w) {
-    //     coor[1]= coor[1] / scale_w;
-    //     coor[3]= coor[3] / scale_w;
-    //     coor[0]= (coor[0] - (infer_h - scale_w * orig_h) / 2) / scale_w;
-    //     coor[2]= (coor[2] - (infer_h - scale_w * orig_h) / 2) / scale_w;
-    // } else {
-    //     coor[1]= (coor[1] - (infer_w - scale_h * orig_w) / 2) / scale_h;
-    //     coor[3]= (coor[3] - (infer_w - scale_h * orig_w) / 2) / scale_h;
-    //     coor[0]= coor[0] / scale_h;
-    //     coor[2]= coor[2] / scale_h;
-    // }
-
-    for (uint8_t i = 0; i < 4; ++i) {
-        coor[i] /= gain;
-        int maxcoor = (i % 2 == 0) ? orig_w : orig_h;
-        if (coor[i] >= maxcoor) {
-            coor[i] = maxcoor - 1;
-        }
-        if (coor[i] < 0) {
-            coor[i] = 0;
-        }
-        *(orig_bboxCoors + i) = (int)coor[i];
-    }
+    return transposed;
 }
 
 /**
- * @brief Cropping multiple boxes from 1 picture
+ * @brief resize the input data without changing the aspect ratio and pad the empty area with a designated color
  * 
- * @param image 
- * @param infer_h 
- * @param infer_w 
- * @param numDetections 
- * @param bbox_coorList 
- * @param croppedBBoxes 
+ * @param input the input data
+ * @param height the expected height after processing
+ * @param width  the expect width after processing
+ * @param bgcolor color to pad the empty area with
+ * @return cv::cuda::GpuMat 
  */
-void crop(
-    const cv::cuda::GpuMat &image,
-    int orig_h,
-    int orig_w,
-    int infer_h,
-    int infer_w,
-    int numDetections,
-    const float *bbox_coorList,
-    std::vector<cv::cuda::GpuMat> &croppedBBoxes
+cv::cuda::GpuMat resizePadRightBottom(
+    cv::cuda::GpuMat &input,
+    const size_t height,
+    const size_t width,
+    const cv::Scalar &bgcolor,
+    cv::cuda::Stream &stream
 ) {
-    int orig_bboxCoors[4];
-    for (uint16_t i = 0; i < numDetections; ++i) {
-        scaleBBox(orig_h, orig_w, infer_h, infer_w, bbox_coorList + i * 4, orig_bboxCoors);
-        std::cout << (int)orig_bboxCoors[0] << " " << (int)orig_bboxCoors[1] << " " << (int)orig_bboxCoors[2] << " " << (int)orig_bboxCoors[3] << std::endl;
-        cv::cuda::GpuMat croppedBBox = image(cv::Range((int)orig_bboxCoors[1], (int)orig_bboxCoors[3]), cv::Range((int)orig_bboxCoors[0], (int)orig_bboxCoors[2])).clone();
-        croppedBBoxes.emplace_back(croppedBBox);
-    }
+    trace("Going into {0:s}", __func__);
+
+    cv::cuda::GpuMat rgb_img(input.rows, input.cols, CV_8UC3);
+    cv::cuda::cvtColor(input, rgb_img, cv::COLOR_BGR2RGB, 0, stream);
+
+    float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
+    int unpad_w = r * input.cols;
+    int unpad_h = r * input.rows;
+    //Create a new GPU Mat 
+    cv::cuda::GpuMat resized(unpad_h, unpad_w, CV_8UC3);
+    cv::cuda::resize(rgb_img, resized, resized.size(), 0, 0, cv::INTER_AREA, stream);
+    cv::cuda::GpuMat out(height, width, CV_8UC3, bgcolor);
+    // Creating an opencv stream for asynchronous operation on cuda
+    resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
+
+    stream.waitForCompletion();
+    trace("Finished {0:s}", __func__);
+
+    return out;
 }
 
 /**
- * @brief Cropping 1 box from 1 picture
+ * @brief Construct a new Base Preprocessor that inherites the LocalGPUDataMicroservice given the `InType`
  * 
- * @param image 
- * @param infer_h 
- * @param infer_w 
- * @param numDetections 
- * @param bbox_coorList 
- * @param croppedBBoxes 
+ * @param configs 
  */
-void cropOneBox(
-    const cv::cuda::GpuMat &image,
-    int infer_h,
-    int infer_w,
-    int numDetections,
-    const float *bbox_coorList,
-    cv::cuda::GpuMat &croppedBBoxes
-) {
-    int orig_h, orig_w;
-    orig_h = image.rows;
-    orig_w = image.cols;
-    int orig_bboxCoors[4];
-    scaleBBox(orig_h, orig_w, infer_h, infer_w, bbox_coorList, orig_bboxCoors);
-    cv::cuda::GpuMat croppedBBox = image(cv::Range((int)orig_bboxCoors[0], (int)orig_bboxCoors[2]), cv::Range((int)orig_bboxCoors[1], (int)orig_bboxCoors[3])).clone();
-    croppedBBoxes = croppedBBox;
+BaseReqBatcher::BaseReqBatcher(const BaseMicroserviceConfigs &configs) : Microservice(configs){
+    info("{0:s} is created.", msvc_name); 
 }
 
-BaseBBoxCropper::BaseBBoxCropper(const BaseMicroserviceConfigs &configs) : Microservice(configs) {
-    spdlog::info("{0:s} is created.", msvc_name); 
-}
-
-void BaseBBoxCropper::cropping() {
+void BaseReqBatcher::batchRequests() {
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
     ClockType currReq_genTime;
     // The time where the current incoming request arrives
     ClockType currReq_recvTime;
+    // Buffer memory for each batch
+    std::vector<RequestData<LocalGPUReqDataType>> bufferData;
 
-    // Data package to be sent to and processed at the next microservice
-    std::vector<RequestData<LocalGPUReqDataType>> outReqData;
-    // List of images carried from the previous microservice here to be cropped from.
-    std::vector<RequestData<LocalGPUReqDataType>> imageList;
-    // Instance of data to be packed into `outReqData`
-    RequestData<LocalGPUReqDataType> reqData;
+    // // Data carried from upstream microservice to be processed at a downstream
+    std::vector<RequestData<LocalGPUReqDataType>> prevData;
+    RequestData<LocalGPUReqDataType> data;
 
-    // List of bounding boxes cropped from one single image
-    std::vector<cv::cuda::GpuMat> singleImageBBoxList;
+    // Incoming request
+    Request<LocalGPUReqDataType> currReq;
 
-    // Current incoming equest and request to be sent out to the next
-    Request<LocalGPUReqDataType> currReq, outReq;
+    Request<LocalCPUReqDataType> currCPUReq;
+
+    // Request sent to a downstream microservice
+    Request<LocalGPUReqDataType> outReq;   
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
-
-    // Shape of cropped bounding boxes
-    RequestShapeType bboxShape;
-    spdlog::info("{0:s} STARTS.", msvc_name); 
-
-
-    cudaStream_t postProcStream;
-    checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+    info("{0:s} STARTS.", msvc_name); 
+    cv::cuda::Stream preProcStream;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
-            spdlog::info("{0:s} STOPS.", msvc_name);
+            info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
-            spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
-
         // Processing the next incoming request
-        currReq = msvc_InQueue.at(0)->pop2();
+        if (msvc_InQueue.at(0)->getActiveQueueIndex() != msvc_activeInQueueIndex.at(0)) {
+            if (msvc_InQueue.at(0)->size(msvc_activeInQueueIndex.at(0)) == 0) {
+                msvc_activeInQueueIndex.at(0) = msvc_InQueue.at(0)->getActiveQueueIndex();
+                trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+            }
+        }
+        trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+        if (msvc_activeInQueueIndex.at(0) == 1) {
+            currCPUReq = msvc_InQueue.at(0)->pop1();
+            currReq = uploadReq(currCPUReq);
+        } else if (msvc_activeInQueueIndex.at(0) == 2) {
+            currReq = msvc_InQueue.at(0)->pop2();
+        }
         msvc_inReqCount++;
-
         currReq_genTime = currReq.req_origGenTime;
+
         // We need to check if the next request is worth processing.
         // If it's too late, then we can drop and stop processing this request.
         if (!this->checkReqEligibility(currReq_genTime)) {
@@ -178,169 +163,93 @@ void BaseBBoxCropper::cropping() {
         }
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
-        currReq_recvTime = std::chrono::high_resolution_clock::now();
+        currReq_recvTime = std::chrono::system_clock::now();
         if (this->msvc_inReqCount > 1) {
             this->updateReqRate(currReq_genTime);
         }
         currReq_batchSize = currReq.req_batchSize;
-        trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
+        trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
+
+        msvc_onBufferBatchSize++;
+        // Resize the incoming request image the padd with the grey color
+        // The resize image will be copied into a reserved buffer
+
+        Stopwatch stopwatch;
+        stopwatch.start();
 
 
-        /**
-         * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
-         * as well as the images from which bounding boxes will be cropped.
-         * `The buffers` are a vector of 4 small raw memory (float) buffers (since using `BatchedNMSPlugin` provided by TRT), which are
-         * 1/ `num_detections` (Batch, 1): number of objects detected in this frame
-         * 2/ `nmsed_boxes` (Batch, TopK, 4): the boxes remaining after nms is performed.
-         * 3/ `nmsed_scores` (Batch, TopK): the scores of these boxes.
-         * 4/ `nmsed_classes` (Batch, TopK):
-         * We need to bring these buffers to CPU in order to process them.
-         */
+        prevData.emplace_back(currReq.req_data[0]);
 
-        uint16_t maxNumDets = msvc_dataShape[2][0];
+        trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
+            msvc_name,
+            currReq.req_data[0].data.rows,
+            currReq.req_data[0].data.cols,
+            (this->msvc_outReqShape.at(0))[0][1],
+            (this->msvc_outReqShape.at(0))[0][2]
+        );
+        data.data = resizePadRightBottom(
+            currReq.req_data[0].data,
+            (this->msvc_outReqShape.at(0))[0][1],
+            (this->msvc_outReqShape.at(0))[0][2],
+            cv::Scalar(128, 128, 128),
+            preProcStream
+        );
 
-        std::vector<RequestData<LocalGPUReqDataType>> currReq_data = currReq.req_data;
-        int32_t num_detections[currReq_batchSize];
-        float nmsed_boxes[currReq_batchSize][maxNumDets][4];
-        float nmsed_scores[currReq_batchSize][maxNumDets];
-        float nmsed_classes[currReq_batchSize][maxNumDets];
-        int32_t *numDetList = num_detections;
-        float *nmsedBoxesList = &nmsed_boxes[0][0][0];
-        float *nmsedScoresList = &nmsed_scores[0][0];
-        float *nmsedClassesList = &nmsed_classes[0][0];
+        data.data = cvtHWCToCHW(data.data, preProcStream);
 
-        // float numDetList[currReq_batchSize];
-        // float nmsedBoxesList[currReq_batchSize][maxNumDets][4];
-        // float nmsedScoresList[currReq_batchSize][maxNumDets];
-        // float nmsedClassesList[currReq_batchSize][maxNumDets];
-        std::vector<float *> ptrList{nmsedBoxesList, nmsedScoresList, nmsedClassesList};
-        std::vector<size_t> bufferSizeList;
+        data.data = normalize(data.data, preProcStream);
 
-        for (std::size_t i = 0; i < currReq_data.size(); ++i) {
-            size_t bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
-            RequestShapeType shape = currReq_data[i].shape;
-            for (uint8_t j = 0; j < shape.size(); ++j) {
-                bufferSize *= shape[j];
-            }
-            bufferSizeList.emplace_back(bufferSize);
-            if (i == 0) {
-                checkCudaErrorCode(cudaMemcpyAsync(
-                    (void *) num_detections,
-                    currReq_data[i].data.cudaPtr(),
-                    bufferSize,
-                    cudaMemcpyDeviceToHost,
-                    postProcStream
-                ), __func__);
-            } else {
-                checkCudaErrorCode(cudaMemcpyAsync(
-                    (void *) ptrList[i - 1],
-                    currReq_data[i].data.cudaPtr(),
-                    bufferSize,
-                    cudaMemcpyDeviceToHost,
-                    postProcStream
-                ), __func__);
-            }
+        trace("{0:s} finished resizing a frame", msvc_name);
+        data.shape = RequestShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
+        bufferData.emplace_back(data);
+        trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
+
+        stopwatch.stop();
+        std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
+        // cudaFree(currReq.req_data[0].data.cudaPtr());
+        // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
+        // Waiting more means there is a higher chance the earliest request in the buffer will be late eventually.
+        if (this->isTimeToBatch()) {
+            // If true, copy the buffer data into the out queue
+            outReq = {
+                std::chrono::_V2::system_clock::now(),
+                9999,
+                "",
+                msvc_onBufferBatchSize,
+                bufferData,
+                prevData
+            };
+            trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
+            msvc_OutQueue[0]->emplace(outReq);
+            msvc_onBufferBatchSize = 0;
+            bufferData.clear();
+            prevData.clear();
         }
-
-        checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
-        trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
-
-        // List of images to be cropped from
-        imageList = currReq.upstreamReq_data; 
-
-        // class of the bounding box cropped from one the images in the image list
-        int16_t bboxClass;
-        // The index of the queue we are going to put data on based on the value of `bboxClass`
-        NumQueuesType queueIndex;
-
-        // Doing post processing for the whole batch
-        for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
-            // Height and width of the image used for inference
-            int orig_h, orig_w, infer_h, infer_w;
-
-            // If there is no object in frame, we don't have to do nothing.
-            int numDetsInFrame = (int)numDetList[i];
-            if (numDetsInFrame <= 0) {
-                outReqData.clear();
-                continue;
-            }
-
-            // Otherwise, we need to do some cropping.
-            orig_h = imageList[i].shape[1];
-            orig_w = imageList[i].shape[2];
-
-            /**
-             * @brief TODOs:
-             * Hardcoding because we hvent been able to properly carry the image to be cropped.
-             * The cropping logic is ok though.
-             * Need to figure out a way.
-             */
-            infer_h = 640;
-            infer_w = 640;
-
-            crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
-            trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
-
-            // After cropping, we need to find the right queues to put the bounding boxes in
-            for (int j = 0; j < numDetsInFrame; ++j) {
-                bboxClass = (int16_t)nmsed_classes[i][j];
-                queueIndex = -1;
-                // in the constructor of each microservice, we map the class number to the corresponding queue index in 
-                // `classToDntreamMap`.
-                for (size_t k = 0; k < this->classToDnstreamMap.size(); ++k) {
-                    if ((classToDnstreamMap.at(k).first == bboxClass) || (classToDnstreamMap.at(k).first == -1)) {
-                        queueIndex = this->classToDnstreamMap.at(k).second; 
-                        // Breaking is only appropriate if case we assume the downstream only wants to take one class
-                        // TODO: More than class-of-interests for 1 queue
-                        break;
-                    }
-                }
-                // If this class number is not needed anywhere downstream
-                if (queueIndex == -1) {
-                    continue;
-                }
-
-                if (bboxClass == 0) {
-                    saveGPUAsImg(singleImageBBoxList[j], "bbox.jpg");
-                }
-
-                // Putting the bounding box into an `outReq` to be sent out
-                bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
-                reqData = {
-                    bboxShape,
-                    singleImageBBoxList[j].clone()
-                };
-                outReqData.emplace_back(reqData);
-                outReq = {
-                    std::chrono::_V2::system_clock::now(),
-                    currReq.req_e2eSLOLatency,
-                    "",
-                    1,
-                    outReqData, //req_data
-                    currReq.req_data // upstreamReq_data
-                };
-                // msvc_OutQueue.at(queueIndex)->emplace(outReq);
-                trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, bboxClass, queueIndex);
-            }
-            // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
-            // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
-            // Clearing out data of the vector
-
-            outReqData.clear();
-            singleImageBBoxList.clear();
-        }
-        // // Free all the output buffers of trtengine after cropping is done.
-        // for (size_t i = 0; i < currReq_data.size(); i++) {
-        //     checkCudaErrorCode(cudaFree(currReq_data.at(i).data.cudaPtr()));
-        // }
-
-
-        
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
-        // Synchronize the cuda stream
     }
+}
 
+/**
+ * @brief Simplest function to decide if the requests should be batched and sent to the main processor.
+ * 
+ * @return true True if its time to batch
+ * @return false if otherwise
+ */
+bool BaseReqBatcher::isTimeToBatch() {
+    if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
+        return true;
+    }
+    return false;
+}
 
-    checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
+/**
+ * @brief Check if the request is still worth being processed.
+ * For instance, if the request is already late at the moment of checking, there is no value in processing it anymore.
+ * 
+ * @return true 
+ * @return false 
+ */
+bool BaseReqBatcher::checkReqEligibility(ClockType currReq_gentime) {
+    return true;
 }
