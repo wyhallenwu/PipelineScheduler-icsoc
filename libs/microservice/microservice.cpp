@@ -9,6 +9,7 @@
  * @param configs 
  */
 Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
+    msvc_idealBatchSize = configs.msvc_idealBatchSize;
     msvc_dataShape = configs.msvc_dataShape;
     msvc_name = configs.msvc_name;
     msvc_svcLevelObjLatency = configs.msvc_svcLevelObjLatency;

@@ -9,7 +9,7 @@ YoloV5Agent::YoloV5Agent(const std::string &name, uint16_t own_port, std::vector
     preprocessor.detach();
     std::thread inference(&BaseBatchInferencer::inference, dynamic_cast<BaseBatchInferencer*>(msvcs[2]));
     inference.detach();
-    std::thread postprocessor(&YoloV5Postprocessor::postProcessing, dynamic_cast<YoloV5Postprocessor*>(msvcs[3]));
+    std::thread postprocessor(&BaseBBoxCropper::cropping, dynamic_cast<BaseBBoxCropper*>(msvcs[3]));
     postprocessor.detach();
     for (int i = 4; i < msvcs.size(); i++) {
         std::thread sender(&Sender::Process, dynamic_cast<Sender*>(msvcs[i]));
@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
     msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
     msvcs.push_back(new BaseBatchInferencer(msvc_configs[2], yoloConfigs));
     msvcs[2]->SetInQueue(msvcs[1]->GetOutQueue());
-    msvcs.push_back(new YoloV5Postprocessor(msvc_configs[3]));
+    msvcs.push_back(new BaseBBoxCropper(msvc_configs[3]));
     msvcs[3]->SetInQueue(msvcs[2]->GetOutQueue());
     for (int i = 4; i < msvc_configs.size(); i++) {
         if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::localGPU) {

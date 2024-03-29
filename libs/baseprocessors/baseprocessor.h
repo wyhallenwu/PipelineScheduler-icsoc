@@ -91,10 +91,10 @@ void cropOneBox(
     cv::cuda::GpuMat &croppedBBoxes
 );
 
-class BasePostprocessor : public Microservice {
+class BaseBBoxCropper : public Microservice {
 public:
-    BasePostprocessor(const BaseMicroserviceConfigs &configs);
-    ~BasePostprocessor() {
+    BaseBBoxCropper(const BaseMicroserviceConfigs &configs);
+    ~BaseBBoxCropper() = default;
 
-    };
+    void cropping();
 };

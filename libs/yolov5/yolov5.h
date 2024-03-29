@@ -37,14 +37,14 @@ using namespace spdlog;
 //     Engine* msvc_inferenceEngine;
 // };
 
-class YoloV5Postprocessor : public BasePostprocessor {
-public:
-    friend class YoloV5Agent;
-    YoloV5Postprocessor(const BaseMicroserviceConfigs &config);
-    ~YoloV5Postprocessor() = default;
-protected:
-    void postProcessing();
-};
+// class YoloV5Postprocessor : public BaseBBoxCropper {
+// public:
+//     friend class YoloV5Agent;
+//     YoloV5Postprocessor(const BaseMicroserviceConfigs &config);
+//     ~YoloV5Postprocessor() = default;
+// protected:
+//     void postProcessing();
+// };
 
 class YoloV5Agent : public ContainerAgent {
 public:

@@ -1,6 +1,6 @@
 #include <yolov5.h>
 
-YoloV5Postprocessor::YoloV5Postprocessor(const BaseMicroserviceConfigs &config) : BasePostprocessor(config) {
+YoloV5Postprocessor::YoloV5Postprocessor(const BaseMicroserviceConfigs &config) : BaseBBoxCropper(config) {
     spdlog::info("{0:s} is created.", msvc_name); 
 }
 
