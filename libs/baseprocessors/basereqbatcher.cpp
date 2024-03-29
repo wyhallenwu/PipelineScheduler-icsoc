@@ -136,7 +136,7 @@ void BaseReqBatcher::batchRequests() {
             break;
         }
         else if (this->PAUSE_THREADS) {
-            info("{0:s} is being PAUSED.", msvc_name);
+            //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
         // Processing the next incoming request

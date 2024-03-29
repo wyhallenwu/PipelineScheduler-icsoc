@@ -167,7 +167,7 @@ void BaseBBoxCropper::cropping() {
             break;
         }
         else if (this->PAUSE_THREADS) {
-            info("{0:s} is being PAUSED.", msvc_name);
+            //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
 

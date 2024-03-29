@@ -63,7 +63,7 @@ void BaseBatchInferencer::inference() {
             break;
         }
         else if (this->PAUSE_THREADS) {
-            spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            //spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
 

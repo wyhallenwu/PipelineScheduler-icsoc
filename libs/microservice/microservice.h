@@ -327,6 +327,22 @@ public:
 
     virtual QueueLengthType GetOutQueueSize(int i) {return msvc_OutQueue[i]->size();};
 
+    void stopThread() {
+        STOP_THREADS = true;
+    }
+
+    void pauseThread() {
+        PAUSE_THREADS = true;
+    }
+
+    void unpauseThread() {
+        PAUSE_THREADS = false;
+    }
+
+    bool checkReady() {
+        return READY;
+    }
+
 protected:
     std::vector<ThreadSafeFixSizedDoubleQueue*> msvc_InQueue, msvc_OutQueue;
     //
@@ -335,6 +351,7 @@ protected:
     // Used to signal to thread when not to run and to bring thread to a natural end.
     bool STOP_THREADS = false;
     bool PAUSE_THREADS = false;
+    bool READY = false;
 
     /**
      * @brief 

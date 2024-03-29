@@ -33,7 +33,15 @@ GPUSender::GPUSender(const BaseMicroserviceConfigs &configs) : Sender(configs) {
 }
 
 void GPUSender::Process() {
-    while (run) {
+    while (READY) {
+        if (this->STOP_THREADS) {
+            spdlog::info("{0:s} STOPS.", msvc_name);
+            break;
+        }
+        else if (this->PAUSE_THREADS) {
+            ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            continue;
+        }
         auto request = msvc_InQueue[0]->pop2();
         SendGpuPointer(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -104,7 +112,15 @@ LocalCPUSender::LocalCPUSender(const BaseMicroserviceConfigs &configs) : Sender(
         configs) {}
 
 void LocalCPUSender::Process() {
-    while (run) {
+    while (READY) {
+        if (this->STOP_THREADS) {
+            spdlog::info("{0:s} STOPS.", msvc_name);
+            break;
+        }
+        else if (this->PAUSE_THREADS) {
+            ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            continue;
+        }
         auto request = msvc_InQueue[0]->pop1();
         SendSharedMemory(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -150,7 +166,15 @@ RemoteCPUSender::RemoteCPUSender(const BaseMicroserviceConfigs &configs) : Sende
         configs) {}
 
 void RemoteCPUSender::Process() {
-    while (run) {
+    while (READY) {
+        if (this->STOP_THREADS) {
+            spdlog::info("{0:s} STOPS.", msvc_name);
+            break;
+        }
+        else if (this->PAUSE_THREADS) {
+            ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            continue;
+        }
         auto request = msvc_InQueue[0]->pop1();
         SendSerializedData(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));

@@ -140,6 +140,14 @@ void Receiver::HandleRpcs() {
     void *tag;  // uniquely identifies a request.
     bool ok;
     while (true) {
+        if (this->STOP_THREADS) {
+            spdlog::info("{0:s} STOPS.", msvc_name);
+            break;
+        }
+        else if (this->PAUSE_THREADS) {
+            ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            continue;
+        }
         GPR_ASSERT(cq->Next(&tag, &ok));
         GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
