@@ -9,6 +9,21 @@
 #include "spdlog/spdlog.h"
 #include "opencv2/opencv.hpp"
 
+
+typedef uint16_t NumQueuesType;
+typedef uint16_t QueueLengthType;
+typedef uint32_t MsvcSLOType;
+typedef uint16_t NumMscvType;
+typedef std::chrono::high_resolution_clock::time_point ClockType;
+const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
+typedef const char *InterConGPUReqDataType;
+typedef std::vector<int32_t> RequestDataShapeType;
+typedef std::vector<std::vector<int32_t>> RequestShapeType;
+typedef cv::cuda::GpuMat LocalGPUReqDataType;
+typedef cv::Mat LocalCPUReqDataType;
+typedef uint16_t BatchSizeType;
+
+
 void saveGPUAsImg(const cv::cuda::GpuMat &img, std::string name = "test.jpg", float scale = 1.f);
 
 void saveCPUAsImg(const cv::Mat &img, std::string name = "test.jpg", float scale = 1.f);
