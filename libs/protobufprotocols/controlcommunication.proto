@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "google/protobuf/empty.proto";
 
 option java_multiple_files = true;
 option objc_class_prefix = "HLW";
@@ -6,10 +7,10 @@ option objc_class_prefix = "HLW";
 package controlcommunication;
 
 service ControlCommunication {
-  rpc ReportQueueSizes(QueueSize) returns (StaticConfirm) {}
-  rpc SayHello(ConnectionConfigs) returns (StaticConfirm) {}
-  rpc StartMicroservice(MicroserviceConfig) returns (StaticConfirm) {}
-  rpc StopExecution(StopSignal) returns (StaticConfirm) {}
+  rpc ReportQueueSizes(QueueSizes) returns (google.protobuf.Empty) {}
+  rpc AdvertiseToController(ConnectionConfigs) returns (google.protobuf.Empty) {}
+  rpc StartMicroservice(MicroserviceConfig) returns (google.protobuf.Empty) {}
+  rpc StopMicroservice(MicroserviceName) returns (google.protobuf.Empty) {}
 }
 
 message QueueSize {
@@ -17,24 +18,25 @@ message QueueSize {
   repeated int32 size = 2;
 }
 
+message QueueSizes {
+  repeated QueueSize element = 1;
+}
+
 message ConnectionConfigs {
-  string device_handle = 1;
+  string device_name = 1;
   string device_type = 2;
   string ip_address = 3;
 }
 
 message MicroserviceConfig {
-  string msvc_name = 1;
-  string msvc_type = 2;
-  string msvc_version = 3;
-  string msvc_host = 4;
-  int32 msvc_port = 5;
+  string name = 1;
+  string type = 2;
+  string version = 3;
+  int32 recv_port = 4;
+  int32 dwnstr_port = 5;
+  string dwnstr_ip = 6;
 }
 
-message StopSignal {
-  string msvc_name = 1;
-}
-
-// The response message confirming transfer
-message StaticConfirm {
+message MicroserviceName {
+  string name = 1;
 }

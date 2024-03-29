@@ -51,8 +51,8 @@ private:
 
     private:
         GpuPointerPayload request;
-        SimpleConfirm reply;
-        grpc::ServerAsyncResponseWriter<SimpleConfirm> responder;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
     class SharedMemoryRequestHandler : public RequestHandler {
@@ -68,8 +68,8 @@ private:
 
     private:
         SharedMemPayload request;
-        SimpleConfirm reply;
-        grpc::ServerAsyncResponseWriter<SimpleConfirm> responder;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
     class SerializedDataRequestHandler : public RequestHandler {
@@ -81,8 +81,8 @@ private:
 
     private:
         SerializedDataPayload request;
-        SimpleConfirm reply;
-        grpc::ServerAsyncResponseWriter<SimpleConfirm> responder;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
     // This can be run in multiple threads if needed.

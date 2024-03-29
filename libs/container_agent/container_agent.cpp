@@ -60,7 +60,7 @@ ContainerAgent::ContainerAgent(const std::string &name, uint16_t own_port) : nam
     server_cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
 
-    stub = InDeviceCommunication::NewStub(grpc::CreateChannel("localhost:2000", grpc::InsecureChannelCredentials()));
+    stub = InDeviceCommunication::NewStub(grpc::CreateChannel("localhost:60003", grpc::InsecureChannelCredentials()));
     sender_cq = new CompletionQueue();
 
     run = true;
@@ -72,9 +72,9 @@ ContainerAgent::ContainerAgent(const std::string &name, uint16_t own_port) : nam
 void ContainerAgent::ReportStart() {
     indevicecommunication::ConnectionConfigs request;
     request.set_msvc_name(name);
-    StaticConfirm reply;
+    EmptyMessage reply;
     ClientContext context;
-    std::unique_ptr<ClientAsyncResponseReader<StaticConfirm>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             stub->AsyncReportMsvcStart(&context, request, sender_cq));
     Status status;
     rpc->Finish(&reply, &status, (void *) 1);
@@ -86,9 +86,9 @@ void ContainerAgent::SendQueueLengths() {
         request.add_size(msvc->GetOutQueueSize(0));
         spdlog::info("{0:s} Length of queue is {1:d}", msvc->msvc_name, msvc->GetOutQueueSize(0));
     }
-    StaticConfirm reply;
+    EmptyMessage reply;
     ClientContext context;
-    std::unique_ptr<ClientAsyncResponseReader<StaticConfirm>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             stub->AsyncSendQueueSize(&context, request, sender_cq));
     Status status;
     rpc->Finish(&reply, &status, (void *) 1);

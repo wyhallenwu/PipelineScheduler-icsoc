@@ -10,6 +10,7 @@
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/health_check_service_interface.h>
+#include <google/protobuf/empty.pb.h>
 #include <boost/interprocess/mapped_region.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <cuda_runtime.h>
@@ -24,6 +25,6 @@ using pipelinescheduler::DataTransferService;
 using pipelinescheduler::GpuPointerPayload;
 using pipelinescheduler::SharedMemPayload;
 using pipelinescheduler::SerializedDataPayload;
-using pipelinescheduler::SimpleConfirm;
+using EmptyMessage = google::protobuf::Empty;
 
 #endif //PIPEPLUSPLUS_COMMUNICATOR_H

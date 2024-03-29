@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "google/protobuf/empty.proto";
 
 option java_multiple_files = true;
 option objc_class_prefix = "HLW";
@@ -6,9 +7,9 @@ option objc_class_prefix = "HLW";
 package indevicecommunication;
 
 service InDeviceCommunication {
-  rpc SendQueueSize(QueueSize) returns (StaticConfirm) {}
-  rpc ReportMsvcStart(ConnectionConfigs) returns (StaticConfirm) {}
-  rpc StopExecution(StaticConfirm) returns (StaticConfirm) {}
+  rpc SendQueueSize(QueueSize) returns (google.protobuf.Empty) {}
+  rpc ReportMsvcStart(ConnectionConfigs) returns (google.protobuf.Empty) {}
+  rpc StopExecution(google.protobuf.Empty) returns (google.protobuf.Empty) {}
 }
 
 message QueueSize {
@@ -18,8 +19,4 @@ message QueueSize {
 
 message ConnectionConfigs {
   string msvc_name = 1;
-}
-
-// The response message confirming transfer
-message StaticConfirm {
 }

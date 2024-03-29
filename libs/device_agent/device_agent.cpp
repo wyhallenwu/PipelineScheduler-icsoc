@@ -1,5 +1,8 @@
 #include "device_agent.h"
 
+const int CONTAINER_BASE_PORT = 50001;
+const int RECEIVER_BASE_PORT = 55001;
+
 void msvcconfigs::to_json(json &j, const msvcconfigs::NeighborMicroserviceConfigs &val) {
     j["nb_name"] = val.name;
     j["nb_commMethod"] = val.commMethod;
@@ -19,36 +22,43 @@ void msvcconfigs::to_json(json &j, const msvcconfigs::BaseMicroserviceConfigs &v
     j["msvc_dnstreamMicroservices"] = val.msvc_dnstreamMicroservices;
 }
 
-DeviceAgent::DeviceAgent(const std::string &controller_url, uint16_t controller_port) {
-    std::string server_address = absl::StrFormat("%s:%d", "localhost", 2000);
+DeviceAgent::DeviceAgent(const std::string &controller_url) {
+    std::string server_address = absl::StrFormat("%s:%d", "localhost", 60003);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
-    ServerBuilder builder;
-    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-    builder.RegisterService(&service);
-    server_cq = builder.AddCompletionQueue();
-    server = builder.BuildAndStart();
+    ServerBuilder device_builder;
+    device_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    device_builder.RegisterService(&device_service);
+    device_cq = device_builder.AddCompletionQueue();
+    device_server = device_builder.BuildAndStart();
 
-    std::string target_str = absl::StrFormat("%s:%d", controller_url, controller_port);
-    controller_stub = InDeviceCommunication::NewStub(
+    server_address = absl::StrFormat("%s:%d", "localhost", 60002);
+    ServerBuilder controller_builder;
+    controller_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    controller_builder.RegisterService(&controller_service);
+    controller_cq = controller_builder.AddCompletionQueue();
+    controller_server = controller_builder.BuildAndStart();
+    std::string target_str = absl::StrFormat("%s:%d", controller_url, 60001);
+    controller_stub = ControlCommunication::NewStub(
             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
-    sender_cq = new CompletionQueue();
+    controller_sending_cq = new CompletionQueue();
 
     containers = std::map<std::string, ContainerHandle>();
+    std::thread DeviceRPCs(&DeviceAgent::HandleDeviceRecvRpcs, this);
+    std::thread ControlRPCs(&DeviceAgent::HandleControlRecvRpcs, this);
 
     // test code that will eventually be replaced by the controller
-    CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55001"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4");
+    CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4");
     CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{-1, -1, -1}}},
-                          {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1);
-    HandleRecvRpcs();
+                          {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55003"}, 10, -1, {{0, 0}}}}, 1);
 }
 
 void DeviceAgent::StopContainer(const ContainerHandle &container) {
-    StaticConfirm request;
-    StaticConfirm reply;
+    EmptyMessage request;
+    EmptyMessage reply;
     ClientContext context;
     Status status;
-    std::unique_ptr<ClientAsyncResponseReader<StaticConfirm>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container.stub->AsyncStopExecution(&context, request, container.cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
@@ -73,7 +83,7 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
             slo, upstream, downstreams
     );
     TRTConfigs config = {"./models/yolov5s_b32_dynamic_NVIDIAGeForceRTX3090_fp32_32_1.engine", MODEL_DATA_TYPE::fp32, "", 128, 1, 1, 0, true};
-    finishContainer("./Container_Yolov5", name, to_string(j), 49152 + containers.size(), 55000 + containers.size(),
+    finishContainer("./Container_Yolov5", name, to_string(j), CONTAINER_BASE_PORT + containers.size(), RECEIVER_BASE_PORT + containers.size(),
                     to_string(json(config)));
 }
 
@@ -86,7 +96,7 @@ void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroservic
                                    {name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}}},
                            slo, upstream, downstreams
     );
-    finishContainer("./Container_DataSource", name, to_string(j), 49152 + containers.size(), 55000 + containers.size());
+    finishContainer("./Container_DataSource", name, to_string(j), CONTAINER_BASE_PORT + containers.size(), RECEIVER_BASE_PORT + containers.size());
 }
 
 void
@@ -128,13 +138,26 @@ json DeviceAgent::createConfigs(
     return json(configs);
 }
 
-void DeviceAgent::HandleRecvRpcs() {
-    new CounterUpdateRequestHandler(&service, server_cq.get(), this);
-    new ReportStartRequestHandler(&service, server_cq.get(), this);
+void DeviceAgent::HandleDeviceRecvRpcs() {
+    new CounterUpdateRequestHandler(&device_service, device_cq.get(), this);
+    new ReportStartRequestHandler(&device_service, device_cq.get(), this);
     while (true) {
         void *tag;
         bool ok;
-        if (!server_cq->Next(&tag, &ok)) {
+        if (!device_cq->Next(&tag, &ok)) {
+            break;
+        }
+        static_cast<RequestHandler *>(tag)->Proceed();
+    }
+}
+
+void DeviceAgent::HandleControlRecvRpcs() {
+    new StartMicroserviceRequestHandler(&controller_service, controller_cq.get(), this);
+    new StopMicroserviceRequestHandler(&controller_service, controller_cq.get(), this);
+    while (true) {
+        void *tag;
+        bool ok;
+        if (!device_cq->Next(&tag, &ok)) {
             break;
         }
         static_cast<RequestHandler *>(tag)->Proceed();
@@ -171,6 +194,36 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
     }
 }
 
+void DeviceAgent::StartMicroserviceRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestStartMicroservice(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new StartMicroserviceRequestHandler(service, cq, device_agent);
+        // TODO: add logic to start container
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void DeviceAgent::StopMicroserviceRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestStopMicroservice(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new StopMicroserviceRequestHandler(service, cq, device_agent);
+        device_agent->StopContainer(device_agent->containers[request.name()]);
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
 int main() {
-    DeviceAgent agent("localhost", 1999);
+    DeviceAgent agent("localhost");
 }

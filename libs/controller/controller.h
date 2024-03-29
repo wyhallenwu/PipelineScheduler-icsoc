@@ -4,8 +4,24 @@
 #include "device_agent.h"
 #include "controlcommunication.grpc.pb.h"
 
-class controller {
+struct JobHandle;
+struct DeviceHandle {
+    std::shared_ptr<ControlCommunication::Stub> stub;
+    std::vector<JobHandle*> jobs;
+};
+struct JobHandle {
+    std::string name;
+    DeviceHandle *device_agent;
+};
 
+
+class Controller {
+public:
+    Controller();
+    ~Controller() = default;
+private:
+    std::vector<DeviceHandle*> devices;
+    std::vector<JobHandle*> jobs;
 };
 
 
