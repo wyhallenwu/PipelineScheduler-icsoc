@@ -103,7 +103,7 @@ void YoloV5Preprocessor::batchRequests() {
         data.data = normalize(data.data, preProcStream);
 
         trace("{0:s} finished resizing a frame", msvc_name);
-        data.shape = RequestShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
+        data.shape = RequestDataShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
         bufferData.emplace_back(data);
         trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
 

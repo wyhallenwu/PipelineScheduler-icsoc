@@ -29,7 +29,7 @@ void YoloV5Postprocessor::postProcessing() {
     BatchSizeType currReq_batchSize;
 
     // Shape of cropped bounding boxes
-    RequestShapeType bboxShape;
+    RequestDataShapeType bboxShape;
     spdlog::info("{0:s} STARTS.", msvc_name); 
 
 
@@ -98,7 +98,7 @@ void YoloV5Postprocessor::postProcessing() {
 
         for (std::size_t i = 0; i < currReq_data.size(); ++i) {
             size_t bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
-            RequestShapeType shape = currReq_data[i].shape;
+            RequestDataShapeType shape = currReq_data[i].shape;
             for (uint8_t j = 0; j < shape.size(); ++j) {
                 bufferSize *= shape[j];
             }

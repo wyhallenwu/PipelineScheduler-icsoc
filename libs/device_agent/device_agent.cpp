@@ -110,7 +110,7 @@ DeviceAgent::finishContainer(const std::string &executable, const std::string &n
 }
 
 json DeviceAgent::createConfigs(
-        const std::vector<std::tuple<std::string, MicroserviceType, QueueLengthType, int16_t, std::vector<RequestShapeType>>> &data,
+        const std::vector<std::tuple<std::string, MicroserviceType, QueueLengthType, int16_t, std::vector<RequestDataShapeType>>> &data,
         const MsvcSLOType &slo, const NeighborMicroserviceConfigs &prev_msvc,
         const std::vector<NeighborMicroserviceConfigs> &next_msvc) {
     int i = 0, j = next_msvc.size() + 1;

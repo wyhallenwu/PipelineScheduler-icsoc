@@ -21,7 +21,8 @@ typedef uint16_t NumMscvType;
 typedef std::chrono::high_resolution_clock::time_point ClockType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
 typedef const char *InterConGPUReqDataType;
-typedef std::vector<int32_t> RequestShapeType;
+typedef std::vector<int32_t> RequestDataShapeType;
+typedef std::vector<std::vector<int32_t>> RequestShapeType;
 typedef cv::cuda::GpuMat LocalGPUReqDataType;
 typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
@@ -29,10 +30,10 @@ typedef uint16_t BatchSizeType;
 
 template<typename DataType>
 struct RequestData {
-    RequestShapeType shape;
+    RequestDataShapeType shape;
     DataType data;
 
-    RequestData(RequestShapeType s, DataType d) : data(d) {
+    RequestData(RequestDataShapeType s, DataType d) : data(d) {
         shape = s;
     }
 
@@ -268,7 +269,7 @@ namespace msvcconfigs {
         // Value `-2` denotes Upstream Microservice.
         int16_t classOfInterest;
         // The shape of data this neighbor microservice expects from the current microservice.
-        std::vector<RequestShapeType> expectedShape;
+        std::vector<RequestDataShapeType> expectedShape;
     };
 
     /**
@@ -297,7 +298,7 @@ namespace msvcconfigs {
         // Ideal batch size for this microservice, runtime batch size could be smaller though
         BatchSizeType msvc_idealBatchSize;
         // Shape of data produced by this microservice
-        std::vector<RequestShapeType> msvc_dataShape;
+        std::vector<RequestDataShapeType> msvc_dataShape;
         // List of upstream microservices
         std::list<NeighborMicroserviceConfigs> msvc_upstreamMicroservices;
         std::list<NeighborMicroserviceConfigs> msvc_dnstreamMicroservices;
@@ -372,9 +373,9 @@ protected:
     NumMscvType nummsvc_dnstreamMicroservices = 0;
 
     // The expected shape of the data for the next microservice
-    std::vector<std::vector<RequestShapeType>> msvc_outReqShape;
+    std::vector<std::vector<RequestDataShapeType>> msvc_outReqShape;
     // The shape of the data to be processed by this microservice
-    std::vector<RequestShapeType> msvc_dataShape;
+    std::vector<RequestDataShapeType> msvc_dataShape;
 
     // Ideal batch size for this microservice, runtime batch size could be smaller though
     BatchSizeType msvc_idealBatchSize;
