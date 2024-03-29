@@ -121,7 +121,7 @@ void cropOneBox(
 }
 
 BaseBBoxCropper::BaseBBoxCropper(const BaseMicroserviceConfigs &configs) : Microservice(configs) {
-    spdlog::info("{0:s} is created.", msvc_name); 
+    info("{0:s} is created.", msvc_name); 
 }
 
 void BaseBBoxCropper::cropping() {
@@ -150,7 +150,7 @@ void BaseBBoxCropper::cropping() {
 
     // Shape of cropped bounding boxes
     RequestDataShapeType bboxShape;
-    spdlog::info("{0:s} STARTS.", msvc_name); 
+    info("{0:s} STARTS.", msvc_name); 
 
 
     cudaStream_t postProcStream;
@@ -158,11 +158,11 @@ void BaseBBoxCropper::cropping() {
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
-            spdlog::info("{0:s} STOPS.", msvc_name);
+            info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
-            spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
 
