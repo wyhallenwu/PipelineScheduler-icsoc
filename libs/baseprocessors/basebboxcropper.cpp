@@ -216,7 +216,7 @@ void BaseBBoxCropper::cropping() {
         std::vector<float *> ptrList{nmsedBoxesList, nmsedScoresList, nmsedClassesList};
         std::vector<size_t> bufferSizeList;
 
-        for (std::size_t i = 0; i < currReq_data.size(); ++i) {
+        for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
             size_t bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
             RequestDataShapeType shape = currReq_data[i].shape;
             for (uint8_t j = 0; j < shape.size(); ++j) {

@@ -100,7 +100,16 @@ void BaseBatchInferencer::inference() {
             };
             outReqData.emplace_back(data);
         }
-        
+
+        cv::cuda::GpuMat dummy;
+        // Add a piece of data at the end of `req_data` to let the next msvc (e.g., cropper) knows about the shape used
+        // udring inference.
+        // This shape together with the shape of the original data will be used to scale the bounding boxes
+        RequestData<LocalGPUReqDataType> shapeGuide = {
+            currReq.req_data[0].shape,
+            dummy
+        };
+        outReqData.emplace_back(shapeGuide);
 
 
         // Packing everything inside the `outReq` to be sent to and processed at the next microservice
