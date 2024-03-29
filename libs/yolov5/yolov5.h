@@ -10,20 +10,20 @@
 using namespace spdlog;
 
 
-class YoloV5Preprocessor : public BasePreprocessor {
-public:
-    YoloV5Preprocessor(const BaseMicroserviceConfigs &config);
-    ~YoloV5Preprocessor() = default;
-protected:
-    friend class YoloV5Agent;
-    void batchRequests();
-    // 
-    // bool isTimeToBatch() override;
-    //
-    // bool checkReqEligibility(uint64_t currReq_genTime) override;
-    //
-    // void updateReqRate(ClockTypeTemp lastInterReqDuration) override;
-};
+// class YoloV5Preprocessor : public BaseReqBatcher {
+// public:
+//     YoloV5Preprocessor(const BaseMicroserviceConfigs &config);
+//     ~YoloV5Preprocessor() = default;
+// protected:
+//     friend class YoloV5Agent;
+//     void batchRequests();
+//     // 
+//     // bool isTimeToBatch() override;
+//     //
+//     // bool checkReqEligibility(uint64_t currReq_genTime) override;
+//     //
+//     // void updateReqRate(ClockTypeTemp lastInterReqDuration) override;
+// };
 
 class YoloV5Inference : public BaseProcessor {
 public:

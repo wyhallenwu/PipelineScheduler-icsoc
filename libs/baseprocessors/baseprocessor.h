@@ -5,6 +5,8 @@
 #include <opencv2/cudaarithm.hpp>
 #include <opencv2/cudaimgproc.hpp>
 #include <thread>
+#include <misc.h>
+#include <trtengine.h>
 
 typedef uint16_t BatchSizeType;
 
@@ -29,12 +31,12 @@ cv::cuda::GpuMat cvtHWCToCHW(
 );
 
 
-class BasePreprocessor : public Microservice {
+class BaseReqBatcher : public Microservice {
 public:
-    BasePreprocessor(const BaseMicroserviceConfigs &configs);
-    ~BasePreprocessor() {
+    BaseReqBatcher(const BaseMicroserviceConfigs &configs);
+    ~BaseReqBatcher() = default;
 
-    };
+    virtual void batchRequests();
 protected:
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;

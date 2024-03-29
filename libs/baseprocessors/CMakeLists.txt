@@ -35,9 +35,9 @@ set(
 # All source files and private header files go here.
 set(
         SOURCE_FILES
-        basepreprocessor.cpp
-        baseprocessor.cpp
-        basepostprocessor.cpp
+        basereqbatcher.cpp
+        basebatchinferencer.cpp
+        basebboxcropper.cpp
 )
 
 # Here we define the library.
@@ -67,6 +67,12 @@ find_package(Threads REQUIRED)
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
+set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
+find_package(misc CONFIG REQUIRED)
+
+set(trtengine_DIR "${CMAKE_CURRENT_BINARY_DIR}/../trtengine")
+find_package(trtengine CONFIG REQUIRED)
+
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(baseprocessors
@@ -86,7 +92,9 @@ target_link_libraries(baseprocessors
         ${OpenCV_LIBS}
         ${CUDA_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
+        misc
         microservice
+        trtengine
 )
 
 # Here we configure variables specifying the target directories.

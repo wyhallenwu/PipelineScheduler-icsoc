@@ -2,7 +2,7 @@
 
 using namespace spdlog;
 
-YoloV5Preprocessor::YoloV5Preprocessor(const BaseMicroserviceConfigs &configs) : BasePreprocessor(configs) {
+YoloV5Preprocessor::YoloV5Preprocessor(const BaseMicroserviceConfigs &configs) : BaseReqBatcher(configs) {
     spdlog::info("{0:s} is created.", msvc_name); 
 }
 

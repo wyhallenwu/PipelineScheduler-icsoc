@@ -34,9 +34,9 @@ set(
 # All source files and private header files go here.
 set(
         SOURCE_FILES
-        yolov5preprocessor.cpp
-        yolov5inference.cpp
-        yolov5postprocessor.cpp
+        # yolov5preprocessor.cpp
+        # yolov5inference.cpp
+        # yolov5postprocessor.cpp
         yolov5.cpp
 )
 
