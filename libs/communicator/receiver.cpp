@@ -139,6 +139,7 @@ void Receiver::HandleRpcs() {
     new SerializedDataRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
     void *tag;  // uniquely identifies a request.
     bool ok;
+    READY = true;
     while (true) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);

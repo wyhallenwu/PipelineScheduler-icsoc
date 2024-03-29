@@ -129,6 +129,7 @@ void BaseReqBatcher::batchRequests() {
     BatchSizeType currReq_batchSize;
     info("{0:s} STARTS.", msvc_name); 
     cv::cuda::Stream preProcStream;
+    READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {

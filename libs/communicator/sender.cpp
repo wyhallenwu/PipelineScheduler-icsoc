@@ -7,7 +7,7 @@ Sender::Sender(const BaseMicroserviceConfigs &configs) : Microservice(
     stubs.push_back(
             DataTransferService::NewStub(grpc::CreateChannel(configs.msvc_dnstreamMicroservices.front().link[0], grpc::InsecureChannelCredentials())));
     multipleStubs = false;
-    run = true;
+    READY = true;
 }
 
 

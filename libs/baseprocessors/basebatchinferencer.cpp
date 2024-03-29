@@ -56,6 +56,7 @@ void BaseBatchInferencer::inference() {
 
     cudaStream_t inferenceStream;
     checkCudaErrorCode(cudaStreamCreate(&inferenceStream), __func__);
+    READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {

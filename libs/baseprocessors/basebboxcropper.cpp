@@ -160,6 +160,8 @@ void BaseBBoxCropper::cropping() {
     // Height and width of the image used for inference
     int orig_h, orig_w, infer_h, infer_w;
 
+    READY = true;
+
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
