@@ -39,7 +39,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
         for (const auto &el: *request.mutable_elements()) {
             auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3,
                                               (void *) (&el.data())).clone();
-            elements.push_back({{el.width(), el.height()}, gpu_image});
+            elements.push_back({{gpu_image.channels(), el.height(), el.width()}, gpu_image});
         }
         Request<LocalGPUReqDataType> req = {
                 std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
@@ -76,7 +76,7 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
             boost::interprocess::shared_memory_object shm{open_only, name, read_only};
             boost::interprocess::mapped_region region{shm, read_only};
             auto image = static_cast<cv::Mat *>(region.get_address());
-            elements.push_back({{el.width(), el.height()}, *image});
+            elements.push_back({{image->channels(), el.height(), el.width()}, *image});
 
             boost::interprocess::shared_memory_object::remove(name);
         }
@@ -117,7 +117,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             }
             cv::Mat image = cv::Mat(el.height(), el.width(), CV_8UC3,
                                     const_cast<char *>(el.data().c_str())).clone();
-            elements.push_back({{el.width(), el.height()}, image});
+            elements.push_back({{image.channels(), el.height(), el.width()}, image});
         }
         Request<LocalCPUReqDataType> req = {
                 std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
