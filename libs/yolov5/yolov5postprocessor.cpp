@@ -180,6 +180,10 @@ void YoloV5Postprocessor::postProcessing() {
                     continue;
                 }
 
+                if (bboxClass == 0) {
+                    saveGPUAsImg(singleImageBBoxList[j], "bbox.jpg");
+                }
+
                 // Putting the bounding box into an `outReq` to be sent out
                 bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
                 reqData = {
