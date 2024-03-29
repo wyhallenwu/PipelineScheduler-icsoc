@@ -1,7 +1,8 @@
 {
     "calibration": "",
     "di": 0,
-    "mbs": 1,
+    "mbs": 10,
+    "cbs":1, 
     "normalize": true,
     "obs": 1,
     "path": "/home/soulsaver/code/systems/PipePlusPlus/tensorrt-cpp-api/build/yolov5s_b32_dynamic_NVIDIAGeForceRTX3090_fp32_32_1.engine",

@@ -5,7 +5,7 @@
         "msvc_dnstreamMicroservices": [
             {
                 "nb_classOfInterest": -1,
-                "nb_commMethod": 3,
+                "nb_commMethod": 4,
                 "nb_link": [
                     ""
                 ],
@@ -49,7 +49,7 @@
     },
     {
         "msvc_name": "yolov5_0::preprocessor",
-        "msvc_idealBatchSize": 1,
+        "msvc_idealBatchSize": 10,
         "msvc_dnstreamMicroservices": [
             {
                 "nb_classOfInterest": -1,
@@ -79,7 +79,7 @@
         "msvc_upstreamMicroservices": [
             {
                 "nb_classOfInterest": -2,
-                "nb_commMethod": 3,
+                "nb_commMethod": 4,
                 "nb_link": [
                     ""
                 ],

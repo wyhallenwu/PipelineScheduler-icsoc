@@ -9,7 +9,7 @@ include(cmake/ccache.cmake)
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     set(CMAKE_CXX_STANDARD 17)
     # Set C++ version and optimization level
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Wall -DNDEBUG -Wno-deprecated-declarations -O0") #-Ofast
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fPIC -Wall -DNDEBUG -Wno-deprecated-declarations -O0") #-Ofast
 
     # Let's ensure -std=c++xx instead of -std=g++xx
     set(CMAKE_CXX_EXTENSIONS OFF)
@@ -113,17 +113,17 @@ target_link_libraries(PipePlusPlus PUBLIC
         device_agent
         controller
 )
-add_executable(run src/main.cpp)
-target_link_libraries(run PipePlusPlus)
+# add_executable(run src/main.cpp)
+# target_link_libraries(run PipePlusPlus)
 
-add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
-target_link_libraries(DeviceAgent device_agent)
+# add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
+# target_link_libraries(DeviceAgent device_agent)
 
-add_executable(Controller libs/controller/controller.cpp)
-target_link_libraries(Controller controller)
+# add_executable(Controller libs/controller/controller.cpp)
+# target_link_libraries(Controller controller)
 
-add_executable(Container_DataSource libs/data_source/data_source.cpp)
-target_link_libraries(Container_DataSource data_source)
+# add_executable(Container_DataSource libs/data_source/data_source.cpp)
+# target_link_libraries(Container_DataSource data_source)
 
 add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
 target_link_libraries(Container_Yolov5 yolov5)
