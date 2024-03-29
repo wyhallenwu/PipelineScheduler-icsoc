@@ -155,6 +155,11 @@ void BaseBBoxCropper::cropping() {
 
     cudaStream_t postProcStream;
     checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+
+
+    // Height and width of the image used for inference
+    int orig_h, orig_w, infer_h, infer_w;
+
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -245,6 +250,15 @@ void BaseBBoxCropper::cropping() {
         checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
         trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
 
+         /**
+         * @brief TODOs:
+         * Hardcoding because we hvent been able to properly carry the image to be cropped.
+         * The cropping logic is ok though.
+         * Need to figure out a way.
+         */
+        infer_h = currReq.req_data[4].shape[1];
+        infer_w = currReq.req_data[4].shape[2];
+
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
 
@@ -255,8 +269,6 @@ void BaseBBoxCropper::cropping() {
 
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
-            // Height and width of the image used for inference
-            int orig_h, orig_w, infer_h, infer_w;
 
             // If there is no object in frame, we don't have to do nothing.
             int numDetsInFrame = (int)numDetList[i];
@@ -268,15 +280,6 @@ void BaseBBoxCropper::cropping() {
             // Otherwise, we need to do some cropping.
             orig_h = imageList[i].shape[1];
             orig_w = imageList[i].shape[2];
-
-            /**
-             * @brief TODOs:
-             * Hardcoding because we hvent been able to properly carry the image to be cropped.
-             * The cropping logic is ok though.
-             * Need to figure out a way.
-             */
-            infer_h = 640;
-            infer_w = 640;
 
             crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
             trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
