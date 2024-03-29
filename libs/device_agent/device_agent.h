@@ -1,13 +1,18 @@
+#ifndef DEVICE_AGENT_H
+#define DEVICE_AGENT_H
+
 #include "container_agent.h"
 #include "indevicecommunication.grpc.pb.h"
 #include "controlcommunication.grpc.pb.h"
 #include <cstdlib>
 #include <misc.h>
 
-using trt::TRTConfigs;
+using controlcommunication::ControlCommunication;
+using controlcommunication::QueueSizes;
+using controlcommunication::MicroserviceName;
+using controlcommunication::MicroserviceConfig;
 
-int CONTAINER_BASE_PORT = 50001;
-int RECEIVER_BASE_PORT = 55001;
+using trt::TRTConfigs;
 
 enum ContainerType {
     DataSource,
@@ -81,29 +86,41 @@ private:
 
     class RequestHandler {
     public:
-        RequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq)
-                : service(service), cq(cq), status(CREATE) {};
-
+        RequestHandler(ServerCompletionQueue *cq) : cq(cq), status(CREATE) {}
         virtual ~RequestHandler() = default;
-
         virtual void Proceed() = 0;
-
     protected:
         enum CallStatus {
             CREATE, PROCESS, FINISH
         };
-
-        InDeviceCommunication::AsyncService *service;
         ServerCompletionQueue *cq;
         ServerContext ctx;
         CallStatus status;
     };
 
-    class CounterUpdateRequestHandler : public RequestHandler {
+    class DeviceRequestHandler : public RequestHandler {
+    public:
+        DeviceRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq)
+                : RequestHandler(cq), service(service) {};
+
+    protected:
+        InDeviceCommunication::AsyncService *service;
+    };
+
+    class ControlRequestHandler : public RequestHandler {
+    public:
+        ControlRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq)
+                : RequestHandler(cq), service(service) {};
+
+    protected:
+        ControlCommunication::AsyncService *service;
+    };
+
+    class CounterUpdateRequestHandler : public DeviceRequestHandler {
     public:
         CounterUpdateRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                     DeviceAgent *device)
-                : RequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : DeviceRequestHandler(service, cq), responder(&ctx), device_agent(device) {
             Proceed();
         }
 
@@ -111,16 +128,16 @@ private:
 
     private:
         QueueSize request;
-        StaticConfirm reply;
-        grpc::ServerAsyncResponseWriter<StaticConfirm> responder;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         DeviceAgent *device_agent;
     };
 
-    class ReportStartRequestHandler : public RequestHandler {
+    class ReportStartRequestHandler : public DeviceRequestHandler {
     public:
         ReportStartRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                   DeviceAgent *device)
-                : RequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : DeviceRequestHandler(service, cq), responder(&ctx), device_agent(device) {
             Proceed();
         }
 
@@ -128,42 +145,42 @@ private:
 
     private:
         indevicecommunication::ConnectionConfigs request;
-        StaticConfirm reply;
-        grpc::ServerAsyncResponseWriter<StaticConfirm> responder;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         DeviceAgent *device_agent;
     };
 
-    class StartMicroserviceRequestHandler : public RequestHandler {
+    class StartMicroserviceRequestHandler : public ControlRequestHandler {
     public:
         StartMicroserviceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                        DeviceAgent *device)
-                : RequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
             Proceed();
         }
 
         void Proceed() final;
 
     private:
-        indevicecommunication::ConnectionConfigs request;
-        StaticConfirm reply;
-        grpc::ServerAsyncResponseWriter<StaticConfirm> responder;
+        MicroserviceConfig request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         DeviceAgent *device_agent;
     };
 
-    class StopMicroserviceRequestHandler : public RequestHandler {
+    class StopMicroserviceRequestHandler : public ControlRequestHandler {
     public:
         StopMicroserviceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                   DeviceAgent *device)
-                : RequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
             Proceed();
         }
 
         void Proceed() final;
 
     private:
-        indevicecommunication::ConnectionConfigs request;
-        StaticConfirm reply;
-        grpc::ServerAsyncResponseWriter<StaticConfirm> responder;
+        MicroserviceName request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         DeviceAgent *device_agent;
     };
 
@@ -180,3 +197,5 @@ private:
     CompletionQueue *controller_sending_cq;
     ControlCommunication::AsyncService controller_service;
 };
+
+#endif //DEVICE_AGENT_H

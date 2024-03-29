@@ -10,6 +10,7 @@
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/health_check_service_interface.h>
+#include <google/protobuf/empty.pb.h>
 
 #include "../json/json.h"
 #include "microservice.h"
@@ -35,7 +36,7 @@ using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using indevicecommunication::InDeviceCommunication;
 using indevicecommunication::QueueSize;
-using indevicecommunication::StaticConfirm;
+using EmptyMessage = google::protobuf::Empty;
 
 enum TransferMethod {
     LocalCPU,
@@ -104,9 +105,9 @@ protected:
         void Proceed() final;
 
     private:
-        StaticConfirm request;
-        StaticConfirm reply;
-        grpc::ServerAsyncResponseWriter<StaticConfirm> responder;
+        EmptyMessage request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         std::atomic<bool> *run;
     };
 
@@ -122,4 +123,4 @@ protected:
     std::atomic<bool> run;
 };
 
-#endif
+#endif //CONTAINER_AGENT_H

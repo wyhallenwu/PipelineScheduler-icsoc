@@ -1,5 +1,8 @@
 #include "device_agent.h"
 
+const int CONTAINER_BASE_PORT = 50001;
+const int RECEIVER_BASE_PORT = 55001;
+
 void msvcconfigs::to_json(json &j, const msvcconfigs::NeighborMicroserviceConfigs &val) {
     j["nb_name"] = val.name;
     j["nb_commMethod"] = val.commMethod;
@@ -51,11 +54,11 @@ DeviceAgent::DeviceAgent(const std::string &controller_url) {
 }
 
 void DeviceAgent::StopContainer(const ContainerHandle &container) {
-    StaticConfirm request;
-    StaticConfirm reply;
+    EmptyMessage request;
+    EmptyMessage reply;
     ClientContext context;
     Status status;
-    std::unique_ptr<ClientAsyncResponseReader<StaticConfirm>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container.stub->AsyncStopExecution(&context, request, container.cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
@@ -194,7 +197,7 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
 void DeviceAgent::StartMicroserviceRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
-        service->RequestStartContainer(&ctx, &request, &responder, cq, cq, this);
+        service->RequestStartMicroservice(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new StartMicroserviceRequestHandler(service, cq, device_agent);
         // TODO: add logic to start container
@@ -209,7 +212,7 @@ void DeviceAgent::StartMicroserviceRequestHandler::Proceed() {
 void DeviceAgent::StopMicroserviceRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
-        service->RequestStopContainer(&ctx, &request, &responder, cq, cq, this);
+        service->RequestStopMicroservice(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new StopMicroserviceRequestHandler(service, cq, device_agent);
         device_agent->StopContainer(device_agent->containers[request.name()]);

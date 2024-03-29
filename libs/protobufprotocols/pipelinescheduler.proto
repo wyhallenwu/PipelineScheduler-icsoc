@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "google/protobuf/empty.proto";
 
 option java_multiple_files = true;
 option objc_class_prefix = "HLW";
@@ -7,9 +8,9 @@ package pipelinescheduler;
 
 // The service definition.
 service DataTransferService {
-  rpc GpuPointerTransfer (GpuPointerPayload) returns (SimpleConfirm) {}
-  rpc SharedMemTransfer (SharedMemPayload) returns (SimpleConfirm) {}
-  rpc SerializedDataTransfer (SerializedDataPayload) returns (SimpleConfirm) {}
+  rpc GpuPointerTransfer (GpuPointerPayload) returns (google.protobuf.Empty) {}
+  rpc SharedMemTransfer (SharedMemPayload) returns (google.protobuf.Empty) {}
+  rpc SerializedDataTransfer (SerializedDataPayload) returns (google.protobuf.Empty) {}
 }
 
 message ImageData {
@@ -54,9 +55,4 @@ message SerializedDataPayload {
   string path = 3;
 
   repeated SerializedImageData elements = 9;
-}
-
-
-// The response message confirming transfer
-message SimpleConfirm {
 }

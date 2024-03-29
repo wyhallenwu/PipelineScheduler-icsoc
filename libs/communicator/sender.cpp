@@ -12,8 +12,8 @@ Sender::Sender(const BaseMicroserviceConfigs &configs) : Microservice(
 
 
 std::string
-Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
-                   SimpleConfirm &reply, Status &status) {
+Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
+                   EmptyMessage &reply, Status &status) {
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
@@ -55,7 +55,7 @@ std::string GPUSender::SendGpuPointer(
         ref->set_width(el.shape[0]);
         ref->set_height(el.shape[1]);
     }
-    SimpleConfirm reply;
+    EmptyMessage reply;
     ClientContext context;
     Status status;
 
@@ -66,18 +66,18 @@ std::string GPUSender::SendGpuPointer(
     tagToGpuPointer[tag] = &elements;
 
     if (!multipleStubs) {
-        std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 stubs[0]->AsyncGpuPointerTransfer(&context, request, &cq));
         return HandleRpcs(rpc, cq, reply, status, tag);
     }
 
-    std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             stubs[rand_int(0, stubs.size() - 1)]->AsyncGpuPointerTransfer(&context, request, &cq));
     return HandleRpcs(rpc, cq, reply, status, tag);
 }
 
-std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
-                                  SimpleConfirm &reply, Status &status, void *tag) {
+std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
+                                  EmptyMessage &reply, Status &status, void *tag) {
     rpc->Finish(&reply, &status, tag);
     void *got_tag;
     bool ok = false;
@@ -131,17 +131,17 @@ std::string LocalCPUSender::SendSharedMemory(const std::vector<RequestData<Local
         ref->set_width(el.shape[0]);
         ref->set_height(el.shape[1]);
     }
-    SimpleConfirm reply;
+    EmptyMessage reply;
     ClientContext context;
     Status status;
 
     if (!multipleStubs) {
-        std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 stubs[0]->AsyncSharedMemTransfer(&context, request, &cq));
         return HandleRpcs(rpc, cq, reply, status);
     }
 
-    std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             stubs[rand_int(0, stubs.size() - 1)]->AsyncSharedMemTransfer(&context, request, &cq));
     return HandleRpcs(rpc, cq, reply, status);
 }
@@ -173,17 +173,17 @@ std::string RemoteCPUSender::SendSerializedData(
         ref->set_height(el.shape[1]);
         ref->set_datalen(el.data.total() * el.data.elemSize());
     }
-    SimpleConfirm reply;
+    EmptyMessage reply;
     ClientContext context;
     Status status;
 
     if (!multipleStubs) {
-        std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 stubs[0]->AsyncSerializedDataTransfer(&context, request, &cq));
         return HandleRpcs(rpc, cq, reply, status);
     }
 
-    std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             stubs[rand_int(0, stubs.size() - 1)]->AsyncSerializedDataTransfer(&context, request, &cq));
     return HandleRpcs(rpc, cq, reply, status);
 }

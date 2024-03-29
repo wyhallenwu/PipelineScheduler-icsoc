@@ -27,8 +27,8 @@ protected:
         return dist(generator());
     }
 
-    static std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
-                                  SimpleConfirm &reply, Status &status);
+    static std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
+                                  EmptyMessage &reply, Status &status);
 
     std::vector<std::unique_ptr<DataTransferService::Stub>> stubs;
     bool multipleStubs;
@@ -46,8 +46,8 @@ public:
             const ClockType &timestamp, const std::string &path, const uint32_t &slo);
 
 private:
-    std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<SimpleConfirm>> &rpc, CompletionQueue &cq,
-                                  SimpleConfirm &reply, Status &status, void *tag);
+    std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
+                           EmptyMessage &reply, Status &status, void *tag);
 
     std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *> tagToGpuPointer;
 };
