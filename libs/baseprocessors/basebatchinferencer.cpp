@@ -145,7 +145,7 @@ void BaseBatchInferencer::inference() {
 TRTConfigs BaseBatchInferencer::readConfigsFromJson(const std::string cfgPath) {
     TRTConfigs yoloConfigs;
     
-    spdlog::trace("{0:s} attempts to parse TRT Config from command line.", __func__);
+    spdlog::trace("{0:s} attempts to parse TRT Config from json file.", __func__);
     std::ifstream file(cfgPath);
     yoloConfigs = json::parse(file).get<TRTConfigs>();
     spdlog::trace("{0:s} finished parsing TRT Config from file.", __func__);
