@@ -35,6 +35,7 @@ set(
 # All source files and private header files go here.
 set(
         SOURCE_FILES
+        baseutils.cpp
         basereqbatcher.cpp
         basebatchinferencer.cpp
         basebboxcropper.cpp
