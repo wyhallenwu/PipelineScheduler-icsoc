@@ -280,6 +280,8 @@ namespace msvcconfigs {
         std::string msvc_name;
         // Type of microservice data receiver, data processor, or data sender
         MicroserviceType msvc_type;
+        // Application level configs
+        std::string msvc_appLvlConfigs = "";
         // The acceptable latency for each individual request processed by this microservice, in `ms`
         MsvcSLOType msvc_svcLevelObjLatency;
         // Ideal batch size for this microservice, runtime batch size could be smaller though
@@ -364,6 +366,9 @@ protected:
                 : NeighborMicroserviceConfigs(configs),
                   queueNum(queueNum) {}
     };
+
+    //Path to specific Application configurations for this microservice
+    std::string msvc_appLvlConfigs = "";
 
     //type
     MicroserviceType msvc_type;
