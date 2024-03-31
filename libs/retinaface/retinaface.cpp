@@ -1,32 +1,37 @@
 #include "retinaface.h"
 
-RetinaFaceAgent::RetinaFaceAgent(const std::string &name, uint16_t own_port, std::vector<Microservice *> services)
-    : ContainerAgent(name, own_port) {
-        msvcs = std::move(services);
-        std::thread preprocessor(&RetinaFacePreprocessor::batchRequests, dynamic_cast<RetinaFacePreprocessor*>(msvcs[1]));
-        preprocessor.detach();
-        std::thread inference(&RetinaFaceInference::inference, dynamic_cast<RetinaFaceInference*>(msvcs[2]));
-        inference.detach();
-        std::thread postprocessor(&RetinaFacePostprocessor::postProcessing, dynamic_cast<RetinaFacePostprocessor*>(msvcs[3]));
-        postprocessor.detach();
-        for (int i = 4; i < msvcs.size(); i++) {
-            std::thread sender(&Sender::Process, dynamic_cast<Sender*>(msvcs[i]));
-            sender.detach();
-        }
+#include <utility>
+
+RetinaFaceAgent::RetinaFaceAgent(const std::string &name, uint16_t own_port, std::vector<Microservice*> services)
+        : ContainerAgent(name, own_port) {
+    msvcs = std::move(services);
+    std::thread preprocessor(&BaseReqBatcher::batchRequests, dynamic_cast<BaseReqBatcher*>(msvcs[1]));
+    preprocessor.detach();
+    std::thread inference(&BaseBatchInferencer::inference, dynamic_cast<BaseBatchInferencer*>(msvcs[2]));
+    inference.detach();
+    std::thread postprocessor(&BaseBBoxCropper::cropping, dynamic_cast<BaseBBoxCropper*>(msvcs[3]));
+    postprocessor.detach();
+    for (int i = 4; i < msvcs.size(); i++) {
+        std::thread sender(&Sender::Process, dynamic_cast<Sender*>(msvcs[i]));
+        sender.detach();
+    }
 }
 
 int main(int argc, char **argv) {
+    spdlog::set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
+
     absl::ParseCommandLine(argc, argv);
     std::vector<BaseMicroserviceConfigs> msvc_configs = msvcconfigs::LoadFromJson();
-    TRTConfigs yoloConfigs = json::parse(absl::GetFlag(FLAGS_trt_json).value()).get<TRTConfigs>();
     std::string name = absl::GetFlag(FLAGS_name);
+    uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
+    spdlog::set_level(spdlog::level::level_enum(logLevel));
     std::vector<Microservice*> msvcs;
-    msvcs.push_back(new Receiver(msvc_configs[0], CommMethod::localGPU));
-    msvcs.push_back(new RetinaFacePreprocessor(msvc_configs[1]));
+    msvcs.push_back(new Receiver(msvc_configs[0]));
+    msvcs.push_back(new BaseReqBatcher(msvc_configs[1]));
     msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
-    msvcs.push_back(new RetinaFaceInference(msvc_configs[2], yoloConfigs));
+    msvcs.push_back(new BaseBatchInferencer(msvc_configs[2]));
     msvcs[2]->SetInQueue(msvcs[1]->GetOutQueue());
-    msvcs.push_back(new RetinaFacePostprocessor(msvc_configs[3]));
+    msvcs.push_back(new BaseBBoxCropper(msvc_configs[3]));
     msvcs[3]->SetInQueue(msvcs[2]->GetOutQueue());
     for (int i = 4; i < msvc_configs.size(); i++) {
         if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::localGPU) {
@@ -39,8 +44,11 @@ int main(int argc, char **argv) {
         msvcs[i]->SetInQueue(msvcs[i - 1]->GetOutQueue());
     }
     ContainerAgent *agent = new RetinaFaceAgent(name, absl::GetFlag(FLAGS_port), msvcs);
+
+    agent->checkReady();
+    
     while (agent->running()) {
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        std::this_thread::sleep_for(std::chrono::seconds(4));
         agent->SendQueueLengths();
     }
     delete agent;

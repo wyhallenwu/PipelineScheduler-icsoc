@@ -51,7 +51,7 @@
     {
         "msvc_name": "yolov5_0::preprocessor",
         "msvc_idealBatchSize": 10,
-        "msvc_appLvlConfigs": "",
+        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov5_preproc.json",
         "msvc_dnstreamMicroservices": [
             {
                 "nb_classOfInterest": -1,
@@ -98,7 +98,7 @@
     },
     {
         "msvc_name": "yolov5_0::inference",
-        "msvc_idealBatchSize": 1,
+        "msvc_idealBatchSize": 10,
         "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov5_trt.json",
         "msvc_dnstreamMicroservices": [
             {

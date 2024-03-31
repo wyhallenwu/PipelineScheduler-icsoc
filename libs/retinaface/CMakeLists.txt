@@ -34,9 +34,9 @@ set(
 # All source files and private header files go here.
 set(
         SOURCE_FILES
-        retinafacepreprocessor.cpp
-        retinafaceinference.cpp
-        retinafacepostprocessor.cpp
+        # retinafacepreprocessor.cpp
+        # retinafaceinference.cpp
+        # retinafacepostprocessor.cpp
         retinaface.cpp
 )
 

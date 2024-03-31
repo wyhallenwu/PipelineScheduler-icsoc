@@ -81,38 +81,38 @@ add_subdirectory(libs/protobufprotocols)
 add_subdirectory(libs/communicator)
 add_subdirectory(libs/container_agent)
 add_subdirectory(libs/data_source)
-add_subdirectory(libs/yolov5)
-#add_subdirectory(libs/retinaface)
+# add_subdirectory(libs/yolov5)
+add_subdirectory(libs/retinaface)
 #add_subdirectory(libs/arcface)
-add_subdirectory(libs/device_agent)
-add_subdirectory(libs/controller)
+# add_subdirectory(libs/device_agent)
+# add_subdirectory(libs/controller)
 
-add_library(PipePlusPlus
-        src/main.cpp)
+# add_library(PipePlusPlus
+#         src/main.cpp)
 
-target_include_directories(PipePlusPlus PUBLIC
-        ${OpenCV_INCLUDE_DIRS}
-        ${CUDA_INCLUDE_DIRS}
-        ${TensorRT_INCLUDE_DIRS}
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
-target_link_libraries(PipePlusPlus PUBLIC
-        data_grpc_proto
-        device_grpc_proto
-        ${OpenCV_LIBS}
-        ${CUDA_LIBRARIES}
-        ${CMAKE_THREAD_LIBS_INIT}
-        ${TensorRT_LIBRARIES}
-        ${_GRPC_GRPCPP}
-        ${_REFLECTION}
-        ${_PROTOBUF_LIBPROTOBUF}
-        misc
-        microservice
-        communicator
-        data_source
-        container_agent
-        device_agent
-        controller
-)
+# target_include_directories(PipePlusPlus PUBLIC
+#         ${OpenCV_INCLUDE_DIRS}
+#         ${CUDA_INCLUDE_DIRS}
+#         ${TensorRT_INCLUDE_DIRS}
+#         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
+# target_link_libraries(PipePlusPlus PUBLIC
+#         data_grpc_proto
+#         device_grpc_proto
+#         ${OpenCV_LIBS}
+#         ${CUDA_LIBRARIES}
+#         ${CMAKE_THREAD_LIBS_INIT}
+#         ${TensorRT_LIBRARIES}
+#         ${_GRPC_GRPCPP}
+#         ${_REFLECTION}
+#         ${_PROTOBUF_LIBPROTOBUF}
+#         misc
+#         microservice
+#         communicator
+#         data_source
+#         container_agent
+#         # device_agent
+#         # controller
+# )
 # add_executable(run src/main.cpp)
 # target_link_libraries(run PipePlusPlus)
 
@@ -125,11 +125,11 @@ target_link_libraries(PipePlusPlus PUBLIC
 # add_executable(Container_DataSource libs/data_source/data_source.cpp)
 # target_link_libraries(Container_DataSource data_source)
 
-add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
-target_link_libraries(Container_Yolov5 yolov5)
+# add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
+# target_link_libraries(Container_Yolov5 yolov5)
 
-#add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
-#target_link_libraries(Container_RetinaFace retinaface)
+add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
+target_link_libraries(Container_RetinaFace retinaface)
 
 #add_executable(Container_ArcFace libs/arcface/arcface.cpp)
 #target_link_libraries(Container_ArcFace arcface)

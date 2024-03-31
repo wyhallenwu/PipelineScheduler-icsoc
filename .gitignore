@@ -17,6 +17,7 @@ __pycache__/
 .idea
 .dotnet
 .wget-hsts
+.pip
 *.a
 *.o
 build
@@ -29,6 +30,10 @@ cmake-test/
 cmake-build-debug/
 cmake-build-default/
 models/
+
+data
+curve
+
 # files
 
 ## videos
@@ -39,3 +44,4 @@ models/
 *.onnx
 *.pt
 *.pth
+*.tar
