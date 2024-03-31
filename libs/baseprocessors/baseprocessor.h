@@ -9,6 +9,8 @@
 #include <trtengine.h>
 
 typedef uint16_t BatchSizeType;
+using namespace msvcconfigs;
+using json = nlohmann::json;
 
 cv::cuda::GpuMat resizePadRightBottom(
     cv::cuda::GpuMat &input,
@@ -43,10 +45,30 @@ public:
 
     virtual void batchRequests();
 protected:
+    /**
+     * @brief 
+     * 
+     */
+    struct BaseReqBatcherConfigs {
+        uint8_t msvc_imgType = 16; //CV_8UC3
+        uint8_t msvc_colorCvtType = 4; //CV_BGR2RGB
+        uint8_t msvc_resizeInterpolType = 3; //INTER_AREA
+        float msvc_imgNormScale = 1.f / 255.f;
+        std::array<float, 3> msvc_subVals = {0.f, 0.f, 0.f};
+        std::array<float, 3> msvc_divVals = {1.f, 1.f, 1.f};
+    };
+
+    void readConfigsFromJson(std::string cfgPath);
+
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
     bool isTimeToBatch() override;
     bool checkReqEligibility(ClockType currReq_genTime) override;
+
+    uint8_t msvc_imgType, msvc_colorCvtType, msvc_resizeInterpolType;
+    float msvc_imgNormScale;
+    std::array<float, 3> msvc_subVals, msvc_divVals;
+
 };
 
 

@@ -124,4 +124,6 @@ public:
     }
 };
 
+float fractionToFloat(const std::string& fraction);
+
 #endif

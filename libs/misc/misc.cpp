@@ -36,3 +36,24 @@ void saveCPUAsImg(const cv::Mat &img, std::string name, float scale) {
     img.convertTo(cpuImg, CV_8UC3, scale);
     cv::imwrite(name, img);
 }
+
+float fractionToFloat(const std::string& fraction) {
+    std::istringstream iss(fraction);
+    std::string numerator, denominator;
+
+    // Extract the numerator and denominator
+    std::getline(iss, numerator, '/');
+    std::getline(iss, denominator);
+
+    // Convert the numerator and denominator to float
+    float num = std::stof(numerator);
+    float den = std::stof(denominator);
+
+    // Check for division by zero
+    if (den == 0) {
+        return 0.0f; // or any other desired value for division by zero
+    }
+
+    // Calculate and return the result
+    return num / den;
+}

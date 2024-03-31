@@ -108,6 +108,7 @@ cv::cuda::GpuMat resizePadRightBottom(
  * @param configs 
  */
 BaseReqBatcher::BaseReqBatcher(const BaseMicroserviceConfigs &configs) : Microservice(configs){
+    readConfigsFromJson(configs.msvc_appLvlConfigs);
     info("{0:s} is created.", msvc_name); 
 }
 
@@ -201,12 +202,15 @@ void BaseReqBatcher::batchRequests() {
             (this->msvc_outReqShape.at(0))[0][1],
             (this->msvc_outReqShape.at(0))[0][2],
             cv::Scalar(128, 128, 128),
-            preProcStream
+            preProcStream,
+            msvc_imgType,
+            msvc_colorCvtType,
+            msvc_resizeInterpolType
         );
 
-        data.data = cvtHWCToCHW(data.data, preProcStream);
+        data.data = cvtHWCToCHW(data.data, preProcStream, msvc_imgType);
 
-        data.data = normalize(data.data, preProcStream);
+        data.data = normalize(data.data, preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
         trace("{0:s} finished resizing a frame", msvc_name);
         data.shape = RequestDataShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
@@ -261,4 +265,23 @@ bool BaseReqBatcher::isTimeToBatch() {
  */
 bool BaseReqBatcher::checkReqEligibility(ClockType currReq_gentime) {
     return true;
+}
+
+void BaseReqBatcher::readConfigsFromJson(std::string cfgPath) {
+    spdlog::trace("{0:s} attempts to parse TRT Config from json file.", __func__);
+    std::ifstream file(cfgPath);
+    json j = json::parse(file);
+
+    j.at("msvc_imgType").get_to(msvc_imgType);
+    j.at("msvc_colorCvtType").get_to(msvc_colorCvtType);
+    j.at("msvc_resizeInterpolType").get_to(msvc_resizeInterpolType);
+    std::string normVal;
+    j.at("msvc_imgNormScale").get_to(normVal);
+    msvc_imgNormScale = fractionToFloat(normVal);
+
+    // Assuming msvc_subVals and msvc_divVals are std::vector<double>
+    j.at("msvc_subVals").get_to(msvc_subVals);
+    j.at("msvc_divVals").get_to(msvc_divVals);
+
+    spdlog::trace("{0:s} finished parsing TRT Config from file.", __func__);
 }
