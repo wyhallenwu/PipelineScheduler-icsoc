@@ -15,19 +15,24 @@ cv::cuda::GpuMat resizePadRightBottom(
     size_t height,
     size_t width,
     const cv::Scalar &bgcolor = cv::Scalar(128, 128, 128),
-    cv::cuda::Stream &stream = cv::cuda::Stream::Null()
+    cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
+    uint8_t IMG_TYPE = 16, //CV_8UC3
+    uint8_t COLOR_CVT_TYPE = 4, //CV_BGR2RGB
+    uint8_t RESIZE_INTERPOL_TYPE = 3 //INTER_AREA
 );
 
 cv::cuda::GpuMat normalize(
     cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
     const std::array<float, 3>& subVals = {0.f, 0.f, 0.f},
-    const std::array<float, 3>& divVals = {1.f, 1.f, 1.f}
+    const std::array<float, 3>& divVals = {1.f, 1.f, 1.f},
+    const float normalized_scale = 1.f / 255.f
 );
 
 cv::cuda::GpuMat cvtHWCToCHW(
     cv::cuda::GpuMat &input,
-    cv::cuda::Stream &stream = cv::cuda::Stream::Null()
+    cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
+    uint8_t IMG_TYPE = 16 //CV_8UC3
 );
 
 

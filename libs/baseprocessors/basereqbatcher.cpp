@@ -14,14 +14,16 @@ cv::cuda::GpuMat normalize(
     cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream,
     const std::array<float, 3>& subVals,
-    const std::array<float, 3>& divVals
+    const std::array<float, 3>& divVals,
+    const float normalized_scale
 ) {
     trace("Going into {0:s}", __func__);
     cv::cuda::GpuMat normalized;
-    input.convertTo(normalized, CV_32FC3, 1.f / 255.f, stream);
+    input.convertTo(normalized, CV_32FC3, normalized_scale, stream);
     stream.waitForCompletion();
-    // cv::cuda::subtract(normalized, cv::Scalar(subVals[0], subVals[1], subVals[2]), normalized, cv::noArray(), -1);
-    // cv::cuda::divide(normalized, cv::Scalar(divVals[0], divVals[1], divVals[2]), normalized, 1, -1);
+    
+    cv::cuda::subtract(normalized, cv::Scalar(subVals[0], subVals[1], subVals[2]), normalized, cv::noArray(), -1);
+    cv::cuda::divide(normalized, cv::Scalar(divVals[0], divVals[1], divVals[2]), normalized, 1, -1);
     trace("Finished {0:s}", __func__);
 
     return normalized;
@@ -29,7 +31,8 @@ cv::cuda::GpuMat normalize(
 
 cv::cuda::GpuMat cvtHWCToCHW(
     cv::cuda::GpuMat &input,
-    cv::cuda::Stream &stream
+    cv::cuda::Stream &stream,
+    uint8_t IMG_TYPE
 ) {
 
     trace("Going into {0:s}", __func__);
@@ -43,11 +46,12 @@ cv::cuda::GpuMat cvtHWCToCHW(
      */
     // cv::cuda::GpuMat transposed(height, width, CV_8UC3);
     cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
+    uint8_t IMG_SINGLE_CHANNEL_TYPE = IMG_TYPE ^ 16;
     size_t channel_mem_width = height * width;
     std::vector<cv::cuda::GpuMat> channels {
-        cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[0])),
-        cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[channel_mem_width])),
-        cv::cuda::GpuMat(height, width, CV_8U, &(transposed.ptr()[channel_mem_width * 2]))
+        cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[0])),
+        cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width])),
+        cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width * 2]))
     };
     cv::cuda::split(input, channels, stream);
     stream.waitForCompletion();    
@@ -71,20 +75,24 @@ cv::cuda::GpuMat resizePadRightBottom(
     const size_t height,
     const size_t width,
     const cv::Scalar &bgcolor,
-    cv::cuda::Stream &stream
+    cv::cuda::Stream &stream,
+    uint8_t IMG_TYPE,
+    uint8_t COLOR_CVT_TYPE,
+    uint8_t RESIZE_INTERPOL_TYPE
+
 ) {
     trace("Going into {0:s}", __func__);
 
-    cv::cuda::GpuMat rgb_img(input.rows, input.cols, CV_8UC3);
-    cv::cuda::cvtColor(input, rgb_img, cv::COLOR_BGR2RGB, 0, stream);
+    cv::cuda::GpuMat rgb_img(input.rows, input.cols, IMG_TYPE);
+    cv::cuda::cvtColor(input, rgb_img, COLOR_CVT_TYPE, 0, stream);
 
     float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
     int unpad_h = r * input.rows;
     //Create a new GPU Mat 
-    cv::cuda::GpuMat resized(unpad_h, unpad_w, CV_8UC3);
-    cv::cuda::resize(rgb_img, resized, resized.size(), 0, 0, cv::INTER_AREA, stream);
-    cv::cuda::GpuMat out(height, width, CV_8UC3, bgcolor);
+    cv::cuda::GpuMat resized(unpad_h, unpad_w, IMG_TYPE);
+    cv::cuda::resize(rgb_img, resized, resized.size(), 0, 0, RESIZE_INTERPOL_TYPE, stream);
+    cv::cuda::GpuMat out(height, width, IMG_TYPE, bgcolor);
     // Creating an opencv stream for asynchronous operation on cuda
     resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
 
