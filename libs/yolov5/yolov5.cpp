@@ -22,18 +22,7 @@ int main(int argc, char **argv) {
 
     absl::ParseCommandLine(argc, argv);
     std::vector<BaseMicroserviceConfigs> msvc_configs = msvcconfigs::LoadFromJson();
-    TRTConfigs yoloConfigs;
-    if (absl::GetFlag(FLAGS_trt_json).has_value()) {
-        spdlog::trace("{0:s} attempts to parse TRT Config from command line.", __func__);
-        yoloConfigs = json::parse(absl::GetFlag(FLAGS_trt_json).value()).get<TRTConfigs>();
-        spdlog::trace("{0:s} finished parsing TRT Config from file.", __func__);
-    } else {
-        spdlog::trace("{0:s} attempts to parse TRT Config from command line.", __func__);
-        std::ifstream file(absl::GetFlag(FLAGS_trt_json_path).value());
-        yoloConfigs = json::parse(file).get<TRTConfigs>();
-        spdlog::trace("{0:s} finished parsing TRT Config from file.", __func__);
-        
-    }
+
     std::string name = absl::GetFlag(FLAGS_name);
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     spdlog::set_level(spdlog::level::level_enum(logLevel));
@@ -41,7 +30,7 @@ int main(int argc, char **argv) {
     msvcs.push_back(new Receiver(msvc_configs[0]));
     msvcs.push_back(new BaseReqBatcher(msvc_configs[1]));
     msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
-    msvcs.push_back(new BaseBatchInferencer(msvc_configs[2], yoloConfigs));
+    msvcs.push_back(new BaseBatchInferencer(msvc_configs[2]));
     msvcs[2]->SetInQueue(msvcs[1]->GetOutQueue());
     msvcs.push_back(new BaseBBoxCropper(msvc_configs[3]));
     msvcs[3]->SetInQueue(msvcs[2]->GetOutQueue());

@@ -131,7 +131,7 @@ json DeviceAgent::createConfigs(
                     {std::get<0>(data[++i]), CommMethod::localGPU, {""}, std::get<2>(data[i]), std::get<3>(data[i]),
                      std::get<4>(data[i])});
         }
-        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), slo, 1, std::get<4>(msvc), {upstream}, downstream});
+        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), "", slo, 1, std::get<4>(msvc), {upstream}, downstream});
         //current mvsc becomes upstream for next msvc
         upstream = {std::get<0>(msvc), CommMethod::localGPU, {""}, std::get<2>(msvc), -2, std::get<4>(msvc)};
     }

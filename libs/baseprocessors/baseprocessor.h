@@ -49,7 +49,7 @@ typedef uint16_t BatchSizeType;
 
 class BaseBatchInferencer : public Microservice {
 public:
-    BaseBatchInferencer(const BaseMicroserviceConfigs &configs, const TRTConfigs &engineConfigs);
+    BaseBatchInferencer(const BaseMicroserviceConfigs &configs);
     ~BaseBatchInferencer() = default;
     virtual void inference();
 protected:
@@ -57,6 +57,8 @@ protected:
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
     TRTConfigs msvc_engineConfigs;
     Engine* msvc_inferenceEngine;
+
+    TRTConfigs readConfigsFromJson(const std::string cfgPath);
 
     bool checkReqEligibility(ClockType currReq_genTime) override;
 };

@@ -1,17 +1,20 @@
 #include "baseprocessor.h"
 
 using namespace spdlog;
+using json = nlohmann::json;
+
 
 /**
  * @brief Construct a new Base Preprocessor that inherites the LocalGPUDataMicroservice given the `InType`
  * 
  * @param configs 
  */
-BaseBatchInferencer::BaseBatchInferencer(
-    const BaseMicroserviceConfigs &config, 
-    const TRTConfigs &engineConfigs) : Microservice(config), msvc_engineConfigs(engineConfigs) {
+BaseBatchInferencer::BaseBatchInferencer(const BaseMicroserviceConfigs &config) : Microservice(config){
     
-    msvc_inferenceEngine = new Engine(engineConfigs);
+    msvc_engineConfigs = readConfigsFromJson(msvc_appLvlConfigs);
+    msvc_engineConfigs.maxBatchSize = msvc_idealBatchSize;
+
+    msvc_inferenceEngine = new Engine(msvc_engineConfigs);
 
     msvc_engineInputBuffers = msvc_inferenceEngine->getInputBuffers();
     msvc_engineOutputBuffers = msvc_inferenceEngine->getOutputBuffers();
@@ -137,4 +140,15 @@ void BaseBatchInferencer::inference() {
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }
     checkCudaErrorCode(cudaStreamDestroy(inferenceStream), __func__);
+}
+
+TRTConfigs BaseBatchInferencer::readConfigsFromJson(const std::string cfgPath) {
+    TRTConfigs yoloConfigs;
+    
+    spdlog::trace("{0:s} attempts to parse TRT Config from command line.", __func__);
+    std::ifstream file(cfgPath);
+    yoloConfigs = json::parse(file).get<TRTConfigs>();
+    spdlog::trace("{0:s} finished parsing TRT Config from file.", __func__);
+
+    return yoloConfigs;
 }
