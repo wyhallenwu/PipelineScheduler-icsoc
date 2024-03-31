@@ -20,6 +20,7 @@ void msvcconfigs::from_json(const json &j, msvcconfigs::NeighborMicroserviceConf
 void msvcconfigs::from_json(const json &j, msvcconfigs::BaseMicroserviceConfigs &val) {
     j.at("msvc_name").get_to(val.msvc_name);
     j.at("msvc_type").get_to(val.msvc_type);
+    j.at("msvc_appLvlConfigs").get_to(val.msvc_appLvlConfigs);
     j.at("msvc_svcLevelObjLatency").get_to(val.msvc_svcLevelObjLatency);
     j.at("msvc_idealBatchSize").get_to(val.msvc_idealBatchSize);
     j.at("msvc_dataShape").get_to(val.msvc_dataShape);
