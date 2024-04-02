@@ -78,6 +78,7 @@ namespace trt {
         // GPU device index
         int deviceIndex = 0;
 
+        size_t maxWorkspaceSize = 1 << 30;
         bool normalize = false;
         std::array<float, 3> subVals{0.f, 0.f, 0.f};
         std::array<float, 3> divVals{1.f, 1.f, 1.f};

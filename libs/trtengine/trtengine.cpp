@@ -36,6 +36,8 @@ void Engine::serializeEngineOptions(const TRTConfigs &configs) {
     std::string engineName = onnxModelPath.substr(filenamePos, onnxModelPath.find_last_of('.') - filenamePos);
     std::string enginePath = onnxModelPath.substr(0, onnxModelPath.find_last_of('.'));
 
+    m_maxWorkspaceSize = configs.maxWorkspaceSize;
+
     // Add the GPU device name to the file to ensure that the model is only used on devices with the exact same GPU
     std::vector<std::string> deviceNames;
     getDeviceNames(deviceNames);
@@ -164,6 +166,7 @@ bool Engine::build(const TRTConfigs &configs) {
     if (!builderConfig) {
         return false;
     }
+    builderConfig->setMaxWorkspaceSize(m_maxWorkspaceSize);
 
     // Register a single optimization profile
     IOptimizationProfile *optProfile = builder->createOptimizationProfile();

@@ -131,6 +131,8 @@ private:
     bool outToGPU = true;
     bool isDynamic = false;
 
+    size_t m_maxWorkspaceSize = 1 << 30;
+
     MODEL_DATA_TYPE m_precision;
 };
 
