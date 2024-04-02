@@ -20,7 +20,6 @@ Engine::Engine(const TRTConfigs &configs) : m_configs(configs) {
     if (m_configs.path.find(".onnx") != std::string::npos) {
         build();
     }
-    loadNetwork();
 }
 
 std::string getLastWord(const std::string& str) {
