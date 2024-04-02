@@ -33,6 +33,7 @@ GPUSender::GPUSender(const BaseMicroserviceConfigs &configs) : Sender(configs) {
 }
 
 void GPUSender::Process() {
+    setDevice();
     while (READY) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);
@@ -112,6 +113,7 @@ LocalCPUSender::LocalCPUSender(const BaseMicroserviceConfigs &configs) : Sender(
         configs) {}
 
 void LocalCPUSender::Process() {
+    setDevice();
     while (READY) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);
@@ -166,6 +168,7 @@ RemoteCPUSender::RemoteCPUSender(const BaseMicroserviceConfigs &configs) : Sende
         configs) {}
 
 void RemoteCPUSender::Process() {
+    setDevice();
     while (READY) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);

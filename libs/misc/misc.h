@@ -76,7 +76,7 @@ namespace trt {
         // This determines the GPU memory buffer sizes allocated upon model loading so CANNOT BE CHANGE DURING RUNTIME.
         int32_t maxBatchSize = 128;
         // GPU device index
-        int deviceIndex = 0;
+        int8_t deviceIndex = 0;
 
         size_t maxWorkspaceSize = 1 << 30;
         bool normalize = false;

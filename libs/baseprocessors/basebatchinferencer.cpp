@@ -13,8 +13,10 @@ BaseBatchInferencer::BaseBatchInferencer(const BaseMicroserviceConfigs &config) 
     
     msvc_engineConfigs = readConfigsFromJson(msvc_appLvlConfigs);
     msvc_engineConfigs.maxBatchSize = msvc_idealBatchSize;
+    msvc_engineConfigs.deviceIndex = msvc_deviceIndex;
 
     msvc_inferenceEngine = new Engine(msvc_engineConfigs);
+    msvc_inferenceEngine->loadNetwork();
 
     msvc_engineInputBuffers = msvc_inferenceEngine->getInputBuffers();
     msvc_engineOutputBuffers = msvc_inferenceEngine->getOutputBuffers();
@@ -35,6 +37,7 @@ bool BaseBatchInferencer::checkReqEligibility(ClockType currReq_gentime) {
 }
 
 void BaseBatchInferencer::inference() {
+    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.

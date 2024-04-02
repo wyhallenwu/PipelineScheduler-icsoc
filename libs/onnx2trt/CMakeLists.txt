@@ -38,7 +38,7 @@ set(
 
 # Here we define the library.
 add_library(onnx2trt
-        ${HEADER_FILES}
+        # ${HEADER_FILES}
         ${SOURCE_FILES})
 
 # We also add an alias definition so that we shadown

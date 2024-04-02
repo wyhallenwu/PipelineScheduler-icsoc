@@ -22,7 +22,7 @@ int main(int argc, char *argv[]) {
     uint16_t max_batch = absl::GetFlag(FLAGS_max_batch);
     uint16_t step = absl::GetFlag(FLAGS_step);
     uint16_t precision = absl::GetFlag(FLAGS_precision);
-    uint16_t gpu = absl::GetFlag(FLAGS_gpu);
+    int8_t gpu = absl::GetFlag(FLAGS_gpu);
     size_t max_workspace_size = absl::GetFlag(FLAGS_max_workspace_size);
     uint16_t verbose = absl::GetFlag(FLAGS_verbose);
 

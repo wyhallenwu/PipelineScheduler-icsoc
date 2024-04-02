@@ -134,6 +134,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 
 // This can be run in multiple threads if needed.
 void Receiver::HandleRpcs() {
+    setDevice();
     new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
     new SharedMemoryRequestHandler(&service, cq.get(), msvc_OutQueue[0]);
     new SerializedDataRequestHandler(&service, cq.get(), msvc_OutQueue[0]);

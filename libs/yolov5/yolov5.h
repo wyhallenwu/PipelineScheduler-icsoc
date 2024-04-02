@@ -48,5 +48,5 @@ using namespace spdlog;
 
 class YoloV5Agent : public ContainerAgent {
 public:
-    YoloV5Agent(const std::string &name, uint16_t own_port, std::vector<Microservice*> services);
+    YoloV5Agent(const std::string &name, uint16_t own_port, int8_t devIndex, std::vector<Microservice*> services);
 };

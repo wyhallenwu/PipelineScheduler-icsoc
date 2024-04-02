@@ -22,6 +22,7 @@ ABSL_DECLARE_FLAG(std::optional<std::string>, json_path);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json_path);
 ABSL_DECLARE_FLAG(uint16_t, port);
+ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
 
 using json = nlohmann::json;
@@ -54,7 +55,7 @@ namespace msvcconfigs {
 
 class ContainerAgent {
 public:
-    ContainerAgent(const std::string &name, uint16_t own_port);
+    ContainerAgent(const std::string &name, uint16_t own_port, int8_t devIndex);
 
     ~ContainerAgent() {
         for (auto msvc: msvcs) {
@@ -80,6 +81,7 @@ public:
     void checkReady();
 
 protected:
+    uint8_t deviceIndex = -1;
     void ReportStart();
 
     class RequestHandler {

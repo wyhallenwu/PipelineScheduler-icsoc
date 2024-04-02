@@ -288,6 +288,8 @@ namespace msvcconfigs {
         BatchSizeType msvc_idealBatchSize;
         // Shape of data produced by this microservice
         std::vector<RequestDataShapeType> msvc_dataShape;
+        // GPU index, -1 means CPU
+        int8_t msvc_deviceIndex = -1;
         // List of upstream microservices
         std::list<NeighborMicroserviceConfigs> msvc_upstreamMicroservices;
         std::list<NeighborMicroserviceConfigs> msvc_dnstreamMicroservices;
@@ -345,6 +347,31 @@ public:
         return READY;
     }
 
+    /**
+     * @brief Set the Device index
+     * should be called at least once for each thread
+     * 
+     */
+    void setDevice() {
+        setDevice(msvc_deviceIndex);
+    }
+
+    /**
+     * @brief Set the Device index
+     * should be called at least once for each thread (except when the above function is already called)
+     * 
+     */
+    void setDevice(int8_t deviceIndex) {
+        if (deviceIndex >= 0) {
+            cv::cuda::setDevice(deviceIndex);
+            checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
+        }
+    }
+
+    void setDeviceIndex(int8_t deviceIndex) {
+        msvc_deviceIndex = deviceIndex;
+    }
+
 protected:
     std::vector<ThreadSafeFixSizedDoubleQueue*> msvc_InQueue, msvc_OutQueue;
     //
@@ -369,6 +396,9 @@ protected:
 
     //Path to specific Application configurations for this microservice
     std::string msvc_appLvlConfigs = "";
+
+    // GPU index, -1 means CPU
+    int8_t msvc_deviceIndex = -1;
 
     //type
     MicroserviceType msvc_type;

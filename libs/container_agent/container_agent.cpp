@@ -6,6 +6,7 @@ ABSL_FLAG(std::optional<std::string>, json_path, std::nullopt, "json for configu
 ABSL_FLAG(std::optional<std::string>, trt_json, std::nullopt, "optional json for TRTConfiguration");
 ABSL_FLAG(std::optional<std::string>, trt_json_path, std::nullopt, "json for TRTConfiguration");
 ABSL_FLAG(uint16_t, port, 0, "server port for the service");
+ABSL_FLAG(int16_t, device, 0, "Index of GPU device");
 ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
 
 void msvcconfigs::from_json(const json &j, msvcconfigs::NeighborMicroserviceConfigs &val) {
@@ -51,7 +52,7 @@ std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
     }
 }
 
-ContainerAgent::ContainerAgent(const std::string &name, uint16_t own_port) : name(name) {
+ContainerAgent::ContainerAgent(const std::string &name, uint16_t own_port, int8_t devIndex) : name(name) {
     std::string server_address = absl::StrFormat("%s:%d", "localhost", own_port);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();

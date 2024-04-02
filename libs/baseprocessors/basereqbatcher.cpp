@@ -13,6 +13,7 @@ BaseReqBatcher::BaseReqBatcher(const BaseMicroserviceConfigs &configs) : Microse
 }
 
 void BaseReqBatcher::batchRequests() {
+    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.

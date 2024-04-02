@@ -7,6 +7,7 @@ BaseBBoxCropper::BaseBBoxCropper(const BaseMicroserviceConfigs &configs) : Micro
 }
 
 void BaseBBoxCropper::cropping() {
+    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.

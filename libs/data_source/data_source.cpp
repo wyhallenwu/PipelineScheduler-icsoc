@@ -23,8 +23,8 @@ void DataReader::Process(int wait_time_ms) {
     }
 };
 
-DataSourceAgent::DataSourceAgent(const std::string &name, uint16_t own_port,
-                                 std::vector<BaseMicroserviceConfigs> &msvc_configs) : ContainerAgent(name, own_port) {
+DataSourceAgent::DataSourceAgent(const std::string &name, uint16_t own_port, int8_t devIndex,
+                                 std::vector<BaseMicroserviceConfigs> &msvc_configs) : ContainerAgent(name, own_port, deviceIndex) {
     msvcs.push_back(reinterpret_cast<Microservice *const>(new DataReader(msvc_configs[0])));
     msvcs.push_back(reinterpret_cast<Microservice *const>(new RemoteCPUSender(msvc_configs[1])));
     msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
     std::vector<BaseMicroserviceConfigs> msvc_configs = msvcconfigs::LoadFromJson();
     std::string name = absl::GetFlag(FLAGS_name);
-    ContainerAgent *agent = new DataSourceAgent(name, absl::GetFlag(FLAGS_port), msvc_configs);
+    ContainerAgent *agent = new DataSourceAgent(name, absl::GetFlag(FLAGS_port), -1, msvc_configs);
     while (agent->running()) {
         std::this_thread::sleep_for(std::chrono::seconds(10));
         agent->SendQueueLengths();

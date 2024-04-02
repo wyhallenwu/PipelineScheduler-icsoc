@@ -58,11 +58,6 @@ void Engine::serializeEngineOptions(const TRTConfigs &configs) {
 
     m_maxWorkspaceSize = configs.maxWorkspaceSize;
 
-    // Add the GPU device name to the file to ensure that the model is only used on devices with the exact same GPU
-    std::vector<std::string> deviceNames;
-    getDeviceNames(deviceNames);
-    
-
     enginePath = onnxModelPath.substr(0, onnxModelPath.find_last_of('.'));    
     if (configs.storePath.empty()) {
         m_engineStorePath = onnxModelPath.substr(0, onnxModelPath.find_last_of('/'));   
@@ -309,9 +304,8 @@ bool Engine::loadNetwork() {
         return false;
     }
 
-    m_precision = m_configs.precision;
     // Set the device index
-    auto ret = cudaSetDevice(m_configs.deviceIndex);
+    auto ret = cudaSetDevice(m_deviceIndex);
     if (ret != 0) {
         int numGPUs;
         cudaGetDeviceCount(&numGPUs);

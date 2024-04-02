@@ -2,8 +2,8 @@
 
 #include <utility>
 
-YoloV5Agent::YoloV5Agent(const std::string &name, uint16_t own_port, std::vector<Microservice*> services)
-        : ContainerAgent(name, own_port) {
+YoloV5Agent::YoloV5Agent(const std::string &name, uint16_t own_port, int8_t devIndex, std::vector<Microservice*> services)
+        : ContainerAgent(name, own_port, devIndex) {
     msvcs = std::move(services);
     std::thread preprocessor(&BaseReqBatcher::batchRequests, dynamic_cast<BaseReqBatcher*>(msvcs[1]));
     preprocessor.detach();
@@ -21,7 +21,13 @@ int main(int argc, char **argv) {
     spdlog::set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
 
     absl::ParseCommandLine(argc, argv);
+
+    int8_t device = absl::GetFlag(FLAGS_device);
+    checkCudaErrorCode(cudaSetDevice(device), __func__);
     std::vector<BaseMicroserviceConfigs> msvc_configs = msvcconfigs::LoadFromJson();
+    for (uint8_t i = 0; i < msvc_configs.size(); i++) {
+        msvc_configs[i].msvc_deviceIndex = device;
+    }
 
     std::string name = absl::GetFlag(FLAGS_name);
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
@@ -44,7 +50,7 @@ int main(int argc, char **argv) {
         }
         msvcs[i]->SetInQueue(msvcs[i - 1]->GetOutQueue());
     }
-    ContainerAgent *agent = new YoloV5Agent(name, absl::GetFlag(FLAGS_port), msvcs);
+    ContainerAgent *agent = new YoloV5Agent(name, absl::GetFlag(FLAGS_port), device, msvcs);
 
     agent->checkReady();
     
