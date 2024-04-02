@@ -60,6 +60,10 @@ public:
     std::string m_enginePath;
     // Store dir
     std::string m_engineStorePath;
+
+    // device index
+    uint8_t m_deviceIndex;
+
     // Build the network
     // The default implementation will normalize values between [0.f, 1.f]
     // Setting the normalize flag to false will leave values between [0.f, 255.f] (some converted models may require this).

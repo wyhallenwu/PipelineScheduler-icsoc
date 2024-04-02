@@ -49,6 +49,7 @@ void Engine::serializeEngineOptions(const TRTConfigs &configs) {
     m_divVals = configs.divVals;
     m_normalize = configs.normalize;
     m_precision = configs.precision;
+    m_deviceIndex = configs.deviceIndex;
 
     const auto filenamePos = onnxModelPath.find_last_of('/') + 1;
     std::string engineName = onnxModelPath.substr(filenamePos, onnxModelPath.find_last_of('.') - filenamePos);
@@ -128,6 +129,16 @@ bool Engine::build() {
 
     // Was not able to find the engine file, generate...
     std::cout << "Engine not found, generating. This could take a while..." << std::endl;
+
+    // Set the device index
+    auto ret = cudaSetDevice(m_deviceIndex);
+    if (ret != 0) {
+        int numGPUs;
+        cudaGetDeviceCount(&numGPUs);
+        auto errMsg = "Unable to set GPU device index to: " + std::to_string(m_configs.deviceIndex) +
+                ". Note, your device has " + std::to_string(numGPUs) + " CUDA-capable GPU(s).";
+        throw std::runtime_error(errMsg);
+    }
 
     // Create our engine builder.
     auto builder = std::unique_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(m_logger));
@@ -266,7 +277,7 @@ bool Engine::build() {
     std::ofstream outfile(m_engineStorePath + "/" + m_engineName, std::ofstream::binary);
     outfile.write(reinterpret_cast<const char*>(plan->data()), plan->size());
 
-    std::cout << "Success, saved engine to " << m_engineName << std::endl;
+    std::cout << "Success, saved engine to " << m_engineStorePath + "/" + m_engineName << std::endl;
 
     checkCudaErrorCode(cudaStreamDestroy(profileStream), __func__);
 
