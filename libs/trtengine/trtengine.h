@@ -67,7 +67,7 @@ public:
     //    subVals = {0.5f, 0.5f, 0.5f};
     //    divVals = {0.5f, 0.5f, 0.5f};
     //    normalize = true;
-    bool build(const TRTConfigs &configs);
+    bool build();
     // Load and prepare the network for inference
     bool loadNetwork();
     // Run inference.

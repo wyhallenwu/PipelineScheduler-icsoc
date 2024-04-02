@@ -16,8 +16,9 @@ void Logger::log(Severity severity, const char *msg) noexcept {
  * @param configs 
  */
 Engine::Engine(const TRTConfigs &configs) : m_configs(configs) {
+    serializeEngineOptions(m_configs);
     if (m_configs.path.find(".onnx") != std::string::npos) {
-        build(configs);
+        build();
     }
     loadNetwork();
 }
@@ -32,6 +33,12 @@ Engine::Engine(const TRTConfigs &configs) : m_configs(configs) {
 void Engine::serializeEngineOptions(const TRTConfigs &configs) {
     const std::string& onnxModelPath = m_configs.path;
     // Generate trt model's file name from onnx's. model.onnx -> model.engine
+
+    m_subVals = configs.subVals;
+    m_divVals = configs.divVals;
+    m_normalize = configs.normalize;
+    m_precision = configs.precision;
+
     const auto filenamePos = onnxModelPath.find_last_of('/') + 1;
     std::string engineName = onnxModelPath.substr(filenamePos, onnxModelPath.find_last_of('.') - filenamePos);
     std::string enginePath = onnxModelPath.substr(0, onnxModelPath.find_last_of('.'));
@@ -76,15 +83,9 @@ void Engine::serializeEngineOptions(const TRTConfigs &configs) {
  * @return true if engine is successfully generated
  * @return false if shit goes south otherwise
  */
-bool Engine::build(const TRTConfigs &configs) {
+bool Engine::build() {
     const std::string& onnxModelPath = m_configs.path;
     // Only regenerate the engine file if it has not already been generated for the specified options
-    serializeEngineOptions(m_configs);
-
-    m_subVals = configs.subVals;
-    m_divVals = configs.divVals;
-    m_normalize = configs.normalize;
-    m_precision = configs.precision;
     std::cout << "Searching for engine file with name: " << m_engineName << std::endl;
 
     if (doesFileExist(m_enginePath)) {
@@ -190,9 +191,6 @@ bool Engine::build(const TRTConfigs &configs) {
         optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_configs.maxBatchSize, inputC, inputH, inputW));
     }
     builderConfig->addOptimizationProfile(optProfile);
-
-    // Set the precision level
-    m_precision = configs.precision;
     if (m_configs.precision == MODEL_DATA_TYPE::fp16) {
         // Ensure the GPU supports FP16 inference
         if (!builder->platformHasFastFp16()) {
