@@ -60,6 +60,8 @@ namespace trt {
     struct TRTConfigs {
         // Path to the engine or onnx file
         std::string path = "";
+        // Path to save the engine in the case of conversion from onnx
+        std::string storePath = "";
         // Precision to use for GPU inference.
         MODEL_DATA_TYPE precision = MODEL_DATA_TYPE::fp32;
         // If INT8 precision is selected, must provide path to calibration dataset directory.

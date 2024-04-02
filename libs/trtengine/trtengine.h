@@ -58,6 +58,8 @@ public:
     std::string m_engineName;
     // Path to the engine file
     std::string m_enginePath;
+    // Store dir
+    std::string m_engineStorePath;
     // Build the network
     // The default implementation will normalize values between [0.f, 1.f]
     // Setting the normalize flag to false will leave values between [0.f, 255.f] (some converted models may require this).
