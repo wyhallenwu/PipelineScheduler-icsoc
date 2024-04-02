@@ -23,6 +23,18 @@ Engine::Engine(const TRTConfigs &configs) : m_configs(configs) {
     loadNetwork();
 }
 
+std::string getLastWord(const std::string& str) {
+    size_t lastSpacePos = str.find_last_of(" ");
+
+    if (lastSpacePos == std::string::npos) {
+        // The string doesn't contain any spaces, so return the entire string
+        return str;
+    } else {
+        // Return the substring from the last space to the end of the string
+        return str.substr(lastSpacePos + 1);
+    }
+}
+
 /**
  * @brief 
  * 
@@ -41,39 +53,57 @@ void Engine::serializeEngineOptions(const TRTConfigs &configs) {
 
     const auto filenamePos = onnxModelPath.find_last_of('/') + 1;
     std::string engineName = onnxModelPath.substr(filenamePos, onnxModelPath.find_last_of('.') - filenamePos);
-    std::string enginePath = onnxModelPath.substr(0, onnxModelPath.find_last_of('.'));
+    // If store path is not specified, use the path to either onnx or engine as the store path
+    std::string enginePath;
 
     m_maxWorkspaceSize = configs.maxWorkspaceSize;
 
     // Add the GPU device name to the file to ensure that the model is only used on devices with the exact same GPU
     std::vector<std::string> deviceNames;
     getDeviceNames(deviceNames);
+    
 
-    if (static_cast<size_t>(configs.deviceIndex) >= deviceNames.size()) {
-        throw std::runtime_error("Error, provided device index is out of range!");
-    }
-
-    auto deviceName = deviceNames[configs.deviceIndex];
-    // Remove spaces from the device name
-    deviceName.erase(std::remove_if(deviceName.begin(), deviceName.end(), ::isspace), deviceName.end());
-
-    engineName+= "_" + deviceName;
-
-    // Serialize the specified options into the filename
-    if (configs.precision == MODEL_DATA_TYPE::fp16) {
-        engineName += "_fp16";
-    } else if (configs.precision == MODEL_DATA_TYPE::fp32){
-        engineName += "_fp32";
+    enginePath = onnxModelPath.substr(0, onnxModelPath.find_last_of('.'));    
+    if (configs.storePath.empty()) {
+        m_engineStorePath = onnxModelPath.substr(0, onnxModelPath.find_last_of('/'));   
     } else {
-        engineName += "_int8";
+        m_engineStorePath = configs.storePath;
     }
 
-    engineName += "_" + std::to_string(configs.maxBatchSize);
-    engineName += "_" + std::to_string(configs.optBatchSize);
+    // If we are converting onnx file to engine, some information about gpu should be added.
+    if (m_configs.path.find(".onnx") != std::string::npos) {
+    // Add the GPU device name to the file to ensure that the model is only used on devices with the exact same GPU
+        std::vector<std::string> deviceNames;
+        getDeviceNames(deviceNames);
+
+        if (static_cast<size_t>(configs.deviceIndex) >= deviceNames.size()) {
+            throw std::runtime_error("Error, provided device index is out of range!");
+        }
+
+        auto deviceName = deviceNames[configs.deviceIndex];
+        // Remove spaces from the device name
+        deviceName = getLastWord(deviceName);
+
+        engineName+= "_" + deviceName;
+
+        // Serialize the specified options into the filename
+        if (configs.precision == MODEL_DATA_TYPE::fp16) {
+            engineName += "_fp16";
+        } else if (configs.precision == MODEL_DATA_TYPE::fp32){
+            engineName += "_fp32";
+        } else {
+            engineName += "_int8";
+        }
+        engineName += "_" + std::to_string(configs.maxBatchSize);
+        engineName += "_" + std::to_string(configs.optBatchSize);
+    }
+
+
+
     engineName += ".engine";
 
     m_engineName = engineName;
-    m_enginePath = enginePath + ".engine";
+    m_enginePath = enginePath + engineName + ".engine";
 }
 
 /**
@@ -234,7 +264,7 @@ bool Engine::build() {
     }
 
     // Write the engine to disk
-    std::ofstream outfile(m_enginePath, std::ofstream::binary);
+    std::ofstream outfile(m_engineStorePath + "/" + m_engineName, std::ofstream::binary);
     outfile.write(reinterpret_cast<const char*>(plan->data()), plan->size());
 
     std::cout << "Success, saved engine to " << m_engineName << std::endl;
