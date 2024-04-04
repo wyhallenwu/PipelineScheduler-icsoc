@@ -82,7 +82,7 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
              {name + "::sender",        MicroserviceType::Sender,        10, -1, {{-1, -1}}}},
             slo, upstream, downstreams
     );
-    TRTConfigs config = {"./models/yolov5s_b32_dynamic_NVIDIAGeForceRTX3090_fp32_32_1.engine", MODEL_DATA_TYPE::fp32, "", 128, 1, 1, 0, true};
+    TRTConfigs config = {"./models/yolov5s_b32_dynamic_NVIDIAGeForceRTX3090_fp32_32_1.engine", "", MODEL_DATA_TYPE::fp32, "", 128, 1, 1, 0, true};
     finishContainer("./Container_Yolov5", name, to_string(j), CONTAINER_BASE_PORT + containers.size(), RECEIVER_BASE_PORT + containers.size(),
                     to_string(json(config)));
 }
@@ -131,7 +131,7 @@ json DeviceAgent::createConfigs(
                     {std::get<0>(data[++i]), CommMethod::localGPU, {""}, std::get<2>(data[i]), std::get<3>(data[i]),
                      std::get<4>(data[i])});
         }
-        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), "", slo, 1, std::get<4>(msvc), {upstream}, downstream});
+        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), "", slo, 1, std::get<4>(msvc), 0, RUNMODE::DEPLOYMENT, {upstream}, downstream});
         //current mvsc becomes upstream for next msvc
         upstream = {std::get<0>(msvc), CommMethod::localGPU, {""}, std::get<2>(msvc), -2, std::get<4>(msvc)};
     }
