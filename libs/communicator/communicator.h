@@ -15,6 +15,7 @@
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <cuda_runtime.h>
 #include <thread>
+#include <chrono>
 
 #include "microservice.h"
 #include "pipelinescheduler.grpc.pb.h"

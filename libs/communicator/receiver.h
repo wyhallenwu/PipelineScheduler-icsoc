@@ -3,6 +3,7 @@
 
 #include "communicator.h"
 #include <fstream>
+#include <random>
 
 using grpc::Server;
 using grpc::ServerBuilder;
@@ -103,6 +104,9 @@ private:
 
     // This can be run in multiple threads if needed.
     void HandleRpcs();
+
+    // Data generator for profiling
+    void profileDataGenerator();
 
     std::unique_ptr<ServerCompletionQueue> cq;
     DataTransferService::AsyncService service;
