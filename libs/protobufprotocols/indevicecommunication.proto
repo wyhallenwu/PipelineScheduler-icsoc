@@ -19,4 +19,5 @@ message QueueSize {
 
 message ConnectionConfigs {
   string msvc_name = 1;
+  uint32 pid = 2;
 }

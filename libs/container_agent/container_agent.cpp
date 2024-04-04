@@ -74,6 +74,7 @@ ContainerAgent::ContainerAgent(const std::string &name, uint16_t own_port, int8_
 void ContainerAgent::ReportStart() {
     indevicecommunication::ConnectionConfigs request;
     request.set_msvc_name(name);
+    request.set_pid(getpid());
     EmptyMessage reply;
     ClientContext context;
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(

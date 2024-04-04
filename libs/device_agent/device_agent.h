@@ -24,6 +24,7 @@ struct ContainerHandle {
     google::protobuf::RepeatedField <int32_t> queuelengths;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     CompletionQueue *cq;
+    unsigned int pid;
 };
 
 namespace msvcconfigs {

@@ -211,5 +211,5 @@ unsigned int Profiler::getPcieInfo(nvmlDevice_t device) {
         std::cerr << "Failed to get PCIe throughput: " << nvmlErrorString(result) << std::endl;
         pcie = 0;
     }
-    return pcie
+    return pcie;
 }
