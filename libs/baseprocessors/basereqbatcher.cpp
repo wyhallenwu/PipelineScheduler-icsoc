@@ -169,7 +169,7 @@ bool BaseReqBatcher::checkReqEligibility(ClockType currReq_gentime) {
 }
 
 void BaseReqBatcher::readConfigsFromJson(std::string cfgPath) {
-    spdlog::trace("{0:s} attempts to parse TRT Config from json file.", __func__);
+    spdlog::trace("{0:s} attempts to parse Config from json file.", __func__);
     std::ifstream file(cfgPath);
     json j = json::parse(file);
 
@@ -184,5 +184,5 @@ void BaseReqBatcher::readConfigsFromJson(std::string cfgPath) {
     j.at("msvc_subVals").get_to(msvc_subVals);
     j.at("msvc_divVals").get_to(msvc_divVals);
 
-    spdlog::trace("{0:s} finished parsing TRT Config from file.", __func__);
+    spdlog::trace("{0:s} finished parsing Config from file.", __func__);
 }
