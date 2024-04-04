@@ -29,12 +29,14 @@ set(
         HEADER_FILES
         ../json/json.h
         device_agent.h
+        profiler.h
 )
 
 # All source files and private header files go here.
 set(
         SOURCE_FILES
         device_agent.cpp
+        profiler.cpp
 )
 
 # Here we define the library.

@@ -2,6 +2,7 @@
 #define DEVICE_AGENT_H
 
 #include "container_agent.h"
+#include "profiler.h"
 #include "indevicecommunication.grpc.pb.h"
 #include "controlcommunication.grpc.pb.h"
 #include <cstdlib>

@@ -116,11 +116,8 @@ target_link_libraries(PipePlusPlus PUBLIC
 add_executable(run src/main.cpp)
 target_link_libraries(run PipePlusPlus)
 
-add_executable(profiling src/profiling.cpp)
-target_link_libraries(profiling ${CUDA_LIBRARIES} CUDA::nvml)
-
 add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
-target_link_libraries(DeviceAgent device_agent)
+target_link_libraries(DeviceAgent device_agent ${CUDA_LIBRARIES} CUDA::nvml)
 
 add_executable(Controller libs/controller/controller.cpp)
 target_link_libraries(Controller controller)
