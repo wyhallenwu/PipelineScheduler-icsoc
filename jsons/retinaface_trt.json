@@ -5,6 +5,6 @@
     "cbs":1, 
     "normalize": true,
     "obs": 1,
-    "path": "/home/soulsaver/code/systems/PipePlusPlus/tensorrt-cpp-api/build/retina_single_NVIDIAGeForceRTX3090_fp32_32_1.engine",
+    "path": "/home/soulsaver/code/systems/PipePlusPlus/models/age_dynamic_3090_fp32_2_1.engine",
     "prec": 4
 }

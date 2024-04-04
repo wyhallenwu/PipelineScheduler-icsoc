@@ -17,9 +17,6 @@ void Logger::log(Severity severity, const char *msg) noexcept {
  */
 Engine::Engine(const TRTConfigs &configs) : m_configs(configs) {
     serializeEngineOptions(m_configs);
-    if (m_configs.path.find(".onnx") != std::string::npos) {
-        build();
-    }
 }
 
 std::string getLastWord(const std::string& str) {
@@ -98,7 +95,7 @@ void Engine::serializeEngineOptions(const TRTConfigs &configs) {
     engineName += ".engine";
 
     m_engineName = engineName;
-    m_enginePath = enginePath + engineName + ".engine";
+    m_enginePath = m_engineStorePath + "/" + engineName;
 }
 
 /**
