@@ -2,21 +2,26 @@
 
 Receiver::Receiver(const BaseMicroserviceConfigs &configs)
         : Microservice(configs) {
-    grpc::EnableDefaultHealthCheckService(true);
-    grpc::reflection::InitProtoReflectionServerBuilderPlugin();
-    ServerBuilder builder;
-    builder.AddListeningPort(configs.msvc_upstreamMicroservices.front().link[0], grpc::InsecureServerCredentials());
-    builder.SetMaxSendMessageSize(1024 * 1024 * 1024);
-    builder.SetMaxSendMessageSize(1024 * 1024 * 1024);
-    builder.SetMaxMessageSize(1024 * 1024 * 1024);
-    builder.SetMaxReceiveMessageSize(1024 * 1024 * 1024);
+    if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        readConfigsFromJson(configs.msvc_appLvlConfigs);
+        msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
+    } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
+        grpc::EnableDefaultHealthCheckService(true);
+        grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+        ServerBuilder builder;
+        builder.AddListeningPort(configs.msvc_upstreamMicroservices.front().link[0], grpc::InsecureServerCredentials());
+        builder.SetMaxSendMessageSize(1024 * 1024 * 1024);
+        builder.SetMaxSendMessageSize(1024 * 1024 * 1024);
+        builder.SetMaxMessageSize(1024 * 1024 * 1024);
+        builder.SetMaxReceiveMessageSize(1024 * 1024 * 1024);
 
-    builder.RegisterService(&service);
-    cq = builder.AddCompletionQueue();
-    server = builder.BuildAndStart();
-    msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
-    auto handler = std::thread(&Receiver::HandleRpcs, this);
-    handler.detach();
+        builder.RegisterService(&service);
+        cq = builder.AddCompletionQueue();
+        server = builder.BuildAndStart();
+        msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
+        auto handler = std::thread(&Receiver::HandleRpcs, this);
+        handler.detach();
+    }
 }
 
 void Receiver::profileDataGenerator() {
