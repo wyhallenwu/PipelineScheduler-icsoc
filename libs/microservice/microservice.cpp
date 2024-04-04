@@ -20,6 +20,7 @@ Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
     PAUSE_THREADS = true;
     msvc_appLvlConfigs = configs.msvc_appLvlConfigs;
     msvc_deviceIndex = configs.msvc_deviceIndex;
+    msvc_RUNMODE = configs.msvc_RUNMODE;
 
     std::list<NeighborMicroserviceConfigs>::const_iterator it;
     for (it = configs.msvc_dnstreamMicroservices.begin(); it != configs.msvc_dnstreamMicroservices.end(); ++it) {

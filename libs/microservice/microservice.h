@@ -235,6 +235,11 @@ enum class NeighborType {
     Downstream,
 };
 
+enum RUNMODE {
+    DEPLOYMENT,
+    PROFILING
+};
+
 namespace msvcconfigs {
     /**
      * @brief Descriptions of up and downstream microservices neighboring this current microservice.
@@ -289,7 +294,9 @@ namespace msvcconfigs {
         // Shape of data produced by this microservice
         std::vector<RequestDataShapeType> msvc_dataShape;
         // GPU index, -1 means CPU
-        int8_t msvc_deviceIndex = -1;
+        int8_t msvc_deviceIndex = 0;
+        // Run mode
+        RUNMODE msvc_RUNMODE = RUNMODE::DEPLOYMENT;
         // List of upstream microservices
         std::list<NeighborMicroserviceConfigs> msvc_upstreamMicroservices;
         std::list<NeighborMicroserviceConfigs> msvc_dnstreamMicroservices;
@@ -299,7 +306,6 @@ namespace msvcconfigs {
 using msvcconfigs::NeighborMicroserviceConfigs;
 using msvcconfigs::BaseMicroserviceConfigs;
 using msvcconfigs::MicroserviceType;
-
 
 /**
  * @brief 
@@ -381,6 +387,12 @@ protected:
     bool STOP_THREADS = false;
     bool PAUSE_THREADS = false;
     bool READY = false;
+
+    /**
+     * @brief Running mode of the container, globally set for all microservices inside the container
+     * Default to be deployment.
+     */
+    RUNMODE msvc_RUNMODE = RUNMODE::DEPLOYMENT;
 
     /**
      * @brief 
