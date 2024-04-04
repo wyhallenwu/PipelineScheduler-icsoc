@@ -16,6 +16,11 @@ public:
     Profiler(std::vector<unsigned int> pids);
     ~Profiler();
 
+    void run();
+    void stop();
+
+    void updatePids(std::vector<unsigned int> pids);
+
     struct sysStats {
         uint64_t timestamp;
         double cpuUsage;
@@ -26,9 +31,6 @@ public:
         unsigned int pcieThroughput;
     };
 
-    void run();
-    void stop();
-
     std::vector<sysStats> getStats(unsigned int pid) const;
     std::vector<sysStats> popStats(unsigned int pid);
 
@@ -38,6 +40,7 @@ private:
     bool initializeNVML();
     bool setAccounting(nvmlDevice_t device);
     std::vector<nvmlDevice_t> getDevices();
+    void setPidOnDevices(std::vector<unsigned int> pids);
     bool cleanupNVML();
 
     double getCPUInfo(unsigned int pid);

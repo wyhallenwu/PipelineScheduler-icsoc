@@ -5,28 +5,9 @@ Profiler::Profiler(std::vector<unsigned int> pids) {
         std::cerr << "Failed to initialize NVML" << std::endl;
         return;
     }
-    auto devices = getDevices();
-    for (const auto &pid: pids) {
-        for (const auto &device: devices) {
-            nvmlProcessInfo_t processes[64];
-            unsigned int infoCount = 64;
-            nvmlReturn_t result = nvmlDeviceGetComputeRunningProcesses(device, &infoCount, processes);
-            if (NVML_SUCCESS != result) {
-                std::cerr << "Failed to get compute running processes for a device: " << nvmlErrorString(result) << std::endl;
-                break;
-            }
-            for (unsigned int j = 0; j < infoCount; j++) {
-                if (processes[j].pid == pid) {
-                    pidOnDevices[pid] = device;
-                    stats[pid] = std::vector<sysStats>();
-                    break;
-                }
-            }
-        }
-    }
+    setPidOnDevices(pids);
     nvmlInitialized = true;
     running = false;
-
 }
 
 Profiler::~Profiler() {
@@ -48,6 +29,15 @@ void Profiler::run() {
 void Profiler::stop() {
     running = false;
     profilerThread.join();
+}
+
+void Profiler::updatePids(std::vector<unsigned int> pids) {
+    if (running) {
+        stop();
+    }
+    pidOnDevices.clear();
+    stats.clear();
+    setPidOnDevices(pids);
 }
 
 std::vector<Profiler::sysStats> Profiler::getStats(unsigned int pid) const {
@@ -129,6 +119,28 @@ std::vector<nvmlDevice_t> Profiler::getDevices() {
         devices.push_back(device);
     }
     return devices;
+}
+
+void Profiler::setPidOnDevices(std::vector<unsigned int> pids){
+    auto devices = getDevices();
+    for (const auto &pid: pids) {
+        for (const auto &device: devices) {
+            nvmlProcessInfo_t processes[64];
+            unsigned int infoCount = 64;
+            nvmlReturn_t result = nvmlDeviceGetComputeRunningProcesses(device, &infoCount, processes);
+            if (NVML_SUCCESS != result) {
+                std::cerr << "Failed to get compute running processes for a device: " << nvmlErrorString(result) << std::endl;
+                break;
+            }
+            for (unsigned int j = 0; j < infoCount; j++) {
+                if (processes[j].pid == pid) {
+                    pidOnDevices[pid] = device;
+                    stats[pid] = std::vector<sysStats>();
+                    break;
+                }
+            }
+        }
+    }
 }
 
 bool Profiler::cleanupNVML() {
