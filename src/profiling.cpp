@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <sstream>
 #include <chrono>
+#include <thread>
 #include <unistd.h>
 #include <sys/sysinfo.h>
 #include <nvml.h>
@@ -12,7 +13,9 @@ struct sysStats {
     double cpuUsage;
     double memoryUsage;
     int gpuUtilization;
-    double gpuMemoryUsage;
+    int gpuMemoryUsage;
+    double maxGpuMemoryUsage;
+    unsigned int pcieThroughput;
 };
 
 std::vector<std::string> CpuUtilization() {
@@ -64,23 +67,6 @@ double getCurrentCpuUsage(int pid) {
     }
     long process_active = std::stol(utime) + std::stol(stime);
     return 100* (double)process_active / total_active;
-
-
-//    std::ifstream file("/proc/"+ std::to_string(pid) + "/stat");
-//    std::string line;
-//    std::getline(file, line);
-//    std::istringstream ss(line);
-//    for (int i = 0; i < 13; i++) {
-//        ss.ignore();
-//    }
-//    long utime, stime;
-//    ss >> utime >> stime;
-//    long totalTicks = utime + stime;
-//    long clockTicksPerSecond = sysconf(_SC_CLK_TCK);
-//    double elapsedTime = (totalTicks / clockTicksPerSecond) - previousCPU;
-//    std::cout << "previousCPU: " << previousCPU << " | totalClicks: " << totalTicks << " | elapsedTime: " << elapsedTime << std::endl;
-//    previousCPU = totalTime;
-//    return elapsedTime / 1;
 }
 
 int getCurrentMemoryUsage(int pid) {
@@ -111,17 +97,33 @@ nvmlReturn_t initializeNVML() {
         std::cerr << "Failed to initialize NVML: " << nvmlErrorString(result) << std::endl;
         exit(1);
     }
+
+    nvmlDevice_t device;
+    result = nvmlDeviceGetHandleByIndex(0, &device);
+    if (result != NVML_SUCCESS) {
+        std::cerr << "Failed to get device handle: " << nvmlErrorString(result) << std::endl;
+        exit(1);
+    }
+
+    nvmlEnableState_t state;
+    result = nvmlDeviceGetAccountingMode(device, &state);
+    if (result != NVML_SUCCESS) {
+        std::cerr << "Failed to get accounting mode: " << nvmlErrorString(result) << std::endl;
+        exit(1);
+    }
+    if (state == NVML_FEATURE_DISABLED) {
+        std::cerr << "Enabling accounting mode" << std::endl;
+        result = nvmlDeviceSetAccountingMode(device, NVML_FEATURE_ENABLED);
+        if (result != NVML_SUCCESS) {
+            std::cerr << "Failed to enable accounting mode: " << nvmlErrorString(result) << std::endl;
+            exit(1);
+        }
+    }
+
     return result;
 }
 
 void cleanupNVML() {
-    nvmlReturn_t result = nvmlShutdown();
-    if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to shutdown NVML: " << nvmlErrorString(result) << std::endl;
-    }
-}
-
-nvmlUtilization_st getGpuUtilization() {
     nvmlDevice_t device;
     nvmlReturn_t result = nvmlDeviceGetHandleByIndex(0, &device);
     if (result != NVML_SUCCESS) {
@@ -129,49 +131,102 @@ nvmlUtilization_st getGpuUtilization() {
         exit(1);
     }
 
-    nvmlUtilization_st utilization;
-    result = nvmlDeviceGetUtilizationRates(device, &utilization);
-//    unsigned int processes;
-//    nvmlProcessUtilizationSample_st utilizationSt;
-//    nvmlDeviceGetProcessUtilization(device, &utilizationSt, &processes, 0);
+    nvmlEnableState_t state;
+    result = nvmlDeviceGetAccountingMode(device, &state);
     if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to get GPU utilization: " << nvmlErrorString(result) << std::endl;
+        std::cerr << "Failed to get accounting mode: " << nvmlErrorString(result) << std::endl;
+        exit(1);
+    }
+    if (state == NVML_FEATURE_ENABLED) {
+        std::cerr << "Disabling accounting mode" << std::endl;
+        result = nvmlDeviceSetAccountingMode(device, NVML_FEATURE_DISABLED);
+        if (result != NVML_SUCCESS) {
+            std::cerr << "Failed to disable accounting mode: " << nvmlErrorString(result) << std::endl;
+            exit(1);
+        }
+    }
+
+    result = nvmlShutdown();
+    if (result != NVML_SUCCESS) {
+        std::cerr << "Failed to shutdown NVML: " << nvmlErrorString(result) << std::endl;
+    }
+}
+
+std::pair<nvmlAccountingStats_t, unsigned int> getGpuUtilization(int pid) {
+    nvmlDevice_t device;
+    nvmlReturn_t result = nvmlDeviceGetHandleByIndex(0, &device);
+    if (result != NVML_SUCCESS) {
+        std::cerr << "Failed to get device handle: " << nvmlErrorString(result) << std::endl;
         exit(1);
     }
 
-    return utilization;
+    nvmlAccountingStats_t gpu;
+    result = nvmlDeviceGetAccountingStats(device, pid, &gpu);
+    if (result != NVML_SUCCESS) {
+        std::cerr << "Failed to get GPU Accounting Stats: " << nvmlErrorString(result) << std::endl;
+        gpu.gpuUtilization = 0;
+        gpu.memoryUtilization = 0;
+        gpu.maxMemoryUsage = 0;
+    }
+    unsigned int pcie;
+    result = nvmlDeviceGetPcieThroughput(device, NVML_PCIE_UTIL_COUNT, &pcie);
+    if (result != NVML_SUCCESS) {
+        std::cerr << "Failed to get PCIe throughput: " << nvmlErrorString(result) << std::endl;
+        pcie = 0;
+    }
+
+    return std::pair<nvmlAccountingStats_t, unsigned int>(gpu, pcie);
 }
 
 sysStats getSystemInfo(int pid) {
     sysStats info;
     info.cpuUsage = getCurrentCpuUsage(pid);
     info.memoryUsage = getCurrentMemoryUsage(pid) / 1000; // Convert to MB
-    nvmlUtilization_st gpuUtilization = getGpuUtilization();
-    info.gpuUtilization = gpuUtilization.gpu;
-    info.gpuMemoryUsage = gpuUtilization.memory;
+    std::pair<nvmlAccountingStats_t, unsigned int> gpu = getGpuUtilization(pid);
+    info.gpuUtilization = gpu.first.gpuUtilization;
+    info.gpuMemoryUsage = gpu.first.memoryUtilization;
+    info.maxGpuMemoryUsage = gpu.first.maxMemoryUsage / 1000000; // Convert to MB
+    info.pcieThroughput = gpu.second / 1000; // Convert to MB/s
     return info;
 }
 
-int main() {
-    int pid;
-    initializeNVML();
+void mainLoop(bool &running, int pid) {
     std::time_t currentTime;
     sysStats systemInfo;
-    std::cin >> pid;
-    while (true) {
+    while (running) {
         currentTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-
         systemInfo = getSystemInfo(pid);
 
-        // Output statistics to stdout
         std::cout << "Timestamp: " << std::put_time(std::localtime(&currentTime), "%H:%M:%S") << " | ";
         std::cout << "CPU Usage: " << systemInfo.cpuUsage << " % | ";
         std::cout << "Memory Usage: " << systemInfo.memoryUsage << " MB | ";
         std::cout << "GPU Utilization: " << systemInfo.gpuUtilization << " % | ";
-        std::cout << "GPU Memory Usage: " << systemInfo.gpuMemoryUsage << " % " << std::endl;
+        std::cout << "GPU Memory Usage: " << systemInfo.gpuMemoryUsage << " % ";
+        std::cout << "Max GPU Memory Usage: " << systemInfo.maxGpuMemoryUsage << " MB | ";
+        std::cout << "PCIe Throughput: " << systemInfo.pcieThroughput << " MB/s" << std::endl;
 
-        usleep(1000000);
+        sleep(1);
     }
+    return;
+}
+
+int main() {
+    initializeNVML();
+    std::cout << "Enter PID of process to monitor: ";
+    int pid;
+    std::cin >> pid;
+    std::cout << "Monitoring process with PID: " << pid << " Press q + Enter to exit." << std::endl;
+    bool running = true;
+    std::thread mainThread(mainLoop, std::ref(running), pid);
+    char input;
+    while (running) {
+        std::cin >> input;
+        if (input == 'q') {
+            running = false;
+        }
+    }
+    std::cout << "Exiting..." << std::endl;
+    mainThread.join();
 
     cleanupNVML();
     return 0;
