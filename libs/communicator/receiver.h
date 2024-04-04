@@ -2,6 +2,7 @@
 #define PIPEPLUSPLUS_RECEIVER_H
 
 #include "communicator.h"
+#include <fstream>
 
 using grpc::Server;
 using grpc::ServerBuilder;
@@ -9,6 +10,7 @@ using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using boost::interprocess::read_only;
 using boost::interprocess::open_only;
+using json = nlohmann::json;
 
 class Receiver : public Microservice {
 public:
@@ -19,7 +21,21 @@ public:
         cq->Shutdown();
     }
 
+protected:
+    void readConfigsFromJson(std::string cfgPath) {
+        spdlog::trace("{0:s} attempts to parse Profiling configs from json file.", __func__);
+        std::ifstream file(cfgPath);
+        json j = json::parse(file);
+        j.at("msvc_dataShape").get_to(msvc_dataShape);
+        j.at("msvc_numWarmUpBatches").get_to(msvc_numWarmUpBatches);
+        j.at("msvc_numProfileBatches").get_to(msvc_numProfileBatches);
+
+        spdlog::trace("{0:s} finished parsing Config from file.", __func__);
+    }
+
 private:
+    uint16_t msvc_numWarmUpBatches, msvc_numProfileBatches;
+    uint8_t msvc_inputRandomizeScheme;
     class RequestHandler {
     public:
         RequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
