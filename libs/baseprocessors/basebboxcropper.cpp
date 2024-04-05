@@ -22,6 +22,8 @@ void BaseBBoxCropper::cropping() {
     // Instance of data to be packed into `outReqData`
     RequestData<LocalGPUReqDataType> reqData;
 
+    std::vector<RequestData<LocalGPUReqDataType>> currReq_data;
+
     // List of bounding boxes cropped from one single image
     std::vector<cv::cuda::GpuMat> singleImageBBoxList;
 
@@ -42,6 +44,39 @@ void BaseBBoxCropper::cropping() {
 
     // Height and width of the image used for inference
     int orig_h, orig_w, infer_h, infer_w;
+
+    /**
+     * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
+     * as well as the images from which bounding boxes will be cropped.
+     * `The buffers` are a vector of 4 small raw memory (float) buffers (since using `BatchedNMSPlugin` provided by TRT), which are
+     * 1/ `num_detections` (Batch, 1): number of objects detected in this frame
+     * 2/ `nmsed_boxes` (Batch, TopK, 4): the boxes remaining after nms is performed.
+     * 3/ `nmsed_scores` (Batch, TopK): the scores of these boxes.
+     * 4/ `nmsed_classes` (Batch, TopK):
+     * We need to bring these buffers to CPU in order to process them.
+     */
+
+    uint16_t maxNumDets = msvc_dataShape[2][0];
+
+    int32_t num_detections[msvc_idealBatchSize];
+    float nmsed_boxes[msvc_idealBatchSize][maxNumDets][4];
+    float nmsed_scores[msvc_idealBatchSize][maxNumDets];
+    float nmsed_classes[msvc_idealBatchSize][maxNumDets];
+    float *nmsedBoxesList = &nmsed_boxes[0][0][0];
+    float *nmsedScoresList = &nmsed_scores[0][0];
+    float *nmsedClassesList = &nmsed_classes[0][0];
+
+    std::vector<float *> ptrList{nmsedBoxesList, nmsedScoresList, nmsedClassesList};
+
+    size_t bufferSize;
+
+    // class of the bounding box cropped from one the images in the image list
+    int16_t bboxClass;
+    // The index of the queue we are going to put data on based on the value of `bboxClass`
+    NumQueuesType queueIndex;
+
+    // To whole the shape of data sent from the inferencer
+    RequestDataShapeType shape;
 
     READY = true;
 
@@ -75,44 +110,14 @@ void BaseBBoxCropper::cropping() {
         currReq_batchSize = currReq.req_batchSize;
         trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
-
-        /**
-         * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
-         * as well as the images from which bounding boxes will be cropped.
-         * `The buffers` are a vector of 4 small raw memory (float) buffers (since using `BatchedNMSPlugin` provided by TRT), which are
-         * 1/ `num_detections` (Batch, 1): number of objects detected in this frame
-         * 2/ `nmsed_boxes` (Batch, TopK, 4): the boxes remaining after nms is performed.
-         * 3/ `nmsed_scores` (Batch, TopK): the scores of these boxes.
-         * 4/ `nmsed_classes` (Batch, TopK):
-         * We need to bring these buffers to CPU in order to process them.
-         */
-
-        uint16_t maxNumDets = msvc_dataShape[2][0];
-
-        std::vector<RequestData<LocalGPUReqDataType>> currReq_data = currReq.req_data;
-        int32_t num_detections[currReq_batchSize];
-        float nmsed_boxes[currReq_batchSize][maxNumDets][4];
-        float nmsed_scores[currReq_batchSize][maxNumDets];
-        float nmsed_classes[currReq_batchSize][maxNumDets];
-        int32_t *numDetList = num_detections;
-        float *nmsedBoxesList = &nmsed_boxes[0][0][0];
-        float *nmsedScoresList = &nmsed_scores[0][0];
-        float *nmsedClassesList = &nmsed_classes[0][0];
-
-        // float numDetList[currReq_batchSize];
-        // float nmsedBoxesList[currReq_batchSize][maxNumDets][4];
-        // float nmsedScoresList[currReq_batchSize][maxNumDets];
-        // float nmsedClassesList[currReq_batchSize][maxNumDets];
-        std::vector<float *> ptrList{nmsedBoxesList, nmsedScoresList, nmsedClassesList};
-        std::vector<size_t> bufferSizeList;
+        currReq_data = currReq.req_data;
 
         for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
-            size_t bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
+            bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
             RequestDataShapeType shape = currReq_data[i].shape;
             for (uint8_t j = 0; j < shape.size(); ++j) {
                 bufferSize *= shape[j];
             }
-            bufferSizeList.emplace_back(bufferSize);
             if (i == 0) {
                 checkCudaErrorCode(cudaMemcpyAsync(
                     (void *) num_detections,
@@ -147,16 +152,11 @@ void BaseBBoxCropper::cropping() {
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
 
-        // class of the bounding box cropped from one the images in the image list
-        int16_t bboxClass;
-        // The index of the queue we are going to put data on based on the value of `bboxClass`
-        NumQueuesType queueIndex;
-
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
 
             // If there is no object in frame, we don't have to do nothing.
-            int numDetsInFrame = (int)numDetList[i];
+            int numDetsInFrame = (int)num_detections[i];
             if (numDetsInFrame <= 0) {
                 outReqData.clear();
                 continue;
