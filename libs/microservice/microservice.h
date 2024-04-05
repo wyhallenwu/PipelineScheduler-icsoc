@@ -44,7 +44,7 @@ struct Request {
     RequestSLOType req_e2eSLOLatency;
     // The path that this request and its ancestors have travelled through.
     // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
-    // For instance, `[YOLOv5Prep-01_05][YOLOv5s_05][YOLOv5post_07]`
+    // For instance, `[YOLOv5_01_05][retinaface_02_09]`
     RequestPathType req_travelPath;
 
     // Batch size
@@ -323,6 +323,10 @@ public:
     // Another example is the
     std::string msvc_name;
 
+    // Name of the contianer that holds this microservice
+    std::string msvc_containerName;
+
+
     void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue*> queue) {
         msvc_InQueue = std::move(queue);
     };
@@ -421,9 +425,9 @@ protected:
     MsvcSLOType msvc_interReqTime = 1;
 
     //
-    uint32_t msvc_inReqCount = 0;
+    uint64_t msvc_inReqCount = 0;
     //
-    uint32_t msvc_outReqCount = 0;
+    uint64_t msvc_outReqCount = 0;
 
     //
     NumMscvType nummsvc_upstreamMicroservices = 0;

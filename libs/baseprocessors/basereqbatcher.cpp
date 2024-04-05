@@ -92,7 +92,7 @@ void BaseReqBatcher::batchRequests() {
 
         outReq_genTime.emplace_back(currReq_genTime);
         outReq_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
-        outReq_path.emplace_back(currReq.req_travelPath[0]);
+        outReq_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_containerName + "_" + std::to_string(msvc_inReqCount) + "]");
         trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
         msvc_onBufferBatchSize++;
@@ -151,6 +151,8 @@ void BaseReqBatcher::batchRequests() {
             msvc_OutQueue[0]->emplace(outReq);
             msvc_onBufferBatchSize = 0;
             outReq_genTime.clear();
+            outReq_path.clear();
+            outReq_slo.clear();
             bufferData.clear();
             prevData.clear();
         }

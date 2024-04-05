@@ -40,14 +40,16 @@ private:
     class RequestHandler {
     public:
         RequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                       ThreadSafeFixSizedDoubleQueue *out)
-                : service(service), cq(cq), OutQueue(out), status(CREATE) {};
+                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount)
+                : service(service), cq(cq), OutQueue(out), status(CREATE), msvc_inReqCount(msvc_inReqCount) {};
 
         virtual ~RequestHandler() = default;
 
         virtual void Proceed() = 0;
 
     protected:
+        std::string containerName;
+        uint64_t &msvc_inReqCount;
         enum CallStatus {
             CREATE, PROCESS, FINISH
         };
@@ -62,7 +64,7 @@ private:
     class GpuPointerRequestHandler : public RequestHandler {
     public:
         GpuPointerRequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                                 ThreadSafeFixSizedDoubleQueue *out);
+                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount);
 
         void Proceed() final;
 
@@ -75,7 +77,7 @@ private:
     class SharedMemoryRequestHandler : public RequestHandler {
     public:
         SharedMemoryRequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                                   ThreadSafeFixSizedDoubleQueue *out);
+                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount);
 
         void Proceed() final;
 
@@ -92,7 +94,7 @@ private:
     class SerializedDataRequestHandler : public RequestHandler {
     public:
         SerializedDataRequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                                     ThreadSafeFixSizedDoubleQueue *out);
+                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount);
 
         void Proceed() final;
 

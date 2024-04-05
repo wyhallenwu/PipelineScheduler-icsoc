@@ -51,6 +51,10 @@ int main(int argc, char **argv) {
         }
         msvcs[i]->SetInQueue(msvcs[i - 1]->GetOutQueue());
     }
+    for (auto msvc : msvcs) {
+        msvc->msvc_containerName = name;
+    }
+
     ContainerAgent *agent = new RetinaFaceAgent(name, absl::GetFlag(FLAGS_port), device, msvcs);
 
     agent->checkReady();
