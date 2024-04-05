@@ -159,7 +159,7 @@ TRTConfigs BaseBatchInferencer::readConfigsFromJson(const std::string cfgPath) {
 RequestShapeType BaseBatchInferencer::getInputShapeVector() {
     RequestShapeType shape = {};
     std::vector<nvinfer1::Dims3> engineInDims = msvc_inferenceEngine->getInputDims();
-    for (int32_t i = 0; i < engineInDims.size(); ++i) {
+    for (uint16_t i = 0; i < engineInDims.size(); ++i) {
         RequestDataShapeType insideShape;
         for (int32_t j = 0; j < engineInDims.at(i).nbDims; ++j) {
             insideShape.emplace_back(engineInDims.at(i).d[j]);
@@ -172,7 +172,7 @@ RequestShapeType BaseBatchInferencer::getInputShapeVector() {
 RequestShapeType BaseBatchInferencer::getOutputShapeVector() {
     RequestShapeType shape = {};
     std::vector<nvinfer1::Dims32> engineOutDims = msvc_inferenceEngine->getOutputDims();
-    for (int32_t i = 0; i < engineOutDims.size(); ++i) {
+    for (uint16_t i = 0; i < engineOutDims.size(); ++i) {
         RequestDataShapeType insideShape;
         for (int32_t j = 0; j < engineOutDims.at(i).nbDims; ++j) {
             insideShape.emplace_back(engineOutDims.at(i).d[j]);

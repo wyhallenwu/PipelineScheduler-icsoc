@@ -154,7 +154,7 @@
     },
     {
         "msvc_name": "yolov5_0::postprocessor",
-        "msvc_idealBatchSize": 1,
+        "msvc_idealBatchSize": 10,
         "msvc_appLvlConfigs": "",
         "msvc_dnstreamMicroservices": [
             {
@@ -201,8 +201,8 @@
                 "nb_name": "yolov5_0::inference",
                 "nb_expectedShape": [
                     [
-                        0,
-                        0
+                        -1,
+                        -1
                     ]
                 ]
             }
@@ -248,8 +248,8 @@
                 "nb_name": "yolov5_0::postprocessor",
                 "nb_expectedShape": [
                     [
-                        0,
-                        0
+                        -1,
+                        -1
                     ]
                 ]
             }

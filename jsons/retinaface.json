@@ -50,7 +50,7 @@
     },
     {
         "msvc_name": "retinaface_0::preprocessor",
-        "msvc_idealBatchSize": 60,
+        "msvc_idealBatchSize": 5,
         "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/retinaface_preproc.json",
         "msvc_dnstreamMicroservices": [
             {
@@ -98,7 +98,7 @@
     },
     {
         "msvc_name": "retinaface_0::inference",
-        "msvc_idealBatchSize": 60,
+        "msvc_idealBatchSize": 5,
         "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/retinaface_trt.json",
         "msvc_dnstreamMicroservices": [
             {
@@ -154,7 +154,7 @@
     },
     {
         "msvc_name": "retinaface_0::postprocessor",
-        "msvc_idealBatchSize": 1,
+        "msvc_idealBatchSize": 5,
         "msvc_appLvlConfigs": "",
         "msvc_dnstreamMicroservices": [
             {
