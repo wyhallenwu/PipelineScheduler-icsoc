@@ -89,32 +89,32 @@ add_subdirectory(libs/retinaface)
 add_subdirectory(libs/device_agent)
 add_subdirectory(libs/controller)
 
-add_library(PipePlusPlus
-        src/main.cpp)
+# add_library(PipePlusPlus
+#         src/main.cpp)
 
-target_include_directories(PipePlusPlus PUBLIC
-        ${OpenCV_INCLUDE_DIRS}
-        ${CUDA_INCLUDE_DIRS}
-        ${TensorRT_INCLUDE_DIRS}
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
-target_link_libraries(PipePlusPlus PUBLIC
-        data_grpc_proto
-        device_grpc_proto
-        ${OpenCV_LIBS}
-        ${CUDA_LIBRARIES}
-        ${CMAKE_THREAD_LIBS_INIT}
-        ${TensorRT_LIBRARIES}
-        ${_GRPC_GRPCPP}
-        ${_REFLECTION}
-        ${_PROTOBUF_LIBPROTOBUF}
-        misc
-        microservice
-        communicator
-        data_source
-        container_agent
-)
-add_executable(run src/main.cpp)
-target_link_libraries(run PipePlusPlus)
+# target_include_directories(PipePlusPlus PUBLIC
+#         ${OpenCV_INCLUDE_DIRS}
+#         ${CUDA_INCLUDE_DIRS}
+#         ${TensorRT_INCLUDE_DIRS}
+#         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
+# target_link_libraries(PipePlusPlus PUBLIC
+#         data_grpc_proto
+#         device_grpc_proto
+#         ${OpenCV_LIBS}
+#         ${CUDA_LIBRARIES}
+#         ${CMAKE_THREAD_LIBS_INIT}
+#         ${TensorRT_LIBRARIES}
+#         ${_GRPC_GRPCPP}
+#         ${_REFLECTION}
+#         ${_PROTOBUF_LIBPROTOBUF}
+#         misc
+#         microservice
+#         communicator
+#         data_source
+#         container_agent
+# )
+# add_executable(run src/main.cpp)
+# target_link_libraries(run PipePlusPlus)
 
 add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
 target_link_libraries(DeviceAgent device_agent ${CUDA_LIBRARIES} CUDA::nvml)

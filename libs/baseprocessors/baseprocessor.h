@@ -7,6 +7,7 @@
 #include <thread>
 #include <misc.h>
 #include <trtengine.h>
+#include <random>
 
 typedef uint16_t BatchSizeType;
 using namespace msvcconfigs;
@@ -79,6 +80,9 @@ public:
     BaseBatchInferencer(const BaseMicroserviceConfigs &configs);
     ~BaseBatchInferencer() = default;
     virtual void inference();
+
+    RequestShapeType getInputShapeVector();
+    RequestShapeType getOutputShapeVector();
 protected:
     BatchSizeType msvc_onBufferBatchSize;
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
@@ -126,4 +130,20 @@ public:
     ~BaseBBoxCropper() = default;
 
     void cropping();
+    void setInferenceShape(RequestShapeType shape) {
+        msvc_inferenceShape = shape;
+    }
+
+    void generateRandomBBox(
+        float *bboxList,
+        const uint16_t height,
+        const uint16_t width,
+        const uint16_t numBboxes,
+        const uint16_t seed = 2024
+    );
+
+    void cropProfiling();
+
+protected:
+    RequestShapeType msvc_inferenceShape;
 };

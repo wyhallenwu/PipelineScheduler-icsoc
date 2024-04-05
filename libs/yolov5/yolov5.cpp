@@ -11,7 +11,7 @@ YoloV5Agent::YoloV5Agent(const std::string &name, uint16_t own_port, int8_t devI
     inference.detach();
     std::thread postprocessor(&BaseBBoxCropper::cropping, dynamic_cast<BaseBBoxCropper*>(msvcs[3]));
     postprocessor.detach();
-    for (int i = 4; i < msvcs.size(); i++) {
+    for (uint16_t i = 4; i < msvcs.size(); i++) {
         std::thread sender(&Sender::Process, dynamic_cast<Sender*>(msvcs[i]));
         sender.detach();
     }
@@ -40,7 +40,8 @@ int main(int argc, char **argv) {
     msvcs[2]->SetInQueue(msvcs[1]->GetOutQueue());
     msvcs.push_back(new BaseBBoxCropper(msvc_configs[3]));
     msvcs[3]->SetInQueue(msvcs[2]->GetOutQueue());
-    for (int i = 4; i < msvc_configs.size(); i++) {
+    dynamic_cast<BaseBBoxCropper*>(msvcs[3])->setInferenceShape(dynamic_cast<BaseBatchInferencer*>(msvcs[2])->getInputShapeVector());
+    for (uint16_t i = 4; i < msvc_configs.size(); i++) {
         if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::localGPU) {
             msvcs.push_back(new GPUSender(msvc_configs[i]));
         } else if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::sharedMemory) {
@@ -50,6 +51,11 @@ int main(int argc, char **argv) {
         }
         msvcs[i]->SetInQueue(msvcs[i - 1]->GetOutQueue());
     }
+
+    for (auto msvc : msvcs) {
+        msvc->msvc_containerName = name;
+    }
+
     ContainerAgent *agent = new YoloV5Agent(name, absl::GetFlag(FLAGS_port), device, msvcs);
 
     agent->checkReady();

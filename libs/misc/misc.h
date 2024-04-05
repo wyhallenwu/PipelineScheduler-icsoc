@@ -13,8 +13,11 @@
 typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
 typedef uint32_t MsvcSLOType;
+typedef std::vector<uint32_t> RequestSLOType;
+typedef std::vector<std::string> RequestPathType;
 typedef uint16_t NumMscvType;
 typedef std::chrono::high_resolution_clock::time_point ClockType;
+typedef std::vector<ClockType> RequestTimeType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
 typedef const char *InterConGPUReqDataType;
 typedef std::vector<int32_t> RequestDataShapeType;

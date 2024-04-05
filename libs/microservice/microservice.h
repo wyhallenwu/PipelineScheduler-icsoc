@@ -39,13 +39,13 @@ struct RequestData {
 template<typename DataType>
 struct Request {
     // The moment this request was generated at the begining of the pipeline.
-    ClockType req_origGenTime = std::chrono::_V2::system_clock::now();
+    RequestTimeType req_origGenTime;
     // The end-to-end service level latency objective to which this request is subject
-    MsvcSLOType req_e2eSLOLatency = 0;
+    RequestSLOType req_e2eSLOLatency;
     // The path that this request and its ancestors have travelled through.
     // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
-    // For instance, `[YOLOv5Prep-01_05][YOLOv5s_05][YOLOv5post_07]`
-    std::string req_travelPath = "";
+    // For instance, `[YOLOv5_01_05][retinaface_02_09]`
+    RequestPathType req_travelPath;
 
     // Batch size
     BatchSizeType req_batchSize = 0;
@@ -61,9 +61,9 @@ struct Request {
     Request() {};
 
     Request(
-        ClockType genTime,
-        MsvcSLOType latency,
-        std::string path,
+        RequestTimeType genTime,
+        RequestSLOType latency,
+        RequestPathType path,
         BatchSizeType batchSize,
         std::vector<RequestData<DataType>> data,
         std::vector<RequestData<DataType>> upstream_data
@@ -78,9 +78,9 @@ struct Request {
     
     // df
     Request(
-        ClockType genTime,
-        MsvcSLOType latency,
-        std::string path,
+        RequestTimeType genTime,
+        RequestSLOType latency,
+        RequestPathType path,
         BatchSizeType batchSize,
         std::vector<RequestData<DataType>> data
     ) : req_origGenTime(genTime),
@@ -235,6 +235,11 @@ enum class NeighborType {
     Downstream,
 };
 
+enum RUNMODE {
+    DEPLOYMENT,
+    PROFILING
+};
+
 namespace msvcconfigs {
     /**
      * @brief Descriptions of up and downstream microservices neighboring this current microservice.
@@ -265,9 +270,9 @@ namespace msvcconfigs {
      */
     enum class MicroserviceType {
         Receiver,
-        Preprocessor,
-        Inference,
-        Postprocessor,
+        PreprocessBatcher,
+        TRTInferencer,
+        PostprocessorBBoxCropper,
         Sender,
     };
 
@@ -289,7 +294,9 @@ namespace msvcconfigs {
         // Shape of data produced by this microservice
         std::vector<RequestDataShapeType> msvc_dataShape;
         // GPU index, -1 means CPU
-        int8_t msvc_deviceIndex = -1;
+        int8_t msvc_deviceIndex = 0;
+        // Run mode
+        RUNMODE msvc_RUNMODE = RUNMODE::DEPLOYMENT;
         // List of upstream microservices
         std::list<NeighborMicroserviceConfigs> msvc_upstreamMicroservices;
         std::list<NeighborMicroserviceConfigs> msvc_dnstreamMicroservices;
@@ -299,7 +306,6 @@ namespace msvcconfigs {
 using msvcconfigs::NeighborMicroserviceConfigs;
 using msvcconfigs::BaseMicroserviceConfigs;
 using msvcconfigs::MicroserviceType;
-
 
 /**
  * @brief 
@@ -316,6 +322,10 @@ public:
     // For instance, an object detector could be named `YOLOv5s-01`.
     // Another example is the
     std::string msvc_name;
+
+    // Name of the contianer that holds this microservice
+    std::string msvc_containerName;
+
 
     void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue*> queue) {
         msvc_InQueue = std::move(queue);
@@ -383,6 +393,12 @@ protected:
     bool READY = false;
 
     /**
+     * @brief Running mode of the container, globally set for all microservices inside the container
+     * Default to be deployment.
+     */
+    RUNMODE msvc_RUNMODE = RUNMODE::DEPLOYMENT;
+
+    /**
      * @brief 
      * 
      */
@@ -409,9 +425,9 @@ protected:
     MsvcSLOType msvc_interReqTime = 1;
 
     //
-    uint32_t msvc_inReqCount = 0;
+    uint64_t msvc_inReqCount = 0;
     //
-    uint32_t msvc_outReqCount = 0;
+    uint64_t msvc_outReqCount = 0;
 
     //
     NumMscvType nummsvc_upstreamMicroservices = 0;
