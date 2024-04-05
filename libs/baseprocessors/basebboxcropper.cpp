@@ -44,6 +44,8 @@ void BaseBBoxCropper::cropping() {
 
     // Height and width of the image used for inference
     int orig_h, orig_w, infer_h, infer_w;
+    infer_h = msvc_inferenceShape[0][1];
+    infer_w = msvc_inferenceShape[0][2];
 
     /**
      * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
@@ -139,15 +141,6 @@ void BaseBBoxCropper::cropping() {
 
         checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
         trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
-
-         /**
-         * @brief TODOs:
-         * Hardcoding because we hvent been able to properly carry the image to be cropped.
-         * The cropping logic is ok though.
-         * Need to figure out a way.
-         */
-        infer_h = currReq.req_data[4].shape[1];
-        infer_w = currReq.req_data[4].shape[2];
 
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 

@@ -79,6 +79,9 @@ public:
     BaseBatchInferencer(const BaseMicroserviceConfigs &configs);
     ~BaseBatchInferencer() = default;
     virtual void inference();
+
+    RequestShapeType getInputShapeVector();
+    RequestShapeType getOutputShapeVector();
 protected:
     BatchSizeType msvc_onBufferBatchSize;
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
@@ -126,4 +129,10 @@ public:
     ~BaseBBoxCropper() = default;
 
     void cropping();
+    void setInferenceShape(RequestShapeType shape) {
+        msvc_inferenceShape = shape;
+    }
+
+protected:
+    RequestShapeType msvc_inferenceShape;
 };

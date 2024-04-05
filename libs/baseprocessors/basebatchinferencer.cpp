@@ -18,8 +18,8 @@ BaseBatchInferencer::BaseBatchInferencer(const BaseMicroserviceConfigs &config) 
     msvc_inferenceEngine = new Engine(msvc_engineConfigs);
     msvc_inferenceEngine->loadNetwork();
 
-    msvc_engineInputBuffers = msvc_inferenceEngine->getInputBuffers();
-    msvc_engineOutputBuffers = msvc_inferenceEngine->getOutputBuffers();
+    // msvc_engineInputBuffers = msvc_inferenceEngine->getInputBuffers();
+    // msvc_engineOutputBuffers = msvc_inferenceEngine->getOutputBuffers();
 
     info("{0:s} is created.", msvc_name); 
 }
@@ -154,4 +154,30 @@ TRTConfigs BaseBatchInferencer::readConfigsFromJson(const std::string cfgPath) {
     spdlog::trace("{0:s} finished parsing TRT Config from file.", __func__);
 
     return yoloConfigs;
+}
+
+RequestShapeType BaseBatchInferencer::getInputShapeVector() {
+    RequestShapeType shape = {};
+    std::vector<nvinfer1::Dims3> engineInDims = msvc_inferenceEngine->getInputDims();
+    for (int32_t i = 0; i < engineInDims.size(); ++i) {
+        RequestDataShapeType insideShape;
+        for (int32_t j = 0; j < engineInDims.at(i).nbDims; ++j) {
+            insideShape.emplace_back(engineInDims.at(i).d[j]);
+        }
+        shape.emplace_back(insideShape);
+    }
+    return shape;
+}
+
+RequestShapeType BaseBatchInferencer::getOutputShapeVector() {
+    RequestShapeType shape = {};
+    std::vector<nvinfer1::Dims32> engineOutDims = msvc_inferenceEngine->getOutputDims();
+    for (int32_t i = 0; i < engineOutDims.size(); ++i) {
+        RequestDataShapeType insideShape;
+        for (int32_t j = 0; j < engineOutDims.at(i).nbDims; ++j) {
+            insideShape.emplace_back(engineOutDims.at(i).d[j]);
+        }
+        shape.emplace_back(insideShape);
+    }
+    return shape;
 }
