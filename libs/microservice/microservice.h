@@ -270,9 +270,9 @@ namespace msvcconfigs {
      */
     enum class MicroserviceType {
         Receiver,
-        Preprocessor,
-        Inference,
-        Postprocessor,
+        PreprocessBatcher,
+        TRTInferencer,
+        PostprocessorBBoxCropper,
         Sender,
     };
 

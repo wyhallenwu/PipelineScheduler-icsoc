@@ -5,6 +5,7 @@
 YoloV5Agent::YoloV5Agent(const std::string &name, uint16_t own_port, int8_t devIndex, std::vector<Microservice*> services)
         : ContainerAgent(name, own_port, devIndex) {
     msvcs = std::move(services);
+    dynamic_cast<BaseBBoxCropper*>(msvcs[3])->setInferenceShape(dynamic_cast<BaseBatchInferencer*>(msvcs[2])->getInputShapeVector());
     std::thread preprocessor(&BaseReqBatcher::batchRequests, dynamic_cast<BaseReqBatcher*>(msvcs[1]));
     preprocessor.detach();
     std::thread inference(&BaseBatchInferencer::inference, dynamic_cast<BaseBatchInferencer*>(msvcs[2]));

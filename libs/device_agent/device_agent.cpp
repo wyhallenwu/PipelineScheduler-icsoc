@@ -76,9 +76,9 @@ void DeviceAgent::CreateYolo5Container(int id, const NeighborMicroserviceConfigs
     std::string name = "yolov5_" + std::to_string(id);
     json j = createConfigs(
             {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{-1, -1}}},
-             {name + "::preprocessor",  MicroserviceType::Preprocessor,  10, -1, {{-1, -1, -1}}},
-             {name + "::inference",     MicroserviceType::Inference,     10, -1, {{3, 640, 640}}},
-             {name + "::postprocessor", MicroserviceType::Postprocessor, 10, -1, {{1},{100,4},{100},{100}}},
+             {name + "::PreprocessBatcher",  MicroserviceType::PreprocessBatcher,  10, -1, {{-1, -1, -1}}},
+             {name + "::TRTInferencer",     MicroserviceType::TRTInferencer,     10, -1, {{3, 640, 640}}},
+             {name + "::PostprocessorBBoxCropper", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{1},{100,4},{100},{100}}},
              {name + "::sender",        MicroserviceType::Sender,        10, -1, {{-1, -1}}}},
             slo, upstream, downstreams
     );
@@ -92,7 +92,7 @@ void DeviceAgent::CreateDataSource(int id, const std::vector<NeighborMicroservic
     std::string name = "datasource_" + std::to_string(id);
     NeighborMicroserviceConfigs upstream = {"video_source", CommMethod::localCPU, {video_path}, 0, -2, {{0, 0}}};
     json j = createConfigs({
-                                   {name + "::data_reader", MicroserviceType::Postprocessor, 10, -1, {{0, 0}}},
+                                   {name + "::data_reader", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{0, 0}}},
                                    {name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}}},
                            slo, upstream, downstreams
     );
@@ -118,7 +118,7 @@ json DeviceAgent::createConfigs(
     NeighborMicroserviceConfigs upstream = prev_msvc;
     for (auto &msvc: data) {
         std::list<NeighborMicroserviceConfigs> downstream;
-        if (std::get<1>(msvc) == MicroserviceType::Postprocessor) {
+        if (std::get<1>(msvc) == MicroserviceType::PostprocessorBBoxCropper) {
             while (--j > 0) {
                 downstream.push_back(
                         {std::get<0>(data[i + j]), CommMethod::localGPU, {""}, std::get<2>(data[i + j]),
