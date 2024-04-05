@@ -60,9 +60,9 @@ void Receiver::profileDataGenerator() {
             };
             requestData.emplace_back(data);
             request = {
-                std::chrono::_V2::system_clock::now(),
-                9999,
-                "",
+                {std::chrono::_V2::system_clock::now()},
+                {9999},
+                {""},
                 1,
                 requestData
             };
@@ -97,8 +97,12 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
             elements.push_back({{gpu_image.channels(), el.height(), el.width()}, gpu_image});
         }
         Request<LocalGPUReqDataType> req = {
-                std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
-                request.slo(), request.path(), 1, elements};
+            {ClockType(std::chrono::nanoseconds(request.timestamp()))},
+            {request.slo()},
+            {request.path()},
+            1,
+            elements
+        };
         OutQueue->emplace(req);
 
         status = FINISH;
@@ -136,8 +140,12 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
             boost::interprocess::shared_memory_object::remove(name);
         }
         Request<LocalCPUReqDataType> req = {
-                std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
-                request.slo(), request.path(), 1, elements};
+            {ClockType(std::chrono::nanoseconds(request.timestamp()))},
+            {request.slo()},
+            {request.path()},
+            1,
+            elements
+        };
         OutQueue->emplace(req);
 
         status = FINISH;
@@ -175,8 +183,12 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             elements.push_back({{image.channels(), el.height(), el.width()}, image});
         }
         Request<LocalCPUReqDataType> req = {
-                std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp())),
-                request.slo(), request.path(), 1, elements};
+            {std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp()))},
+            {request.slo()},
+            {request.path()},
+            1, 
+            elements
+        };
         OutQueue->emplace(req);
 
         status = FINISH;

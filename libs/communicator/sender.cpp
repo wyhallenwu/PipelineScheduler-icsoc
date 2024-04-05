@@ -44,7 +44,7 @@ void GPUSender::Process() {
             continue;
         }
         auto request = msvc_InQueue[0]->pop2();
-        SendGpuPointer(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
+        SendGpuPointer(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
@@ -124,7 +124,7 @@ void LocalCPUSender::Process() {
             continue;
         }
         auto request = msvc_InQueue[0]->pop1();
-        SendSharedMemory(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
+        SendSharedMemory(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
@@ -179,7 +179,7 @@ void RemoteCPUSender::Process() {
             continue;
         }
         auto request = msvc_InQueue[0]->pop1();
-        SendSerializedData(request.req_data, request.req_origGenTime, request.req_travelPath, request.req_e2eSLOLatency);
+        SendSerializedData(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }

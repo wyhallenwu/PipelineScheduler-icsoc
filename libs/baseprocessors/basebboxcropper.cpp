@@ -14,6 +14,8 @@ void BaseBBoxCropper::cropping() {
     ClockType currReq_genTime;
     // The time where the current incoming request arrives
     ClockType currReq_recvTime;
+    // Path
+    std::string currReq_path;
 
     // Data package to be sent to and processed at the next microservice
     std::vector<RequestData<LocalGPUReqDataType>> outReqData;
@@ -97,12 +99,6 @@ void BaseBBoxCropper::cropping() {
         currReq = msvc_InQueue.at(0)->pop2();
         msvc_inReqCount++;
 
-        currReq_genTime = currReq.req_origGenTime;
-        // We need to check if the next request is worth processing.
-        // If it's too late, then we can drop and stop processing this request.
-        if (!this->checkReqEligibility(currReq_genTime)) {
-            continue;
-        }
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
@@ -147,6 +143,10 @@ void BaseBBoxCropper::cropping() {
 
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
+
+
+            currReq_genTime = currReq.req_origGenTime[i];
+            currReq_path = currReq.req_travelPath[i];
 
             // If there is no object in frame, we don't have to do nothing.
             int numDetsInFrame = (int)num_detections[i];
@@ -193,9 +193,9 @@ void BaseBBoxCropper::cropping() {
                 };
                 outReqData.emplace_back(reqData);
                 outReq = {
-                    std::chrono::_V2::system_clock::now(),
+                    {currReq_genTime},
                     currReq.req_e2eSLOLatency,
-                    "",
+                    {currReq_path},
                     1,
                     outReqData, //req_data
                     currReq.req_data // upstreamReq_data
@@ -364,12 +364,8 @@ void BaseBBoxCropper::cropProfiling() {
         currReq = msvc_InQueue.at(0)->pop2();
         msvc_inReqCount++;
 
-        currReq_genTime = currReq.req_origGenTime;
-        // We need to check if the next request is worth processing.
-        // If it's too late, then we can drop and stop processing this request.
-        if (!this->checkReqEligibility(currReq_genTime)) {
-            continue;
-        }
+        currReq_genTime = currReq.req_origGenTime[0];
+
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();

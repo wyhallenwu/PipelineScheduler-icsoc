@@ -81,7 +81,7 @@ void BaseBatchInferencer::inference() {
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
-        currReq_recvTime = std::chrono::system_clock::now();
+        currReq_recvTime = std::chrono::high_resolution_clock::now();
         if (this->msvc_inReqCount > 1) {
             this->updateReqRate(currReq_genTime);
         }
@@ -121,9 +121,9 @@ void BaseBatchInferencer::inference() {
 
         // Packing everything inside the `outReq` to be sent to and processed at the next microservice
         outReq = {
-            std::chrono::_V2::system_clock::now(),
+            currReq.req_origGenTime,
             currReq.req_e2eSLOLatency,
-            "",
+            currReq.req_travelPath,
             currReq_batchSize,
             outReqData, //req_data
             currReq.upstreamReq_data // upstreamReq_data

@@ -39,13 +39,13 @@ struct RequestData {
 template<typename DataType>
 struct Request {
     // The moment this request was generated at the begining of the pipeline.
-    ClockType req_origGenTime = std::chrono::_V2::system_clock::now();
+    RequestTimeType req_origGenTime;
     // The end-to-end service level latency objective to which this request is subject
-    MsvcSLOType req_e2eSLOLatency = 0;
+    RequestSLOType req_e2eSLOLatency;
     // The path that this request and its ancestors have travelled through.
     // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
     // For instance, `[YOLOv5Prep-01_05][YOLOv5s_05][YOLOv5post_07]`
-    std::string req_travelPath = "";
+    RequestPathType req_travelPath;
 
     // Batch size
     BatchSizeType req_batchSize = 0;
@@ -61,9 +61,9 @@ struct Request {
     Request() {};
 
     Request(
-        ClockType genTime,
-        MsvcSLOType latency,
-        std::string path,
+        RequestTimeType genTime,
+        RequestSLOType latency,
+        RequestPathType path,
         BatchSizeType batchSize,
         std::vector<RequestData<DataType>> data,
         std::vector<RequestData<DataType>> upstream_data
@@ -78,9 +78,9 @@ struct Request {
     
     // df
     Request(
-        ClockType genTime,
-        MsvcSLOType latency,
-        std::string path,
+        RequestTimeType genTime,
+        RequestSLOType latency,
+        RequestPathType path,
         BatchSizeType batchSize,
         std::vector<RequestData<DataType>> data
     ) : req_origGenTime(genTime),
