@@ -5,7 +5,6 @@
 RetinaFaceAgent::RetinaFaceAgent(const std::string &name, uint16_t own_port, int8_t devIndex, std::vector<Microservice*> services)
         : ContainerAgent(name, own_port, devIndex) {
     msvcs = std::move(services);
-    dynamic_cast<BaseBBoxCropper*>(msvcs[3])->setInferenceShape(dynamic_cast<BaseBatchInferencer*>(msvcs[2])->getInputShapeVector());
     std::thread preprocessor(&BaseReqBatcher::batchRequests, dynamic_cast<BaseReqBatcher*>(msvcs[1]));
     preprocessor.detach();
     std::thread inference(&BaseBatchInferencer::inference, dynamic_cast<BaseBatchInferencer*>(msvcs[2]));
@@ -41,6 +40,7 @@ int main(int argc, char **argv) {
     msvcs[2]->SetInQueue(msvcs[1]->GetOutQueue());
     msvcs.push_back(new BaseBBoxCropper(msvc_configs[3]));
     msvcs[3]->SetInQueue(msvcs[2]->GetOutQueue());
+    dynamic_cast<BaseBBoxCropper*>(msvcs[3])->setInferenceShape(dynamic_cast<BaseBatchInferencer*>(msvcs[2])->getInputShapeVector());
     for (int i = 4; i < msvc_configs.size(); i++) {
         if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::localGPU) {
             msvcs.push_back(new GPUSender(msvc_configs[i]));
@@ -50,7 +50,6 @@ int main(int argc, char **argv) {
             msvcs.push_back(new RemoteCPUSender(msvc_configs[i]));
         }
         msvcs[i]->SetInQueue(msvcs[i - 1]->GetOutQueue());
-    }
     ContainerAgent *agent = new RetinaFaceAgent(name, absl::GetFlag(FLAGS_port), device, msvcs);
 
     agent->checkReady();
