@@ -7,6 +7,7 @@
 #include <thread>
 #include <misc.h>
 #include <trtengine.h>
+#include <random>
 
 typedef uint16_t BatchSizeType;
 using namespace msvcconfigs;
@@ -132,6 +133,16 @@ public:
     void setInferenceShape(RequestShapeType shape) {
         msvc_inferenceShape = shape;
     }
+
+    void generateRandomBBox(
+        float *bboxList,
+        const uint16_t height,
+        const uint16_t width,
+        const uint16_t numBboxes,
+        const uint16_t seed = 2024
+    );
+
+    void cropProfiling();
 
 protected:
     RequestShapeType msvc_inferenceShape;
