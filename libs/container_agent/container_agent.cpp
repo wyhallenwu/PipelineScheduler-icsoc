@@ -26,6 +26,7 @@ void msvcconfigs::from_json(const json &j, msvcconfigs::BaseMicroserviceConfigs 
     j.at("msvc_appLvlConfigs").get_to(val.msvc_appLvlConfigs);
     j.at("msvc_svcLevelObjLatency").get_to(val.msvc_svcLevelObjLatency);
     j.at("msvc_idealBatchSize").get_to(val.msvc_idealBatchSize);
+    j.at("msvc_maxQueueSize").get_to(val.msvc_maxQueueSize);
     j.at("msvc_dataShape").get_to(val.msvc_dataShape);
     j.at("msvc_upstreamMicroservices").get_to(val.msvc_upstreamMicroservices);
     j.at("msvc_dnstreamMicroservices").get_to(val.msvc_dnstreamMicroservices);

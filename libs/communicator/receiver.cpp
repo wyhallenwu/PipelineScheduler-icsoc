@@ -43,6 +43,7 @@ void Receiver::profileDataGenerator() {
     cv::Mat img;
     std::string requestPath;
     if (msvc_OutQueue[0]->getActiveQueueIndex() != 1) msvc_OutQueue[0]->setActiveQueueIndex(1);
+    msvc_OutQueue[0]->setQueueSize(1000);
     READY = true;
 
     while (true) {

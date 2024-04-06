@@ -22,7 +22,8 @@ typedef std::tuple<
     MicroserviceType, // type
     QueueLengthType, // queue length type
     int16_t, // class of interests
-    std::vector<RequestDataShapeType> //data shape
+    std::vector<RequestDataShapeType>, //data shape
+    QueueLengthType
 > MsvcConfigTupleType;
 
 enum ContainerType {

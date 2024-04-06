@@ -18,6 +18,7 @@ void msvcconfigs::to_json(json &j, const msvcconfigs::BaseMicroserviceConfigs &v
     j["msvc_svcLevelObjLatency"] = val.msvc_svcLevelObjLatency;
     j["msvc_idealBatchSize"] = val.msvc_idealBatchSize;
     j["msvc_dataShape"] = val.msvc_dataShape;
+    j["msvc_maxQueueSize"] = val.msvc_maxQueueSize;
     j["msvc_upstreamMicroservices"] = val.msvc_upstreamMicroservices;
     j["msvc_dnstreamMicroservices"] = val.msvc_dnstreamMicroservices;
 }
@@ -80,11 +81,11 @@ void DeviceAgent::CreateYolo5Container(
 ) {
     std::string name = "yolov5_" + std::to_string(id);
     json j = createConfigs(
-            {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{-1, -1}}},
-             {name + "::PreprocessBatcher",  MicroserviceType::PreprocessBatcher,  10, -1, {{-1, -1, -1}}},
-             {name + "::TRTInferencer",     MicroserviceType::TRTInferencer,     10, -1, {{3, 640, 640}}},
-             {name + "::PostprocessorBBoxCropper", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{1},{100,4},{100},{100}}},
-             {name + "::sender",        MicroserviceType::Sender,        10, -1, {{-1, -1}}}},
+            {{name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{-1, -1}}, 100},
+             {name + "::PreprocessBatcher",  MicroserviceType::PreprocessBatcher,  10, -1, {{-1, -1, -1}}, 10},
+             {name + "::TRTInferencer",     MicroserviceType::TRTInferencer,     10, -1, {{3, 640, 640}}, 10},
+             {name + "::PostprocessorBBoxCropper", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{1},{100,4},{100},{100}}, 100},
+             {name + "::sender",        MicroserviceType::Sender,        10, -1, {{-1, -1}}, 10}},
             slo,
             batchSize,
             logPath,
@@ -105,8 +106,8 @@ void DeviceAgent::CreateDataSource(
     std::string name = "datasource_" + std::to_string(id);
     NeighborMicroserviceConfigs upstream = {"video_source", CommMethod::localCPU, {video_path}, 0, -2, {{0, 0}}};
     json j = createConfigs(
-        {{name + "::data_reader", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{0, 0}}},
-         {name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}}},
+        {{name + "::data_reader", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{0, 0}}, 100},
+         {name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}, 100}},
         slo,
         1,
         logPath,
@@ -152,7 +153,7 @@ json DeviceAgent::createConfigs(
                     {std::get<0>(data[++i]), CommMethod::localGPU, {""}, std::get<2>(data[i]), std::get<3>(data[i]),
                      std::get<4>(data[i])});
         }
-        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), "", slo, batchSize, std::get<4>(msvc), -1, logPath, RUNMODE::DEPLOYMENT, {upstream}, downstream});
+        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), "", slo, std::get<5>(msvc), batchSize, std::get<4>(msvc), -1, logPath, RUNMODE::DEPLOYMENT, {upstream}, downstream});
         //current mvsc becomes upstream for next msvc
         upstream = {std::get<0>(msvc), CommMethod::localGPU, {""}, std::get<2>(msvc), -2, std::get<4>(msvc)};
     }

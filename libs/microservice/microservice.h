@@ -124,9 +124,11 @@ private:
     std::mutex q_mutex;
     std::condition_variable q_condition;
     std::uint8_t activeQueueIndex;
-    size_t q_MaxSize = 100;
+    QueueLengthType q_MaxSize = 100;
 
 public:
+    ThreadSafeFixSizedDoubleQueue(QueueLengthType size) : q_MaxSize(size) {}
+
     /**
      * @brief Emplacing Type 1 requests
      * 
@@ -295,6 +297,8 @@ namespace msvcconfigs {
         std::string msvc_appLvlConfigs = "";
         // The acceptable latency for each individual request processed by this microservice, in `ms`
         MsvcSLOType msvc_svcLevelObjLatency;
+        // 
+        QueueLengthType msvc_maxQueueSize;
         // Ideal batch size for this microservice, runtime batch size could be smaller though
         BatchSizeType msvc_idealBatchSize;
         // Shape of data produced by this microservice
