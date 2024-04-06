@@ -26,6 +26,7 @@ ABSL_DECLARE_FLAG(uint16_t, port);
 ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
 ABSL_DECLARE_FLAG(std::string, log_dir);
+ABSL_DECLARE_FLAG(bool, profile_mode);
 
 using json = nlohmann::json;
 

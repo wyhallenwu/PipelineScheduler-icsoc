@@ -361,6 +361,10 @@ public:
         return READY;
     }
 
+    RUNMODE checkMode() {
+        return msvc_RUNMODE;
+    }
+
     /**
      * @brief Set the Device index
      * should be called at least once for each thread

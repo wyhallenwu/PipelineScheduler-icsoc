@@ -36,12 +36,14 @@ void Receiver::profileDataGenerator() {
     uint16_t seed = 2024;
     std::mt19937 gen(2024);
 
-    std::vector<RequestData<LocalGPUReqDataType>> requestData;
-    RequestData<LocalGPUReqDataType> data;
-    Request<LocalGPUReqDataType> request;
+    std::vector<RequestData<LocalCPUReqDataType>> requestData;
+    RequestData<LocalCPUReqDataType> data;
+    Request<LocalCPUReqDataType> request;
     RequestDataShapeType shape;
-    cv::cuda::GpuMat img;
+    cv::Mat img;
     std::string requestPath;
+    if (msvc_OutQueue[0]->getActiveQueueIndex() != 1) msvc_OutQueue[0]->setActiveQueueIndex(1);
+    READY = true;
 
     while (true) {
         if (this->STOP_THREADS) {
@@ -56,7 +58,7 @@ void Receiver::profileDataGenerator() {
             msvc_inReqCount++;
             randomShapeIndex = dis(gen);
             shape = msvc_dataShape[randomShapeIndex];
-            img = cv::cuda::GpuMat(shape[1], shape[2], CV_8UC3);
+            img = cv::Mat(shape[1], shape[2], CV_8UC3);
             data = {
                 shape,
                 img

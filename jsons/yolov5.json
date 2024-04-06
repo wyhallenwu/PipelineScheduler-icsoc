@@ -1,8 +1,8 @@
 [
     {
         "msvc_name": "yolov5_0::receiver",
-        "msvc_idealBatchSize": 1,
-        "msvc_appLvlConfigs": "",
+        "msvc_idealBatchSize": 10,
+        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov5_receiver.json",
         "msvc_dnstreamMicroservices": [
             {
                 "nb_classOfInterest": -1,
@@ -46,7 +46,8 @@
                     ]
                 ]
             }
-        ]
+        ],
+        "msvc_maxQueueSize": 100
     },
     {
         "msvc_name": "yolov5_0::preprocessor",
@@ -94,7 +95,8 @@
                     ]
                 ]
             }
-        ]
+        ],
+        "msvc_maxQueueSize": 10
     },
     {
         "msvc_name": "yolov5_0::inference",
@@ -150,7 +152,8 @@
                     ]
                 ]
             }
-        ]
+        ],
+        "msvc_maxQueueSize": 10
     },
     {
         "msvc_name": "yolov5_0::postprocessor",
@@ -206,7 +209,8 @@
                     ]
                 ]
             }
-        ]
+        ],
+        "msvc_maxQueueSize": 100
     },
     {
         "msvc_name": "yolov5_0::sender",
@@ -253,6 +257,7 @@
                     ]
                 ]
             }
-        ]
+        ],
+        "msvc_maxQueueSize": 100
     }
 ]

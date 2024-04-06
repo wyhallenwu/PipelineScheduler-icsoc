@@ -11,12 +11,21 @@ YoloV5Agent::YoloV5Agent(
 ) : ContainerAgent(name, own_port, devIndex, logPath) {
 
     msvcs = std::move(services);
+    if (msvcs[0]->checkMode() == RUNMODE::PROFILING) {
+        std::thread preprocessor(&Receiver::profileDataGenerator, dynamic_cast<Receiver*>(msvcs[0]));
+        preprocessor.detach();
+    }
     std::thread preprocessor(&BaseReqBatcher::batchRequests, dynamic_cast<BaseReqBatcher*>(msvcs[1]));
     preprocessor.detach();
     std::thread inference(&BaseBatchInferencer::inference, dynamic_cast<BaseBatchInferencer*>(msvcs[2]));
     inference.detach();
-    std::thread postprocessor(&BaseBBoxCropper::cropping, dynamic_cast<BaseBBoxCropper*>(msvcs[3]));
-    postprocessor.detach();
+    if (msvcs[0]->checkMode() == RUNMODE::PROFILING) {
+        std::thread postprocessor(&BaseBBoxCropper::cropProfiling, dynamic_cast<BaseBBoxCropper*>(msvcs[3]));
+        postprocessor.detach();
+    } else {
+        std::thread postprocessor(&BaseBBoxCropper::cropping, dynamic_cast<BaseBBoxCropper*>(msvcs[3]));
+        postprocessor.detach();
+    }
     for (uint16_t i = 4; i < msvcs.size(); i++) {
         std::thread sender(&Sender::Process, dynamic_cast<Sender*>(msvcs[i]));
         sender.detach();
@@ -32,12 +41,14 @@ int main(int argc, char **argv) {
     std::string name = absl::GetFlag(FLAGS_name);
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     std::string logPath = absl::GetFlag(FLAGS_log_dir);
+    bool profiling_mode = absl::GetFlag(FLAGS_profile_mode);
 
     checkCudaErrorCode(cudaSetDevice(device), __func__);
     std::vector<BaseMicroserviceConfigs> msvc_configs = msvcconfigs::LoadFromJson();
     for (uint8_t i = 0; i < msvc_configs.size(); i++) {
         msvc_configs[i].msvc_deviceIndex = device;
         msvc_configs[i].msvc_containerLogPath = logPath + "/" + name;
+        msvc_configs[i].msvc_RUNMODE = RUNMODE::PROFILING;
     }
 
     spdlog::set_level(spdlog::level::level_enum(logLevel));

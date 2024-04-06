@@ -21,6 +21,8 @@ public:
         server->Shutdown();
         cq->Shutdown();
     }
+    // Data generator for profiling
+    void profileDataGenerator();
 
 protected:
     void readConfigsFromJson(std::string cfgPath) {
@@ -106,9 +108,6 @@ private:
 
     // This can be run in multiple threads if needed.
     void HandleRpcs();
-
-    // Data generator for profiling
-    void profileDataGenerator();
 
     std::unique_ptr<ServerCompletionQueue> cq;
     DataTransferService::AsyncService service;

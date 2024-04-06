@@ -9,6 +9,7 @@ ABSL_FLAG(uint16_t, port, 0, "server port for the service");
 ABSL_FLAG(int16_t, device, 0, "Index of GPU device");
 ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
 ABSL_FLAG(std::string, log_dir, "../logs", "Log path for the container");
+ABSL_FLAG(bool, profile_mode, false, "flag to make the model running in profiling mode.");
 
 void msvcconfigs::from_json(const json &j, msvcconfigs::NeighborMicroserviceConfigs &val) {
     j.at("nb_name").get_to(val.name);
