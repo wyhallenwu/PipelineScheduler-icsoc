@@ -43,5 +43,11 @@
 
 class RetinaFaceAgent : public ContainerAgent {
 public:
-    RetinaFaceAgent(const std::string &name, uint16_t own_port, int8_t devIndex, std::vector<Microservice*> services);
+    RetinaFaceAgent(
+        const std::string &name,
+        uint16_t own_port,
+        int8_t devIndex,
+        const std::string &logPath,
+        std::vector<Microservice*> services
+    );
 };

@@ -13,6 +13,7 @@ BaseReqBatcher::BaseReqBatcher(const BaseMicroserviceConfigs &configs) : Microse
 }
 
 void BaseReqBatcher::batchRequests() {
+    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
@@ -159,6 +160,7 @@ void BaseReqBatcher::batchRequests() {
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }
+    msvc_logFile.close();
 }
 
 /**

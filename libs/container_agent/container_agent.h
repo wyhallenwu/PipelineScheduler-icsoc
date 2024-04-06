@@ -11,6 +11,7 @@
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <google/protobuf/empty.pb.h>
+#include <filesystem>
 
 #include "../json/json.h"
 #include "microservice.h"
@@ -24,6 +25,7 @@ ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json_path);
 ABSL_DECLARE_FLAG(uint16_t, port);
 ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
+ABSL_DECLARE_FLAG(std::string, log_dir);
 
 using json = nlohmann::json;
 
@@ -55,7 +57,7 @@ namespace msvcconfigs {
 
 class ContainerAgent {
 public:
-    ContainerAgent(const std::string &name, uint16_t own_port, int8_t devIndex);
+    ContainerAgent(const std::string &name, uint16_t own_port, int8_t devIndex, const std::string &logPath);
 
     ~ContainerAgent() {
         for (auto msvc: msvcs) {
@@ -131,6 +133,8 @@ protected:
     std::unique_ptr<Server> server;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     std::atomic<bool> run;
+
+    std::string cont_logDir;
 };
 
 #endif //CONTAINER_AGENT_H

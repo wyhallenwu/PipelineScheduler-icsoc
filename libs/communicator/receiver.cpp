@@ -25,6 +25,7 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs)
 }
 
 void Receiver::profileDataGenerator() {
+    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     setDevice();
     uint16_t numBatches = 0;
 
@@ -79,6 +80,7 @@ void Receiver::profileDataGenerator() {
             this->pauseThread();
         }
     }
+    msvc_logFile.close();
 }
 
 Receiver::GpuPointerRequestHandler::GpuPointerRequestHandler(
@@ -211,6 +213,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 
 // This can be run in multiple threads if needed.
 void Receiver::HandleRpcs() {
+    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     setDevice();
     new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount);
     new SharedMemoryRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount);
@@ -231,4 +234,5 @@ void Receiver::HandleRpcs() {
         GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
     }
+    msvc_logFile.close();
 }

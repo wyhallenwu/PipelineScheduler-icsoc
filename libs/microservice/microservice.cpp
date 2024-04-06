@@ -1,5 +1,4 @@
 #include<microservice.h>
-#include<iostream>
 #include<opencv2/opencv.hpp>
 
 /**
@@ -21,6 +20,7 @@ Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
     msvc_appLvlConfigs = configs.msvc_appLvlConfigs;
     msvc_deviceIndex = configs.msvc_deviceIndex;
     msvc_RUNMODE = configs.msvc_RUNMODE;
+    msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + ".txt";
 
     std::list<NeighborMicroserviceConfigs>::const_iterator it;
     for (it = configs.msvc_dnstreamMicroservices.begin(); it != configs.msvc_dnstreamMicroservices.end(); ++it) {

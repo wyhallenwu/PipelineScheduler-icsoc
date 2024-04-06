@@ -10,6 +10,8 @@
 #include <opencv2/opencv.hpp>
 #include <utility>
 #include <spdlog/spdlog.h>
+#include <fstream>
+#include <iostream>
 
 #ifndef MICROSERVICE_H
 #define MICROSERVICE_H
@@ -295,6 +297,8 @@ namespace msvcconfigs {
         std::vector<RequestDataShapeType> msvc_dataShape;
         // GPU index, -1 means CPU
         int8_t msvc_deviceIndex = 0;
+        // Log dir
+        std::string msvc_containerLogPath;
         // Run mode
         RUNMODE msvc_RUNMODE = RUNMODE::DEPLOYMENT;
         // List of upstream microservices
@@ -382,6 +386,12 @@ public:
         msvc_deviceIndex = deviceIndex;
     }
 
+    void setContainerLogPath(std::string dirPath) {
+        msvc_microserviceLogPath = dirPath + "/" + msvc_name;
+    }
+
+    std::ofstream msvc_logFile;
+
 protected:
     std::vector<ThreadSafeFixSizedDoubleQueue*> msvc_InQueue, msvc_OutQueue;
     //
@@ -461,6 +471,8 @@ protected:
     //
     virtual void updateReqRate(ClockType lastInterReqDuration);
 
+    // Logging file path, where each microservice is supposed to log in running metrics
+    std::string msvc_microserviceLogPath;
 };
 
 

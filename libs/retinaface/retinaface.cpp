@@ -2,8 +2,13 @@
 
 #include <utility>
 
-RetinaFaceAgent::RetinaFaceAgent(const std::string &name, uint16_t own_port, int8_t devIndex, std::vector<Microservice*> services)
-        : ContainerAgent(name, own_port, devIndex) {
+RetinaFaceAgent::RetinaFaceAgent(
+    const std::string &name,
+    uint16_t own_port,
+    int8_t devIndex,
+    const std::string &logPath,
+    std::vector<Microservice*> services
+) : ContainerAgent(name, own_port, devIndex, logPath) {
     msvcs = std::move(services);
     std::thread preprocessor(&BaseReqBatcher::batchRequests, dynamic_cast<BaseReqBatcher*>(msvcs[1]));
     preprocessor.detach();
@@ -24,14 +29,20 @@ int main(int argc, char **argv) {
     
     int8_t device = absl::GetFlag(FLAGS_device);
     checkCudaErrorCode(cudaSetDevice(device), __func__);
+
+    std::string name = absl::GetFlag(FLAGS_name);
+    std::string logPath = absl::GetFlag(FLAGS_log_dir);
+
     std::vector<BaseMicroserviceConfigs> msvc_configs = msvcconfigs::LoadFromJson();
     for (uint8_t i = 0; i < msvc_configs.size(); i++) {
         msvc_configs[i].msvc_deviceIndex = device;
+        msvc_configs[i].msvc_containerLogPath = logPath + "/" + name;
     }
 
-    std::string name = absl::GetFlag(FLAGS_name);
+
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     spdlog::set_level(spdlog::level::level_enum(logLevel));
+
     std::vector<Microservice*> msvcs;
     msvcs.push_back(new Receiver(msvc_configs[0]));
     msvcs.push_back(new BaseReqBatcher(msvc_configs[1]));
@@ -40,7 +51,8 @@ int main(int argc, char **argv) {
     msvcs[2]->SetInQueue(msvcs[1]->GetOutQueue());
     msvcs.push_back(new BaseBBoxCropper(msvc_configs[3]));
     msvcs[3]->SetInQueue(msvcs[2]->GetOutQueue());
-    dynamic_cast<BaseBBoxCropper*>(msvcs[3])->setInferenceShape(dynamic_cast<BaseBatchInferencer*>(msvcs[2])->getInputShapeVector());
+    RequestShapeType inferenceShape = dynamic_cast<BaseBatchInferencer*>(msvcs[2])->getInputShapeVector();
+    dynamic_cast<BaseBBoxCropper*>(msvcs[3])->setInferenceShape(inferenceShape);
     for (uint16_t i = 4; i < msvc_configs.size(); i++) {
         if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::localGPU) {
             msvcs.push_back(new GPUSender(msvc_configs[i]));
@@ -55,7 +67,7 @@ int main(int argc, char **argv) {
         msvc->msvc_containerName = name;
     }
 
-    ContainerAgent *agent = new RetinaFaceAgent(name, absl::GetFlag(FLAGS_port), device, msvcs);
+    ContainerAgent *agent = new RetinaFaceAgent(name, absl::GetFlag(FLAGS_port), device, logPath, msvcs);
 
     agent->checkReady();
     

@@ -7,6 +7,8 @@ BaseBBoxCropper::BaseBBoxCropper(const BaseMicroserviceConfigs &configs) : Micro
 }
 
 void BaseBBoxCropper::cropping() {
+    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
+
     setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
@@ -224,6 +226,7 @@ void BaseBBoxCropper::cropping() {
 
 
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
+    msvc_logFile.close();
 }
 
 
@@ -472,9 +475,13 @@ void BaseBBoxCropper::cropProfiling() {
         //     checkCudaErrorCode(cudaFree(currReq_data.at(i).data.cudaPtr()));
         // }
 
-        auto time_now = std::chrono::high_resolution_clock::now();
+        // If the current req batch is for warming up (signified by empty request paths), time is not calculated.
+        if (!currReq.req_travelPath[0].empty()) {        
+            auto time_now = std::chrono::high_resolution_clock::now();
+        }
         
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
         // Synchronize the cuda stream
     }

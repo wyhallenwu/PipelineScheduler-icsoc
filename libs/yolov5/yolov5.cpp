@@ -2,8 +2,14 @@
 
 #include <utility>
 
-YoloV5Agent::YoloV5Agent(const std::string &name, uint16_t own_port, int8_t devIndex, std::vector<Microservice*> services)
-        : ContainerAgent(name, own_port, devIndex) {
+YoloV5Agent::YoloV5Agent(
+    const std::string &name,
+    uint16_t own_port,
+    int8_t devIndex,
+    std::string logPath,
+    std::vector<Microservice*> services
+) : ContainerAgent(name, own_port, devIndex, logPath) {
+
     msvcs = std::move(services);
     std::thread preprocessor(&BaseReqBatcher::batchRequests, dynamic_cast<BaseReqBatcher*>(msvcs[1]));
     preprocessor.detach();
@@ -23,15 +29,19 @@ int main(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
 
     int8_t device = absl::GetFlag(FLAGS_device);
+    std::string name = absl::GetFlag(FLAGS_name);
+    uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
+    std::string logPath = absl::GetFlag(FLAGS_log_dir);
+
     checkCudaErrorCode(cudaSetDevice(device), __func__);
     std::vector<BaseMicroserviceConfigs> msvc_configs = msvcconfigs::LoadFromJson();
     for (uint8_t i = 0; i < msvc_configs.size(); i++) {
         msvc_configs[i].msvc_deviceIndex = device;
+        msvc_configs[i].msvc_containerLogPath = logPath + "/" + name;
     }
 
-    std::string name = absl::GetFlag(FLAGS_name);
-    uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     spdlog::set_level(spdlog::level::level_enum(logLevel));
+
     std::vector<Microservice*> msvcs;
     msvcs.push_back(new Receiver(msvc_configs[0]));
     msvcs.push_back(new BaseReqBatcher(msvc_configs[1]));
@@ -56,7 +66,7 @@ int main(int argc, char **argv) {
         msvc->msvc_containerName = name;
     }
 
-    ContainerAgent *agent = new YoloV5Agent(name, absl::GetFlag(FLAGS_port), device, msvcs);
+    ContainerAgent *agent = new YoloV5Agent(name, absl::GetFlag(FLAGS_port), device, logPath, msvcs);
 
     agent->checkReady();
     

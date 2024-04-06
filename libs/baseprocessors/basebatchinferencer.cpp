@@ -37,6 +37,7 @@ bool BaseBatchInferencer::checkReqEligibility(ClockType currReq_gentime) {
 }
 
 void BaseBatchInferencer::inference() {
+    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
@@ -143,6 +144,7 @@ void BaseBatchInferencer::inference() {
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }
     checkCudaErrorCode(cudaStreamDestroy(inferenceStream), __func__);
+    msvc_logFile.close();
 }
 
 TRTConfigs BaseBatchInferencer::readConfigsFromJson(const std::string cfgPath) {

@@ -51,15 +51,29 @@ public:
     };
 
 private:
-    void CreateYolo5Container(int id, const NeighborMicroserviceConfigs &upstream,
-                              const std::vector<NeighborMicroserviceConfigs> &downstreams, const MsvcSLOType &slo);
+    void CreateYolo5Container(
+        int id,
+        const NeighborMicroserviceConfigs &upstream,
+        const std::vector<NeighborMicroserviceConfigs> &downstreams,
+        const MsvcSLOType &slo,
+        const BatchSizeType &batchSize,
+        const std::string &logPath
+    );
 
-    void CreateDataSource(int id, const std::vector<NeighborMicroserviceConfigs> &downstreams, const MsvcSLOType &slo,
-                          const std::string &video_path);
+    void CreateDataSource(
+        int id,
+        const std::vector<NeighborMicroserviceConfigs> &downstreams,
+        const MsvcSLOType &slo,
+        const std::string &video_path,
+        const std::string &logPath
+    );
 
     static json createConfigs(
             const std::vector<std::tuple<std::string, MicroserviceType, QueueLengthType, int16_t, std::vector<RequestDataShapeType>>> &data,
-            const MsvcSLOType &slo, const NeighborMicroserviceConfigs &prev_msvc,
+            const MsvcSLOType &slo,
+            const BatchSizeType &batchSize,
+            const std::string &logPath,
+            const NeighborMicroserviceConfigs &prev_msvc,
             const std::vector<NeighborMicroserviceConfigs> &next_msvc);
 
     void finishContainer(const std::string &executable, const std::string &name, const std::string &start_string,
@@ -198,6 +212,9 @@ private:
     std::unique_ptr<Server> controller_server;
     CompletionQueue *controller_sending_cq;
     ControlCommunication::AsyncService controller_service;
+
+    // This will be mounted into the container to easily collect all logs.
+    std::string dev_logPath = "../logs";
 };
 
 #endif //DEVICE_AGENT_H

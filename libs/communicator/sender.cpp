@@ -29,10 +29,12 @@ Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc
 }
 
 GPUSender::GPUSender(const BaseMicroserviceConfigs &configs) : Sender(configs) {
+    addToName("sender", "GPU");
     tagToGpuPointer = std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *>();
 }
 
 void GPUSender::Process() {
+    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     setDevice();
     while (READY) {
         if (this->STOP_THREADS) {
@@ -47,6 +49,7 @@ void GPUSender::Process() {
         SendGpuPointer(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    msvc_logFile.close();
 }
 
 std::string GPUSender::SendGpuPointer(
@@ -110,9 +113,12 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Empt
 }
 
 LocalCPUSender::LocalCPUSender(const BaseMicroserviceConfigs &configs) : Sender(
-        configs) {}
+        configs) {
+            addToName("sender", "LocalCPU");
+        }
 
 void LocalCPUSender::Process() {
+    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     setDevice();
     while (READY) {
         if (this->STOP_THREADS) {
@@ -127,6 +133,7 @@ void LocalCPUSender::Process() {
         SendSharedMemory(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    msvc_logFile.close();
 }
 
 std::string LocalCPUSender::SendSharedMemory(const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp,
@@ -165,9 +172,12 @@ std::string LocalCPUSender::SendSharedMemory(const std::vector<RequestData<Local
 }
 
 RemoteCPUSender::RemoteCPUSender(const BaseMicroserviceConfigs &configs) : Sender(
-        configs) {}
+        configs) {
+            addToName("sender", "RemoteCPU");
+        }
 
 void RemoteCPUSender::Process() {
+    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     setDevice();
     while (READY) {
         if (this->STOP_THREADS) {
@@ -182,6 +192,7 @@ void RemoteCPUSender::Process() {
         SendSerializedData(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    msvc_logFile.close();
 }
 
 std::string RemoteCPUSender::SendSerializedData(
