@@ -15,6 +15,16 @@ using controlcommunication::MicroserviceConfig;
 
 using trt::TRTConfigs;
 
+
+
+typedef std::tuple<
+    std::string, // name
+    MicroserviceType, // type
+    QueueLengthType, // queue length type
+    int16_t, // class of interests
+    std::vector<RequestDataShapeType> //data shape
+> MsvcConfigTupleType;
+
 enum ContainerType {
     DataSource,
     Yolo5,
@@ -69,7 +79,7 @@ private:
     );
 
     static json createConfigs(
-            const std::vector<std::tuple<std::string, MicroserviceType, QueueLengthType, int16_t, std::vector<RequestDataShapeType>>> &data,
+            const std::vector<MsvcConfigTupleType> &data,
             const MsvcSLOType &slo,
             const BatchSizeType &batchSize,
             const std::string &logPath,

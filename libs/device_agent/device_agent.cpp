@@ -127,7 +127,7 @@ DeviceAgent::finishContainer(const std::string &executable, const std::string &n
 }
 
 json DeviceAgent::createConfigs(
-    const std::vector<std::tuple<std::string, MicroserviceType, QueueLengthType, int16_t, std::vector<RequestDataShapeType>>> &data,
+    const std::vector<MsvcConfigTupleType> &data,
     const MsvcSLOType &slo,
     const BatchSizeType &batchSize,
     const std::string &logPath,
