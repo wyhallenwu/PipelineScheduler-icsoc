@@ -40,6 +40,7 @@ void Receiver::profileDataGenerator() {
     Request<LocalGPUReqDataType> request;
     RequestDataShapeType shape;
     cv::cuda::GpuMat img;
+    std::string requestPath;
 
     while (true) {
         if (this->STOP_THREADS) {
@@ -60,16 +61,21 @@ void Receiver::profileDataGenerator() {
                 img
             };
             requestData.emplace_back(data);
+            if (numBatches < msvc_numWarmUpBatches) {
+                requestPath = "";
+            } else {
+                requestPath = "[" + this->msvc_containerName + "_" + std::to_string(msvc_inReqCount) + "]";
+            }
             request = {
                 {std::chrono::_V2::system_clock::now()},
                 {9999},
-                {"[" + this->msvc_containerName + "_" + std::to_string(msvc_inReqCount) + "]"},
+                {requestPath},
                 1,
                 requestData
             };
             msvc_OutQueue[0]->emplace(request);
         }
-        if (numBatches == (msvc_numWarmUpBatches + msvc_numProfileBatches)) {
+        if (++numBatches == (msvc_numWarmUpBatches + msvc_numProfileBatches)) {
             this->pauseThread();
         }
     }
