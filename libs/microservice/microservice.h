@@ -119,12 +119,12 @@ struct Request {
 //template<int MaxSize=100>
 class ThreadSafeFixSizedDoubleQueue {
 private:
-    std::queue<Request<LocalCPUReqDataType>> cpuQueue;
-    std::queue<Request<LocalGPUReqDataType>> gpuQueue;
+    std::queue<Request<LocalCPUReqDataType>> q_cpuQueue;
+    std::queue<Request<LocalGPUReqDataType>> q_gpuQueue;
     std::mutex q_mutex;
     std::condition_variable q_condition;
     std::uint8_t activeQueueIndex;
-    size_t MaxSize = 100;
+    size_t q_MaxSize = 100;
 
 public:
     /**
@@ -134,10 +134,10 @@ public:
      */
     void emplace(Request<LocalCPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
-        if (cpuQueue.size() == MaxSize) {
-            cpuQueue.pop();
+        if (q_cpuQueue.size() == q_MaxSize) {
+            q_cpuQueue.pop();
         }
-        cpuQueue.emplace(request);
+        q_cpuQueue.emplace(request);
         q_condition.notify_one();
         q_mutex.unlock();
     }
@@ -149,10 +149,10 @@ public:
      */
     void emplace(Request<LocalGPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
-        if (gpuQueue.size() == MaxSize) {
-            gpuQueue.pop();
+        if (q_gpuQueue.size() == q_MaxSize) {
+            q_gpuQueue.pop();
         }
-        gpuQueue.emplace(request);
+        q_gpuQueue.emplace(request);
         q_condition.notify_one();
         q_mutex.unlock();
     }
@@ -166,10 +166,10 @@ public:
         std::unique_lock<std::mutex> lock(q_mutex);
         q_condition.wait(
                 lock,
-                [this]() { return !cpuQueue.empty(); }
+                [this]() { return !q_cpuQueue.empty(); }
         );
-        Request<LocalCPUReqDataType> request = cpuQueue.front();
-        cpuQueue.pop();
+        Request<LocalCPUReqDataType> request = q_cpuQueue.front();
+        q_cpuQueue.pop();
         q_mutex.unlock();
         return request;
     }
@@ -183,27 +183,31 @@ public:
         std::unique_lock<std::mutex> lock(q_mutex);
         q_condition.wait(
                 lock,
-                [this]() { return !gpuQueue.empty(); }
+                [this]() { return !q_gpuQueue.empty(); }
         );
-        Request<LocalGPUReqDataType> request = gpuQueue.front();
-        gpuQueue.pop();
+        Request<LocalGPUReqDataType> request = q_gpuQueue.front();
+        q_gpuQueue.pop();
         q_mutex.unlock();
         return request;
     }
 
+    void setQueueSize(uint32_t queueSize) {
+        q_MaxSize = queueSize;
+    }
+
     int32_t size() {
         if (activeQueueIndex == 1) {
-            return cpuQueue.size();
+            return q_cpuQueue.size();
         } //else if (activeQueueIndex == 2) {
-        return gpuQueue.size();
+        return q_gpuQueue.size();
         //}
     }
 
     int32_t size(uint8_t queueIndex) {
         if (queueIndex == 1) {
-            return cpuQueue.size();
+            return q_cpuQueue.size();
         } //else if (activeQueueIndex == 2) {
-        return gpuQueue.size();
+        return q_gpuQueue.size();
         //}
     }
 
@@ -212,8 +216,8 @@ public:
     }
 
     ~ThreadSafeFixSizedDoubleQueue() {
-        std::queue<Request<LocalGPUReqDataType>>().swap(gpuQueue);
-        std::queue<Request<LocalCPUReqDataType>>().swap(cpuQueue);
+        std::queue<Request<LocalGPUReqDataType>>().swap(q_gpuQueue);
+        std::queue<Request<LocalCPUReqDataType>>().swap(q_cpuQueue);
     }
     uint8_t getActiveQueueIndex() {
         return activeQueueIndex;
