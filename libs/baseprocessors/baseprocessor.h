@@ -45,6 +45,11 @@ public:
     ~BaseReqBatcher() = default;
 
     virtual void batchRequests();
+
+    void dispatchThread() override {
+        std::thread batcher(&BaseReqBatcher::batchRequests, this);
+        batcher.detach();
+    }
 protected:
     /**
      * @brief 
@@ -83,6 +88,11 @@ public:
 
     RequestShapeType getInputShapeVector();
     RequestShapeType getOutputShapeVector();
+
+    void dispatchThread() override {
+        std::thread inferencer(&BaseBatchInferencer::inference, this);
+        inferencer.detach();
+    }
 protected:
     BatchSizeType msvc_onBufferBatchSize;
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
@@ -143,6 +153,16 @@ public:
     );
 
     void cropProfiling();
+
+    void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            std::thread postprocessor(&BaseBBoxCropper::cropProfiling, this);
+            postprocessor.detach();
+            return;
+        }
+        std::thread postprocessor(&BaseBBoxCropper::cropping, this);
+        postprocessor.detach();
+    }
 
 protected:
     RequestShapeType msvc_inferenceShape;

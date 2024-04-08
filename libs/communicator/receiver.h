@@ -24,6 +24,16 @@ public:
     // Data generator for profiling
     void profileDataGenerator();
 
+    void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            std::thread handler(&Receiver::profileDataGenerator, this);
+            handler.detach();
+            return;
+        }
+        std::thread handler(&Receiver::HandleRpcs, this);
+        handler.detach();
+    }
+
 protected:
     void readConfigsFromJson(std::string cfgPath) {
         spdlog::trace("{0:s} attempts to parse Profiling configs from json file.", __func__);

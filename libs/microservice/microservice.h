@@ -402,6 +402,8 @@ public:
         msvc_microserviceLogPath = dirPath + "/" + msvc_name;
     }
 
+    virtual void dispatchThread() {};
+
     std::ofstream msvc_logFile;
 
 protected:
