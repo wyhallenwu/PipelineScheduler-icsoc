@@ -120,8 +120,8 @@ void Receiver::profileDataGenerator() {
                 requestPath = std::to_string(batchSize) + "," + std::to_string(batchNum) + "," + std::to_string(i);
 
                 // The very last batch of this profiling session is marked with "END" in the `requestPath` field.
-                if ((batchSize == msvc_idealBatchSize) && (batchNum == msvc_numProfileBatches - 1)) {
-                    requestPath = requestPath + "END";
+                if ((batchSize == msvc_idealBatchSize) && (batchNum == msvc_numProfileBatches) && (i == batchSize)) {
+                    requestPath = requestPath + "PROFILE_ENDS";
                 }
                 request = {
                     {std::chrono::_V2::system_clock::now()},
@@ -132,6 +132,7 @@ void Receiver::profileDataGenerator() {
                 };
                 msvc_OutQueue[0]->emplace(request);
             }
+            batchNum++;
             requestData.clear();
             
         }

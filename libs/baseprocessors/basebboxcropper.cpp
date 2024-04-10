@@ -420,6 +420,9 @@ void BaseBBoxCropper::cropProfiling() {
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
 
+        uint8_t numTimeStampPerReq = (uint8_t)(currReq.req_origGenTime.size() / currReq_batchSize);
+        uint16_t insertPos = numTimeStampPerReq;
+
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
 
@@ -477,6 +480,13 @@ void BaseBBoxCropper::cropProfiling() {
 
             time_now = std::chrono::high_resolution_clock::now();
             inferenceTime[i] = std::chrono::duration_cast<std::chrono::nanoseconds>(time_now - currReq.req_origGenTime[i]).count();
+
+            if (insertPos < currReq.req_origGenTime.size()) {
+                currReq.req_origGenTime.insert(currReq.req_origGenTime.begin() + insertPos, time_now);
+                insertPos += numTimeStampPerReq + 1;
+            } else if (insertPos == currReq.req_origGenTime.size()) {
+                currReq.req_origGenTime.push_back(time_now);
+            }
         }
         
         for (BatchSizeType i = 0; i < currReq.req_batchSize; i++) {
@@ -487,9 +497,18 @@ void BaseBBoxCropper::cropProfiling() {
                 }
             );
         }        
+        // END is in the travelPath of the last message meaning the profiling session is completed
+        if (currReq.req_travelPath[currReq_batchSize - 1].find("PROFILE_ENDS") != std::string::npos) {
+
+            // we need to clean END from the path
+            currReq.req_travelPath[currReq_batchSize - 1] = removeSubstring(currReq.req_travelPath[currReq_batchSize - 1], "PROFILE_ENDS");
+
+            // set this thread to pause to signal to the profiler that the current profiling session has been completed.
+            this->pauseThread();
+        }
         msvc_OutQueue[0]->emplace(
             Request<LocalCPUReqDataType>{
-                {},
+                currReq.req_origGenTime,
                 {},
                 currReq.req_travelPath,
                 currReq.req_batchSize,

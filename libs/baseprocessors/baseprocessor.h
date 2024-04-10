@@ -98,11 +98,17 @@ public:
     BaseBatchInferencer(const BaseMicroserviceConfigs &configs);
     ~BaseBatchInferencer() = default;
     virtual void inference();
+    virtual void inferenceProfiling();
 
     RequestShapeType getInputShapeVector();
     RequestShapeType getOutputShapeVector();
 
     void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            std::thread inferencer(&BaseBatchInferencer::inferenceProfiling, this);
+            inferencer.detach();
+            return;
+        }
         std::thread inferencer(&BaseBatchInferencer::inference, this);
         inferencer.detach();
     }

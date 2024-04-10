@@ -329,7 +329,8 @@ void BaseReqBatcher::batchRequestsProfiling() {
 
         auto timeNow = std::chrono::high_resolution_clock::now();
 
-        outReq_genTime = currReq.req_origGenTime;
+        // Add the whole time vector of currReq to outReq
+        outReq_genTime.insert(outReq_genTime.end(), currReq.req_origGenTime.begin(), currReq.req_origGenTime.end());
         outReq_genTime.emplace_back(timeNow);
         outReq_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
         outReq_path.emplace_back(currReq.req_travelPath[0]);
