@@ -132,4 +132,7 @@ public:
 
 float fractionToFloat(const std::string& fraction);
 
+std::string removeSubstring(const std::string& str, const std::string& substring);
+
+
 #endif
