@@ -45,6 +45,15 @@ public:
     ~BaseReqBatcher() = default;
 
     virtual void batchRequests();
+    virtual void batchRequestsProfiling();
+
+    void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            std::thread batcher(&BaseReqBatcher::batchRequestsProfiling, this);
+            batcher.detach();
+            return;
+        }
+    }
 
     void dispatchThread() override {
         std::thread batcher(&BaseReqBatcher::batchRequests, this);
