@@ -346,9 +346,18 @@ void BaseBBoxCropper::cropProfiling() {
     // Random bboxes used for random cropping
     float nmsed_randomBoxes[msvc_idealBatchSize][maxNumDets][4];
 
+    // To hold the inference time for each individual request
+    uint64_t inferenceTime[msvc_idealBatchSize];
+
+    auto time_now = std::chrono::high_resolution_clock::now();
+
     for (uint16_t i = 0; i < msvc_idealBatchSize; i++) {
         generateRandomBBox(nmsed_randomBoxes[i][0], infer_h, infer_w, maxNumDets);
     }
+
+    //
+    std::vector<RequestData<LocalCPUReqDataType>> inferTimeReportData;
+
 
     READY = true;
 
@@ -382,7 +391,7 @@ void BaseBBoxCropper::cropProfiling() {
 
         for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
             bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
-            RequestDataShapeType shape = currReq_data[i].shape;
+            shape = currReq_data[i].shape;
             for (uint8_t j = 0; j < shape.size(); ++j) {
                 bufferSize *= shape[j];
             }
@@ -416,10 +425,6 @@ void BaseBBoxCropper::cropProfiling() {
 
             // If there is no object in frame, we don't have to do nothing.
             int numDetsInFrame = maxNumDets;
-            if (numDetsInFrame <= 0) {
-                outReqData.clear();
-                continue;
-            }
 
             // Otherwise, we need to do some cropping.
             orig_h = imageList[i].shape[1];
@@ -456,8 +461,6 @@ void BaseBBoxCropper::cropProfiling() {
                     bboxShape,
                     singleImageBBoxList[j].clone()
                 };
-                
-                // We don't need to send out anything. Just measure the time is enough.
 
 
                 // msvc_OutQueue.at(queueIndex)->emplace(outReq);
@@ -469,16 +472,37 @@ void BaseBBoxCropper::cropProfiling() {
 
             outReqData.clear();
             singleImageBBoxList.clear();
+
+            // We don't need to send out anything. Just measure the time is enough.
+
+            time_now = std::chrono::high_resolution_clock::now();
+            inferenceTime[i] = std::chrono::duration_cast<std::chrono::nanoseconds>(time_now - currReq.req_origGenTime[i]).count();
         }
+        
+        for (BatchSizeType i = 0; i < currReq.req_batchSize; i++) {
+            inferTimeReportData.emplace_back(
+                RequestData<LocalCPUReqDataType>{
+                    {1}, 
+                    cv::Mat{1, 1, CV_64F, &inferenceTime[i]}
+                }
+            );
+        }        
+        msvc_OutQueue[0]->emplace(
+            Request<LocalCPUReqDataType>{
+                {},
+                {},
+                currReq.req_travelPath,
+                currReq.req_batchSize,
+                inferTimeReportData
+            }
+        );
+        inferTimeReportData.clear();
         // // Free all the output buffers of trtengine after cropping is done.
         // for (size_t i = 0; i < currReq_data.size(); i++) {
         //     checkCudaErrorCode(cudaFree(currReq_data.at(i).data.cudaPtr()));
         // }
 
         // If the current req batch is for warming up (signified by empty request paths), time is not calculated.
-        if (!currReq.req_travelPath[0].empty()) {        
-            auto time_now = std::chrono::high_resolution_clock::now();
-        }
         
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
 
