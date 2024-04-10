@@ -3,6 +3,53 @@
 using namespace spdlog;
 
 /**
+ * @brief Get number at index from a string of comma separated numbers
+ * 
+ * @param str 
+ * @param index 
+ * @return uint64_t 
+ */
+inline uint64_t getNumberAtIndex(const std::string& str, int index) {
+    int currentIndex = 0;
+    int startPos = 0;
+    uint64_t number = 0;
+
+    if (index == -1) {
+        // Handle the case where the index is -1 (last number)
+        for (size_t i = 0; i < str.length(); i++) {
+            if (str[i] == ',') {
+                startPos = i + 1;
+            }
+        }
+        std::string numberStr = str.substr(startPos);
+        number = std::stoull(numberStr);
+        return number;
+    }
+
+    for (size_t i = 0; i < str.length(); i++) {
+        if (str[i] == ',') {
+            if (currentIndex == index) {
+                std::string numberStr = str.substr(startPos, i - startPos);
+                number = std::stoull(numberStr);
+                return number;
+            }
+            startPos = i + 1;
+            currentIndex++;
+        }
+    }
+
+    // Handle the last number in the string
+    if (currentIndex == index) {
+        std::string numberStr = str.substr(startPos);
+        number = std::stoull(numberStr);
+        return number;
+    }
+
+    return 0; // Return 0 if the index is out of range
+}
+
+
+/**
  * @brief Construct a new Base Preprocessor that inherites the LocalGPUDataMicroservice given the `InType`
  * 
  * @param configs 
@@ -239,9 +286,6 @@ void BaseReqBatcher::batchRequestsProfiling() {
         }
         currReq_batchSize = currReq.req_batchSize;
 
-        outReq_genTime = currReq.req_origGenTime;
-        outReq_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
-        outReq_path.emplace_back(currReq.req_travelPath[0]);
         trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
         msvc_onBufferBatchSize++;
@@ -277,6 +321,18 @@ void BaseReqBatcher::batchRequestsProfiling() {
         data.shape = RequestDataShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
         bufferData.emplace_back(data);
         trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
+
+
+        // Set the ideal batch size for this microservice using the signal from the receiver.
+        // Only used during profiling time.
+        msvc_idealBatchSize = getNumberAtIndex(currReq.req_travelPath[0], 0);
+
+        auto timeNow = std::chrono::high_resolution_clock::now();
+
+        outReq_genTime = currReq.req_origGenTime;
+        outReq_genTime.emplace_back(timeNow);
+        outReq_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
+        outReq_path.emplace_back(currReq.req_travelPath[0]);
 
         // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
         // cudaFree(currReq.req_data[0].data.cudaPtr());

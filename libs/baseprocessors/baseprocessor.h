@@ -13,6 +13,13 @@ typedef uint16_t BatchSizeType;
 using namespace msvcconfigs;
 using json = nlohmann::json;
 
+
+inline uint64_t getNumberAtIndex(const std::string& str, int index);
+inline std::string getTimeDifString(const ClockType &start, const ClockType &end) {
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    return std::to_string(duration.count());
+}
+
 cv::cuda::GpuMat resizePadRightBottom(
     cv::cuda::GpuMat &input,
     size_t height,
@@ -53,9 +60,6 @@ public:
             batcher.detach();
             return;
         }
-    }
-
-    void dispatchThread() override {
         std::thread batcher(&BaseReqBatcher::batchRequests, this);
         batcher.detach();
     }
