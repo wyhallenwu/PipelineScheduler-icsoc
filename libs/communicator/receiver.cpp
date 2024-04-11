@@ -24,6 +24,30 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs)
     }
 }
 
+template<typename ReqDataType>
+void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
+    BatchSizeType batchSize = timeReport.req_batchSize;
+    bool isProfileEnd = false;
+
+    if (timeReport.req_travelPath[batchSize - 1].find("PROFILE_ENDS") != std::string::npos) {
+        timeReport.req_travelPath[batchSize - 1] = removeSubstring(timeReport.req_travelPath[batchSize - 1], "PROFILE_ENDS");
+        isProfileEnd = true;
+    } else if (timeReport.req_travelPath[batchSize - 1].find("BATCH_ENDS") != std::string::npos) {
+        timeReport.req_travelPath[batchSize - 1] = removeSubstring(timeReport.req_travelPath[batchSize - 1], "BATCH_ENDS");
+    }
+    BatchSizeType numTimeStamps = (BatchSizeType)(timeReport.req_origGenTime.size() / batchSize);
+    for (BatchSizeType i = 0; i < batchSize; i++) {
+        msvc_logFile << timeReport.req_travelPath[i] << ",";
+        for (BatchSizeType j = 0; j < numTimeStamps - 1; j++) {
+            msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + j]) << ",";
+        }
+        msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + numTimeStamps - 1]) << std::endl;
+    } 
+    if (isProfileEnd) {
+        this->pauseThread();
+    }
+}
+
 void Receiver::profileDataGenerator() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     setDevice();
@@ -64,9 +88,10 @@ void Receiver::profileDataGenerator() {
         }
         if (msvc_inReqCount > 0) {
             inferTimeReportReq = msvc_InQueue.at(0)->pop1();
-            for (BatchSizeType i = 0; i < inferTimeReportReq.req_batchSize; i++) {
-                std::cout << inferTimeReportReq.req_data[i].data.at<uint64_t>(0, 0) << std::endl;
-            }
+            processInferTimeReport(inferTimeReportReq);
+
+            // NEXT STEP: Write the inferTimeReportReq to a file
+            // NEXT NEXT STEP:  Write a function to analyze the inferTimeReportReq
         }
         /**
          * @brief Warming up to avoid cold start effects.
@@ -101,7 +126,7 @@ void Receiver::profileDataGenerator() {
          * @brief For each model, we profile all batch size in range of [1, msvc_idealBatchSize] for `numProfileBatches` times.
          * 
          */
-        else if (numWarmUpBatches == 0 && numProfileBatches > 0) {
+        else if (numWarmUpBatches == 0 && batchNum <= numProfileBatches) {
             for (BatchSizeType i = 1; i <= batchSize; i++) { // Filling up the batch
                 msvc_inReqCount++;
 
@@ -120,8 +145,12 @@ void Receiver::profileDataGenerator() {
                 requestPath = std::to_string(batchSize) + "," + std::to_string(batchNum) + "," + std::to_string(i);
 
                 // The very last batch of this profiling session is marked with "END" in the `requestPath` field.
-                if ((batchSize == msvc_idealBatchSize) && (batchNum == msvc_numProfileBatches) && (i == batchSize)) {
-                    requestPath = requestPath + "PROFILE_ENDS";
+                if ((batchNum == msvc_numProfileBatches) && (i == batchSize)) {
+                    if (batchSize == msvc_idealBatchSize) {
+                        requestPath = requestPath + "PROFILE_ENDS";
+                    } else {
+                        requestPath = requestPath + "BATCH_ENDS";
+                    }
                 }
                 request = {
                     {std::chrono::_V2::system_clock::now()},
@@ -139,9 +168,6 @@ void Receiver::profileDataGenerator() {
         if (batchNum > msvc_numProfileBatches) {
             batchSize++;
             batchNum = 1;
-        }
-        if (batchSize > msvc_idealBatchSize) {
-            this->pauseThread();
         }
     }
     msvc_logFile.close();

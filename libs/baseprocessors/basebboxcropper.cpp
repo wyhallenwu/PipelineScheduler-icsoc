@@ -499,10 +499,6 @@ void BaseBBoxCropper::cropProfiling() {
         }        
         // END is in the travelPath of the last message meaning the profiling session is completed
         if (currReq.req_travelPath[currReq_batchSize - 1].find("PROFILE_ENDS") != std::string::npos) {
-
-            // we need to clean END from the path
-            currReq.req_travelPath[currReq_batchSize - 1] = removeSubstring(currReq.req_travelPath[currReq_batchSize - 1], "PROFILE_ENDS");
-
             // set this thread to pause to signal to the profiler that the current profiling session has been completed.
             this->pauseThread();
         }

@@ -245,6 +245,9 @@ void BaseReqBatcher::batchRequestsProfiling() {
     BatchSizeType currReq_batchSize;
     info("{0:s} STARTS.", msvc_name); 
     cv::cuda::Stream preProcStream;
+
+    auto timeNow = std::chrono::high_resolution_clock::now();
+
     READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -327,20 +330,38 @@ void BaseReqBatcher::batchRequestsProfiling() {
         // Only used during profiling time.
         msvc_idealBatchSize = getNumberAtIndex(currReq.req_travelPath[0], 0);
 
-        auto timeNow = std::chrono::high_resolution_clock::now();
+        outReq_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
+        outReq_path.emplace_back(currReq.req_travelPath[0]);
+
+
+        timeNow = std::chrono::high_resolution_clock::now();
 
         // Add the whole time vector of currReq to outReq
         outReq_genTime.insert(outReq_genTime.end(), currReq.req_origGenTime.begin(), currReq.req_origGenTime.end());
         outReq_genTime.emplace_back(timeNow);
-        outReq_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
-        outReq_path.emplace_back(currReq.req_travelPath[0]);
 
-        // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
-        // cudaFree(currReq.req_data[0].data.cudaPtr());
         // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
         // Waiting more means there is a higher chance the earliest request in the buffer will be late eventually.
-        if (this->isTimeToBatch()) {
-            // If true, copy the buffer data into the out queue
+        if (this->isTimeToBatch()) { // If true, copy the buffer data into the out queue
+
+            // Moment of batching
+            timeNow =  std::chrono::high_resolution_clock::now();
+
+            /**
+             * @brief At the moment of batching we stick this time stamp into each request in the batch.
+             * This lets us know how much each individual request has to wait and how much is the batched inference
+             * time exactly.
+             * 
+             */
+            uint8_t numTimeStampPerReq = (uint8_t)(outReq_genTime.size() / msvc_onBufferBatchSize);
+            uint16_t insertPos = numTimeStampPerReq;
+            while (insertPos < outReq_genTime.size()) {
+                outReq_genTime.insert(outReq_genTime.begin() + insertPos, timeNow);
+                insertPos += numTimeStampPerReq + 1;
+            }
+            if (insertPos == outReq_genTime.size()) {
+                outReq_genTime.push_back(timeNow);
+            }
             outReq = {
                 outReq_genTime,
                 outReq_slo,
