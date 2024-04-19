@@ -183,9 +183,9 @@ void BaseBBoxCropper::cropping() {
                     continue;
                 }
 
-                if (bboxClass == 0 || bboxClass == 2) {
-                    saveGPUAsImg(singleImageBBoxList[j], "bbox_" + std::to_string(j) + ".jpg");
-                }
+                // if (bboxClass == 0 || bboxClass == 2) {
+                //     saveGPUAsImg(singleImageBBoxList[j], "bbox_" + std::to_string(j) + ".jpg");
+                // }
 
                 // Putting the bounding box into an `outReq` to be sent out
                 bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};

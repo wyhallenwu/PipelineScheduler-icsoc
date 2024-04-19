@@ -187,6 +187,27 @@ protected:
     RequestShapeType msvc_inferenceShape;
 };
 
+class BaseBBoxCropperVerifier : public Microservice {
+public:
+    BaseBBoxCropperVerifier(const BaseMicroserviceConfigs &configs);
+    ~BaseBBoxCropperVerifier() = default;
+
+    void cropping();
+    void setInferenceShape(RequestShapeType shape) {
+        msvc_inferenceShape = shape;
+    }
+
+    void cropProfiling();
+
+    void dispatchThread() override {
+        std::thread postprocessor(&BaseBBoxCropperVerifier::cropping, this);
+        postprocessor.detach();
+    }
+
+protected:
+    RequestShapeType msvc_inferenceShape;
+};
+
 class BaseClassifier : public Microservice {
 public:
     BaseClassifier(const BaseMicroserviceConfigs &configs);
