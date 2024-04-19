@@ -186,3 +186,28 @@ public:
 protected:
     RequestShapeType msvc_inferenceShape;
 };
+
+class BaseClassifier : public Microservice {
+public:
+    BaseClassifier(const BaseMicroserviceConfigs &configs);
+    ~BaseClassifier() = default;
+
+    virtual void classify() ;
+
+    void dispatchThread() override {
+        std::thread classifier(&BaseClassifier::classify, this);
+        classifier.detach();
+    }
+
+protected:
+    RequestShapeType msvc_inferenceShape;
+    uint16_t msvc_numClasses;
+};
+
+class BaseSoftmaxClassifier : public BaseClassifier {
+public:
+    BaseSoftmaxClassifier(const BaseMicroserviceConfigs &configs);
+    ~BaseSoftmaxClassifier() = default;
+
+    virtual void classify() override;
+};

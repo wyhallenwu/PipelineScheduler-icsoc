@@ -183,8 +183,8 @@ void BaseBBoxCropper::cropping() {
                     continue;
                 }
 
-                if (bboxClass == 0) {
-                    saveGPUAsImg(singleImageBBoxList[j], "bbox.jpg");
+                if (bboxClass == 0 || bboxClass == 2) {
+                    saveGPUAsImg(singleImageBBoxList[j], "bbox_" + std::to_string(j) + ".jpg");
                 }
 
                 // Putting the bounding box into an `outReq` to be sent out
@@ -202,7 +202,7 @@ void BaseBBoxCropper::cropping() {
                     outReqData, //req_data
                     currReq.req_data // upstreamReq_data
                 };
-                // msvc_OutQueue.at(queueIndex)->emplace(outReq);
+                msvc_OutQueue.at(queueIndex)->emplace(outReq);
                 trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, bboxClass, queueIndex);
             }
             // // After cropping is done for this image in the batch, the image's cuda memory can be freed.

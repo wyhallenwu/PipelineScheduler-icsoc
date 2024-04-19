@@ -39,6 +39,8 @@ set(
         basereqbatcher.cpp
         basebatchinferencer.cpp
         basebboxcropper.cpp
+        baseclassifier.cpp
+        basesoftmaxclassifier.cpp
 )
 
 # Here we define the library.
