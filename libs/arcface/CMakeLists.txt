@@ -28,15 +28,11 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES 
         arcface.h
-        ../json/json.h
 )
 
 # All source files and private header files go here.
 set(
         SOURCE_FILES
-        arcfacepreprocessor.cpp
-        arcfaceinference.cpp
-        arcfacepostprocessor.cpp
         arcface.cpp
 )
 

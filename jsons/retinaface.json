@@ -46,7 +46,8 @@
                     ]
                 ]
             }
-        ]
+        ],
+        "msvc_maxQueueSize": 100
     },
     {
         "msvc_name": "retinaface_0::preprocessor",
@@ -94,7 +95,8 @@
                     ]
                 ]
             }
-        ]
+        ],
+        "msvc_maxQueueSize": 10
     },
     {
         "msvc_name": "retinaface_0::inference",
@@ -150,7 +152,8 @@
                     ]
                 ]
             }
-        ]
+        ],
+        "msvc_maxQueueSize": 10
     },
     {
         "msvc_name": "retinaface_0::postprocessor",
@@ -206,7 +209,8 @@
                     ]
                 ]
             }
-        ]
+        ],
+        "msvc_maxQueueSize": 100
     },
     {
         "msvc_name": "retinaface_0::sender",
@@ -253,6 +257,7 @@
                     ]
                 ]
             }
-        ]
+        ],
+        "msvc_maxQueueSize": 100
     }
 ]

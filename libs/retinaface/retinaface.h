@@ -47,7 +47,7 @@ public:
         const std::string &name,
         uint16_t own_port,
         int8_t devIndex,
-        const std::string &logPath,
+        std::string logPath,
         std::vector<Microservice*> services
     );
 };
