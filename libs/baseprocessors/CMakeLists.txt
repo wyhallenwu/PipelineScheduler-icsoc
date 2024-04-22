@@ -39,6 +39,7 @@ set(
         basereqbatcher.cpp
         basebatchinferencer.cpp
         basebboxcropper.cpp
+        basesegmaskapply.cpp
 )
 
 # Here we define the library.
