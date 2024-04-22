@@ -167,3 +167,9 @@ public:
 protected:
     RequestShapeType msvc_inferenceShape;
 };
+
+class BaseKeypointSketcher : public Microservice{
+public:
+    BaseKeypointSketcher(const BaseMicroserviceConfigs &configs);
+    ~BaseKeypointSketcher() = default;
+}
