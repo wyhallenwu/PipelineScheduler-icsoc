@@ -24,6 +24,30 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs)
     }
 }
 
+template<typename ReqDataType>
+void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
+    BatchSizeType batchSize = timeReport.req_batchSize;
+    bool isProfileEnd = false;
+
+    if (timeReport.req_travelPath[batchSize - 1].find("PROFILE_ENDS") != std::string::npos) {
+        timeReport.req_travelPath[batchSize - 1] = removeSubstring(timeReport.req_travelPath[batchSize - 1], "PROFILE_ENDS");
+        isProfileEnd = true;
+    } else if (timeReport.req_travelPath[batchSize - 1].find("BATCH_ENDS") != std::string::npos) {
+        timeReport.req_travelPath[batchSize - 1] = removeSubstring(timeReport.req_travelPath[batchSize - 1], "BATCH_ENDS");
+    }
+    BatchSizeType numTimeStamps = (BatchSizeType)(timeReport.req_origGenTime.size() / batchSize);
+    for (BatchSizeType i = 0; i < batchSize; i++) {
+        msvc_logFile << timeReport.req_travelPath[i] << ",";
+        for (BatchSizeType j = 0; j < numTimeStamps - 1; j++) {
+            msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + j]) << ",";
+        }
+        msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + numTimeStamps - 1]) << std::endl;
+    } 
+    if (isProfileEnd) {
+        this->pauseThread();
+    }
+}
+
 void Receiver::profileDataGenerator() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     setDevice();
@@ -45,6 +69,14 @@ void Receiver::profileDataGenerator() {
     msvc_OutQueue[0]->setQueueSize(1000);
     READY = true;
 
+    Request<LocalCPUReqDataType> inferTimeReportReq;
+
+    auto numWarmUpBatches = msvc_numWarmUpBatches;
+    auto numProfileBatches = msvc_numProfileBatches;
+    BatchSizeType batchSize = 1;
+    BatchSizeType batchNum = 1;
+    msvc_InQueue.at(0)->setActiveQueueIndex(1);
+
     while (true) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);
@@ -54,12 +86,19 @@ void Receiver::profileDataGenerator() {
             ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
+        if (msvc_inReqCount > 0) {
+            inferTimeReportReq = msvc_InQueue.at(0)->pop1();
+            processInferTimeReport(inferTimeReportReq);
+
+            // NEXT STEP: Write the inferTimeReportReq to a file
+            // NEXT NEXT STEP:  Write a function to analyze the inferTimeReportReq
+        }
         /**
          * @brief Warming up to avoid cold start effects.
          * During warming up, we use inference `numBatches` batches of requests.
          * 
          */
-        for (BatchSizeType i = 0; i < msvc_numWarmUpBatches; ++i) {
+        if (numWarmUpBatches > 0) {
             for (BatchSizeType j = 0; j < msvc_idealBatchSize; ++j) {
                 msvc_inReqCount++;
                 randomShapeIndex = dis(gen);
@@ -78,47 +117,58 @@ void Receiver::profileDataGenerator() {
                     1,
                     requestData
                 };
+                msvc_OutQueue[0]->emplace(request);
             }
+            numWarmUpBatches--;
+            requestData.clear();
         }
         /**
          * @brief For each model, we profile all batch size in range of [1, msvc_idealBatchSize] for `numProfileBatches` times.
          * 
          */
-        for (BatchSizeType batchSize = 1; batchSize <= msvc_idealBatchSize; batchSize += 1) { // TODOs: Setting batch size for our efficient profiling algorithm
-            for (BatchSizeType batchNum = 1; batchNum <= msvc_numProfileBatches; batchNum++) {
-                for (BatchSizeType i = 1; i <= batchSize; i++) { // Filling up the batch
-                    msvc_inReqCount++;
+        else if (numWarmUpBatches == 0 && batchNum <= numProfileBatches) {
+            for (BatchSizeType i = 1; i <= batchSize; i++) { // Filling up the batch
+                msvc_inReqCount++;
 
-                    // Choosing a random shape for a more generalized profiling results
-                    randomShapeIndex = dis(gen);
-                    shape = msvc_dataShape[randomShapeIndex];
-                    img = cv::Mat(shape[1], shape[2], CV_8UC3);
-                    data = {
-                        shape,
-                        img
-                    };
-                    requestData.emplace_back(data);
+                // Choosing a random shape for a more generalized profiling results
+                randomShapeIndex = dis(gen);
+                shape = msvc_dataShape[randomShapeIndex];
+                img = cv::Mat(shape[1], shape[2], CV_8UC3);
+                data = {
+                    shape,
+                    img
+                };
+                requestData.emplace_back(data);
 
-                    // For bookkeeping, we add a certain pattern into the `requestPath` field.
-                    // [batchSize, batchNum, i]
-                    requestPath = std::to_string(batchSize) + "," + std::to_string(batchNum) + "," + std::to_string(i);
+                // For bookkeeping, we add a certain pattern into the `requestPath` field.
+                // [batchSize, batchNum, i]
+                requestPath = std::to_string(batchSize) + "," + std::to_string(batchNum) + "," + std::to_string(i);
 
-                    // The very last batch of this profiling session is marked with "END" in the `requestPath` field.
-                    if ((batchSize == msvc_idealBatchSize) && (batchNum == msvc_numProfileBatches - 1)) {
-                        requestPath = requestPath + "END";
+                // The very last batch of this profiling session is marked with "END" in the `requestPath` field.
+                if ((batchNum == msvc_numProfileBatches) && (i == batchSize)) {
+                    if (batchSize == msvc_idealBatchSize) {
+                        requestPath = requestPath + "PROFILE_ENDS";
+                    } else {
+                        requestPath = requestPath + "BATCH_ENDS";
                     }
-                    request = {
-                        {std::chrono::_V2::system_clock::now()},
-                        {9999},
-                        {requestPath},
-                        1,
-                        requestData
-                    };
-                    msvc_OutQueue[0]->emplace(request);
                 }
+                request = {
+                    {std::chrono::_V2::system_clock::now()},
+                    {9999},
+                    {requestPath},
+                    1,
+                    requestData
+                };
+                msvc_OutQueue[0]->emplace(request);
             }
+            batchNum++;
+            requestData.clear();
+            
         }
-        this->pauseThread();
+        if (batchNum > msvc_numProfileBatches) {
+            batchSize++;
+            batchNum = 1;
+        }
     }
     msvc_logFile.close();
 }

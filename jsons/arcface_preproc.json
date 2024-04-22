@@ -1,0 +1,17 @@
+{
+    "msvc_imgType": 16,
+    "msvc_colorCvtType": 4,
+    "msvc_resizeInterpolType": 3,
+    "msvc_imgNormScale": "0.0078125/1",
+    "msvc_subVals": [
+        127.5,
+        127.5,
+        127.5
+    ],
+    "msvc_divVals": [
+        1,
+        1,
+        1
+    ]
+
+}

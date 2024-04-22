@@ -1,8 +1,8 @@
 [
     {
-        "msvc_name": "yolov5_0::receiver",
+        "msvc_name": "yolov5-plate_0::receiver",
         "msvc_idealBatchSize": 20,
-        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov5_receiver.json",
+        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov5-plate_receiver.json",
         "msvc_dnstreamMicroservices": [
             {
                 "nb_classOfInterest": -1,
@@ -11,7 +11,7 @@
                     ""
                 ],
                 "nb_maxQueueSize": 10,
-                "nb_name": "yolov5_0::preprocessor",
+                "nb_name": "yolov5-plate_0::preprocessor",
                 "nb_expectedShape": [
                     [
                         -1,
@@ -50,9 +50,9 @@
         "msvc_maxQueueSize": 100
     },
     {
-        "msvc_name": "yolov5_0::preprocessor",
+        "msvc_name": "yolov5-plate_0::preprocessor",
         "msvc_idealBatchSize": 20,
-        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov5_preproc.json",
+        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov5-plate_preproc.json",
         "msvc_dnstreamMicroservices": [
             {
                 "nb_classOfInterest": -1,
@@ -61,12 +61,12 @@
                     ""
                 ],
                 "nb_maxQueueSize": 10,
-                "nb_name": "yolov5_0::inference",
+                "nb_name": "yolov5-plate_0::inference",
                 "nb_expectedShape": [
                     [
                         3,
-                        320,
-                        320
+                        224,
+                        224
                     ]
                 ]
             }
@@ -87,7 +87,7 @@
                     ""
                 ],
                 "nb_maxQueueSize": 10,
-                "nb_name": "yolov5_0::receiver",
+                "nb_name": "yolov5-plate_0::receiver",
                 "nb_expectedShape": [
                     [
                         -1,
@@ -99,9 +99,9 @@
         "msvc_maxQueueSize": 10
     },
     {
-        "msvc_name": "yolov5_0::inference",
+        "msvc_name": "yolov5-plate_0::inference",
         "msvc_idealBatchSize": 20,
-        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov5_trt.json",
+        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov5-plate_trt.json",
         "msvc_dnstreamMicroservices": [
             {
                 "nb_classOfInterest": -1,
@@ -110,20 +110,20 @@
                     ""
                 ],
                 "nb_maxQueueSize": 10,
-                "nb_name": "yolov5_0::postprocessor",
+                "nb_name": "yolov5-plate_0::postprocessor",
                 "nb_expectedShape": [
                     [
                         1 
                     ],
                     [
-                        100,
+                        1,
                         4
                     ],
                     [
-                        100
+                        1
                     ],
                     [
-                        100
+                        1
                     ]
                 ]
             }
@@ -144,7 +144,7 @@
                     ""
                 ],
                 "nb_maxQueueSize": 10,
-                "nb_name": "yolov5_0::preprocessor",
+                "nb_name": "yolov5-plate_0::preprocessor",
                 "nb_expectedShape": [
                     [
                         0,
@@ -156,7 +156,7 @@
         "msvc_maxQueueSize": 10
     },
     {
-        "msvc_name": "yolov5_0::postprocessor",
+        "msvc_name": "yolov5-plate_0::postprocessor",
         "msvc_idealBatchSize": 20,
         "msvc_appLvlConfigs": "",
         "msvc_dnstreamMicroservices": [
@@ -167,7 +167,7 @@
                     ""
                 ],
                 "nb_maxQueueSize": 10,
-                "nb_name": "yolov5_0::sender",
+                "nb_name": "yolov5-plate_0::sender",
                 "nb_expectedShape": [
                     [
                         0,
@@ -181,14 +181,14 @@
                 1 
             ],
             [
-                100,
+                1,
                 4
             ],
             [
-                100
+                1
             ],
             [
-                100
+                1
             ]
         ],
         "msvc_svcLevelObjLatency": 1,
@@ -201,7 +201,7 @@
                     ""
                 ],
                 "nb_maxQueueSize": 10,
-                "nb_name": "yolov5_0::inference",
+                "nb_name": "yolov5-plate_0::inference",
                 "nb_expectedShape": [
                     [
                         -1,
@@ -213,7 +213,7 @@
         "msvc_maxQueueSize": 100
     },
     {
-        "msvc_name": "yolov5_0::sender",
+        "msvc_name": "yolov5-plate_0::sender",
         "msvc_idealBatchSize": 20,
         "msvc_appLvlConfigs": "",
         "msvc_dnstreamMicroservices": [
@@ -249,7 +249,7 @@
                     ""
                 ],
                 "nb_maxQueueSize": 10,
-                "nb_name": "yolov5_0::postprocessor",
+                "nb_name": "yolov5-plate_0::postprocessor",
                 "nb_expectedShape": [
                     [
                         -1,

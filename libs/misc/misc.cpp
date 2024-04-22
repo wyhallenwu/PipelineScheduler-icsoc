@@ -57,3 +57,26 @@ float fractionToFloat(const std::string& fraction) {
     // Calculate and return the result
     return num / den;
 }
+
+std::string removeSubstring(const std::string& str, const std::string& substring) {
+    std::string result = str;
+    size_t pos = result.find(substring);
+
+    while (pos != std::string::npos) {
+        result.erase(pos, substring.length());
+        pos = result.find(substring);
+    }
+
+    return result;
+}
+
+
+std::string timePointToEpochString(const std::chrono::system_clock::time_point& tp) {
+    // Convert time_point to nanoseconds
+    std::chrono::nanoseconds ns = std::chrono::duration_cast<std::chrono::nanoseconds>(tp.time_since_epoch());
+
+    // Convert nanoseconds to string
+    std::stringstream ss;
+    ss << ns.count();
+    return ss.str();
+}

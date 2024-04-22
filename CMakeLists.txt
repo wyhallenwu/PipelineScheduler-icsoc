@@ -84,8 +84,9 @@ add_subdirectory(libs/communicator)
 add_subdirectory(libs/container_agent)
 add_subdirectory(libs/data_source)
 add_subdirectory(libs/yolov5)
+add_subdirectory(libs/yolov5-plate)
 add_subdirectory(libs/retinaface)
-# add_subdirectory(libs/arcface)
+add_subdirectory(libs/arcface)
 add_subdirectory(libs/device_agent)
 add_subdirectory(libs/controller)
 
@@ -116,23 +117,26 @@ add_subdirectory(libs/controller)
 # add_executable(run src/main.cpp)
 # target_link_libraries(run PipePlusPlus)
 
-add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
-target_link_libraries(DeviceAgent device_agent ${CUDA_LIBRARIES} CUDA::nvml)
+# add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
+# target_link_libraries(DeviceAgent device_agent ${CUDA_LIBRARIES} CUDA::nvml)
 
-add_executable(Controller libs/controller/controller.cpp)
-target_link_libraries(Controller controller)
+# add_executable(Controller libs/controller/controller.cpp)
+# target_link_libraries(Controller controller)
 
-add_executable(Container_DataSource libs/data_source/data_source.cpp)
-target_link_libraries(Container_DataSource data_source)
+# add_executable(Container_DataSource libs/data_source/data_source.cpp)
+# target_link_libraries(Container_DataSource data_source)
 
 add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
 target_link_libraries(Container_Yolov5 yolov5)
 
-add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
-target_link_libraries(convert_onnx2trt onnx2trt)
+add_executable(Container_Yolov5-plate libs/yolov5-plate/yolov5-plate.cpp)
+target_link_libraries(Container_Yolov5-plate yolov5-plate)
+
+# add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
+# target_link_libraries(convert_onnx2trt onnx2trt)
 
 add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
 target_link_libraries(Container_RetinaFace retinaface)
 
-#add_executable(Container_ArcFace libs/arcface/arcface.cpp)
-#target_link_libraries(Container_ArcFace arcface)
+add_executable(Container_ArcFace libs/arcface/arcface.cpp)
+target_link_libraries(Container_ArcFace arcface)

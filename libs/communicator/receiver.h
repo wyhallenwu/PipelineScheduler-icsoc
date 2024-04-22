@@ -24,6 +24,9 @@ public:
     // Data generator for profiling
     void profileDataGenerator();
 
+    template<typename ReqDataType>
+    void processInferTimeReport(Request<ReqDataType> &timeReport);
+
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
             std::thread handler(&Receiver::profileDataGenerator, this);

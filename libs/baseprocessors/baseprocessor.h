@@ -13,6 +13,13 @@ typedef uint16_t BatchSizeType;
 using namespace msvcconfigs;
 using json = nlohmann::json;
 
+
+inline uint64_t getNumberAtIndex(const std::string& str, int index);
+inline std::string getTimeDifString(const ClockType &start, const ClockType &end) {
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    return std::to_string(duration.count());
+}
+
 cv::cuda::GpuMat resizePadRightBottom(
     cv::cuda::GpuMat &input,
     size_t height,
@@ -45,8 +52,14 @@ public:
     ~BaseReqBatcher() = default;
 
     virtual void batchRequests();
+    virtual void batchRequestsProfiling();
 
     void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            std::thread batcher(&BaseReqBatcher::batchRequestsProfiling, this);
+            batcher.detach();
+            return;
+        }
         std::thread batcher(&BaseReqBatcher::batchRequests, this);
         batcher.detach();
     }
@@ -85,11 +98,17 @@ public:
     BaseBatchInferencer(const BaseMicroserviceConfigs &configs);
     ~BaseBatchInferencer() = default;
     virtual void inference();
+    virtual void inferenceProfiling();
 
     RequestShapeType getInputShapeVector();
     RequestShapeType getOutputShapeVector();
 
     void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            std::thread inferencer(&BaseBatchInferencer::inferenceProfiling, this);
+            inferencer.detach();
+            return;
+        }
         std::thread inferencer(&BaseBatchInferencer::inference, this);
         inferencer.detach();
     }
@@ -168,8 +187,48 @@ protected:
     RequestShapeType msvc_inferenceShape;
 };
 
-class BaseKeypointSketcher : public Microservice{
+class BaseBBoxCropperVerifier : public Microservice {
 public:
-    BaseKeypointSketcher(const BaseMicroserviceConfigs &configs);
-    ~BaseKeypointSketcher() = default;
-}
+    BaseBBoxCropperVerifier(const BaseMicroserviceConfigs &configs);
+    ~BaseBBoxCropperVerifier() = default;
+
+    void cropping();
+    void setInferenceShape(RequestShapeType shape) {
+        msvc_inferenceShape = shape;
+    }
+
+    void cropProfiling();
+
+    void dispatchThread() override {
+        std::thread postprocessor(&BaseBBoxCropperVerifier::cropping, this);
+        postprocessor.detach();
+    }
+
+protected:
+    RequestShapeType msvc_inferenceShape;
+};
+
+class BaseClassifier : public Microservice {
+public:
+    BaseClassifier(const BaseMicroserviceConfigs &configs);
+    ~BaseClassifier() = default;
+
+    virtual void classify() ;
+
+    void dispatchThread() override {
+        std::thread classifier(&BaseClassifier::classify, this);
+        classifier.detach();
+    }
+
+protected:
+    RequestShapeType msvc_inferenceShape;
+    uint16_t msvc_numClasses;
+};
+
+class BaseSoftmaxClassifier : public BaseClassifier {
+public:
+    BaseSoftmaxClassifier(const BaseMicroserviceConfigs &configs);
+    ~BaseSoftmaxClassifier() = default;
+
+    virtual void classify() override;
+};

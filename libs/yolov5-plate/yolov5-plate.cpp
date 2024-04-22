@@ -1,8 +1,8 @@
-#include "arcface.h"
+#include "yolov5-plate.h"
 
 #include <utility>
 
-ArcFaceAgent::ArcFaceAgent(
+YoloV5Agent::YoloV5Agent(
     const std::string &name,
     uint16_t own_port,
     int8_t devIndex,
@@ -14,7 +14,7 @@ ArcFaceAgent::ArcFaceAgent(
     dynamic_cast<Receiver*>(msvcs[0])->dispatchThread();
     dynamic_cast<BaseReqBatcher*>(msvcs[1])->dispatchThread();
     dynamic_cast<BaseBatchInferencer*>(msvcs[2])->dispatchThread();
-    dynamic_cast<BaseClassifier*>(msvcs[3])->dispatchThread();
+    dynamic_cast<BaseBBoxCropperVerifier*>(msvcs[3])->dispatchThread();
     for (uint16_t i = 4; i < msvcs.size(); i++) {
         std::thread sender(&Sender::Process, dynamic_cast<Sender*>(msvcs[i]));
         sender.detach();
@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
     msvcsList[1]->SetInQueue(msvcsList[0]->GetOutQueue());
     msvcsList.push_back(new BaseBatchInferencer(msvc_configs[2]));
     msvcsList[2]->SetInQueue(msvcsList[1]->GetOutQueue());
-    msvcsList.push_back(new BaseClassifier(msvc_configs[3]));
+    msvcsList.push_back(new BaseBBoxCropperVerifier(msvc_configs[3]));
     msvcsList[3]->SetInQueue(msvcsList[2]->GetOutQueue());
     if (msvc_configs[0].msvc_RUNMODE == RUNMODE::PROFILING) {
         msvcsList[0]->SetInQueue(msvcsList[3]->GetOutQueue());
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
         msvc->msvc_containerName = name;
     }
 
-    ContainerAgent *agent = new ArcFaceAgent(name, absl::GetFlag(FLAGS_port), device, logPath, msvcsList);
+    ContainerAgent *agent = new YoloV5Agent(name, absl::GetFlag(FLAGS_port), device, logPath, msvcsList);
 
     agent->checkReady();
     

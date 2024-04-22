@@ -1,0 +1,14 @@
+@PACKAGE_INIT@
+
+# Include the exported CMake file
+get_filename_component(yolov5_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+
+# This macro enables usage of find_dependency().
+# https://cmake.org/cmake/help/v3.11/module/CMakeFindDependencyMacro.html
+include(CMakeFindDependencyMacro)
+
+if(NOT TARGET yolov5-plate::yolov5-plate)
+    include("${yolov5_CMAKE_DIR}/yolov5-plate-targets.cmake")
+endif()
+
+check_required_components(yolov5-plate)

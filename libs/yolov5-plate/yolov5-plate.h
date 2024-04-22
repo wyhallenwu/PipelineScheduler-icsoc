@@ -1,16 +1,21 @@
 #include <baseprocessor.h>
 #include <trtengine.h>
 #include <misc.h>
+#include <chrono>
 #include "container_agent.h"
 #include "receiver.h"
 #include "sender.h"
+#include "spdlog/spdlog.h"
 
-// class RetinaFacePreprocessor : public BasePreprocessor {
+using namespace spdlog;
+
+
+// class YoloV5Preprocessor : public BaseReqBatcher {
 // public:
-//     RetinaFacePreprocessor(const BaseMicroserviceConfigs &config);
-//     ~RetinaFacePreprocessor() = default;
+//     YoloV5Preprocessor(const BaseMicroserviceConfigs &config);
+//     ~YoloV5Preprocessor() = default;
 // protected:
-//     friend class RetinaFaceAgent;
+//     friend class YoloV5Agent;
 //     void batchRequests();
 //     // 
 //     // bool isTimeToBatch() override;
@@ -20,30 +25,30 @@
 //     // void updateReqRate(ClockTypeTemp lastInterReqDuration) override;
 // };
 
-// class RetinaFaceInference : public BaseProcessor {
+// class YoloV5Inference : public BaseBatchInferencer {
 // public:
-//     RetinaFaceInference(const BaseMicroserviceConfigs &config, const TRTConfigs &engineConfigs);
-//     ~RetinaFaceInference() = default;
+//     YoloV5Inference(const BaseMicroserviceConfigs &config, const TRTConfigs &engineConfigs);
+//     ~YoloV5Inference() = default;
 // protected:
-//     friend class RetinaFaceAgent;
+//     friend class YoloV5Agent;
 //     void inference();
 //     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
 //     TRTConfigs msvc_engineConfigs;
 //     Engine* msvc_inferenceEngine;
 // };
 
-// class RetinaFacePostprocessor : public BasePostprocessor {
+// class YoloV5Postprocessor : public BaseBBoxCropper {
 // public:
-//     RetinaFacePostprocessor(const BaseMicroserviceConfigs &config);
-//     ~RetinaFacePostprocessor() = default;
+//     friend class YoloV5Agent;
+//     YoloV5Postprocessor(const BaseMicroserviceConfigs &config);
+//     ~YoloV5Postprocessor() = default;
 // protected:
-//     friend class RetinaFaceAgent;
 //     void postProcessing();
 // };
 
-class RetinaFaceAgent : public ContainerAgent {
+class YoloV5Agent : public ContainerAgent {
 public:
-    RetinaFaceAgent(
+    YoloV5Agent(
         const std::string &name,
         uint16_t own_port,
         int8_t devIndex,
