@@ -2,7 +2,7 @@
     {
         "msvc_name": "yolov8_0::receiver",
         "msvc_idealBatchSize": 10,
-        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov8_receiver.json",
+        "msvc_appLvlConfigs": "../jsons/yolov8_receiver.json",
         "msvc_dnstreamMicroservices": [
             {
                 "nb_classOfInterest": -1,
@@ -52,7 +52,7 @@
     {
         "msvc_name": "yolov8_0::preprocessor",
         "msvc_idealBatchSize": 10,
-        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov8_preproc.json",
+        "msvc_appLvlConfigs": "../jsons/yolov8_preproc.json",
         "msvc_dnstreamMicroservices": [
             {
                 "nb_classOfInterest": -1,
@@ -101,7 +101,7 @@
     {
         "msvc_name": "yolov8_0::inference",
         "msvc_idealBatchSize": 10,
-        "msvc_appLvlConfigs": "/home/soulsaver/code/systems/PipePlusPlus/jsons/yolov8_trt.json",
+        "msvc_appLvlConfigs": "../jsons/yolov8_trt.json",
         "msvc_dnstreamMicroservices": [
             {
                 "nb_classOfInterest": -1,

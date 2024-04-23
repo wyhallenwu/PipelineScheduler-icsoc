@@ -4,7 +4,7 @@
 #include "absl/flags/flag.h"
 
 ABSL_FLAG(std::string, onnx_path, "", "Path to onnx model file.");
-ABSL_FLAG(std::string, engine_save_dir, "/home/soulsaver/code/systems/PipePlusPlus/models", "Path to the directory where the converted trt engines are stored.");
+ABSL_FLAG(std::string, engine_save_dir, "../models", "Path to the directory where the converted trt engines are stored.");
 ABSL_FLAG(uint16_t, min_batch, 1, "Minimum batch size.");
 ABSL_FLAG(uint16_t, max_batch, 128, "Max batch size");
 ABSL_FLAG(uint16_t, step, 3, "Step to increase the batch size");

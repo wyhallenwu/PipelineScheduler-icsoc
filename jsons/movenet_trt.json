@@ -5,6 +5,6 @@
     "cbs":1, 
     "normalize": true,
     "obs": 1,
-    "path": "../models/arcface_dynamic_3090_fp32_20_1.engine",
+    "path": "../models/pose_3090_fp32_20_1.engine",
     "prec": 4
 }

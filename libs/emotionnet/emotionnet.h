@@ -6,9 +6,9 @@
 #include "sender.h"
 
 
-class MoveNetAgent: public ContainerAgent{
+class EmotionNetAgent: public ContainerAgent{
 public:
-    MoveNetAgent(
+    EmotionNetAgent(
         const std::string &name,
         uint16_t own_port,
         int8_t devIndex,

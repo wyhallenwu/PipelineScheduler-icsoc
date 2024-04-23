@@ -87,6 +87,8 @@ add_subdirectory(libs/yolov5)
 add_subdirectory(libs/yolov5-plate)
 add_subdirectory(libs/retinaface)
 add_subdirectory(libs/arcface)
+add_subdirectory(libs/movenet)
+add_subdirectory(libs/emotionnet)
 add_subdirectory(libs/device_agent)
 add_subdirectory(libs/controller)
 
@@ -132,11 +134,17 @@ target_link_libraries(Container_Yolov5 yolov5)
 add_executable(Container_Yolov5-plate libs/yolov5-plate/yolov5-plate.cpp)
 target_link_libraries(Container_Yolov5-plate yolov5-plate)
 
-# add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
-# target_link_libraries(convert_onnx2trt onnx2trt)
+add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
+target_link_libraries(convert_onnx2trt onnx2trt)
 
 add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
 target_link_libraries(Container_RetinaFace retinaface)
 
 add_executable(Container_ArcFace libs/arcface/arcface.cpp)
 target_link_libraries(Container_ArcFace arcface)
+
+add_executable(Container_MoveNet libs/movenet/movenet.cpp)
+target_link_libraries(Container_MoveNet movenet)
+
+add_executable(Container_EmotionNet libs/emotionnet/emotionnet.cpp)
+target_link_libraries(Container_EmotionNet emotionnet)
