@@ -7,10 +7,10 @@ option objc_class_prefix = "HLW";
 package controlcommunication;
 
 service ControlCommunication {
-  rpc ReportQueueSizes(QueueSizes) returns (google.protobuf.Empty) {}
   rpc AdvertiseToController(ConnectionConfigs) returns (google.protobuf.Empty) {}
   rpc StartMicroservice(MicroserviceConfig) returns (google.protobuf.Empty) {}
   rpc StopMicroservice(MicroserviceName) returns (google.protobuf.Empty) {}
+  rpc SendLightMetrics(LightMetricsList) returns (google.protobuf.Empty) {}
 }
 
 message QueueSize {
@@ -18,15 +18,23 @@ message QueueSize {
   repeated int32 size = 2;
 }
 
-message QueueSizes {
-  repeated QueueSize element = 1;
-}
-
 message ConnectionConfigs {
   string device_name = 1;
   string device_type = 2;
   string ip_address = 3;
 }
+
+message LightMetrics {
+  string name = 1;
+  QueueSize queue = 2;
+  float request_rate = 3;
+}
+
+message LightMetricsList {
+  repeated LightMetrics light_metrics = 1;
+}
+
+
 
 message MicroserviceConfig {
   string name = 1;

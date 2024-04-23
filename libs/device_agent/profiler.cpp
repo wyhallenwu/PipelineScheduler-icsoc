@@ -32,12 +32,17 @@ void Profiler::stop() {
 }
 
 void Profiler::updatePids(std::vector<unsigned int> pids) {
+    bool restart = false;
     if (running) {
         stop();
+        restart = true;
     }
     pidOnDevices.clear();
     stats.clear();
     setPidOnDevices(pids);
+    if (restart) {
+        run();
+    }
 }
 
 std::vector<Profiler::sysStats> Profiler::getStats(unsigned int pid) const {
@@ -48,6 +53,20 @@ std::vector<Profiler::sysStats> Profiler::popStats(unsigned int pid) {
     std::vector<Profiler::sysStats> statsCopy = stats[pid];
     stats[pid] = std::vector<sysStats>();
     return statsCopy;
+}
+
+Profiler::sysStats Profiler::reportAtRuntime(unsigned int pid) {
+    sysStats value{};
+    if (!running) {
+        value.timestamp = 1;
+        return value;
+    }
+    value.cpuUsage = getCPUInfo(pid);
+    value.memoryUsage = getMemoryInfo(pid) / 1000; // convert to MB
+    auto gpu = getGPUInfo(pid, pidOnDevices[pid]);
+    value.gpuUtilization = gpu.gpuUtilization;
+    value.gpuMemoryUsage = gpu.memoryUtilization;
+    return value;
 }
 
 void Profiler::collectStats() {

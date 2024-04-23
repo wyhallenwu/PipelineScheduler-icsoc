@@ -9,13 +9,15 @@
 #include <misc.h>
 
 using controlcommunication::ControlCommunication;
-using controlcommunication::QueueSizes;
-using controlcommunication::MicroserviceName;
+using controlcommunication::QueueSize;
+using controlcommunication::LightMetrics;
+using controlcommunication::ConnectionConfigs;
 using controlcommunication::MicroserviceConfig;
-
+using controlcommunication::MicroserviceName;
 using trt::TRTConfigs;
 
-
+ABSL_DECLARE_FLAG(std::string, deviceType);
+ABSL_DECLARE_FLAG(std::string, controller_url);
 
 typedef std::tuple<
     std::string, // name
@@ -26,14 +28,18 @@ typedef std::tuple<
     QueueLengthType
 > MsvcConfigTupleType;
 
-enum ContainerType {
-    DataSource,
-    Yolo5,
+struct Metrics {
+    float requestRate = 0;
+    double cpuUsage = 0;
+    long memUsage = 0;
+    unsigned int gpuUsage = 0;
+    unsigned int gpuMemUsage = 0;
 };
 
 struct ContainerHandle {
-    google::protobuf::RepeatedField <int32_t> queuelengths;
+    google::protobuf::RepeatedField<int32_t> queuelengths;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
+    Metrics metrics;
     CompletionQueue *cq;
     unsigned int pid;
 };
@@ -46,14 +52,20 @@ namespace msvcconfigs {
 
 class DeviceAgent {
 public:
-    DeviceAgent(const std::string &controller_url);
+    DeviceAgent(const std::string &controller_url, const std::string name, const std::string &deviceType);
 
     ~DeviceAgent() {
+        running = false;
         for (const auto &c: containers) {
             StopContainer(c.second);
         }
+        controller_server->Shutdown();
+        controller_cq->Shutdown();
         device_server->Shutdown();
         device_cq->Shutdown();
+        for (std::thread &t: threads) {
+            t.join();
+        }
     };
 
     void UpdateQueueLengths(const std::basic_string<char> &container_name,
@@ -110,6 +122,15 @@ private:
     };
 
     static void StopContainer(const ContainerHandle &container);
+
+    void Ready(const std::string &name, const std::string &ip, const std::string type);
+    void ReportDeviceStatus();
+    void ReportFullMetrics();
+
+    void HandleDeviceRecvRpcs();
+    void HandleControlRecvRpcs();
+
+    void MonitorDeviceStatus();
 
     class RequestHandler {
     public:
@@ -211,10 +232,11 @@ private:
         DeviceAgent *device_agent;
     };
 
-    void HandleDeviceRecvRpcs();
-    void HandleControlRecvRpcs();
-
+    bool running;
+    Profiler *profiler;
     std::map<std::string, ContainerHandle> containers;
+    std::vector<std::thread> threads;
+
     std::unique_ptr<ServerCompletionQueue> device_cq;
     std::unique_ptr<Server> device_server;
     InDeviceCommunication::AsyncService device_service;

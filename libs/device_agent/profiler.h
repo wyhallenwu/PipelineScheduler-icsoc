@@ -22,17 +22,18 @@ public:
     void updatePids(std::vector<unsigned int> pids);
 
     struct sysStats {
-        uint64_t timestamp;
-        double cpuUsage;
-        long memoryUsage;
-        unsigned int gpuUtilization;
-        unsigned int gpuMemoryUsage;
-        long maxGpuMemoryUsage;
-        unsigned int pcieThroughput;
+        uint64_t timestamp = 0;
+        double cpuUsage = 0;
+        long memoryUsage = 0;
+        unsigned int gpuUtilization = 0;
+        unsigned int gpuMemoryUsage = 0;
+        long maxGpuMemoryUsage = 0;
+        unsigned int pcieThroughput = 0;
     };
 
     std::vector<sysStats> getStats(unsigned int pid) const;
     std::vector<sysStats> popStats(unsigned int pid);
+    sysStats reportAtRuntime(unsigned int pid);
 
 private:
     void collectStats();
