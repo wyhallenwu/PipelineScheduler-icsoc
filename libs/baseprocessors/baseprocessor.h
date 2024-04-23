@@ -232,3 +232,16 @@ public:
 
     virtual void classify() override;
 };
+
+class BaseKPointExtractor : public Microservice{
+public:
+    BaseKPointExtractor(const BaseMicroserviceConfigs &configs);
+    ~BaseKPointExtractor() = default;
+
+    virtual void extractor();
+
+    void dispatchThread() override {
+        std::thread extractor(&BaseKPointExtractor::extractor, this);
+        extractor.detach();
+    }
+};

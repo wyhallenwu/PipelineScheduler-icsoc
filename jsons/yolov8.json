@@ -1,0 +1,263 @@
+[
+    {
+        "msvc_name": "yolov8_0::receiver",
+        "msvc_idealBatchSize": 10,
+        "msvc_appLvlConfigs": "../jsons/yolov8_receiver.json",
+        "msvc_dnstreamMicroservices": [
+            {
+                "nb_classOfInterest": -1,
+                "nb_commMethod": 4,
+                "nb_link": [
+                    ""
+                ],
+                "nb_maxQueueSize": 10,
+                "nb_name": "yolov8_0::preprocessor",
+                "nb_expectedShape": [
+                    [
+                        -1,
+                        -1,
+                        -1
+                    ]
+                ]
+            }
+        ],
+        "msvc_dataShape": [
+            [
+                0,
+                0
+            ]
+        ],
+        "msvc_svcLevelObjLatency": 1,
+        "msvc_type": 0,
+        "msvc_upstreamMicroservices": [
+            {
+                "nb_classOfInterest": -2,
+                "nb_commMethod": 2,
+                "nb_link": [
+                    "localhost:55001"
+                ],
+                "nb_maxQueueSize": 10,
+                "nb_name": "datasource_0",
+                "nb_expectedShape": [
+                    [
+                        -1,
+                        -1,
+                        -1
+                    ]
+                ]
+            }
+        ],
+        "msvc_maxQueueSize": 100
+    },
+    {
+        "msvc_name": "yolov8_0::preprocessor",
+        "msvc_idealBatchSize": 10,
+        "msvc_appLvlConfigs": "../jsons/yolov8_preproc.json",
+        "msvc_dnstreamMicroservices": [
+            {
+                "nb_classOfInterest": -1,
+                "nb_commMethod": 3,
+                "nb_link": [
+                    ""
+                ],
+                "nb_maxQueueSize": 10,
+                "nb_name": "yolov8_0::inference",
+                "nb_expectedShape": [
+                    [
+                        3,
+                        640,
+                        640
+                    ]
+                ]
+            }
+        ],
+        "msvc_dataShape": [
+            [
+                -1,
+                -1
+            ]
+        ],
+        "msvc_svcLevelObjLatency": 1,
+        "msvc_type": 1,
+        "msvc_upstreamMicroservices": [
+            {
+                "nb_classOfInterest": -2,
+                "nb_commMethod": 4,
+                "nb_link": [
+                    ""
+                ],
+                "nb_maxQueueSize": 10,
+                "nb_name": "yolov8_0::receiver",
+                "nb_expectedShape": [
+                    [
+                        -1,
+                        -1
+                    ]
+                ]
+            }
+        ],
+        "msvc_maxQueueSize": 10
+    },
+    {
+        "msvc_name": "yolov8_0::inference",
+        "msvc_idealBatchSize": 10,
+        "msvc_appLvlConfigs": "../jsons/yolov8_trt.json",
+        "msvc_dnstreamMicroservices": [
+            {
+                "nb_classOfInterest": -1,
+                "nb_commMethod": 3,
+                "nb_link": [
+                    ""
+                ],
+                "nb_maxQueueSize": 10,
+                "nb_name": "yolov8_0::postprocessor",
+                "nb_expectedShape": [
+                    [
+                        1 
+                    ],
+                    [
+                        100,
+                        4
+                    ],
+                    [
+                        100
+                    ],
+                    [
+                        100
+                    ]
+                ]
+            }
+        ],
+        "msvc_dataShape": [
+            [
+                0,
+                0
+            ]
+        ],
+        "msvc_svcLevelObjLatency": 1,
+        "msvc_type": 2,
+        "msvc_upstreamMicroservices": [
+            {
+                "nb_classOfInterest": -2,
+                "nb_commMethod": 3,
+                "nb_link": [
+                    ""
+                ],
+                "nb_maxQueueSize": 10,
+                "nb_name": "yolov8_0::preprocessor",
+                "nb_expectedShape": [
+                    [
+                        0,
+                        0
+                    ]
+                ]
+            }
+        ],
+        "msvc_maxQueueSize": 10
+    },
+    {
+        "msvc_name": "yolov8_0::postprocessor",
+        "msvc_idealBatchSize": 10,
+        "msvc_appLvlConfigs": "",
+        "msvc_dnstreamMicroservices": [
+            {
+                "nb_classOfInterest": -1,
+                "nb_commMethod": 3,
+                "nb_link": [
+                    ""
+                ],
+                "nb_maxQueueSize": 10,
+                "nb_name": "yolov8_0::sender",
+                "nb_expectedShape": [
+                    [
+                        0,
+                        0
+                    ]
+                ]
+            }
+        ],
+        "msvc_dataShape": [
+            [
+                1 
+            ],
+            [
+                100,
+                4
+            ],
+            [
+                100
+            ],
+            [
+                100
+            ]
+        ],
+        "msvc_svcLevelObjLatency": 1,
+        "msvc_type": 3,
+        "msvc_upstreamMicroservices": [
+            {
+                "nb_classOfInterest": -2,
+                "nb_commMethod": 3,
+                "nb_link": [
+                    ""
+                ],
+                "nb_maxQueueSize": 10,
+                "nb_name": "yolov8_0::inference",
+                "nb_expectedShape": [
+                    [
+                        -1,
+                        -1
+                    ]
+                ]
+            }
+        ],
+        "msvc_maxQueueSize": 100
+    },
+    {
+        "msvc_name": "yolov8_0::sender",
+        "msvc_idealBatchSize": 1,
+        "msvc_appLvlConfigs": "",
+        "msvc_dnstreamMicroservices": [
+            {
+                "nb_classOfInterest": -1,
+                "nb_commMethod": 3,
+                "nb_link": [
+                    "localhost:55002"
+                ],
+                "nb_maxQueueSize": 10,
+                "nb_name": "dummy_receiver_0",
+                "nb_expectedShape": [
+                    [
+                        -1,
+                        -1
+                    ]
+                ]
+            }
+        ],
+        "msvc_dataShape": [
+            [
+                0,
+                0
+            ]
+        ],
+        "msvc_svcLevelObjLatency": 1,
+        "msvc_type": 4,
+        "msvc_upstreamMicroservices": [
+            {
+                "nb_classOfInterest": -2,
+                "nb_commMethod": 3,
+                "nb_link": [
+                    ""
+                ],
+                "nb_maxQueueSize": 10,
+                "nb_name": "yolov8_0::postprocessor",
+                "nb_expectedShape": [
+                    [
+                        -1,
+                        -1
+                    ]
+                ]
+            }
+        ],
+        "msvc_maxQueueSize": 100
+    }
+]
