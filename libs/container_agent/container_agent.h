@@ -39,7 +39,7 @@ using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using indevicecommunication::InDeviceCommunication;
-using indevicecommunication::QueueSize;
+using indevicecommunication::State;
 using EmptyMessage = google::protobuf::Empty;
 
 enum TransferMethod {
@@ -73,7 +73,7 @@ public:
         return run;
     }
 
-    void SendQueueLengths();
+    void SendState();
     void START() {
         for (auto msvc : msvcs) {
             msvc->unpauseThread();
@@ -128,6 +128,7 @@ protected:
 
     std::string name;
     std::vector<Microservice*> msvcs;
+    float arrivalRate;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
     InDeviceCommunication::AsyncService service;

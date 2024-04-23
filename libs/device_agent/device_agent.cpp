@@ -238,13 +238,13 @@ void DeviceAgent::MonitorDeviceStatus() {
     }
 }
 
-void DeviceAgent::CounterUpdateRequestHandler::Proceed() {
+void DeviceAgent::StateUpdateRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
-        service->RequestSendQueueSize(&ctx, &request, &responder, cq, cq, this);
+        service->RequestSendState(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
-        new CounterUpdateRequestHandler(service, cq, device_agent);
-        device_agent->UpdateQueueLengths(request.name(), request.size());
+        new StateUpdateRequestHandler(service, cq, device_agent);
+        device_agent->UpdateState(request.name(), request.size());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

@@ -61,6 +61,7 @@ ContainerAgent::ContainerAgent(
     int8_t devIndex,
     const std::string &logPath
 ) : name(name) {
+    arrivalRate = 0;
 
     // Create the logDir for this container
     cont_logDir = logPath + "/" + name;
@@ -83,7 +84,6 @@ ContainerAgent::ContainerAgent(
     run = true;
     std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
     receiver.detach();
-    ReportStart();
 }
 
 void ContainerAgent::ReportStart() {
@@ -98,8 +98,10 @@ void ContainerAgent::ReportStart() {
     rpc->Finish(&reply, &status, (void *) 1);
 }
 
-void ContainerAgent::SendQueueLengths() {
-    QueueSize request;
+void ContainerAgent::SendState() {
+    State request;
+    request.set_name(name);
+    request.set_arrival_rate(arrivalRate);
     for (auto msvc: msvcs) {
         request.add_size(msvc->GetOutQueueSize(0));
         spdlog::info("{0:s} Length of queue is {1:d}", msvc->msvc_name, msvc->GetOutQueueSize(0));
@@ -107,7 +109,7 @@ void ContainerAgent::SendQueueLengths() {
     EmptyMessage reply;
     ClientContext context;
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            stub->AsyncSendQueueSize(&context, request, sender_cq));
+            stub->AsyncSendState(&context, request, sender_cq));
     Status status;
     rpc->Finish(&reply, &status, (void *) 1);
 }
@@ -139,6 +141,7 @@ void ContainerAgent::StopRequestHandler::Proceed() {
 }
 
 void ContainerAgent::checkReady() {
+    ReportStart();
     bool ready = false;
     while (!ready) {
         ready = true;

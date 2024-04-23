@@ -9,7 +9,7 @@
 #include <misc.h>
 
 using controlcommunication::ControlCommunication;
-using controlcommunication::QueueSize;
+using controlcommunication::State;
 using controlcommunication::LightMetrics;
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::MicroserviceConfig;
@@ -68,9 +68,10 @@ public:
         }
     };
 
-    void UpdateQueueLengths(const std::basic_string<char> &container_name,
+    void UpdateState(const std::basic_string<char> &container_name, const float &requestrate,
                             const google::protobuf::RepeatedField <int32_t> &queuelengths) {
         containers[container_name].queuelengths = queuelengths;
+        containers[container_name].metrics.requestRate = requestrate;
     };
 
 private:
@@ -164,9 +165,9 @@ private:
         ControlCommunication::AsyncService *service;
     };
 
-    class CounterUpdateRequestHandler : public DeviceRequestHandler {
+    class StateUpdateRequestHandler : public DeviceRequestHandler {
     public:
-        CounterUpdateRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        StateUpdateRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                     DeviceAgent *device)
                 : DeviceRequestHandler(service, cq), responder(&ctx), device_agent(device) {
             Proceed();
@@ -175,7 +176,7 @@ private:
         void Proceed() final;
 
     private:
-        QueueSize request;
+        State request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         DeviceAgent *device_agent;
