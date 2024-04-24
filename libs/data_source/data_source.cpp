@@ -29,7 +29,7 @@ DataSourceAgent::DataSourceAgent(
     int8_t devIndex,
     std::string logPath,
     std::vector<BaseMicroserviceConfigs> &msvc_configs
-) : ContainerAgent(name, own_port, deviceIndex, logPath) {
+) : ContainerAgent(name, own_port, devIndex, logPath) {
     msvcs.push_back(reinterpret_cast<Microservice *const>(new DataReader(msvc_configs[0])));
     msvcs.push_back(reinterpret_cast<Microservice *const>(new RemoteCPUSender(msvc_configs[1])));
     msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
