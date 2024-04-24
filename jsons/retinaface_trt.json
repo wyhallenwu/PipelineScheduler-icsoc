@@ -5,6 +5,6 @@
     "cbs":1, 
     "normalize": true,
     "obs": 1,
-    "path": "/home/soulsaver/code/systems/PipePlusPlus/models/retina_single_face_3090_fp32_5_1.engine",
+    "path": "../models/retina_single_face_3090_fp32_5_1.engine",
     "prec": 4
 }

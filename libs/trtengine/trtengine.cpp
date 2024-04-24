@@ -166,7 +166,7 @@ bool Engine::build() {
     // Parse the buffer we read into memory.
     auto parsed = parser->parse(buffer.data(), buffer.size());
     if (!parsed) {
-        return false;
+        throw std::runtime_error("Unable to parse onnx file");
     }
 
     // Ensure that all the inputs have the same batch size
