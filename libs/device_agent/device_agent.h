@@ -1,15 +1,15 @@
 #ifndef DEVICE_AGENT_H
 #define DEVICE_AGENT_H
 
-#include "container_agent.h"
 #include "profiler.h"
-#include "indevicecommunication.grpc.pb.h"
-#include "controlcommunication.grpc.pb.h"
 #include <cstdlib>
 #include <misc.h>
+#include "container_agent.h"
+#include "indevicecommunication.grpc.pb.h"
+#include "controlcommunication.grpc.pb.h"
 
 using controlcommunication::ControlCommunication;
-using controlcommunication::State;
+using controlcommunication::QueueSize;
 using controlcommunication::LightMetrics;
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::MicroserviceConfig;

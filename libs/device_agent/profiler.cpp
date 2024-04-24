@@ -127,7 +127,7 @@ std::vector<nvmlDevice_t> Profiler::getDevices() {
         std::cerr << "Failed to query device count: " << nvmlErrorString(result) << std::endl;
         return std::vector<nvmlDevice_t> ();
     }
-    for (int i = 0; i < deviceCount; i++) {
+    for (unsigned int i = 0; i < deviceCount; i++) {
         nvmlDevice_t device;
         result = nvmlDeviceGetHandleByIndex(i, &device);
         if (NVML_SUCCESS != result) {
@@ -188,7 +188,7 @@ double Profiler::getCPUInfo(unsigned int pid) {
     }
     stream.close();
     long total_active = 0;
-    for(int i = 0; i < timers.size(); ++i) {
+    for(unsigned int i = 0; i < timers.size(); ++i) {
         if(i != 3 && i != 4) total_active += std::stol(timers[i]);
     }
     stream = std::ifstream("/proc/"+ std::to_string(pid) + "/stat");

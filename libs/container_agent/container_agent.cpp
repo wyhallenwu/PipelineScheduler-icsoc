@@ -103,7 +103,7 @@ void ContainerAgent::SendState() {
     request.set_name(name);
     request.set_arrival_rate(arrivalRate);
     for (auto msvc: msvcs) {
-        request.add_size(msvc->GetOutQueueSize(0));
+        request.add_queue_size(msvc->GetOutQueueSize(0));
         spdlog::info("{0:s} Length of queue is {1:d}", msvc->msvc_name, msvc->GetOutQueueSize(0));
     }
     EmptyMessage reply;

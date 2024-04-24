@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
     ContainerAgent *agent = new DataSourceAgent(name, absl::GetFlag(FLAGS_port), -1, logPath, msvc_configs);
     while (agent->running()) {
         std::this_thread::sleep_for(std::chrono::seconds(10));
-        agent->SendQueueLengths();
+        agent->SendState();
     }
     delete agent;
     return 0;

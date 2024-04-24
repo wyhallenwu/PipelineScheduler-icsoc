@@ -56,20 +56,20 @@ private:
     public:
         RequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
                        ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount)
-                : service(service), cq(cq), OutQueue(out), status(CREATE), msvc_inReqCount(msvc_inReqCount) {};
+                : service(service), msvc_inReqCount(msvc_inReqCount), cq(cq), OutQueue(out), status(CREATE) {};
 
         virtual ~RequestHandler() = default;
 
         virtual void Proceed() = 0;
 
     protected:
-        std::string containerName;
-        uint64_t &msvc_inReqCount;
         enum CallStatus {
             CREATE, PROCESS, FINISH
         };
 
+        std::string containerName;
         DataTransferService::AsyncService *service;
+        uint64_t &msvc_inReqCount;
         ServerCompletionQueue *cq;
         ServerContext ctx;
         ThreadSafeFixSizedDoubleQueue *OutQueue;

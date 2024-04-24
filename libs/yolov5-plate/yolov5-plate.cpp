@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
     
     while (agent->running()) {
         std::this_thread::sleep_for(std::chrono::seconds(4));
-        agent->SendQueueLengths();
+        agent->SendState();
     }
     delete agent;
     return 0;

@@ -149,7 +149,7 @@ DeviceAgent::finishContainer(const std::string &executable, const std::string &n
     std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
     containers[name] = {{},
                         InDeviceCommunication::NewStub(grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
-                        new CompletionQueue(), 0};
+                        {}, new CompletionQueue(), 0};
 }
 
 void DeviceAgent::StopContainer(const ContainerHandle &container) {
@@ -177,7 +177,7 @@ void DeviceAgent::Ready(const std::string &name, const std::string &ip, const st
     request.set_device_name(name);
     request.set_device_type(type);
     request.set_ip_address(ip);
-    std::unique_ptr<ClientAsyncResponseReader<ConnectionConfigs>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             controller_stub->AsyncAdvertiseToController(&context, request, controller_sending_cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
@@ -190,10 +190,16 @@ void DeviceAgent::Ready(const std::string &name, const std::string &ip, const st
     }
 }
 
+void DeviceAgent::ReportDeviceStatus() {
 
+}
+
+void DeviceAgent::ReportFullMetrics() {
+
+}
 
 void DeviceAgent::HandleDeviceRecvRpcs() {
-    new CounterUpdateRequestHandler(&device_service, device_cq.get(), this);
+    new StateUpdateRequestHandler(&device_service, device_cq.get(), this);
     new ReportStartRequestHandler(&device_service, device_cq.get(), this);
     while (running) {
         void *tag;
@@ -244,7 +250,7 @@ void DeviceAgent::StateUpdateRequestHandler::Proceed() {
         service->RequestSendState(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new StateUpdateRequestHandler(service, cq, device_agent);
-        device_agent->UpdateState(request.name(), request.size());
+        device_agent->UpdateState(request.name(), request.arrival_rate(), request.queue_size());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -301,6 +307,7 @@ void DeviceAgent::StopMicroserviceRequestHandler::Proceed() {
 
 int main(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
+
     std::string name = absl::GetFlag(FLAGS_name);
     std::string type = absl::GetFlag(FLAGS_deviceType);
     std::string controller_url = absl::GetFlag(FLAGS_controllerUrl);
