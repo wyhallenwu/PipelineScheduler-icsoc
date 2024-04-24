@@ -57,11 +57,6 @@ target_compile_features(misc
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX misc)
 
-find_package(CUDA REQUIRED)
-find_package(OpenCV REQUIRED)
-
-find_package(Threads REQUIRED)
-
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(misc

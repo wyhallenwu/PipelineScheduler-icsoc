@@ -55,11 +55,6 @@ target_compile_features(onnx2trt
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX onnx2trt)
 
-find_package(CUDA REQUIRED)
-find_package(OpenCV REQUIRED)
-
-find_package(Threads REQUIRED)
-
 set(trtengine_DIR "${CMAKE_CURRENT_BINARY_DIR}/../trtengine")
 find_package(trtengine CONFIG REQUIRED)
 

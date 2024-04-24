@@ -55,11 +55,6 @@ target_compile_features(arcface
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX arcface)
 
-find_package(TensorRT REQUIRED)
-find_package(CUDA REQUIRED)
-find_package(OpenCV REQUIRED)
-find_package(Threads REQUIRED)
-
 set(baseprocessors_DIR "${CMAKE_CURRENT_BINARY_DIR}/../baseprocessors")
 find_package(baseprocessors CONFIG REQUIRED)
 

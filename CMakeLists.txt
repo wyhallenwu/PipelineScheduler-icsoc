@@ -4,6 +4,28 @@ project(PipePlusPlus)
 # Use ccache to speed up rebuilds
 include(cmake/ccache.cmake)
 
+# This include defines standard install locations.
+# https://cmake.org/cmake/help/v3.11/module/GNUInstallDirs.html
+include(GNUInstallDirs)
+
+# This include provides some helper functions that simplify packaging.
+# https://cmake.org/cmake/help/v3.11/module/CMakePackageConfigHelpers.html
+include(CMakePackageConfigHelpers)
+
+# If no build type was specified, set it to Release.
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING
+            "Choose the type of build, options are: None Debug Release."
+            FORCE)
+endif (NOT CMAKE_BUILD_TYPE)
+
+# If no installation prefix is given manually, install locally.
+if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE STRING
+            "The install location"
+            FORCE)
+endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+
 # Only do these if this is the main project, and not if it is included through
 # add_subdirectory
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
@@ -40,6 +62,8 @@ endif ()
 # Use the correct version of CUDA
 set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
 
+find_package(Threads REQUIRED)
+
 # We require CUDA, OpenCV, and TensorRT
 find_package(TensorRT REQUIRED)
 find_package(CUDA REQUIRED)
@@ -47,7 +71,6 @@ find_package(OpenCV REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
 # Find Protobuf installation
-# Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
 option(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf CONFIG REQUIRED)
 message(STATUS "Using protobuf ${Protobuf_VERSION}")
@@ -59,6 +82,10 @@ if (CMAKE_CROSSCOMPILING)
 else ()
     set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
 endif ()
+
+# Find Boost installation
+find_package(Boost REQUIRED)
+include_directories(${Boost_INCLUDE_DIR})
 
 # Find gRPC installation
 # Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
@@ -73,6 +100,9 @@ else ()
 endif ()
 
 find_package(spdlog REQUIRED)
+
+# Manually specify the path to the protobufprotocols
+set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
 
 add_subdirectory(libs/misc)
 add_subdirectory(libs/microservice)
@@ -117,14 +147,14 @@ add_subdirectory(libs/controller)
 # add_executable(run src/main.cpp)
 # target_link_libraries(run PipePlusPlus)
 
-# add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
-# target_link_libraries(DeviceAgent device_agent ${CUDA_LIBRARIES} CUDA::nvml)
+add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
+target_link_libraries(DeviceAgent device_agent)
 
-# add_executable(Controller libs/controller/controller.cpp)
-# target_link_libraries(Controller controller)
+add_executable(Controller libs/controller/controller.cpp)
+target_link_libraries(Controller controller)
 
-# add_executable(Container_DataSource libs/data_source/data_source.cpp)
-# target_link_libraries(Container_DataSource data_source)
+add_executable(Container_DataSource libs/data_source/data_source.cpp)
+target_link_libraries(Container_DataSource data_source)
 
 add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
 target_link_libraries(Container_Yolov5 yolov5)

@@ -41,10 +41,6 @@ target_compile_features(trtengine
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX trtengine)
 
-find_package(TensorRT REQUIRED)
-find_package(CUDA REQUIRED)
-find_package(OpenCV REQUIRED)
-
 set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
 find_package(misc CONFIG REQUIRED)
 

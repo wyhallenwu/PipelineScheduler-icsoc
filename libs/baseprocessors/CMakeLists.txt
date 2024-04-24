@@ -53,7 +53,6 @@ add_library(baseprocessors
 # the export namespace when using add_subdirectory() instead.
 add_library(baseprocessors::baseprocessors ALIAS baseprocessors)
 
-
 # Required compiler features.
 # https://cmake.org/cmake/help/v3.1/manual/cmake-compile-features.7.html
 target_compile_features(baseprocessors
@@ -63,10 +62,6 @@ target_compile_features(baseprocessors
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX baseprocessors)
 
-find_package(CUDA REQUIRED)
-find_package(OpenCV REQUIRED)
-
-find_package(Threads REQUIRED)
 
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)

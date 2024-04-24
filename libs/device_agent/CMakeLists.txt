@@ -27,9 +27,9 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 # Only public header files go here.
 set(
         HEADER_FILES
-        ../json/json.h
         device_agent.h
         profiler.h
+        ../json/json.h
 )
 
 # All source files and private header files go here.
@@ -58,37 +58,6 @@ target_compile_features(device_agent
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX device_agent)
 
-# Find Protobuf installation
-# Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
-option(protobuf_MODULE_COMPATIBLE TRUE)
-find_package(Protobuf CONFIG REQUIRED)
-message(STATUS "Using protobuf ${Protobuf_VERSION}")
-
-set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
-set(_REFLECTION gRPC::grpc++_reflection)
-if (CMAKE_CROSSCOMPILING)
-    find_program(_PROTOBUF_PROTOC protoc)
-else ()
-    set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
-endif ()
-
-# Find gRPC installation
-# Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
-find_package(gRPC CONFIG REQUIRED)
-message(STATUS "Using gRPC ${gRPC_VERSION}")
-
-set(_GRPC_GRPCPP gRPC::grpc++)
-if (CMAKE_CROSSCOMPILING)
-    find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-else ()
-    set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
-endif ()
-
-find_package(Threads REQUIRED)
-
-set(baseprocessors_DIR "${CMAKE_CURRENT_BINARY_DIR}/../baseprocessors")
-find_package(baseprocessors CONFIG REQUIRED)
-
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
@@ -106,7 +75,6 @@ target_include_directories(device_agent
             $<BUILD_INTERFACE:${device_agent_SOURCE_DIR}/>
             # Used when installing the library:
             $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
-            ${OpenCV_INCLUDE_DIRS}
             $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
         PRIVATE
             # Used only when building the library:
@@ -116,12 +84,14 @@ target_link_libraries(device_agent
         PUBLIC
         control_grpc_proto
         device_grpc_proto
-        ${_GRPC_GRPCPP}
-        ${_PROTOBUF_LIBPROTOBUF}
+        absl::flags
+        absl::flags_parse
         ${CMAKE_THREAD_LIBS_INIT}
-        container_agent
+        ${CUDA_LIBRARIES}
+        CUDA::nvml
         microservice
         misc
+        container_agent
 )
 
 # Here we configure variables specifying the target directories.
