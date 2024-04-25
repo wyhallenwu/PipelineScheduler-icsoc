@@ -4,13 +4,17 @@
 #include "profiler.h"
 #include <cstdlib>
 #include <misc.h>
+#include <sys/sysinfo.h>
 #include "container_agent.h"
+#include "controller.h"
 #include "indevicecommunication.grpc.pb.h"
 #include "controlcommunication.grpc.pb.h"
 
 using controlcommunication::ControlCommunication;
-using controlcommunication::QueueSize;
 using controlcommunication::LightMetrics;
+using controlcommunication::LightMetricsList;
+using controlcommunication::FullMetrics;
+using controlcommunication::FullMetricsList;
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::MicroserviceConfig;
 using controlcommunication::MicroserviceName;
@@ -20,21 +24,13 @@ ABSL_DECLARE_FLAG(std::string, deviceType);
 ABSL_DECLARE_FLAG(std::string, controller_url);
 
 typedef std::tuple<
-    std::string, // name
-    MicroserviceType, // type
-    QueueLengthType, // queue length type
-    int16_t, // class of interests
-    std::vector<RequestDataShapeType>, //data shape
-    QueueLengthType
+        std::string, // name
+        MicroserviceType, // type
+        QueueLengthType, // queue length type
+        int16_t, // class of interests
+        std::vector<RequestDataShapeType>, //data shape
+        QueueLengthType
 > MsvcConfigTupleType;
-
-struct Metrics {
-    float requestRate = 0;
-    double cpuUsage = 0;
-    long memUsage = 0;
-    unsigned int gpuUsage = 0;
-    unsigned int gpuMemUsage = 0;
-};
 
 struct ContainerHandle {
     google::protobuf::RepeatedField<int32_t> queuelengths;
@@ -52,7 +48,7 @@ namespace msvcconfigs {
 
 class DeviceAgent {
 public:
-    DeviceAgent(const std::string &controller_url, const std::string name, const std::string &deviceType);
+    DeviceAgent(const std::string &controller_url, const std::string name, DeviceType type);
 
     ~DeviceAgent() {
         running = false;
@@ -69,27 +65,27 @@ public:
     };
 
     void UpdateState(const std::basic_string<char> &container_name, const float &requestrate,
-                            const google::protobuf::RepeatedField <int32_t> &queuelengths) {
+                     const google::protobuf::RepeatedField<int32_t> &queuelengths) {
         containers[container_name].queuelengths = queuelengths;
         containers[container_name].metrics.requestRate = requestrate;
     };
 
 private:
     void CreateYolo5Container(
-        int id,
-        const NeighborMicroserviceConfigs &upstream,
-        const std::vector<NeighborMicroserviceConfigs> &downstreams,
-        const MsvcSLOType &slo,
-        const BatchSizeType &batchSize,
-        const std::string &logPath
+            int id,
+            const NeighborMicroserviceConfigs &upstream,
+            const std::vector<NeighborMicroserviceConfigs> &downstreams,
+            const MsvcSLOType &slo,
+            const BatchSizeType &batchSize,
+            const std::string &logPath
     );
 
     void CreateDataSource(
-        int id,
-        const std::vector<NeighborMicroserviceConfigs> &downstreams,
-        const MsvcSLOType &slo,
-        const std::string &video_path,
-        const std::string &logPath
+            int id,
+            const std::vector<NeighborMicroserviceConfigs> &downstreams,
+            const MsvcSLOType &slo,
+            const std::string &video_path,
+            const std::string &logPath
     );
 
     static json createConfigs(
@@ -124,11 +120,14 @@ private:
 
     static void StopContainer(const ContainerHandle &container);
 
-    void Ready(const std::string &name, const std::string &ip, const std::string type);
+    void Ready(const std::string &name, const std::string &ip, DeviceType type);
+
     void ReportDeviceStatus();
+
     void ReportFullMetrics();
 
     void HandleDeviceRecvRpcs();
+
     void HandleControlRecvRpcs();
 
     void MonitorDeviceStatus();
@@ -136,8 +135,11 @@ private:
     class RequestHandler {
     public:
         RequestHandler(ServerCompletionQueue *cq) : cq(cq), status(CREATE) {}
+
         virtual ~RequestHandler() = default;
+
         virtual void Proceed() = 0;
+
     protected:
         enum CallStatus {
             CREATE, PROCESS, FINISH
@@ -168,7 +170,7 @@ private:
     class StateUpdateRequestHandler : public DeviceRequestHandler {
     public:
         StateUpdateRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                    DeviceAgent *device)
+                                  DeviceAgent *device)
                 : DeviceRequestHandler(service, cq), responder(&ctx), device_agent(device) {
             Proceed();
         }
@@ -202,7 +204,7 @@ private:
     class StartMicroserviceRequestHandler : public ControlRequestHandler {
     public:
         StartMicroserviceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                       DeviceAgent *device)
+                                        DeviceAgent *device)
                 : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
             Proceed();
         }
@@ -219,7 +221,7 @@ private:
     class StopMicroserviceRequestHandler : public ControlRequestHandler {
     public:
         StopMicroserviceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                  DeviceAgent *device)
+                                       DeviceAgent *device)
                 : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
             Proceed();
         }
@@ -239,11 +241,11 @@ private:
     std::vector<std::thread> threads;
 
     std::unique_ptr<ServerCompletionQueue> device_cq;
-    std::unique_ptr<Server> device_server;
+    std::unique_ptr<grpc::Server> device_server;
     InDeviceCommunication::AsyncService device_service;
     std::unique_ptr<ControlCommunication::Stub> controller_stub;
     std::unique_ptr<ServerCompletionQueue> controller_cq;
-    std::unique_ptr<Server> controller_server;
+    std::unique_ptr<grpc::Server> controller_server;
     CompletionQueue *controller_sending_cq;
     ControlCommunication::AsyncService controller_service;
 

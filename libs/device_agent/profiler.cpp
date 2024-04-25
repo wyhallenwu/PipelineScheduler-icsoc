@@ -45,6 +45,36 @@ void Profiler::updatePids(std::vector<unsigned int> pids) {
     }
 }
 
+int Profiler::getGpuCount() const {
+    unsigned int device_count;
+    nvmlReturn_t result = nvmlDeviceGetCount(&device_count);
+    if (result != NVML_SUCCESS) {
+        std::cerr << "Failed to get device count: " << nvmlErrorString(result) << std::endl;
+        return -1;
+    }
+    return device_count;
+}
+
+long Profiler::getGpuMemory(int device_count) const {
+    long totalMemory = 0;
+    for (unsigned int i = 0; i < device_count; i++) {
+        nvmlDevice_t device;
+        nvmlReturn_t result = nvmlDeviceGetHandleByIndex(i, &device);
+        if (result != NVML_SUCCESS) {
+            std::cerr << "Failed to get handle for device " << i << ": " << nvmlErrorString(result) << std::endl;
+            return -1;
+        }
+        nvmlMemory_t memory;
+        result = nvmlDeviceGetMemoryInfo(device, &memory);
+        if (result != NVML_SUCCESS) {
+            std::cerr << "Failed to get memory info for device " << i << ": " << nvmlErrorString(result) << std::endl;
+            return -1;
+        }
+        totalMemory += memory.total / 1000000; // convert to MB
+    }
+    return totalMemory;
+}
+
 std::vector<Profiler::sysStats> Profiler::getStats(unsigned int pid) const {
     return stats.at(pid);
 }

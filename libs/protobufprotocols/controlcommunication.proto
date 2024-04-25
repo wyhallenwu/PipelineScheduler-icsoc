@@ -11,30 +11,40 @@ service ControlCommunication {
   rpc StartMicroservice(MicroserviceConfig) returns (google.protobuf.Empty) {}
   rpc StopMicroservice(MicroserviceName) returns (google.protobuf.Empty) {}
   rpc SendLightMetrics(LightMetricsList) returns (google.protobuf.Empty) {}
-}
-
-message QueueSize {
-  string name = 1;
-  repeated int32 size = 2;
+  rpc SendFullMetrics(FullMetricsList) returns (google.protobuf.Empty) {}
 }
 
 message ConnectionConfigs {
   string device_name = 1;
-  string device_type = 2;
+  uint32 device_type = 2;
   string ip_address = 3;
+  int32 processors = 4;
+  uint64 memory = 5;
 }
 
 message LightMetrics {
   string name = 1;
-  QueueSize queue = 2;
+  repeated int32 queue_size = 2;
   float request_rate = 3;
 }
 
 message LightMetricsList {
-  repeated LightMetrics light_metrics = 1;
+  repeated LightMetrics metrics = 1;
 }
 
+message FullMetrics {
+  string name = 1;
+  repeated int32 queue_size = 2;
+  float request_rate = 3;
+  double cpu_usage = 4;
+  int64 mem_usage = 5;
+  uint32 gpu_usage = 6;
+  uint32 gpu_mem_usage = 7;
+}
 
+message FullMetricsList {
+  repeated FullMetrics metrics = 1;
+}
 
 message MicroserviceConfig {
   string name = 1;
