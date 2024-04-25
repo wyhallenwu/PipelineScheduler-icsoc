@@ -48,7 +48,11 @@ int main(int argc, char **argv) {
     }
 
     std::vector<Microservice*> msvcsList;
-    msvcsList.push_back(new Receiver(cont_args.cont_pipeConfigs[0]));
+    if (cont_args.cont_pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
+        msvcsList.push_back(new DataReader(cont_args.cont_pipeConfigs[0]));
+    } else {
+        msvcsList.push_back(new Receiver(cont_args.cont_pipeConfigs[0]));
+    }
     msvcsList.push_back(new BaseReqBatcher(cont_args.cont_pipeConfigs[1]));
     msvcsList[1]->SetInQueue(msvcsList[0]->GetOutQueue());
     msvcsList.push_back(new BaseBatchInferencer(cont_args.cont_pipeConfigs[2]));
