@@ -1,0 +1,31 @@
+#ifndef PIPEPLUSPLUS_DATA_READER_H
+#define PIPEPLUSPLUS_DATA_READER_H
+
+#include <opencv2/opencv.hpp>
+#include <thread>
+#include "microservice.h"
+
+class DataReader : public Microservice {
+public:
+    //msvc_idealBatchSize is used for the wait time, where 33 equals ~30.3 fps
+    //the link to the upstream microservice is used to specify the file location
+    DataReader(const BaseMicroserviceConfigs &config);
+
+    ~DataReader() override {
+        source.release();
+    };
+
+    void dispatchThread() override {
+        std::thread handler(&DataReader::Process, this);
+        handler.detach();
+    }
+
+private:
+    void Process();
+
+    cv::VideoCapture source;
+    int wait_time_ms;
+};
+
+
+#endif //PIPEPLUSPLUS_DATA_READER_H

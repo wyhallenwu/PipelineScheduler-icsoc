@@ -71,6 +71,9 @@ find_package(communicator CONFIG REQUIRED)
 set(container_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../container_agent")
 find_package(container_agent CONFIG REQUIRED)
 
+set(data_source_DIR "${CMAKE_CURRENT_BINARY_DIR}/../data_source")
+find_package(data_source CONFIG REQUIRED)
+
 set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
 find_package(misc CONFIG REQUIRED)
 
@@ -104,6 +107,7 @@ target_link_libraries(yolov5
 		baseprocessors
         communicator
         container_agent
+		data_source
 )
 
 # Here we configure variables specifying the target directories.

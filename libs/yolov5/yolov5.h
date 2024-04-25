@@ -3,6 +3,7 @@
 #include <misc.h>
 #include <chrono>
 #include "container_agent.h"
+#include "data_reader.h"
 #include "receiver.h"
 #include "sender.h"
 #include "spdlog/spdlog.h"
@@ -49,10 +50,21 @@ using namespace spdlog;
 class YoloV5Agent : public ContainerAgent {
 public:
     YoloV5Agent(
-        const std::string &name,
-        uint16_t own_port,
-        int8_t devIndex,
-        std::string logPath,
-        std::vector<Microservice*> services
+            const std::string &name,
+            uint16_t own_port,
+            int8_t devIndex,
+            const std::string& logPath,
+            std::vector<Microservice *> services
+    );
+};
+
+class YoloV5DataSource : public ContainerAgent {
+public:
+    YoloV5DataSource(
+            const std::string &name,
+            uint16_t own_port,
+            int8_t devIndex,
+            const std::string& logPath,
+            std::vector<Microservice *> services
     );
 };

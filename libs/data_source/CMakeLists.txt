@@ -28,13 +28,14 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES
         data_source.h
-        ../json/json.h
+        data_reader.h
 )
 
 # All source files and private header files go here.
 set(
         SOURCE_FILES
         data_source.cpp
+        data_reader.cpp
 )
 
 # Here we define the library.

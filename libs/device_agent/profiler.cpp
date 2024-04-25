@@ -57,7 +57,7 @@ int Profiler::getGpuCount() const {
 
 long Profiler::getGpuMemory(int device_count) const {
     long totalMemory = 0;
-    for (unsigned int i = 0; i < device_count; i++) {
+    for (int i = 0; i < device_count; i++) {
         nvmlDevice_t device;
         nvmlReturn_t result = nvmlDeviceGetHandleByIndex(i, &device);
         if (result != NVML_SUCCESS) {

@@ -282,6 +282,7 @@ namespace msvcconfigs {
         TRTInferencer,
         PostprocessorBBoxCropper,
         Sender,
+        DataSource,
     };
 
     /**

@@ -127,6 +127,9 @@ int main() {
             type = PipelineType::Video_Call;
         } else if (command == "People") {
             type = PipelineType::Building_Security;
+        } else {
+            std::cout << "Invalid command" << std::endl;
+            continue;
         }
         std::string name;
         int slo;
