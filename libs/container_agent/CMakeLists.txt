@@ -2,28 +2,6 @@ cmake_minimum_required(VERSION 3.18)
 
 project(container_agent)
 
-# This include defines standard install locations.
-# https://cmake.org/cmake/help/v3.11/module/GNUInstallDirs.html
-include(GNUInstallDirs)
-
-# This include provides some helper functions that simplify packaging.
-# https://cmake.org/cmake/help/v3.11/module/CMakePackageConfigHelpers.html
-include(CMakePackageConfigHelpers)
-
-# If no build type was specified, set it to Release.
-if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING
-            "Choose the type of build, options are: None Debug Release."
-            FORCE)
-endif (NOT CMAKE_BUILD_TYPE)
-
-# If no installation prefix is given manually, install locally.
-if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-    set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE STRING
-            "The install location"
-            FORCE)
-endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-
 # Only public header files go here.
 set(
         HEADER_FILES
@@ -56,32 +34,6 @@ target_compile_features(container_agent
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX container_agent)
 
-# Find Protobuf installation
-# Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
-option(protobuf_MODULE_COMPATIBLE TRUE)
-find_package(Protobuf CONFIG REQUIRED)
-message(STATUS "Using protobuf ${Protobuf_VERSION}")
-
-set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
-set(_REFLECTION gRPC::grpc++_reflection)
-if (CMAKE_CROSSCOMPILING)
-    find_program(_PROTOBUF_PROTOC protoc)
-else ()
-    set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
-endif ()
-
-# Find gRPC installation
-# Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
-find_package(gRPC CONFIG REQUIRED)
-message(STATUS "Using gRPC ${gRPC_VERSION}")
-
-set(_GRPC_GRPCPP gRPC::grpc++)
-if (CMAKE_CROSSCOMPILING)
-    find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-else ()
-    set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
-endif ()
-
 find_package(Threads REQUIRED)
 
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
@@ -107,6 +59,8 @@ target_include_directories(container_agent
 target_link_libraries(container_agent
         PUBLIC
         device_grpc_proto
+        absl::flags
+        absl::flags_parse
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}

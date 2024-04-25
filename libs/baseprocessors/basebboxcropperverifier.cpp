@@ -45,7 +45,7 @@ void BaseBBoxCropperVerifier::cropping() {
     cudaStream_t postProcStream;
     checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
 
-
+    // TODO: remove potentially unused variables
     // Height and width of the image used for inference
     int orig_h, orig_w, infer_h, infer_w;
 

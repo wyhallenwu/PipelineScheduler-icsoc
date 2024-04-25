@@ -24,6 +24,7 @@ int main(int argc, char *argv[]) {
     uint16_t precision = absl::GetFlag(FLAGS_precision);
     int8_t gpu = absl::GetFlag(FLAGS_gpu);
     size_t max_workspace_size = absl::GetFlag(FLAGS_max_workspace_size);
+    // TODO: remove potentially unused variable
     uint16_t verbose = absl::GetFlag(FLAGS_verbose);
 
     MODEL_DATA_TYPE prec = static_cast<MODEL_DATA_TYPE>(precision);

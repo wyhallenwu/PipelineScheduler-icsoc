@@ -1,40 +1,17 @@
 #include "data_source.h"
 
-DataReader::DataReader(const BaseMicroserviceConfigs &configs) : Microservice(configs), source(VideoCapture(
-        configs.msvc_upstreamMicroservices.front().link[0])) {};
-
-void DataReader::Process(int wait_time_ms) {
-    while (true) {
-        ClockType time = std::chrono::system_clock::now();
-        Mat frame;
-        source >> frame;
-        if (frame.empty()) {
-            source.set(CAP_PROP_POS_FRAMES, 0); // retry to get the frame by modifying source
-            source >> frame;
-            if (frame.empty()) {
-                std::cout << "No more frames to read" << std::endl;
-                return;
-            }
-        }
-        Request<LocalCPUReqDataType> req = {{time}, {msvc_svcLevelObjLatency}, {msvc_name}, 1,
-                                            {RequestData<LocalCPUReqDataType>{{frame.cols, frame.rows}, frame}}};
-        msvc_OutQueue[0]->emplace(req);
-        std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
-    }
-};
-
 DataSourceAgent::DataSourceAgent(
     const std::string &name,
     uint16_t own_port,
     int8_t devIndex,
-    std::string logPath,
+    const std::string& logPath,
     std::vector<BaseMicroserviceConfigs> &msvc_configs
-) : ContainerAgent(name, own_port, deviceIndex, logPath) {
+) : ContainerAgent(name, own_port, devIndex, logPath) {
     msvcs.push_back(reinterpret_cast<Microservice *const>(new DataReader(msvc_configs[0])));
     msvcs.push_back(reinterpret_cast<Microservice *const>(new RemoteCPUSender(msvc_configs[1])));
     msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
-    std::thread processor(&DataReader::Process, dynamic_cast<DataReader *>(msvcs[0]), 33); // ~30.3 fps
-    processor.detach();
+
+    dynamic_cast<DataReader *>(msvcs[0])->dispatchThread();
     std::thread sender(&RemoteCPUSender::Process, dynamic_cast<RemoteCPUSender *>(msvcs[1]));
     sender.detach();
 }
@@ -47,7 +24,7 @@ int main(int argc, char **argv) {
     ContainerAgent *agent = new DataSourceAgent(name, absl::GetFlag(FLAGS_port), -1, logPath, msvc_configs);
     while (agent->running()) {
         std::this_thread::sleep_for(std::chrono::seconds(10));
-        agent->SendQueueLengths();
+        agent->SendState();
     }
     delete agent;
     return 0;

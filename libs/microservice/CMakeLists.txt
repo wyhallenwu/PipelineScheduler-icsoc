@@ -55,11 +55,6 @@ target_compile_features(microservice
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX microservice)
 
-find_package(CUDA REQUIRED)
-find_package(OpenCV REQUIRED)
-
-find_package(Threads REQUIRED)
-
 set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
 find_package(misc CONFIG REQUIRED)
 

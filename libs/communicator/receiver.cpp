@@ -56,7 +56,6 @@ void Receiver::profileDataGenerator() {
     // during profiling
     uint8_t randomShapeIndex;
     std::uniform_int_distribution<> dis(0, msvc_dataShape.size() - 1);
-    uint16_t seed = 2024;
     std::mt19937 gen(2024);
 
     std::vector<RequestData<LocalCPUReqDataType>> requestData;

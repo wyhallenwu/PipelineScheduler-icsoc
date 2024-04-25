@@ -6,12 +6,31 @@ YoloV5Agent::YoloV5Agent(
     const std::string &name,
     uint16_t own_port,
     int8_t devIndex,
-    std::string logPath,
+    const std::string& logPath,
     std::vector<Microservice*> services
 ) : ContainerAgent(name, own_port, devIndex, logPath) {
 
     msvcs = std::move(services);
     dynamic_cast<Receiver*>(msvcs[0])->dispatchThread();
+    dynamic_cast<BaseReqBatcher*>(msvcs[1])->dispatchThread();
+    dynamic_cast<BaseBatchInferencer*>(msvcs[2])->dispatchThread();
+    dynamic_cast<BaseBBoxCropper*>(msvcs[3])->dispatchThread();
+    for (uint16_t i = 4; i < msvcs.size(); i++) {
+        std::thread sender(&Sender::Process, dynamic_cast<Sender*>(msvcs[i]));
+        sender.detach();
+    }
+}
+
+YoloV5DataSource::YoloV5DataSource(
+        const std::string &name,
+        uint16_t own_port,
+        int8_t devIndex,
+        const std::string& logPath,
+        std::vector<Microservice*> services
+) : ContainerAgent(name, own_port, devIndex, logPath) {
+
+    msvcs = std::move(services);
+    dynamic_cast<DataReader*>(msvcs[0])->dispatchThread();
     dynamic_cast<BaseReqBatcher*>(msvcs[1])->dispatchThread();
     dynamic_cast<BaseBatchInferencer*>(msvcs[2])->dispatchThread();
     dynamic_cast<BaseBBoxCropper*>(msvcs[3])->dispatchThread();
@@ -43,7 +62,11 @@ int main(int argc, char **argv) {
     spdlog::set_level(spdlog::level::level_enum(logLevel));
 
     std::vector<Microservice*> msvcsList;
-    msvcsList.push_back(new Receiver(msvc_configs[0]));
+    if (msvc_configs[0].msvc_type == MicroserviceType::DataSource) {
+        msvcsList.push_back(new DataReader(msvc_configs[0]));
+    } else {
+        msvcsList.push_back(new Receiver(msvc_configs[0]));
+    }
     msvcsList.push_back(new BaseReqBatcher(msvc_configs[1]));
     msvcsList[1]->SetInQueue(msvcsList[0]->GetOutQueue());
     msvcsList.push_back(new BaseBatchInferencer(msvc_configs[2]));
@@ -66,19 +89,22 @@ int main(int argc, char **argv) {
         }
     }
 
-    
-
     for (auto msvc : msvcsList) {
         msvc->msvc_containerName = name;
     }
 
-    ContainerAgent *agent = new YoloV5Agent(name, absl::GetFlag(FLAGS_port), device, logPath, msvcsList);
+    ContainerAgent *agent;
+    if (msvc_configs[0].msvc_type == MicroserviceType::DataSource) {
+        agent = new YoloV5DataSource(name, absl::GetFlag(FLAGS_port), device, logPath, msvcsList);
+    } else {
+        agent = new YoloV5Agent(name, absl::GetFlag(FLAGS_port), device, logPath, msvcsList);
+    }
 
     agent->checkReady();
     
     while (agent->running()) {
         std::this_thread::sleep_for(std::chrono::seconds(4));
-        agent->SendQueueLengths();
+        agent->SendState();
     }
     delete agent;
     return 0;

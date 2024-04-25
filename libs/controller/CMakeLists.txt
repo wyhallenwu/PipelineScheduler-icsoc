@@ -55,38 +55,8 @@ target_compile_features(controller
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX controller)
 
-# Find Protobuf installation
-# Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
-option(protobuf_MODULE_COMPATIBLE TRUE)
-find_package(Protobuf CONFIG REQUIRED)
-message(STATUS "Using protobuf ${Protobuf_VERSION}")
-
-set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
-set(_REFLECTION gRPC::grpc++_reflection)
-if (CMAKE_CROSSCOMPILING)
-    find_program(_PROTOBUF_PROTOC protoc)
-else ()
-    set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
-endif ()
-
-# Find gRPC installation
-# Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
-find_package(gRPC CONFIG REQUIRED)
-message(STATUS "Using gRPC ${gRPC_VERSION}")
-
-set(_GRPC_GRPCPP gRPC::grpc++)
-if (CMAKE_CROSSCOMPILING)
-    find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-else ()
-    set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
-endif ()
-
-find_package(Threads REQUIRED)
-
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
-set(device_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../device_agent")
-find_package(device_agent CONFIG REQUIRED)
 
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html

@@ -59,11 +59,6 @@ target_compile_features(yolov5
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX yolov5)
 
-find_package(TensorRT REQUIRED)
-find_package(CUDA REQUIRED)
-find_package(OpenCV REQUIRED)
-find_package(Threads REQUIRED)
-
 set(baseprocessors_DIR "${CMAKE_CURRENT_BINARY_DIR}/../baseprocessors")
 find_package(baseprocessors CONFIG REQUIRED)
 
@@ -75,6 +70,9 @@ find_package(communicator CONFIG REQUIRED)
 
 set(container_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../container_agent")
 find_package(container_agent CONFIG REQUIRED)
+
+set(data_source_DIR "${CMAKE_CURRENT_BINARY_DIR}/../data_source")
+find_package(data_source CONFIG REQUIRED)
 
 set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
 find_package(misc CONFIG REQUIRED)
@@ -109,6 +107,7 @@ target_link_libraries(yolov5
 		baseprocessors
         communicator
         container_agent
+		data_source
 )
 
 # Here we configure variables specifying the target directories.

@@ -70,12 +70,14 @@ void BaseSoftmaxClassifier::classify() {
     cudaStream_t postProcStream;
     checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
 
+    // TODO: remove potentially unused variable
     NumQueuesType queueIndex;
 
     size_t bufferSize;
     RequestDataShapeType shape;
 
     float predictedLogits[msvc_idealBatchSize][msvc_numClasses], predictedProbs[msvc_idealBatchSize][msvc_numClasses];
+    // TODO: remove potentially unused variables
     uint16_t predictedClass[msvc_idealBatchSize];
 
     while (true) {

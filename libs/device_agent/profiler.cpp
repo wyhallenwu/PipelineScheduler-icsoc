@@ -32,12 +32,47 @@ void Profiler::stop() {
 }
 
 void Profiler::updatePids(std::vector<unsigned int> pids) {
+    bool restart = false;
     if (running) {
         stop();
+        restart = true;
     }
     pidOnDevices.clear();
     stats.clear();
     setPidOnDevices(pids);
+    if (restart) {
+        run();
+    }
+}
+
+int Profiler::getGpuCount() const {
+    unsigned int device_count;
+    nvmlReturn_t result = nvmlDeviceGetCount(&device_count);
+    if (result != NVML_SUCCESS) {
+        std::cerr << "Failed to get device count: " << nvmlErrorString(result) << std::endl;
+        return -1;
+    }
+    return device_count;
+}
+
+long Profiler::getGpuMemory(int device_count) const {
+    long totalMemory = 0;
+    for (int i = 0; i < device_count; i++) {
+        nvmlDevice_t device;
+        nvmlReturn_t result = nvmlDeviceGetHandleByIndex(i, &device);
+        if (result != NVML_SUCCESS) {
+            std::cerr << "Failed to get handle for device " << i << ": " << nvmlErrorString(result) << std::endl;
+            return -1;
+        }
+        nvmlMemory_t memory;
+        result = nvmlDeviceGetMemoryInfo(device, &memory);
+        if (result != NVML_SUCCESS) {
+            std::cerr << "Failed to get memory info for device " << i << ": " << nvmlErrorString(result) << std::endl;
+            return -1;
+        }
+        totalMemory += memory.total / 1000000; // convert to MB
+    }
+    return totalMemory;
 }
 
 std::vector<Profiler::sysStats> Profiler::getStats(unsigned int pid) const {
@@ -48,6 +83,20 @@ std::vector<Profiler::sysStats> Profiler::popStats(unsigned int pid) {
     std::vector<Profiler::sysStats> statsCopy = stats[pid];
     stats[pid] = std::vector<sysStats>();
     return statsCopy;
+}
+
+Profiler::sysStats Profiler::reportAtRuntime(unsigned int pid) {
+    sysStats value{};
+    if (!running) {
+        value.timestamp = 1;
+        return value;
+    }
+    value.cpuUsage = getCPUInfo(pid);
+    value.memoryUsage = getMemoryInfo(pid) / 1000; // convert to MB
+    auto gpu = getGPUInfo(pid, pidOnDevices[pid]);
+    value.gpuUtilization = gpu.gpuUtilization;
+    value.gpuMemoryUsage = gpu.memoryUtilization;
+    return value;
 }
 
 void Profiler::collectStats() {
@@ -108,7 +157,7 @@ std::vector<nvmlDevice_t> Profiler::getDevices() {
         std::cerr << "Failed to query device count: " << nvmlErrorString(result) << std::endl;
         return std::vector<nvmlDevice_t> ();
     }
-    for (int i = 0; i < deviceCount; i++) {
+    for (unsigned int i = 0; i < deviceCount; i++) {
         nvmlDevice_t device;
         result = nvmlDeviceGetHandleByIndex(i, &device);
         if (NVML_SUCCESS != result) {
@@ -169,7 +218,7 @@ double Profiler::getCPUInfo(unsigned int pid) {
     }
     stream.close();
     long total_active = 0;
-    for(int i = 0; i < timers.size(); ++i) {
+    for(unsigned int i = 0; i < timers.size(); ++i) {
         if(i != 3 && i != 4) total_active += std::stol(timers[i]);
     }
     stream = std::ifstream("/proc/"+ std::to_string(pid) + "/stat");

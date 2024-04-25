@@ -5,7 +5,6 @@
 #include <fstream>
 #include <random>
 
-using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
@@ -56,20 +55,20 @@ private:
     public:
         RequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
                        ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount)
-                : service(service), cq(cq), OutQueue(out), status(CREATE), msvc_inReqCount(msvc_inReqCount) {};
+                : service(service), msvc_inReqCount(msvc_inReqCount), cq(cq), OutQueue(out), status(CREATE) {};
 
         virtual ~RequestHandler() = default;
 
         virtual void Proceed() = 0;
 
     protected:
-        std::string containerName;
-        uint64_t &msvc_inReqCount;
         enum CallStatus {
             CREATE, PROCESS, FINISH
         };
 
+        std::string containerName;
         DataTransferService::AsyncService *service;
+        uint64_t &msvc_inReqCount;
         ServerCompletionQueue *cq;
         ServerContext ctx;
         ThreadSafeFixSizedDoubleQueue *OutQueue;
@@ -124,7 +123,7 @@ private:
 
     std::unique_ptr<ServerCompletionQueue> cq;
     DataTransferService::AsyncService service;
-    std::unique_ptr<Server> server;
+    std::unique_ptr<grpc::Server> server;
 };
 
 #endif //PIPEPLUSPLUS_RECEIVER_H

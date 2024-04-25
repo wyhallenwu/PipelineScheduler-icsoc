@@ -166,7 +166,7 @@ bool Engine::build() {
     // Parse the buffer we read into memory.
     auto parsed = parser->parse(buffer.data(), buffer.size());
     if (!parsed) {
-        return false;
+        throw std::runtime_error("Unable to parse onnx file");
     }
 
     // Ensure that all the inputs have the same batch size
@@ -247,6 +247,7 @@ bool Engine::build() {
         builderConfig->setFlag((BuilderFlag::kINT8));
 
         const auto input = network->getInput(0);
+        // TODO: remove potentially unused variables
         const auto inputName = input->getName();
         const auto inputDims = input->getDimensions();
         const auto calibrationFileName = m_engineName + ".calibration";
