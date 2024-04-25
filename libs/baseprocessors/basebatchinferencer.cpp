@@ -2,21 +2,37 @@
 
 using namespace spdlog;
 using json = nlohmann::json;
+using namespace trt;
 
+/**
+ * @brief Load the configurations from the json file
+ * 
+ * @param jsonConfigs 
+ * @param isConstructing 
+ */
+void BaseBatchInferencer::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    
+    if (!isConstructing) { // If the function is called from the constructor, the configs are already loaded.
+        Microservice::loadConfigs(jsonConfigs, true);
+    }
+
+    msvc_engineConfigs = jsonConfigs.get<TRTConfigs>();
+    msvc_engineConfigs.maxBatchSize = msvc_idealBatchSize;
+    msvc_engineConfigs.deviceIndex = msvc_deviceIndex;
+
+    msvc_inferenceEngine = new Engine(msvc_engineConfigs);
+    msvc_inferenceEngine->loadNetwork();
+}
 
 /**
  * @brief Construct a new Base Preprocessor that inherites the LocalGPUDataMicroservice given the `InType`
  * 
  * @param configs 
  */
-BaseBatchInferencer::BaseBatchInferencer(const BaseMicroserviceConfigs &config) : Microservice(config){
-    
-    msvc_engineConfigs = readConfigsFromJson(msvc_appLvlConfigs);
-    msvc_engineConfigs.maxBatchSize = msvc_idealBatchSize;
-    msvc_engineConfigs.deviceIndex = msvc_deviceIndex;
+BaseBatchInferencer::BaseBatchInferencer(const json &jsonConfigs) : Microservice(jsonConfigs){
 
-    msvc_inferenceEngine = new Engine(msvc_engineConfigs);
-    msvc_inferenceEngine->loadNetwork();
+    // Load the configurations from the json file
+    loadConfigs(jsonConfigs);
 
     // msvc_engineInputBuffers = msvc_inferenceEngine->getInputBuffers();
     // msvc_engineOutputBuffers = msvc_inferenceEngine->getOutputBuffers();
@@ -268,17 +284,6 @@ void BaseBatchInferencer::inferenceProfiling() {
     }
     checkCudaErrorCode(cudaStreamDestroy(inferenceStream), __func__);
     msvc_logFile.close();
-}
-
-TRTConfigs BaseBatchInferencer::readConfigsFromJson(const std::string cfgPath) {
-    TRTConfigs yoloConfigs;
-    
-    spdlog::trace("{0:s} attempts to parse TRT Config from json file.", __func__);
-    std::ifstream file(cfgPath);
-    yoloConfigs = json::parse(file).get<TRTConfigs>();
-    spdlog::trace("{0:s} finished parsing TRT Config from file.", __func__);
-
-    return yoloConfigs;
 }
 
 RequestShapeType BaseBatchInferencer::getInputShapeVector() {

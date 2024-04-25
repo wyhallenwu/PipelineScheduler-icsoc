@@ -12,9 +12,12 @@
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <iostream>
+#include "../json/json.h"
 
 #ifndef MICROSERVICE_H
 #define MICROSERVICE_H
+
+using json = nlohmann::json;
 
 
 template<typename DataType>
@@ -283,6 +286,10 @@ namespace msvcconfigs {
         PostprocessorBBoxCropper,
         Sender,
         DataSource,
+        PostProcessorClassifer,
+        PostProcessorSMClassifier,
+        PostProcessorBBoxCropperVerifier,
+        PostProcessorKPointExtractor
     };
 
     /**
@@ -290,6 +297,8 @@ namespace msvcconfigs {
      *
      */
     struct BaseMicroserviceConfigs {
+        // Name of the container
+        std::string msvc_contName;
         // Name of the microservice
         std::string msvc_name;
         // Type of microservice data receiver, data processor, or data sender
@@ -314,6 +323,24 @@ namespace msvcconfigs {
         std::list<NeighborMicroserviceConfigs> msvc_upstreamMicroservices;
         std::list<NeighborMicroserviceConfigs> msvc_dnstreamMicroservices;
     };
+
+
+    /**
+     * @brief 
+     * 
+     */
+    struct NeighborMicroservice : NeighborMicroserviceConfigs {
+        NumQueuesType queueNum;
+
+        NeighborMicroservice(const NeighborMicroserviceConfigs &configs, NumQueuesType queueNum)
+                : NeighborMicroserviceConfigs(configs),
+                  queueNum(queueNum) {}
+    };
+
+
+    void from_json(const json &j, NeighborMicroserviceConfigs &val);
+
+    void from_json(const json &j, BaseMicroserviceConfigs &val);
 }
 
 using msvcconfigs::NeighborMicroserviceConfigs;
@@ -327,7 +354,7 @@ using msvcconfigs::MicroserviceType;
 class Microservice {
 public:
     // Constructor that loads a struct args
-    explicit Microservice(const BaseMicroserviceConfigs &configs);
+    explicit Microservice(const json &jsonConfigs);
 
     virtual ~Microservice() = default;
 
@@ -405,6 +432,8 @@ public:
 
     virtual void dispatchThread() {};
 
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false);
+
     std::ofstream msvc_logFile;
 
 protected:
@@ -422,18 +451,6 @@ protected:
      * Default to be deployment.
      */
     RUNMODE msvc_RUNMODE = RUNMODE::DEPLOYMENT;
-
-    /**
-     * @brief 
-     * 
-     */
-    struct NeighborMicroservice : NeighborMicroserviceConfigs {
-        NumQueuesType queueNum;
-
-        NeighborMicroservice(const NeighborMicroserviceConfigs &configs, NumQueuesType queueNum)
-                : NeighborMicroserviceConfigs(configs),
-                  queueNum(queueNum) {}
-    };
 
     //Path to specific Application configurations for this microservice
     std::string msvc_appLvlConfigs = "";
@@ -471,9 +488,9 @@ protected:
     MODEL_DATA_TYPE msvc_modelDataType = MODEL_DATA_TYPE::fp32;
 
     //
-    std::vector<NeighborMicroservice> upstreamMicroserviceList;
+    std::vector<msvcconfigs::NeighborMicroservice> upstreamMicroserviceList;
     //
-    std::vector<NeighborMicroservice> dnstreamMicroserviceList;
+    std::vector<msvcconfigs::NeighborMicroservice> dnstreamMicroserviceList;
     //
     std::vector<std::pair<int16_t, NumQueuesType>> classToDnstreamMap;
 

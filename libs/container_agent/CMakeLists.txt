@@ -39,6 +39,9 @@ find_package(Threads REQUIRED)
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
+set(communicator_DIR "${CMAKE_CURRENT_BINARY_DIR}/../communicator")
+find_package(communicator CONFIG REQUIRED)
+
 set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
 find_package(misc CONFIG REQUIRED)
 
@@ -66,6 +69,7 @@ target_link_libraries(container_agent
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
         microservice
+        communicator
 )
 
 # add_executable(ContainerAgent container_agent.cpp)

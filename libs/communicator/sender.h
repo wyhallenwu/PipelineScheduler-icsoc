@@ -8,12 +8,23 @@ using grpc::ClientAsyncResponseReader;
 using grpc::CompletionQueue;
 using boost::interprocess::read_write;
 using boost::interprocess::create_only;
+using json = nlohmann::json;
+
+
+struct SenderConfigs : BaseMicroserviceConfigs {
+    // Empty for now
+    uint8_t dummy;
+};
 
 class Sender : public Microservice {
 public:
-    Sender(const BaseMicroserviceConfigs &configs);
+    Sender(const json &jsonConfigs);
 
     virtual void Process() = 0;
+
+    SenderConfigs loadConfigsFromJson(const json &jsonConfigs);
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
 protected:
     static inline std::mt19937 &generator() {
@@ -42,9 +53,14 @@ protected:
 
 class GPUSender : public Sender {
 public:
-    explicit GPUSender(const BaseMicroserviceConfigs &configs);
+    explicit GPUSender(const json &jsonConfigs);
 
     void Process() final;
+
+    void dispatchThread() {
+        std::thread sender(&GPUSender::Process, this);
+        sender.detach();
+    }
 
     std::string SendGpuPointer(
             std::vector<RequestData<LocalGPUReqDataType>> &elements,
@@ -59,9 +75,14 @@ private:
 
 class LocalCPUSender : public Sender {
 public:
-    LocalCPUSender(const BaseMicroserviceConfigs &configs);
+    LocalCPUSender(const json &jsonConfigs);
 
     void Process() final;
+
+    void dispatchThread() final {
+        std::thread sender(&LocalCPUSender::Process, this);
+        sender.detach();
+    }
 
     std::string
     SendSharedMemory(const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp, const std::string &path,
@@ -70,9 +91,14 @@ public:
 
 class RemoteCPUSender : public Sender {
 public:
-    RemoteCPUSender(const BaseMicroserviceConfigs &configs);
+    RemoteCPUSender(const json &jsonConfigs);
 
     void Process() final;
+
+    void dispatchThread() final {
+        std::thread sender(&RemoteCPUSender::Process, this);
+        sender.detach();
+    }
 
     std::string SendSerializedData(
             const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp, const std::string &path,

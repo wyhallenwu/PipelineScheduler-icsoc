@@ -1,7 +1,23 @@
 #include "receiver.h"
 
-Receiver::Receiver(const BaseMicroserviceConfigs &configs)
-        : Microservice(configs) {
+ReceiverConfigs Receiver::loadConfigsFromJson(const json &jsonConfigs) {
+    ReceiverConfigs configs;
+    if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        jsonConfigs.at("msvc_dataShape").get_to(configs.msvc_dataShape);
+        jsonConfigs.at("msvc_numWarmUpBatches").get_to(configs.msvc_numWarmUpBatches);
+        jsonConfigs.at("msvc_numProfileBatches").get_to(configs.msvc_numProfileBatches);
+    }
+    return configs;
+}
+
+void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+
+    if (!isConstructing) { // If this is not called from the constructor, then we are loading configs from a file for Microservice class
+        Microservice::loadConfigs(jsonConfigs);
+    }
+
+    ReceiverConfigs configs = loadConfigsFromJson(jsonConfigs);
+
     if (msvc_RUNMODE == RUNMODE::PROFILING) {
         readConfigsFromJson(configs.msvc_appLvlConfigs);
         msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
@@ -9,7 +25,7 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs)
         grpc::EnableDefaultHealthCheckService(true);
         grpc::reflection::InitProtoReflectionServerBuilderPlugin();
         ServerBuilder builder;
-        builder.AddListeningPort(configs.msvc_upstreamMicroservices.front().link[0], grpc::InsecureServerCredentials());
+        builder.AddListeningPort(upstreamMicroserviceList.front().link[0], grpc::InsecureServerCredentials());
         builder.SetMaxSendMessageSize(1024 * 1024 * 1024);
         builder.SetMaxSendMessageSize(1024 * 1024 * 1024);
         builder.SetMaxMessageSize(1024 * 1024 * 1024);
@@ -19,9 +35,12 @@ Receiver::Receiver(const BaseMicroserviceConfigs &configs)
         cq = builder.AddCompletionQueue();
         server = builder.BuildAndStart();
         msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
-        auto handler = std::thread(&Receiver::HandleRpcs, this);
-        handler.detach();
+        // or so
     }
+}
+
+Receiver::Receiver(const json &jsonConfigs) : Microservice(jsonConfigs) {
+    loadConfigs(jsonConfigs, true);
 }
 
 template<typename ReqDataType>
@@ -41,7 +60,12 @@ void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
         for (BatchSizeType j = 0; j < numTimeStamps - 1; j++) {
             msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + j]) << ",";
         }
-        msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + numTimeStamps - 1]) << std::endl;
+        msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + numTimeStamps - 1]) << "|";
+
+        for (BatchSizeType j = 1; j < numTimeStamps - 1; j++) {
+            msvc_logFile << std::chrono::duration_cast<std::chrono::nanoseconds>(timeReport.req_origGenTime[i * numTimeStamps + j] - timeReport.req_origGenTime[i * numTimeStamps + j - 1]).count() << ",";
+        }
+        msvc_logFile << std::chrono::duration_cast<std::chrono::nanoseconds>(timeReport.req_origGenTime[(i + 1) * numTimeStamps - 1] - timeReport.req_origGenTime[(i + 1) * numTimeStamps - 2]).count() << std::endl;
     } 
     if (isProfileEnd) {
         this->pauseThread();

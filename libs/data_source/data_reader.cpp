@@ -1,7 +1,18 @@
 #include "data_reader.h"
 
-DataReader::DataReader(const BaseMicroserviceConfigs &configs) : Microservice(configs), source(cv::VideoCapture(
-        configs.msvc_upstreamMicroservices.front().link[0])), wait_time_ms(configs.msvc_idealBatchSize) {};
+DataReader::DataReader(const json &jsonConfigs) : Microservice(jsonConfigs) {
+    loadConfigs(jsonConfigs, true);
+};
+
+void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    if (!isConstructing) {
+        Microservice::loadConfigs(jsonConfigs);
+    }
+
+    std::string link = jsonConfigs.at("msvc_upstreamMicroservices")[0].at("nb_link")[0];
+    source = cv::VideoCapture(link);
+    wait_time_ms = jsonConfigs.at("msvc_idealBatchSize");
+};
 
 void DataReader::Process() {
     while (true) {

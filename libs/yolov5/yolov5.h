@@ -50,21 +50,23 @@ using namespace spdlog;
 class YoloV5Agent : public ContainerAgent {
 public:
     YoloV5Agent(
-            const std::string &name,
-            uint16_t own_port,
-            int8_t devIndex,
-            const std::string& logPath,
-            std::vector<Microservice *> services
+        const std::string &name,
+        uint16_t own_port,
+        int8_t devIndex,
+        std::string logPath,
+        RUNMODE runmode,
+        const json &profiling_configs
     );
 };
 
 class YoloV5DataSource : public ContainerAgent {
 public:
     YoloV5DataSource(
-            const std::string &name,
-            uint16_t own_port,
-            int8_t devIndex,
-            const std::string& logPath,
-            std::vector<Microservice *> services
+        const std::string &name,
+        uint16_t own_port,
+        int8_t devIndex,
+        std::string logPath,
+        RUNMODE runmode,
+        const json &profiling_configs
     );
 };

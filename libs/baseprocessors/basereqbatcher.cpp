@@ -48,14 +48,51 @@ inline uint64_t getNumberAtIndex(const std::string& str, int index) {
     return 0; // Return 0 if the index is out of range
 }
 
+BaseReqBatcherConfigs BaseReqBatcher::loadConfigsFromJson(const json &jsonConfigs) {
+    BaseReqBatcherConfigs configs;
+
+    jsonConfigs.at("msvc_imgType").get_to(configs.msvc_imgType);
+    jsonConfigs.at("msvc_colorCvtType").get_to(configs.msvc_colorCvtType);
+    jsonConfigs.at("msvc_resizeInterpolType").get_to(configs.msvc_resizeInterpolType);
+    std::string normVal;
+    jsonConfigs.at("msvc_imgNormScale").get_to(normVal);
+    msvc_imgNormScale = fractionToFloat(normVal);
+    jsonConfigs.at("msvc_subVals").get_to(configs.msvc_subVals);
+    jsonConfigs.at("msvc_divVals").get_to(configs.msvc_divVals);
+    return configs;
+}
+
+/**
+ * @brief Load the configurations from the json file
+ * 
+ * @param jsonConfigs 
+ * @param isConstructing
+ * 
+ * @note The function is called from the constructor or when the microservice is to be reloaded
+ */
+void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    // Load the configs from the json file for Microservice class
+    if (!isConstructing) { // If the function is not called from the constructor
+        Microservice::loadConfigs(jsonConfigs, true);
+    }
+
+    BaseReqBatcherConfigs configs = loadConfigsFromJson(jsonConfigs);
+
+    msvc_imgType = configs.msvc_imgType;
+    msvc_colorCvtType = configs.msvc_colorCvtType;
+    msvc_resizeInterpolType = configs.msvc_resizeInterpolType;
+    msvc_imgNormScale = configs.msvc_imgNormScale;
+    msvc_subVals = configs.msvc_subVals;
+    msvc_divVals = configs.msvc_divVals;
+}
 
 /**
  * @brief Construct a new Base Preprocessor that inherites the LocalGPUDataMicroservice given the `InType`
  * 
  * @param configs 
  */
-BaseReqBatcher::BaseReqBatcher(const BaseMicroserviceConfigs &configs) : Microservice(configs){
-    readConfigsFromJson(configs.msvc_appLvlConfigs);
+BaseReqBatcher::BaseReqBatcher(const json &jsonConfigs) : Microservice(jsonConfigs){
+    loadConfigs(jsonConfigs);
     info("{0:s} is created.", msvc_name); 
 }
 
@@ -407,23 +444,4 @@ bool BaseReqBatcher::isTimeToBatch() {
  */
 bool BaseReqBatcher::checkReqEligibility(ClockType currReq_gentime) {
     return true;
-}
-
-void BaseReqBatcher::readConfigsFromJson(std::string cfgPath) {
-    spdlog::trace("{0:s} attempts to parse Config from json file.", __func__);
-    std::ifstream file(cfgPath);
-    json j = json::parse(file);
-
-    j.at("msvc_imgType").get_to(msvc_imgType);
-    j.at("msvc_colorCvtType").get_to(msvc_colorCvtType);
-    j.at("msvc_resizeInterpolType").get_to(msvc_resizeInterpolType);
-    std::string normVal;
-    j.at("msvc_imgNormScale").get_to(normVal);
-    msvc_imgNormScale = fractionToFloat(normVal);
-
-    // Assuming msvc_subVals and msvc_divVals are std::vector<double>
-    j.at("msvc_subVals").get_to(msvc_subVals);
-    j.at("msvc_divVals").get_to(msvc_divVals);
-
-    spdlog::trace("{0:s} finished parsing Config from file.", __func__);
 }

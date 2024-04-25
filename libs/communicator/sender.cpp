@@ -1,13 +1,28 @@
 #include "sender.h"
 
+SenderConfigs Sender::loadConfigsFromJson(const json &jsonConfigs) {
+    SenderConfigs configs;
+    return configs;
+}
 
-Sender::Sender(const BaseMicroserviceConfigs &configs) : Microservice(
-        configs) {
+void Sender::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    
+    if (!isConstructing) { //If this is not called from the constructor, we need to load the configs for Sender's base, Micrsoservice class
+        Microservice::loadConfigs(jsonConfigs);
+    }
+
+    SenderConfigs configs = loadConfigsFromJson(jsonConfigs);
+    
     stubs = std::vector<std::unique_ptr<DataTransferService::Stub>>();
     stubs.push_back(
-            DataTransferService::NewStub(grpc::CreateChannel(configs.msvc_dnstreamMicroservices.front().link[0], grpc::InsecureChannelCredentials())));
+            DataTransferService::NewStub(grpc::CreateChannel(dnstreamMicroserviceList.front().link[0], grpc::InsecureChannelCredentials())));
     multipleStubs = false;
     READY = true;
+} 
+
+Sender::Sender(const json &jsonConfigs) : Microservice(jsonConfigs) {
+    loadConfigs(jsonConfigs, true);
+    
 }
 
 
@@ -28,9 +43,10 @@ Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc
     }
 }
 
-GPUSender::GPUSender(const BaseMicroserviceConfigs &configs) : Sender(configs) {
+GPUSender::GPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
     addToName("sender", "GPU");
     tagToGpuPointer = std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *>();
+    spdlog::trace("{0:s} GPUSender is created.", msvc_name);
 }
 
 void GPUSender::Process() {
@@ -112,9 +128,9 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Empt
     }
 }
 
-LocalCPUSender::LocalCPUSender(const BaseMicroserviceConfigs &configs) : Sender(
-        configs) {
+LocalCPUSender::LocalCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
             addToName("sender", "LocalCPU");
+            spdlog::trace("{0:s} LocalCPUSender is created.", msvc_name);
         }
 
 void LocalCPUSender::Process() {
@@ -171,9 +187,9 @@ std::string LocalCPUSender::SendSharedMemory(const std::vector<RequestData<Local
     return HandleRpcs(rpc, cq, reply, status);
 }
 
-RemoteCPUSender::RemoteCPUSender(const BaseMicroserviceConfigs &configs) : Sender(
-        configs) {
+RemoteCPUSender::RemoteCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
             addToName("sender", "RemoteCPU");
+            spdlog::trace("{0:s} RemoteCPUSender is created.", msvc_name);
         }
 
 void RemoteCPUSender::Process() {

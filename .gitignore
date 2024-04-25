@@ -31,6 +31,7 @@ cmake-build-debug/
 cmake-build-default/
 models/
 model_profile/
+logs/
 
 data
 curve

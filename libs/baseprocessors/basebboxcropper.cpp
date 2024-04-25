@@ -2,7 +2,14 @@
 
 using namespace spdlog;
 
-BaseBBoxCropper::BaseBBoxCropper(const BaseMicroserviceConfigs &configs) : Microservice(configs) {
+void BaseBBoxCropper::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    if (!isConstructing) { // If this is not called from the constructor
+        Microservice::loadConfigs(jsonConfigs, isConstructing);
+    }
+}
+
+BaseBBoxCropper::BaseBBoxCropper(const json &jsonConfigs) : Microservice(jsonConfigs) {
+    loadConfigs(jsonConfigs, true);
     info("{0:s} is created.", msvc_name); 
 }
 

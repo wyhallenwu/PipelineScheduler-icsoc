@@ -9,7 +9,7 @@ class DataReader : public Microservice {
 public:
     //msvc_idealBatchSize is used for the wait time, where 33 equals ~30.3 fps
     //the link to the upstream microservice is used to specify the file location
-    DataReader(const BaseMicroserviceConfigs &config);
+    DataReader(const json &jsonConfigs);
 
     ~DataReader() override {
         source.release();
@@ -19,6 +19,8 @@ public:
         std::thread handler(&DataReader::Process, this);
         handler.detach();
     }
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing) override;
 
 private:
     void Process();

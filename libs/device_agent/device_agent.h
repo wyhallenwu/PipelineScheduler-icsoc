@@ -24,12 +24,13 @@ ABSL_DECLARE_FLAG(std::string, deviceType);
 ABSL_DECLARE_FLAG(std::string, controller_url);
 
 typedef std::tuple<
-        std::string, // name
-        MicroserviceType, // type
-        QueueLengthType, // queue length type
-        int16_t, // class of interests
-        std::vector<RequestDataShapeType>, //data shape
-        QueueLengthType
+    std::string, // container name
+    std::string, // name
+    MicroserviceType, // type
+    QueueLengthType, // queue length type
+    int16_t, // class of interests
+    std::vector<RequestDataShapeType>, //data shape
+    QueueLengthType
 > MsvcConfigTupleType;
 
 struct ContainerHandle {

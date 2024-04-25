@@ -79,15 +79,11 @@ void DeviceAgent::CreateYolo5Container(
 ) {
     std::string name = "yolov5_" + std::to_string(id);
     json j = createConfigs(
-            {{name + "::receiver",                 MicroserviceType::Receiver,                 10, -1, {{-1, -1}},                    100},
-             {name +
-              "::PreprocessBatcher",               MicroserviceType::PreprocessBatcher,        10, -1, {{-1, -1,  -1}},               10},
-             {name +
-              "::TRTInferencer",                   MicroserviceType::TRTInferencer,            10, -1, {{3,  640, 640}},              10},
-             {name +
-              "::PostprocessorBBoxCropper",        MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{1}, {100, 4}, {100}, {100}}, 100},
-             {name +
-              "::sender",                          MicroserviceType::Sender,                   10, -1, {{-1, -1}},                    10}},
+            {{name, name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{-1, -1}}, 100},
+             {name, name + "::PreprocessBatcher",  MicroserviceType::PreprocessBatcher,  10, -1, {{-1, -1, -1}}, 10},
+             {name, name + "::TRTInferencer",     MicroserviceType::TRTInferencer,     10, -1, {{3, 640, 640}}, 10},
+             {name, name + "::PostprocessorBBoxCropper", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{1},{100,4},{100},{100}}, 100},
+             {name, name + "::sender",        MicroserviceType::Sender,        10, -1, {{-1, -1}}, 10}},
             slo,
             batchSize,
             logPath,
@@ -109,13 +105,13 @@ void DeviceAgent::CreateDataSource(
     std::string name = "datasource_" + std::to_string(id);
     NeighborMicroserviceConfigs upstream = {"video_source", CommMethod::localCPU, {video_path}, 0, -2, {{0, 0}}};
     json j = createConfigs(
-            {{name + "::data_reader", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{0, 0}}, 100},
-             {name + "::sender",      MicroserviceType::Sender,                   10, -1, {{0, 0}}, 100}},
-            slo,
-            1,
-            logPath,
-            upstream,
-            downstreams
+        {{name, name + "::data_reader", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{0, 0}}, 100},
+         {name, name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}, 100}},
+        slo,
+        1,
+        logPath,
+        upstream,
+        downstreams
     );
     finishContainer("./Container_DataSource", name, to_string(j), CONTAINER_BASE_PORT + containers.size(),
                     RECEIVER_BASE_PORT + containers.size());
@@ -134,24 +130,22 @@ json DeviceAgent::createConfigs(
     NeighborMicroserviceConfigs upstream = prev_msvc;
     for (auto &msvc: data) {
         std::list<NeighborMicroserviceConfigs> downstream;
-        if (std::get<1>(msvc) == MicroserviceType::PostprocessorBBoxCropper) {
+        if (std::get<2>(msvc) == MicroserviceType::PostprocessorBBoxCropper) {
             while (--j > 0) {
                 downstream.push_back(
-                        {std::get<0>(data[i + j]), CommMethod::localGPU, {""}, std::get<2>(data[i + j]),
-                         std::get<3>(data[i + j]), std::get<4>(data[i + j])});
+                        {std::get<1>(data[i + j]), CommMethod::localGPU, {""}, std::get<3>(data[i + j]),
+                         std::get<4>(data[i + j]), std::get<5>(data[i + j])});
             }
-        } else if (std::get<1>(msvc) == MicroserviceType::Sender) {
+        } else if (std::get<2>(msvc) == MicroserviceType::Sender) {
             downstream.push_back(next_msvc[j++]);
         } else {
             downstream.push_back(
-                    {std::get<0>(data[++i]), CommMethod::localGPU, {""}, std::get<2>(data[i]), std::get<3>(data[i]),
-                     std::get<4>(data[i])});
+                    {std::get<1>(data[++i]), CommMethod::localGPU, {""}, std::get<3>(data[i]), std::get<4>(data[i]),
+                     std::get<5>(data[i])});
         }
-        configs.push_back(
-                {std::get<0>(msvc), std::get<1>(msvc), "", slo, std::get<5>(msvc), batchSize, std::get<4>(msvc), -1,
-                 logPath, RUNMODE::DEPLOYMENT, {upstream}, downstream});
-        //current msvc becomes upstream for next msvc
-        upstream = {std::get<0>(msvc), CommMethod::localGPU, {""}, std::get<2>(msvc), -2, std::get<4>(msvc)};
+        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), std::get<2>(msvc), "", slo, std::get<6>(msvc), batchSize, std::get<5>(msvc), -1, logPath, RUNMODE::DEPLOYMENT, {upstream}, downstream});
+        //current mvsc becomes upstream for next msvc
+        upstream = {std::get<1>(msvc), CommMethod::localGPU, {""}, std::get<3>(msvc), -2, std::get<5>(msvc)};
     }
     return json(configs);
 }

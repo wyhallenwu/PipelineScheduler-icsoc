@@ -12,9 +12,16 @@ using boost::interprocess::read_only;
 using boost::interprocess::open_only;
 using json = nlohmann::json;
 
+struct ReceiverConfigs : BaseMicroserviceConfigs {
+    uint16_t msvc_numWarmUpBatches;
+    uint16_t msvc_numProfileBatches;
+    uint8_t msvc_inputRandomizeScheme;
+    std::string msvc_dataShape;
+};
+
 class Receiver : public Microservice {
 public:
-    Receiver(const BaseMicroserviceConfigs &configs);
+    Receiver(const json &jsonConfigs);
 
     ~Receiver() override {
         server->Shutdown();
@@ -36,7 +43,12 @@ public:
         handler.detach();
     }
 
+    ReceiverConfigs loadConfigsFromJson(const json &jsonConfigs);
+
+    void loadConfigs(const json &jsonConfigs, bool isConstructing = true);
+
 protected:
+
     void readConfigsFromJson(std::string cfgPath) {
         spdlog::trace("{0:s} attempts to parse Profiling configs from json file.", __func__);
         std::ifstream file(cfgPath);

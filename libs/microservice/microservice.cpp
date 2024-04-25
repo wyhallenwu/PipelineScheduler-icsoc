@@ -1,13 +1,36 @@
 #include<microservice.h>
-#include<opencv2/opencv.hpp>
 
-/**
- * @brief Construct a new Microservice< In Type>:: Microservice object
- * 
- * @tparam InType 
- * @param configs 
- */
-Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
+using namespace msvcconfigs;
+
+void msvcconfigs::from_json(const json &j, msvcconfigs::NeighborMicroserviceConfigs &val) {
+    j.at("nb_name").get_to(val.name);
+    j.at("nb_commMethod").get_to(val.commMethod);
+    j.at("nb_link").get_to(val.link);
+    j.at("nb_maxQueueSize").get_to(val.maxQueueSize);
+    j.at("nb_classOfInterest").get_to(val.classOfInterest);
+    j.at("nb_expectedShape").get_to(val.expectedShape);
+}
+
+void msvcconfigs::from_json(const json &j, msvcconfigs::BaseMicroserviceConfigs &val) {
+    j.at("msvc_contName").get_to(val.msvc_contName);
+    j.at("msvc_name").get_to(val.msvc_name);
+    j.at("msvc_type").get_to(val.msvc_type);
+    j.at("msvc_appLvlConfigs").get_to(val.msvc_appLvlConfigs);
+    j.at("msvc_svcLevelObjLatency").get_to(val.msvc_svcLevelObjLatency);
+    j.at("msvc_idealBatchSize").get_to(val.msvc_idealBatchSize);
+    j.at("msvc_maxQueueSize").get_to(val.msvc_maxQueueSize);
+    j.at("msvc_dataShape").get_to(val.msvc_dataShape);
+    j.at("msvc_deviceIndex").get_to(val.msvc_deviceIndex);
+    j.at("msvc_containerLogPath").get_to(val.msvc_containerLogPath);
+    j.at("msvc_RUNMODE").get_to(val.msvc_RUNMODE);
+    j.at("msvc_upstreamMicroservices").get_to(val.msvc_upstreamMicroservices);
+    j.at("msvc_dnstreamMicroservices").get_to(val.msvc_dnstreamMicroservices);
+}
+
+void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    BaseMicroserviceConfigs configs = jsonConfigs.get<BaseMicroserviceConfigs>();
+
+    msvc_containerName = configs.msvc_contName;
     msvc_idealBatchSize = configs.msvc_idealBatchSize;
     msvc_dataShape = configs.msvc_dataShape;
     msvc_name = configs.msvc_name;
@@ -42,12 +65,23 @@ Microservice::Microservice(const BaseMicroserviceConfigs &configs) {
 
     for (it = configs.msvc_upstreamMicroservices.begin(); it != configs.msvc_upstreamMicroservices.end(); ++it) {
         NeighborMicroservice upStreamMsvc = NeighborMicroservice(*it, nummsvc_upstreamMicroservices++);
+        upstreamMicroserviceList.emplace_back(upStreamMsvc);
         if (it->commMethod == CommMethod::localCPU) {
             msvc_activeInQueueIndex.emplace_back(1);
         } else if (it->commMethod == CommMethod::localGPU) {
             msvc_activeInQueueIndex.emplace_back(2);
         }
     }
+}
+
+/**
+ * @brief Construct a new Microservice< In Type>:: Microservice object
+ * 
+ * @tparam InType 
+ * @param configs 
+ */
+Microservice::Microservice(const json &jsonConfigs) {
+    this->loadConfigs(jsonConfigs);
 }
 
 /**

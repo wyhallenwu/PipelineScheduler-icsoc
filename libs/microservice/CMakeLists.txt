@@ -27,6 +27,7 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 # Only public header files go here.
 set(
         HEADER_FILES 
+        ../json/json.h
         microservice.h
 )
 

@@ -1,3 +1,6 @@
+#ifndef BASEPROCESSOR_H
+#define BASEPROCESSOR_H
+
 #include <microservice.h>
 #include <opencv2/core/cuda.hpp>
 #include <cuda_runtime.h>
@@ -45,10 +48,36 @@ cv::cuda::GpuMat cvtHWCToCHW(
     uint8_t IMG_TYPE = 16 //CV_8UC3
 );
 
+/**
+ * @brief 
+ * 
+ */
+struct BaseReqBatcherConfigs : BaseMicroserviceConfigs{
+    uint8_t msvc_imgType = 16; //CV_8UC3
+    uint8_t msvc_colorCvtType = 4; //CV_BGR2RGB
+    uint8_t msvc_resizeInterpolType = 3; //INTER_AREA
+    float msvc_imgNormScale = 1.f / 255.f;
+    std::array<float, 3> msvc_subVals = {0.f, 0.f, 0.f};
+    std::array<float, 3> msvc_divVals = {1.f, 1.f, 1.f};
+};
+
+/**
+ * @brief 
+ * 
+ */
+struct BaseBatchInferencerConfigs : BaseMicroserviceConfigs {
+    TRTConfigs msvc_engineConfigs;
+    Engine* msvc_inferenceEngine;
+};
+
+struct BaseBBoxCropperConfigs : BaseMicroserviceConfigs {
+    RequestShapeType msvc_inferenceShape;
+};
+
 
 class BaseReqBatcher : public Microservice {
 public:
-    BaseReqBatcher(const BaseMicroserviceConfigs &configs);
+    BaseReqBatcher(const json &jsonConfigs);
     ~BaseReqBatcher() = default;
 
     virtual void batchRequests();
@@ -56,28 +85,20 @@ public:
 
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread batcher(&BaseReqBatcher::batchRequestsProfiling, this);
             batcher.detach();
             return;
         }
+        spdlog::trace("{0:s} dispatching batching thread.", __func__);
         std::thread batcher(&BaseReqBatcher::batchRequests, this);
         batcher.detach();
     }
-protected:
-    /**
-     * @brief 
-     * 
-     */
-    struct BaseReqBatcherConfigs {
-        uint8_t msvc_imgType = 16; //CV_8UC3
-        uint8_t msvc_colorCvtType = 4; //CV_BGR2RGB
-        uint8_t msvc_resizeInterpolType = 3; //INTER_AREA
-        float msvc_imgNormScale = 1.f / 255.f;
-        std::array<float, 3> msvc_subVals = {0.f, 0.f, 0.f};
-        std::array<float, 3> msvc_divVals = {1.f, 1.f, 1.f};
-    };
 
-    void readConfigsFromJson(std::string cfgPath);
+    BaseReqBatcherConfigs loadConfigsFromJson(const json &jsonConfigs);
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
+protected:
 
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
@@ -95,7 +116,7 @@ typedef uint16_t BatchSizeType;
 
 class BaseBatchInferencer : public Microservice {
 public:
-    BaseBatchInferencer(const BaseMicroserviceConfigs &configs);
+    BaseBatchInferencer(const json &jsonConfigs);
     ~BaseBatchInferencer() = default;
     virtual void inference();
     virtual void inferenceProfiling();
@@ -105,20 +126,22 @@ public:
 
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread inferencer(&BaseBatchInferencer::inferenceProfiling, this);
             inferencer.detach();
             return;
         }
+        spdlog::trace("{0:s} dispatching inference thread.", __func__);
         std::thread inferencer(&BaseBatchInferencer::inference, this);
         inferencer.detach();
     }
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 protected:
     BatchSizeType msvc_onBufferBatchSize;
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
     TRTConfigs msvc_engineConfigs;
     Engine* msvc_inferenceEngine;
-
-    TRTConfigs readConfigsFromJson(const std::string cfgPath);
 
     bool checkReqEligibility(ClockType currReq_genTime) override;
 };
@@ -155,7 +178,7 @@ void cropOneBox(
 
 class BaseBBoxCropper : public Microservice {
 public:
-    BaseBBoxCropper(const BaseMicroserviceConfigs &configs);
+    BaseBBoxCropper(const json &jsonConfigs);
     ~BaseBBoxCropper() = default;
 
     void cropping();
@@ -175,13 +198,17 @@ public:
 
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread postprocessor(&BaseBBoxCropper::cropProfiling, this);
             postprocessor.detach();
             return;
         }
+        spdlog::trace("{0:s} dispatching cropping thread.", __func__);
         std::thread postprocessor(&BaseBBoxCropper::cropping, this);
         postprocessor.detach();
     }
+
+    void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
 protected:
     RequestShapeType msvc_inferenceShape;
@@ -245,3 +272,5 @@ public:
         extractor.detach();
     }
 };
+
+#endif //BASEPROCESSOR_H
