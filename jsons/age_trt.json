@@ -1,0 +1,10 @@
+{
+    "calibration": "",
+    "di": 0,
+    "mbs": 1,
+    "cbs":1, 
+    "normalize": true,
+    "obs": 1,
+    "path": "../models/age_dynamic_3090_fp32_20_1.engine",
+    "prec": 4
+}
