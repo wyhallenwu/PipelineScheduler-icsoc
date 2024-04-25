@@ -57,8 +57,6 @@ set(PROJECT_PREFIX controller)
 
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
-set(device_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../device_agent")
-find_package(device_agent CONFIG REQUIRED)
 
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html

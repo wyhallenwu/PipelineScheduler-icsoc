@@ -119,8 +119,8 @@ add_subdirectory(libs/retinaface)
 add_subdirectory(libs/arcface)
 add_subdirectory(libs/movenet)
 add_subdirectory(libs/emotionnet)
-add_subdirectory(libs/device_agent)
 add_subdirectory(libs/controller)
+add_subdirectory(libs/device_agent)
 
 # add_library(PipePlusPlus
 #         src/main.cpp)

@@ -34,7 +34,6 @@ using grpc::Status;
 using grpc::CompletionQueue;
 using grpc::ClientContext;
 using grpc::ClientAsyncResponseReader;
-using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
@@ -132,7 +131,7 @@ protected:
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
     InDeviceCommunication::AsyncService service;
-    std::unique_ptr<Server> server;
+    std::unique_ptr<grpc::Server> server;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     std::atomic<bool> run;
 

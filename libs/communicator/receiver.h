@@ -5,7 +5,6 @@
 #include <fstream>
 #include <random>
 
-using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
@@ -124,7 +123,7 @@ private:
 
     std::unique_ptr<ServerCompletionQueue> cq;
     DataTransferService::AsyncService service;
-    std::unique_ptr<Server> server;
+    std::unique_ptr<grpc::Server> server;
 };
 
 #endif //PIPEPLUSPLUS_RECEIVER_H

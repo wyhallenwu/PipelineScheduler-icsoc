@@ -64,6 +64,9 @@ find_package(microservice CONFIG REQUIRED)
 set(container_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../container_agent")
 find_package(container_agent CONFIG REQUIRED)
 
+set(controller_DIR "${CMAKE_CURRENT_BINARY_DIR}/../controller")
+find_package(controller CONFIG REQUIRED)
+
 set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
 find_package(misc CONFIG REQUIRED)
 
@@ -92,6 +95,7 @@ target_link_libraries(device_agent
         microservice
         misc
         container_agent
+        controller
 )
 
 # Here we configure variables specifying the target directories.
