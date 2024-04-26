@@ -2,6 +2,17 @@
 
 using namespace spdlog;
 
+inline cv::Scalar vectorToScalar(const std::vector<float>& vec) {
+    // Ensure the vector has exactly 4 elements
+    if (vec.size() == 1) {
+        return cv::Scalar(vec[0]);
+    } else if (vec.size() == 3) {
+        return cv::Scalar(vec[0], vec[1], vec[2]);
+    } else {
+        throw std::runtime_error("Unsupported number of channels");
+    }
+}
+
 /**
  * @brief normalize the input data by subtracting and dividing values from the original pixesl
  * 
@@ -13,17 +24,25 @@ using namespace spdlog;
 cv::cuda::GpuMat normalize(
     cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream,
-    const std::array<float, 3>& subVals,
-    const std::array<float, 3>& divVals,
+    const std::vector<float>& subVals,
+    const std::vector<float>& divVals,
     const float normalized_scale
 ) {
     trace("Going into {0:s}", __func__);
     cv::cuda::GpuMat normalized;
-    input.convertTo(normalized, CV_32FC3, normalized_scale, stream);
+    if (input.channels() == 1) {
+        input.convertTo(normalized, CV_32FC1, normalized_scale, stream);
+        cv::cuda::subtract(normalized, vectorToScalar(subVals), normalized, cv::noArray(), -1, stream);
+        cv::cuda::divide(normalized, vectorToScalar(divVals), normalized, 1, -1, stream);
+    } else if (input.channels() == 3) {
+        input.convertTo(normalized, CV_32FC3, normalized_scale, stream);    
+        cv::cuda::subtract(normalized, vectorToScalar(subVals), normalized, cv::noArray(), -1, stream);
+        cv::cuda::divide(normalized, vectorToScalar(divVals), normalized, 1, -1, stream);
+    } else {
+        throw std::runtime_error("Unsupported number of channels");
+    }
+
     stream.waitForCompletion();
-    
-    cv::cuda::subtract(normalized, cv::Scalar(subVals[0], subVals[1], subVals[2]), normalized, cv::noArray(), -1);
-    cv::cuda::divide(normalized, cv::Scalar(divVals[0], divVals[1], divVals[2]), normalized, 1, -1);
     trace("Finished {0:s}", __func__);
 
     return normalized;
@@ -45,15 +64,27 @@ cv::cuda::GpuMat cvtHWCToCHW(
      * cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
      */
     // cv::cuda::GpuMat transposed(height, width, CV_8UC3);
-    cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
-    uint8_t IMG_SINGLE_CHANNEL_TYPE = IMG_TYPE ^ 16;
-    size_t channel_mem_width = height * width;
-    std::vector<cv::cuda::GpuMat> channels {
-        cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[0])),
-        cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width])),
-        cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width * 2]))
-    };
+    cv::cuda::GpuMat transposed(1, height * width, IMG_TYPE);
+    std::vector<cv::cuda::GpuMat> channels;
+    if (input.channels() == 1) {
+        uint8_t IMG_SINGLE_CHANNEL_TYPE = IMG_TYPE;
+        channels = {
+            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[0]))
+        };
+    } else if (input.channels() == 3) {
+        uint8_t IMG_SINGLE_CHANNEL_TYPE = IMG_TYPE ^ 16;
+        size_t channel_mem_width = height * width;
+        
+        channels = {
+            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[0])),
+            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width])),
+            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width * 2]))
+        };
+    } else {
+        throw std::runtime_error("Unsupported number of channels");
+    }
     cv::cuda::split(input, channels, stream);
+
     stream.waitForCompletion();    
 
     trace("Finished {0:s}", __func__);
@@ -74,7 +105,7 @@ cv::cuda::GpuMat resizePadRightBottom(
     cv::cuda::GpuMat &input,
     const size_t height,
     const size_t width,
-    const cv::Scalar &bgcolor,
+    const std::vector<float> &bgcolor,
     cv::cuda::Stream &stream,
     uint8_t IMG_TYPE,
     uint8_t COLOR_CVT_TYPE,
@@ -92,7 +123,7 @@ cv::cuda::GpuMat resizePadRightBottom(
     //Create a new GPU Mat 
     cv::cuda::GpuMat resized(unpad_h, unpad_w, IMG_TYPE);
     cv::cuda::resize(rgb_img, resized, resized.size(), 0, 0, RESIZE_INTERPOL_TYPE, stream);
-    cv::cuda::GpuMat out(height, width, IMG_TYPE, bgcolor);
+    cv::cuda::GpuMat out(height, width, IMG_TYPE, vectorToScalar(bgcolor));
     // Creating an opencv stream for asynchronous operation on cuda
     resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
 

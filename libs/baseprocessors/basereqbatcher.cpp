@@ -211,7 +211,7 @@ void BaseReqBatcher::batchRequests() {
             currReq.req_data[0].data,
             (this->msvc_outReqShape.at(0))[0][1],
             (this->msvc_outReqShape.at(0))[0][2],
-            cv::Scalar(128, 128, 128),
+            {128, 128, 128},
             *preProcStream,
             msvc_imgType,
             msvc_colorCvtType,
@@ -223,7 +223,7 @@ void BaseReqBatcher::batchRequests() {
         data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
         trace("{0:s} finished resizing a frame", msvc_name);
-        data.shape = RequestDataShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
+        data.shape = RequestDataShapeType({(this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
         bufferData.emplace_back(data);
         trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
 
@@ -372,7 +372,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
             currReq.req_data[0].data,
             (this->msvc_outReqShape.at(0))[0][1],
             (this->msvc_outReqShape.at(0))[0][2],
-            cv::Scalar(128, 128, 128),
+            {128, 128, 128},
             *preProcStream,
             msvc_imgType,
             msvc_colorCvtType,
