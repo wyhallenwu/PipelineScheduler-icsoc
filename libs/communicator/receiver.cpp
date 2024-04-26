@@ -327,7 +327,6 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 // This can be run in multiple threads if needed.
 void Receiver::HandleRpcs() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
     new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount);
     new SharedMemoryRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount);
     new SerializedDataRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount);
@@ -340,6 +339,11 @@ void Receiver::HandleRpcs() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                setDevice();
+                RELOADING = false;
+                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+            }
             ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
