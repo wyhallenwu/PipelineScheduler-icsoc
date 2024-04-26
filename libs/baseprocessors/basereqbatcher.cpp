@@ -30,14 +30,16 @@ inline cv::cuda::GpuMat normalize(
 ) {
     trace("Going into {0:s}", __func__);
     cv::cuda::GpuMat normalized;
+    cv::Scalar subValsScalar = vectorToScalar(subVals);
+    cv::Scalar divValsScalar = vectorToScalar(divVals);
     if (input.channels() == 1) {
         input.convertTo(normalized, CV_32FC1, normalized_scale, stream);
-        cv::cuda::subtract(normalized, vectorToScalar(subVals), normalized, cv::noArray(), -1, stream);
-        cv::cuda::divide(normalized, vectorToScalar(divVals), normalized, 1, -1, stream);
+        cv::cuda::subtract(normalized, subValsScalar, normalized, cv::noArray(), -1, stream);
+        cv::cuda::divide(normalized, divValsScalar, normalized, 1, -1, stream);
     } else if (input.channels() == 3) {
         input.convertTo(normalized, CV_32FC3, normalized_scale, stream);    
-        cv::cuda::subtract(normalized, vectorToScalar(subVals), normalized, cv::noArray(), -1, stream);
-        cv::cuda::divide(normalized, vectorToScalar(divVals), normalized, 1, -1, stream);
+        cv::cuda::subtract(normalized, subValsScalar, normalized, cv::noArray(), -1, stream);
+        cv::cuda::divide(normalized, divValsScalar, normalized, 1, -1, stream);
     } else {
         throw std::runtime_error("Unsupported number of channels");
     }
@@ -187,7 +189,7 @@ BaseReqBatcherConfigs BaseReqBatcher::loadConfigsFromJson(const json &jsonConfig
     jsonConfigs.at("msvc_resizeInterpolType").get_to(configs.msvc_resizeInterpolType);
     std::string normVal;
     jsonConfigs.at("msvc_imgNormScale").get_to(normVal);
-    msvc_imgNormScale = fractionToFloat(normVal);
+    configs.msvc_imgNormScale = fractionToFloat(normVal);
     jsonConfigs.at("msvc_subVals").get_to(configs.msvc_subVals);
     jsonConfigs.at("msvc_divVals").get_to(configs.msvc_divVals);
     return configs;
