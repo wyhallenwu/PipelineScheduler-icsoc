@@ -25,7 +25,7 @@ inline std::string getTimeDifString(const ClockType &start, const ClockType &end
 
 inline cv::Scalar vectorToScalar(const std::vector<float>& vec);
 
-cv::cuda::GpuMat resizePadRightBottom(
+inline cv::cuda::GpuMat resizePadRightBottom(
     cv::cuda::GpuMat &input,
     size_t height,
     size_t width,
@@ -36,7 +36,7 @@ cv::cuda::GpuMat resizePadRightBottom(
     uint8_t RESIZE_INTERPOL_TYPE = 3 //INTER_AREA
 );
 
-cv::cuda::GpuMat normalize(
+inline cv::cuda::GpuMat normalize(
     cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
     const std::vector<float>& subVals = {0.f, 0.f, 0.f},
@@ -44,7 +44,7 @@ cv::cuda::GpuMat normalize(
     const float normalized_scale = 1.f / 255.f
 );
 
-cv::cuda::GpuMat cvtHWCToCHW(
+inline cv::cuda::GpuMat cvtHWCToCHW(
     cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
     uint8_t IMG_TYPE = 16 //CV_8UC3
@@ -158,7 +158,7 @@ protected:
  *                      [x1, y1, x2, y2] (e.g., [0, 266, 260, 447])
  * @return cv::cuda::GpuMat
  */
-void crop(
+inline void crop(
     const cv::cuda::GpuMat &image,
     int orig_h,
     int orig_w,
@@ -169,7 +169,7 @@ void crop(
     std::vector<cv::cuda::GpuMat> &croppedBBoxes
 );
 
-void cropOneBox(
+inline void cropOneBox(
     const cv::cuda::GpuMat &image,
     int infer_h,
     int infer_w,
