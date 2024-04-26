@@ -208,7 +208,7 @@ public:
         postprocessor.detach();
     }
 
-    void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
 protected:
     RequestShapeType msvc_inferenceShape;

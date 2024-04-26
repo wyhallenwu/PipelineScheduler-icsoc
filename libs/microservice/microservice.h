@@ -434,6 +434,8 @@ public:
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false);
 
+    bool RELOADING = true;
+
     std::ofstream msvc_logFile;
 
 protected:

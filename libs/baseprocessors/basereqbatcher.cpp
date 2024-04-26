@@ -98,7 +98,6 @@ BaseReqBatcher::BaseReqBatcher(const json &jsonConfigs) : Microservice(jsonConfi
 
 void BaseReqBatcher::batchRequests() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -133,7 +132,7 @@ void BaseReqBatcher::batchRequests() {
     // Batch size of current request
     BatchSizeType currReq_batchSize;
     info("{0:s} STARTS.", msvc_name); 
-    cv::cuda::Stream preProcStream;
+    cv::cuda::Stream *preProcStream;
     READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -142,6 +141,20 @@ void BaseReqBatcher::batchRequests() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                delete preProcStream;
+                setDevice();
+                preProcStream = new cv::cuda::Stream();
+
+                outReq_genTime.clear();
+                outReq_path.clear();
+                outReq_slo.clear();
+                bufferData.clear();
+                prevData.clear();
+
+                info("{0:s} is (RE)LOADED.", msvc_name);
+                RELOADING = false;
+            }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -199,15 +212,15 @@ void BaseReqBatcher::batchRequests() {
             (this->msvc_outReqShape.at(0))[0][1],
             (this->msvc_outReqShape.at(0))[0][2],
             cv::Scalar(128, 128, 128),
-            preProcStream,
+            *preProcStream,
             msvc_imgType,
             msvc_colorCvtType,
             msvc_resizeInterpolType
         );
 
-        data.data = cvtHWCToCHW(data.data, preProcStream, msvc_imgType);
+        data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
 
-        data.data = normalize(data.data, preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
+        data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
         trace("{0:s} finished resizing a frame", msvc_name);
         data.shape = RequestDataShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
@@ -246,7 +259,6 @@ void BaseReqBatcher::batchRequests() {
 
 void BaseReqBatcher::batchRequestsProfiling() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -281,7 +293,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
     // Batch size of current request
     BatchSizeType currReq_batchSize;
     info("{0:s} STARTS.", msvc_name); 
-    cv::cuda::Stream preProcStream;
+    cv::cuda::Stream *preProcStream;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
 
@@ -293,6 +305,20 @@ void BaseReqBatcher::batchRequestsProfiling() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                delete preProcStream;
+                setDevice();
+                preProcStream = new cv::cuda::Stream();
+
+                outReq_genTime.clear();
+                outReq_path.clear();
+                outReq_slo.clear();
+                bufferData.clear();
+                prevData.clear();
+
+                RELOADING = false;
+                info("{0:s} is (RE)LOADED.", msvc_name);
+            }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -347,15 +373,15 @@ void BaseReqBatcher::batchRequestsProfiling() {
             (this->msvc_outReqShape.at(0))[0][1],
             (this->msvc_outReqShape.at(0))[0][2],
             cv::Scalar(128, 128, 128),
-            preProcStream,
+            *preProcStream,
             msvc_imgType,
             msvc_colorCvtType,
             msvc_resizeInterpolType
         );
 
-        data.data = cvtHWCToCHW(data.data, preProcStream, msvc_imgType);
+        data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
 
-        data.data = normalize(data.data, preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
+        data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
         trace("{0:s} finished resizing a frame", msvc_name);
         data.shape = RequestDataShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
