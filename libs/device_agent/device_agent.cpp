@@ -168,6 +168,10 @@ void DeviceAgent::StopContainer(const ContainerHandle &container) {
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container.stub->AsyncStopExecution(&context, request, container.cq));
     rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(container.cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
 }
 
 void DeviceAgent::Ready(const std::string &name, const std::string &ip, DeviceType type) {
@@ -224,6 +228,10 @@ void DeviceAgent::ReportDeviceStatus() {
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             controller_stub->AsyncSendLightMetrics(&context, request, controller_sending_cq));
     rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(controller_sending_cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
 }
 
 void DeviceAgent::ReportFullMetrics() {
@@ -248,6 +256,10 @@ void DeviceAgent::ReportFullMetrics() {
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             controller_stub->AsyncSendFullMetrics(&context, request, controller_sending_cq));
     rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(controller_sending_cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
 }
 
 void DeviceAgent::HandleDeviceRecvRpcs() {

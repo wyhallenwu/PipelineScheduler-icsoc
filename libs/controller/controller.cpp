@@ -27,16 +27,38 @@ void Controller::HandleRecvRpcs() {
     }
 }
 
-void Controller::AddTask(std::string name, int slo, PipelineType type, std::string source, std::string device) {
+void Controller::AddTask(std::string name, int slo, PipelineType type, std::string source, std::string device_name) {
     tasks.insert({name, {slo, type, {}}});
+    TaskHandle *task = &tasks[name];
+    NodeHandle *device = &devices[device_name];
+    std::vector<std::string> models = getModelsByPipelineType(type);
+    microservices.insert({name.append(":datasource"), {DataSource, device, task, {}, {}}});
+    task->subtasks.insert({name.append(":datasource"), &microservices[name.append(":datasource")]});
+    device->microservices.insert({name.append(":datasource"), &microservices[name.append(":datasource")]});
+    device = &devices["server"];
+    for(const auto& m : models) {
+        std::string tmp = name.append(m);
+        microservices.insert({tmp, {MODEL_TYPES[m], device, task, {}, {}}});
+        task->subtasks.insert({tmp, &microservices[tmp]});
+        device->microservices.insert({tmp, &microservices[tmp]});
+    }
     switch (type) {
         case PipelineType::Traffic:
+            //more processing
             break;
         case PipelineType::Video_Call:
+            //more processing
             break;
         case PipelineType::Building_Security:
+            //more processing
             break;
     }
+
+
+    // void *got_tag;
+    // bool ok = false;
+    // GPR_ASSERT(device->cq->Next(&got_tag, &ok));
+    // GPR_ASSERT(ok);
 }
 
 void Controller::UpdateLightMetrics(google::protobuf::RepeatedPtrField<LightMetrics> metrics) {
@@ -107,6 +129,19 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     } else {
         GPR_ASSERT(status == FINISH);
         delete this;
+    }
+}
+
+std::vector<std::string> Controller::getModelsByPipelineType(PipelineType type) {
+    switch (type) {
+        case PipelineType::Traffic:
+            return {":yolov5", ":retinaface", ":arcface", ":cartype", ":plate"};
+        case PipelineType::Video_Call:
+            return {":retinaface", ":gender", ":age", ":emotion", ":arcface"};
+        case PipelineType::Building_Security:
+            return {":yolov5", ":retinaface", ":movenet", "gender", ":age"};
+        default:
+            return {};
     }
 }
 

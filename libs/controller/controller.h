@@ -29,10 +29,30 @@ enum DeviceType {
 };
 
 enum ModelType {
+    DataSource,
     Yolov5,
+    Yolov5Datasource,
     Arcface,
     Retinaface,
-    Yolov5_Plate
+    Yolov5_Plate,
+    Movenet,
+    Emotionnet,
+    Gender,
+    Age
+};
+
+std::map<std::string, ModelType> MODEL_TYPES = {
+        {":datasource", DataSource},
+        {":yolov5", Yolov5},
+        {":yolov5datasource", Yolov5Datasource},
+        {":retinaface", Retinaface},
+        {":arcface", Arcface},
+        {":cartype", Yolov5_Plate}, // Still needs to be finished
+        {":plate", Yolov5_Plate},
+        {":gender", Gender},
+        {":age", Age},
+        {":movenet", Movenet},
+        {":emotion", Emotionnet}
 };
 
 enum PipelineType {
@@ -75,13 +95,13 @@ private:
         DeviceType type;
         int num_processors; // number of processing units, general cores for Edge or GPUs for server
         unsigned long mem_size; // memory size in MB
-        std::vector<MicroserviceHandle *> microservices;
+        std::map<std::string, MicroserviceHandle*> microservices;
     };
 
     struct TaskHandle {
         int slo;
         PipelineType type;
-        std::vector<MicroserviceHandle *> subtasks;
+        std::map<std::string, MicroserviceHandle*> subtasks;
     };
 
     struct MicroserviceHandle {
@@ -156,6 +176,7 @@ private:
         ConnectionConfigs request;
     };
 
+    static std::vector<std::string> getModelsByPipelineType(PipelineType type);
 
     bool running;
     std::map<std::string, NodeHandle> devices;

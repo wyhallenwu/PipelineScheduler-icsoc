@@ -165,6 +165,10 @@ void ContainerAgent::ReportStart() {
             stub->AsyncReportMsvcStart(&context, request, sender_cq));
     Status status;
     rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
 }
 
 void ContainerAgent::SendState() {
@@ -181,6 +185,10 @@ void ContainerAgent::SendState() {
             stub->AsyncSendState(&context, request, sender_cq));
     Status status;
     rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
 }
 
 void ContainerAgent::HandleRecvRpcs() {
