@@ -76,6 +76,9 @@ struct BaseBBoxCropperConfigs : BaseMicroserviceConfigs {
     RequestShapeType msvc_inferenceShape;
 };
 
+struct BaseBBoxCropperVerifierConfigs : BaseBBoxCropperConfigs {
+};
+
 
 class BaseReqBatcher : public Microservice {
 public:
@@ -218,7 +221,7 @@ protected:
 
 class BaseBBoxCropperVerifier : public Microservice {
 public:
-    BaseBBoxCropperVerifier(const BaseMicroserviceConfigs &configs);
+    BaseBBoxCropperVerifier(const json& jsonConfigs);
     ~BaseBBoxCropperVerifier() = default;
 
     void cropping();
@@ -228,10 +231,14 @@ public:
 
     void cropProfiling();
 
-    void dispatchThread() override {
+    virtual void dispatchThread() override {
         std::thread postprocessor(&BaseBBoxCropperVerifier::cropping, this);
         postprocessor.detach();
     }
+
+    BaseBBoxCropperVerifierConfigs loadConfigsFromJson(const json &jsonConfigs);
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
 protected:
     RequestShapeType msvc_inferenceShape;
@@ -244,7 +251,7 @@ public:
 
     virtual void classify() ;
 
-    void dispatchThread() override {
+    virtual void dispatchThread() override {
         std::thread classifier(&BaseClassifier::classify, this);
         classifier.detach();
     }
@@ -269,7 +276,7 @@ public:
 
     virtual void extractor();
 
-    void dispatchThread() override {
+    virtual void dispatchThread() override {
         std::thread extractor(&BaseKPointExtractor::extractor, this);
         extractor.detach();
     }

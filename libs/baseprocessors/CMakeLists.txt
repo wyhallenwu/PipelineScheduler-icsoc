@@ -41,7 +41,7 @@ set(
         basebboxcropper.cpp
         # baseclassifier.cpp
         # basesoftmaxclassifier.cpp
-        # basebboxcropperverifier.cpp
+        basebboxcropperverifier.cpp
         # basekpointextractor.cpp
 )
 
