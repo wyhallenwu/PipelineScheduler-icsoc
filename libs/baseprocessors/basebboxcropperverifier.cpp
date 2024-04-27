@@ -8,6 +8,9 @@ BaseBBoxCropperVerifierConfigs BaseBBoxCropperVerifier::loadConfigsFromJson(cons
 }
 
 void BaseBBoxCropperVerifier::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    if (!isConstructing) { // If the microservice is being reloaded
+        Microservice::loadConfigs(jsonConfigs, isConstructing);
+    }
     BaseBBoxCropperVerifierConfigs configs = loadConfigsFromJson(jsonConfigs);
 
 }

@@ -9,6 +9,9 @@ BaseKPointExtractorConfigs BaseKPointExtractor::loadConfigsFromJson(const json &
 }
 
 void BaseKPointExtractor::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    if (!isConstructing) { // If the microservice is being reloaded
+        Microservice::loadConfigs(jsonConfigs, isConstructing);
+    }
     BaseKPointExtractorConfigs configs = loadConfigsFromJson(jsonConfigs);
 }
 

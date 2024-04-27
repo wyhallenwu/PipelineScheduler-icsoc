@@ -8,6 +8,9 @@ BaseClassifierConfigs BaseClassifier::loadConfigsFromJson(const json &jsonConfig
 }
 
 void BaseClassifier::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    if (!isConstructing) { // If the microservice is being reloaded
+        Microservice::loadConfigs(jsonConfigs, isConstructing);
+    }
     BaseClassifierConfigs configs = loadConfigsFromJson(jsonConfigs);
     msvc_numClasses = msvc_dataShape[0][0];
 }

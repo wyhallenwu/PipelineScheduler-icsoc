@@ -214,7 +214,7 @@ BaseReqBatcherConfigs BaseReqBatcher::loadConfigsFromJson(const json &jsonConfig
 void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     // Load the configs from the json file for Microservice class
     if (!isConstructing) { // If the function is not called from the constructor
-        Microservice::loadConfigs(jsonConfigs, true);
+        Microservice::loadConfigs(jsonConfigs, isConstructing);
     }
 
     BaseReqBatcherConfigs configs = loadConfigsFromJson(jsonConfigs);
