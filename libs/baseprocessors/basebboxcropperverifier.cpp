@@ -20,7 +20,6 @@ BaseBBoxCropperVerifier::BaseBBoxCropperVerifier(const json &jsonConfigs) : Micr
 void BaseBBoxCropperVerifier::cropping() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
 
-    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -54,9 +53,7 @@ void BaseBBoxCropperVerifier::cropping() {
 
 
     cudaStream_t postProcStream;
-    checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
 
-    // TODO: remove potentially unused variables
     // Height and width of the image used for inference
     int orig_h, orig_w, infer_h, infer_w;
 
@@ -71,17 +68,14 @@ void BaseBBoxCropperVerifier::cropping() {
      * We need to bring these buffers to CPU in order to process them.
      */
 
-    uint16_t maxNumDets = msvc_dataShape[2][0];
+    uint16_t maxNumDets;
+    
+    int32_t *num_detections;
+    float *nmsed_boxes;
+    float *nmsed_scores;
+    float *nmsed_classes;
 
-    int32_t num_detections[msvc_idealBatchSize];
-    float nmsed_boxes[msvc_idealBatchSize][maxNumDets][4];
-    float nmsed_scores[msvc_idealBatchSize][maxNumDets];
-    float nmsed_classes[msvc_idealBatchSize][maxNumDets];
-    float *nmsedBoxesList = &nmsed_boxes[0][0][0];
-    float *nmsedScoresList = &nmsed_scores[0][0];
-    float *nmsedClassesList = &nmsed_classes[0][0];
-
-    std::vector<float *> ptrList{nmsedBoxesList, nmsedScoresList, nmsedClassesList};
+    std::vector<float *> ptrList;
 
     size_t bufferSize;
 
@@ -93,8 +87,6 @@ void BaseBBoxCropperVerifier::cropping() {
     // To whole the shape of data sent from the inferencer
     RequestDataShapeType shape;
 
-    READY = true;
-
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -102,6 +94,32 @@ void BaseBBoxCropperVerifier::cropping() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING){
+
+                setDevice();
+                checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+                
+                maxNumDets = msvc_dataShape[2][0];
+
+                delete num_detections;
+                delete nmsed_boxes;
+                delete nmsed_scores;
+                delete nmsed_classes;
+
+                num_detections = new int32_t[msvc_idealBatchSize];
+                nmsed_boxes = new float[msvc_idealBatchSize * maxNumDets * 4];
+                nmsed_scores = new float[msvc_idealBatchSize * maxNumDets];
+                nmsed_classes = new float[msvc_idealBatchSize * maxNumDets];
+
+                ptrList = {nmsed_boxes, nmsed_scores, nmsed_classes};
+
+                outReqData.clear();
+                singleImageBBoxList.clear();
+
+                RELOADING = false;
+                READY = true;
+                info("{0:s} is (RE)LOADED.", msvc_name);
+            }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }

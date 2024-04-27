@@ -25,8 +25,6 @@ inline uint16_t maxIndex(float* arr, size_t size) {
 void BaseClassifier::classify() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
 
-    setDevice();
-
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -60,7 +58,6 @@ void BaseClassifier::classify() {
 
 
     cudaStream_t postProcStream;
-    checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
 
     // TODO: remove potentially unused variable
     NumQueuesType queueIndex;
@@ -68,11 +65,9 @@ void BaseClassifier::classify() {
     size_t bufferSize;
     RequestDataShapeType shape;
 
-    float predictedProbs[msvc_idealBatchSize][msvc_numClasses];
+    float *predictedProbs;
     // TODO: remove potentially unused variables
-    uint16_t predictedClass[msvc_idealBatchSize];
-
-    READY = true;
+    uint16_t *predictedClass;
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -81,6 +76,16 @@ void BaseClassifier::classify() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                setDevice();
+                checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+                
+                predictedProbs = new float[msvc_idealBatchSize * msvc_numClasses];
+                predictedClass = new uint16_t[msvc_idealBatchSize];
+                info("{0:s} is (RE)LOADED.", msvc_name);
+                RELOADING = false;
+                READY = true;
+            }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -107,7 +112,7 @@ void BaseClassifier::classify() {
             bufferSize *= shape[j];
         }
         checkCudaErrorCode(cudaMemcpyAsync(
-            (void *) predictedProbs[0],
+            (void *) predictedProbs,
             currReq_data[0].data.cudaPtr(),
             bufferSize,
             cudaMemcpyDeviceToHost,
@@ -117,7 +122,7 @@ void BaseClassifier::classify() {
         cudaStreamSynchronize(postProcStream);
 
         for (uint8_t i = 0; i < currReq_batchSize; ++i) {
-            predictedClass[i] = maxIndex(predictedProbs[i], msvc_numClasses);
+            predictedClass[i] = maxIndex(predictedProbs + i * msvc_numClasses, msvc_numClasses);
         }
 
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);

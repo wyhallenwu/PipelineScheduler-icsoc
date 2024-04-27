@@ -274,7 +274,6 @@ void BaseReqBatcher::batchRequests() {
     BatchSizeType currReq_batchSize;
     info("{0:s} STARTS.", msvc_name); 
     cv::cuda::Stream *preProcStream;
-    READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -295,6 +294,7 @@ void BaseReqBatcher::batchRequests() {
 
                 info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
+                READY = true;
             }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
@@ -437,8 +437,6 @@ void BaseReqBatcher::batchRequestsProfiling() {
     cv::cuda::Stream *preProcStream;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
-
-    READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -458,6 +456,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
                 prevData.clear();
 
                 RELOADING = false;
+                READY = true;
                 info("{0:s} is (RE)LOADED.", msvc_name);
             }
             //info("{0:s} is being PAUSED.", msvc_name);

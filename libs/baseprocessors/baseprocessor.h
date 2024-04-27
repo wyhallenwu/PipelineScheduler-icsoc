@@ -219,9 +219,6 @@ public:
     }
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
-
-protected:
-    RequestShapeType msvc_inferenceShape;
 };
 
 class BaseBBoxCropperVerifier : public Microservice {
@@ -244,9 +241,6 @@ public:
     BaseBBoxCropperVerifierConfigs loadConfigsFromJson(const json &jsonConfigs);
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
-
-protected:
-    RequestShapeType msvc_inferenceShape;
 };
 
 class BaseClassifier : public Microservice {

@@ -202,8 +202,6 @@ void BaseBBoxCropper::cropping() {
     // To whole the shape of data sent from the inferencer
     RequestDataShapeType shape;
 
-    READY = true;
-
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -237,6 +235,7 @@ void BaseBBoxCropper::cropping() {
                 singleImageBBoxList.clear();
 
                 RELOADING = false;
+                READY = true;
                 info("{0:s} is (RE)LOADED.", msvc_name);
             }
             //info("{0:s} is being PAUSED.", msvc_name);
@@ -492,9 +491,6 @@ void BaseBBoxCropper::cropProfiling() {
     //
     std::vector<RequestData<LocalCPUReqDataType>> inferTimeReportData;
 
-
-    READY = true;
-
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -536,6 +532,7 @@ void BaseBBoxCropper::cropProfiling() {
                 inferTimeReportData.clear();
 
                 RELOADING = false;
+                READY = true;
                 info("{0:s} is (RE)LOADED.", msvc_name);
             }
             //info("{0:s} is being PAUSED.", msvc_name);

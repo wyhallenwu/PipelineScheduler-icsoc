@@ -77,7 +77,6 @@ void BaseBatchInferencer::inference() {
     spdlog::info("{0:s} STARTS.", msvc_name); 
 
     cudaStream_t inferenceStream;
-    READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -95,6 +94,7 @@ void BaseBatchInferencer::inference() {
                 
                 spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
+                READY = true;
             }
             //spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
@@ -199,7 +199,6 @@ void BaseBatchInferencer::inferenceProfiling() {
     auto timeNow = std::chrono::high_resolution_clock::now();
 
     cudaStream_t inferenceStream;
-    READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -217,6 +216,7 @@ void BaseBatchInferencer::inferenceProfiling() {
                 
                 spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
+                READY = true;
             }
             //spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
