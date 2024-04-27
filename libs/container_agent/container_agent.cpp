@@ -71,11 +71,14 @@ std::tuple<json, json> msvcconfigs::loadJson() {
         spdlog::trace("{0:s} attempts to load Json Configs from command line.", __func__);
         if (absl::GetFlag(FLAGS_json_path).has_value()) {
             std::ifstream file(absl::GetFlag(FLAGS_json_path).value());
-            pipeConfigs = json::parse(file).at("pipeline");
+            auto json_file = json::parse(file);
+            pipeConfigs = json_file.at("pipeline");
             try {
-                profilingConfigs = json::parse(file).at("profiling");
-            } catch (json::parse_error &e) {
+                profilingConfigs = json_file.at("profiling");
+            } catch (json::out_of_range &e) {
                 spdlog::trace("{0:s} No profiling configurations found.", __func__);
+            } catch (json::parse_error &e) {
+                spdlog::error("{0:s} Error parsing json file.", __func__);
             }
             spdlog::trace("{0:s} finished loading Json Configs from command line.", __func__);
             return std::make_tuple(pipeConfigs, profilingConfigs);
@@ -91,9 +94,10 @@ std::tuple<json, json> msvcconfigs::loadJson() {
         } else {
             spdlog::trace("{0:s} finished loading Json Configs from file.", __func__);
             std::ifstream file(absl::GetFlag(FLAGS_json_path).value());
-            pipeConfigs = json::parse(file).at("pipeline");
+            auto json_file = json::parse(file);
+            pipeConfigs = json_file.at("pipeline");
             try {
-                profilingConfigs = json::parse(file).at("profiling");
+                profilingConfigs = json_file.at("profiling");
             } catch (json::out_of_range &e) {
                 spdlog::trace("{0:s} No profiling configurations found.", __func__);
             }
