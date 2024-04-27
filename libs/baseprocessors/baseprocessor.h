@@ -79,6 +79,10 @@ struct BaseBBoxCropperConfigs : BaseMicroserviceConfigs {
 struct BaseBBoxCropperVerifierConfigs : BaseBBoxCropperConfigs {
 };
 
+struct BaseKPointExtractorConfigs : BaseMicroserviceConfigs {
+    RequestShapeType msvc_inferenceShape;
+};
+
 
 class BaseReqBatcher : public Microservice {
 public:
@@ -187,9 +191,6 @@ public:
     ~BaseBBoxCropper() = default;
 
     void cropping();
-    void setInferenceShape(RequestShapeType shape) {
-        msvc_inferenceShape = shape;
-    }
 
     void generateRandomBBox(
         float *bboxList,
@@ -271,7 +272,7 @@ public:
 
 class BaseKPointExtractor : public Microservice{
 public:
-    BaseKPointExtractor(const BaseMicroserviceConfigs &configs);
+    BaseKPointExtractor(const json &jsonConfigs);
     ~BaseKPointExtractor() = default;
 
     virtual void extractor();
@@ -280,6 +281,10 @@ public:
         std::thread extractor(&BaseKPointExtractor::extractor, this);
         extractor.detach();
     }
+
+    BaseKPointExtractorConfigs loadConfigsFromJson(const json &jsonConfigs);
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
 #endif //BASEPROCESSOR_H

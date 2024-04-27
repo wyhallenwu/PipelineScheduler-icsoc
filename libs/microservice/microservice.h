@@ -410,6 +410,10 @@ public:
         setDevice(msvc_deviceIndex);
     }
 
+    void setInferenceShape(RequestShapeType shape) {
+        msvc_inferenceShape = shape;
+    }
+
     /**
      * @brief Set the Device index
      * should be called at least once for each thread (except when the above function is already called)
@@ -482,6 +486,8 @@ protected:
     std::vector<std::vector<RequestDataShapeType>> msvc_outReqShape;
     // The shape of the data to be processed by this microservice
     std::vector<RequestDataShapeType> msvc_dataShape;
+
+    RequestShapeType msvc_inferenceShape;
 
     // Ideal batch size for this microservice, runtime batch size could be smaller though
     BatchSizeType msvc_idealBatchSize;

@@ -42,7 +42,7 @@ set(
         # baseclassifier.cpp
         # basesoftmaxclassifier.cpp
         basebboxcropperverifier.cpp
-        # basekpointextractor.cpp
+        basekpointextractor.cpp
 )
 
 # Here we define the library.
