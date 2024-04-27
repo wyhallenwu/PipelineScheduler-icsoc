@@ -2,8 +2,7 @@
 
 using namespace spdlog;
 
-BaseSoftmaxClassifier::BaseSoftmaxClassifier(const BaseMicroserviceConfigs &config) : BaseClassifier(config) {
-    msvc_numClasses = config.msvc_dataShape[0][0];
+BaseSoftmaxClassifier::BaseSoftmaxClassifier(const json& jsonConfigs) : BaseClassifier(jsonConfigs) {
     info("{0:s} is created.", msvc_name); 
 }
 

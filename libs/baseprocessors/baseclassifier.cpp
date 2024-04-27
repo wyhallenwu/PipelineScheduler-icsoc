@@ -2,8 +2,18 @@
 
 using namespace spdlog;
 
-BaseClassifier::BaseClassifier(const BaseMicroserviceConfigs &config) : Microservice(config) {
-    msvc_numClasses = config.msvc_dataShape[0][0];
+BaseClassifierConfigs BaseClassifier::loadConfigsFromJson(const json &jsonConfigs) {
+    BaseClassifierConfigs configs;
+    return configs;
+}
+
+void BaseClassifier::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    BaseClassifierConfigs configs = loadConfigsFromJson(jsonConfigs);
+    msvc_numClasses = msvc_dataShape[0][0];
+}
+
+BaseClassifier::BaseClassifier(const json &jsonConfigs) : Microservice(jsonConfigs) {
+    loadConfigs(jsonConfigs, true);
     info("{0:s} is created.", msvc_name); 
 }
 

@@ -83,6 +83,10 @@ struct BaseKPointExtractorConfigs : BaseMicroserviceConfigs {
     RequestShapeType msvc_inferenceShape;
 };
 
+struct BaseClassifierConfigs : BaseMicroserviceConfigs {
+    uint16_t msvc_numClasses;
+};
+
 
 class BaseReqBatcher : public Microservice {
 public:
@@ -247,7 +251,7 @@ protected:
 
 class BaseClassifier : public Microservice {
 public:
-    BaseClassifier(const BaseMicroserviceConfigs &configs);
+    BaseClassifier(const json &jsonConfigs);
     ~BaseClassifier() = default;
 
     virtual void classify() ;
@@ -257,6 +261,10 @@ public:
         classifier.detach();
     }
 
+    BaseClassifierConfigs loadConfigsFromJson(const json &jsonConfigs);
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
+
 protected:
     RequestShapeType msvc_inferenceShape;
     uint16_t msvc_numClasses;
@@ -264,7 +272,7 @@ protected:
 
 class BaseSoftmaxClassifier : public BaseClassifier {
 public:
-    BaseSoftmaxClassifier(const BaseMicroserviceConfigs &configs);
+    BaseSoftmaxClassifier(const json &jsonConfigs);
     ~BaseSoftmaxClassifier() = default;
 
     virtual void classify() override;
