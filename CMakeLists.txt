@@ -119,6 +119,7 @@ add_subdirectory(libs/retinaface)
 add_subdirectory(libs/arcface)
 add_subdirectory(libs/movenet)
 # add_subdirectory(libs/emotionnet)
+add_subdirectory(libs/gender)
 add_subdirectory(libs/controller)
 add_subdirectory(libs/device_agent)
 
@@ -178,3 +179,6 @@ target_link_libraries(Container_MoveNet movenet)
 
 # add_executable(Container_EmotionNet libs/emotionnet/emotionnet.cpp)
 # target_link_libraries(Container_EmotionNet emotionnet)
+
+add_executable(Container_Gender libs/gender/gender.cpp)
+target_link_libraries(Container_Gender gender)
