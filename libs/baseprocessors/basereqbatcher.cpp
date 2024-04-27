@@ -116,16 +116,24 @@ inline cv::cuda::GpuMat resizePadRightBottom(
 ) {
     trace("Going into {0:s}", __func__);
 
-    cv::cuda::GpuMat rgb_img(input.rows, input.cols, IMG_TYPE);
-    cv::cuda::cvtColor(input, rgb_img, COLOR_CVT_TYPE, 0, stream);
+    uint16_t TARGET_IMG_TYPE;
+
+    // If the image is grayscale, then the target image type should be 0
+    if (GRAYSCALE_CONVERSION_CODES.count(COLOR_CVT_TYPE)) {
+        TARGET_IMG_TYPE = 0;
+    } else {
+        TARGET_IMG_TYPE = IMG_TYPE;
+    }
+    cv::cuda::GpuMat color_cvt_image(input.rows, input.cols, TARGET_IMG_TYPE);
+    cv::cuda::cvtColor(input, color_cvt_image, COLOR_CVT_TYPE, 0, stream);
 
     float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
     int unpad_h = r * input.rows;
     //Create a new GPU Mat 
-    cv::cuda::GpuMat resized(unpad_h, unpad_w, IMG_TYPE);
-    cv::cuda::resize(rgb_img, resized, resized.size(), 0, 0, RESIZE_INTERPOL_TYPE, stream);
-    cv::cuda::GpuMat out(height, width, IMG_TYPE, vectorToScalar(bgcolor));
+    cv::cuda::GpuMat resized(unpad_h, unpad_w, TARGET_IMG_TYPE);
+    cv::cuda::resize(color_cvt_image, resized, resized.size(), 0, 0, RESIZE_INTERPOL_TYPE, stream);
+    cv::cuda::GpuMat out(height, width, TARGET_IMG_TYPE, vectorToScalar(bgcolor));
     // Creating an opencv stream for asynchronous operation on cuda
     resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
 
