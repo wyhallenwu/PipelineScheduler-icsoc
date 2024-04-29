@@ -27,38 +27,71 @@ void Controller::HandleRecvRpcs() {
     }
 }
 
-void Controller::AddTask(std::string name, int slo, PipelineType type, std::string source, std::string device_name) {
-    tasks.insert({name, {slo, type, {}}});
-    TaskHandle *task = &tasks[name];
-    NodeHandle *device = &devices[device_name];
-    std::vector<std::string> models = getModelsByPipelineType(type);
-    microservices.insert({name.append(":datasource"), {DataSource, device, task, {}, {}}});
-    task->subtasks.insert({name.append(":datasource"), &microservices[name.append(":datasource")]});
-    device->microservices.insert({name.append(":datasource"), &microservices[name.append(":datasource")]});
+void Controller::AddTask(const TaskDescription &t) {
+    tasks.insert({t.name, {t.slo, t.type, {}}});
+    TaskHandle *task = &tasks[t.name];
+    NodeHandle *device = &devices[t.device];
+    auto models = getModelsByPipelineType(t.type);
+    // TODO: get initial batch sizes based on TaskDescription and Devices
+    std::map<std::string, int> batch_sizes = {};
+    std::string tmp = t.name;
+    microservices.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, {}, {}}});
+    task->subtasks.insert({tmp, &microservices[tmp]});
+    task->subtasks[tmp]->recv_port = device->next_free_port++;
+    device->microservices.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
     for(const auto& m : models) {
-        std::string tmp = name.append(m);
-        microservices.insert({tmp, {MODEL_TYPES[m], device, task, {}, {}}});
+        tmp = t.name;
+        microservices.insert({tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, {}, {}}});
         task->subtasks.insert({tmp, &microservices[tmp]});
-        device->microservices.insert({tmp, &microservices[tmp]});
+        task->subtasks[tmp]->recv_port = device->next_free_port++;
+        device->microservices.insert({tmp, task->subtasks[tmp]});
     }
-    switch (type) {
-        case PipelineType::Traffic:
-            //more processing
-            break;
-        case PipelineType::Video_Call:
-            //more processing
-            break;
-        case PipelineType::Building_Security:
-            //more processing
-            break;
+    for(const auto& m : models) {
+        for(const auto& d : m.second) {
+            tmp = t.name;
+            task->subtasks[tmp.append(d.first)]->class_of_interest = d.second;
+            task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + m.first]);
+            task->subtasks[t.name + m.first]->downstreams.push_back(task->subtasks[tmp]);
+        }
     }
-
-
-    // void *got_tag;
-    // bool ok = false;
-    // GPR_ASSERT(device->cq->Next(&got_tag, &ok));
-    // GPR_ASSERT(ok);
+    MicroserviceConfig request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    for (auto msvc: task->subtasks) {
+        request.set_name(msvc.first);
+        request.set_model(msvc.second->model);
+        request.set_bath_size(batch_sizes[msvc.first]);
+        request.set_recv_port(msvc.second->recv_port);
+        request.set_slo(task->slo);
+        for (auto dwnstr: msvc.second->downstreams) {
+            Neighbor *dwn = request.add_downstream();
+            dwn->set_name(dwnstr->name);
+            dwn->set_ip(dwnstr->device_agent->ip);
+            dwn->set_class_of_interest(dwnstr->class_of_interest);
+        }
+        if (msvc.second->model == DataSource) {
+            Neighbor *up = request.add_upstream();
+            up->set_name("video_source");
+            up->set_ip(t.source);
+            up->set_class_of_interest(-1);
+        } else {
+            for (auto upstr: msvc.second->upstreams) {
+                Neighbor *up = request.add_upstream();
+                up->set_name(upstr->name);
+                up->set_ip(absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
+                up->set_class_of_interest(-2);
+            }
+        }
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+                msvc.second->device_agent->stub->AsyncStartMicroservice(&context, request, msvc.second->device_agent->cq));
+        rpc->Finish(&reply, &status, (void *) 1);
+        void *got_tag;
+        bool ok = false;
+        GPR_ASSERT(msvc.second->device_agent->cq->Next(&got_tag, &ok));
+        GPR_ASSERT(ok);
+    }
 }
 
 void Controller::UpdateLightMetrics(google::protobuf::RepeatedPtrField<LightMetrics> metrics) {
@@ -118,12 +151,13 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         new DeviseAdvertisementHandler(service, cq, controller);
         std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), 60002);
         controller->devices.insert({request.device_name(),
-                                    {ControlCommunication::NewStub(
+                                    {request.ip_address(),
+                                     ControlCommunication::NewStub(
                                             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
                                      new CompletionQueue(),
                                      static_cast<DeviceType>(request.device_type()),
                                      request.processors(),
-                                     request.memory(), {}}});
+                                     request.memory(), {}, 55001}});
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -132,14 +166,26 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     }
 }
 
-std::vector<std::string> Controller::getModelsByPipelineType(PipelineType type) {
+std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> Controller::getModelsByPipelineType(PipelineType type) {
     switch (type) {
         case PipelineType::Traffic:
-            return {":yolov5", ":retinaface", ":arcface", ":cartype", ":plate"};
+            return {{":yolov5", {{":retinaface", 0}, {":cartype", 2}, {":plate", 2}}},
+                    {":retinaface", {{":arcface", -1}}},
+                    {":arcface", {}},
+                    {":cartype", {}},
+                    {":plate", {}}};
         case PipelineType::Video_Call:
-            return {":retinaface", ":gender", ":age", ":emotion", ":arcface"};
+            return {{":retinaface", {}},
+                    {":gender", {}},
+                    {":age", {}},
+                    {":emotion", {}},
+                    {":arcface", {}}};
         case PipelineType::Building_Security:
-            return {":yolov5", ":retinaface", ":movenet", "gender", ":age"};
+            return {{":yolov5", {}},
+                    {":retinaface", {}},
+                    {":movenet", {}},
+                    {"gender", {}},
+                    {":age", {}}};
         default:
             return {};
     }
@@ -149,36 +195,32 @@ int main() {
     auto controller = new Controller();
     std::thread receiver_thread(&Controller::HandleRecvRpcs, controller);
     while (controller->isRunning()) {
+        TaskDescription task;
         std::string command;
-        PipelineType type;
         std::cout << "Enter command {Traffic, Video_Call, People, exit): ";
         std::cin >> command;
         if (command == "exit") {
             controller->Stop();
             continue;
         } else if (command == "Traffic") {
-            type = PipelineType::Traffic;
+            task.type = PipelineType::Traffic;
         } else if (command == "Video_Call") {
-            type = PipelineType::Video_Call;
+            task.type = PipelineType::Video_Call;
         } else if (command == "People") {
-            type = PipelineType::Building_Security;
+            task.type = PipelineType::Building_Security;
         } else {
             std::cout << "Invalid command" << std::endl;
             continue;
         }
-        std::string name;
-        int slo;
-        std::string path;
-        std::string device;
         std::cout << "Enter name of task: ";
-        std::cin >> name;
+        std::cin >> task.name;
         std::cout << "Enter SLO in ms: ";
-        std::cin >> slo;
+        std::cin >> task.slo;
         std::cout << "Enter total path to source file: ";
-        std::cin >> path;
+        std::cin >> task.source;
         std::cout << "Enter name of source device: ";
-        std::cin >> device;
-        controller->AddTask(name, 0, type, path, device);
+        std::cin >> task.device;
+        controller->AddTask(task);
     }
     delete controller;
     return 0;

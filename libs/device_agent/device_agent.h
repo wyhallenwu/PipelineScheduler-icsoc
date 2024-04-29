@@ -73,19 +73,20 @@ public:
 
 private:
     void CreateYolo5Container(
-            int id,
-            const NeighborMicroserviceConfigs &upstream,
-            const std::vector<NeighborMicroserviceConfigs> &downstreams,
+            std::string name,
+            BatchSizeType batch_size,
             const MsvcSLOType &slo,
-            const BatchSizeType &batchSize,
+            const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
+            const google::protobuf::RepeatedPtrField<Neighbor> &downstreams,
             const std::string &logPath
     );
 
     void CreateDataSource(
-            int id,
-            const std::vector<NeighborMicroserviceConfigs> &downstreams,
+            std::string name,
+            BatchSizeType batch_size,
             const MsvcSLOType &slo,
-            const std::string &video_path,
+            const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
+            const google::protobuf::RepeatedPtrField<Neighbor> &downstreams,
             const std::string &logPath
     );
 
@@ -95,10 +96,10 @@ private:
             const BatchSizeType &batchSize,
             const std::string &logPath,
             const NeighborMicroserviceConfigs &prev_msvc,
-            const std::vector<NeighborMicroserviceConfigs> &next_msvc);
+            const google::protobuf::RepeatedPtrField<Neighbor> &next_msvc);
 
     void finishContainer(const std::string &executable, const std::string &name, const std::string &start_string,
-                         const int &control_port, const int &data_port, const std::string &trt_config = "");
+                         const int &control_port, const std::string &trt_config = "");
 
     static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
                          const int &port, const std::string &trt_config) {

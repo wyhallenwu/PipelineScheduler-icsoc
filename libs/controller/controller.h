@@ -19,6 +19,7 @@ using controlcommunication::LightMetricsList;
 using controlcommunication::FullMetrics;
 using controlcommunication::FullMetricsList;
 using controlcommunication::ConnectionConfigs;
+using controlcommunication::Neighbor;
 using controlcommunication::MicroserviceConfig;
 using controlcommunication::MicroserviceName;
 using EmptyMessage = google::protobuf::Empty;
@@ -42,17 +43,17 @@ enum ModelType {
 };
 
 std::map<std::string, ModelType> MODEL_TYPES = {
-        {":datasource", DataSource},
-        {":yolov5", Yolov5},
+        {":datasource",       DataSource},
+        {":yolov5",           Yolov5},
         {":yolov5datasource", Yolov5Datasource},
-        {":retinaface", Retinaface},
-        {":arcface", Arcface},
-        {":cartype", Yolov5_Plate}, // Still needs to be finished
-        {":plate", Yolov5_Plate},
-        {":gender", Gender},
-        {":age", Age},
-        {":movenet", Movenet},
-        {":emotion", Emotionnet}
+        {":retinaface",       Retinaface},
+        {":arcface",          Arcface},
+        {":cartype",          Yolov5_Plate}, // Still needs to be finished
+        {":plate",            Yolov5_Plate},
+        {":gender",           Gender},
+        {":age",              Age},
+        {":movenet",          Movenet},
+        {":emotion",          Emotionnet}
 };
 
 enum PipelineType {
@@ -69,6 +70,14 @@ struct Metrics {
     unsigned int gpuMemUsage = 0;
 };
 
+struct TaskDescription {
+    std::string name;
+    int slo;
+    PipelineType type;
+    std::string source;
+    std::string device;
+};
+
 class Controller {
 public:
     Controller();
@@ -77,9 +86,9 @@ public:
 
     void HandleRecvRpcs();
 
-    void AddTask(std::string name, int slo, PipelineType type, std::string source, std::string device);
+    void AddTask(const TaskDescription &task);
 
-    bool isRunning() { return running; };
+    bool isRunning() const { return running; };
 
     void Stop() { running = false; };
 
@@ -90,32 +99,39 @@ public:
 private:
     struct MicroserviceHandle;
     struct NodeHandle {
+        std::string ip;
         std::shared_ptr<ControlCommunication::Stub> stub;
         CompletionQueue *cq;
         DeviceType type;
         int num_processors; // number of processing units, general cores for Edge or GPUs for server
         unsigned long mem_size; // memory size in MB
-        std::map<std::string, MicroserviceHandle*> microservices;
+        std::map<std::string, MicroserviceHandle *> microservices;
+        int next_free_port;
     };
 
     struct TaskHandle {
         int slo;
         PipelineType type;
-        std::map<std::string, MicroserviceHandle*> subtasks;
+        std::map<std::string, MicroserviceHandle *> subtasks;
     };
 
     struct MicroserviceHandle {
+        std::string name;
         ModelType model;
         NodeHandle *device_agent;
         TaskHandle *task;
-        google::protobuf::RepeatedField<int32_t> queue_lengths;
+        int class_of_interest;
+        int recv_port;
         Metrics metrics;
+        google::protobuf::RepeatedField<int32_t> queue_lengths;
+        std::vector<MicroserviceHandle *> upstreams;
+        std::vector<MicroserviceHandle *> downstreams;
     };
 
     class RequestHandler {
     public:
         RequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq, Controller *c)
-            : service(service), cq(cq), status(CREATE), controller(c), responder(&ctx) {}
+                : service(service), cq(cq), status(CREATE), controller(c), responder(&ctx) {}
 
         virtual ~RequestHandler() = default;
 
@@ -137,8 +153,8 @@ private:
     class LightMetricsRequestHandler : public RequestHandler {
     public:
         LightMetricsRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                  Controller *c)
-                : RequestHandler(service, cq, c){
+                                   Controller *c)
+                : RequestHandler(service, cq, c) {
             Proceed();
         }
 
@@ -165,7 +181,7 @@ private:
     class DeviseAdvertisementHandler : public RequestHandler {
     public:
         DeviseAdvertisementHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                  Controller *c)
+                                   Controller *c)
                 : RequestHandler(service, cq, c) {
             Proceed();
         }
@@ -176,7 +192,8 @@ private:
         ConnectionConfigs request;
     };
 
-    static std::vector<std::string> getModelsByPipelineType(PipelineType type);
+    static std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
+    getModelsByPipelineType(PipelineType type);
 
     bool running;
     std::map<std::string, NodeHandle> devices;
