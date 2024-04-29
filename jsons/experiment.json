@@ -1,0 +1,16 @@
+[
+  {
+    "name": "exampletraffic",
+    "slo": 1000,
+    "type": 0,
+    "source": "/ssd0/datasets/pipeline-scheduler/traffic/traffic1.mp4",
+    "device": "server"
+  },
+  {
+    "name": "videocall1",
+    "slo": 2000,
+    "type": 1,
+    "source": "/ssd0/datasets/pipeline-scheduler/video-call/zoom1.mp4",
+    "device": "server"
+  }
+]

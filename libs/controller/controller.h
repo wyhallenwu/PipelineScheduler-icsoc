@@ -3,6 +3,7 @@
 
 #include "microservice.h"
 #include <grpcpp/grpcpp.h>
+#include "../json/json.h"
 #include <thread>
 #include "controlcommunication.grpc.pb.h"
 
@@ -70,13 +71,19 @@ struct Metrics {
     unsigned int gpuMemUsage = 0;
 };
 
-struct TaskDescription {
-    std::string name;
-    int slo;
-    PipelineType type;
-    std::string source;
-    std::string device;
-};
+namespace TaskDescription {
+    struct TaskStruct {
+        std::string name;
+        int slo;
+        PipelineType type;
+        std::string source;
+        std::string device;
+    };
+
+    void to_json(nlohmann::json &j, const TaskStruct &val);
+
+    void from_json(const nlohmann::json &j, TaskStruct &val);
+}
 
 class Controller {
 public:
@@ -86,7 +93,7 @@ public:
 
     void HandleRecvRpcs();
 
-    void AddTask(const TaskDescription &task);
+    void AddTask(const TaskDescription::TaskStruct &task);
 
     bool isRunning() const { return running; };
 

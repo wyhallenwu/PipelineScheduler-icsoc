@@ -99,25 +99,16 @@ private:
             const google::protobuf::RepeatedPtrField<Neighbor> &next_msvc);
 
     void finishContainer(const std::string &executable, const std::string &name, const std::string &start_string,
-                         const int &control_port, const std::string &trt_config = "");
+                         const int &control_port);
 
     static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
-                         const int &port, const std::string &trt_config) {
-        if (trt_config.empty()) {
-            std::cout << absl::StrFormat(
-                    R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
-                    executable, name, start_string, port).c_str() << std::endl;
-            return system(absl::StrFormat(
-                    R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
-                    executable, name, start_string, port).c_str());
-        } else {
-            std::cout << absl::StrFormat(
-                    R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i --trt_json='%s')",
-                    executable, name, start_string, port, trt_config).c_str() << std::endl;
-            return system(absl::StrFormat(
-                    R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i --trt_json='%s')",
-                    executable, name, start_string, port, trt_config).c_str());
-        }
+                         const int &port) {
+        std::cout << absl::StrFormat(
+                R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
+                executable, name, start_string, port).c_str() << std::endl;
+        return system(absl::StrFormat(
+                R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
+                executable, name, start_string, port).c_str());
     };
 
     static void StopContainer(const ContainerHandle &container);

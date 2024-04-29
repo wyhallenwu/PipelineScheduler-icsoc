@@ -1,5 +1,21 @@
 #include "controller.h"
 
+void TaskDescription::to_json(json &j, const TaskDescription::TaskStruct &val) {
+    j = json{{"name", val.name},
+             {"slo", val.slo},
+             {"type", val.type},
+             {"source", val.source},
+             {"device", val.device}};
+}
+
+void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskStruct &val) {
+    j.at("name").get_to(val.name);
+    j.at("slo").get_to(val.slo);
+    j.at("type").get_to(val.type);
+    j.at("source").get_to(val.source);
+    j.at("device").get_to(val.device);
+}
+
 Controller::Controller() {
     running = true;
     devices = std::map<std::string, NodeHandle>();
@@ -27,7 +43,7 @@ void Controller::HandleRecvRpcs() {
     }
 }
 
-void Controller::AddTask(const TaskDescription &t) {
+void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     tasks.insert({t.name, {t.slo, t.type, {}}});
     TaskHandle *task = &tasks[t.name];
     NodeHandle *device = &devices[t.device];
@@ -194,8 +210,10 @@ std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> Co
 int main() {
     auto controller = new Controller();
     std::thread receiver_thread(&Controller::HandleRecvRpcs, controller);
+    std::ifstream file("../jsons/experiment.json");
+    std::vector<TaskDescription::TaskStruct> tasks = json::parse(file);
     while (controller->isRunning()) {
-        TaskDescription task;
+        TaskDescription::TaskStruct task;
         std::string command;
         std::cout << "Enter command {Traffic, Video_Call, People, exit): ";
         std::cin >> command;

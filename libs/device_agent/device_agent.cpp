@@ -155,8 +155,8 @@ json DeviceAgent::createConfigs(
 
 void
 DeviceAgent::finishContainer(const std::string &executable, const std::string &name, const std::string &start_string,
-                             const int &control_port, const std::string &trt_config) {
-    runDocker(executable, name, start_string, control_port, trt_config);
+                             const int &control_port) {
+    runDocker(executable, name, start_string, control_port);
     std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
     containers[name] = {{},
                         InDeviceCommunication::NewStub(grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
