@@ -65,14 +65,18 @@ find_package(baseprocessors CONFIG REQUIRED)
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
-set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
-find_package(misc CONFIG REQUIRED)
+set(communicator_DIR "${CMAKE_CURRENT_BINARY_DIR}/../communicator")
+find_package(communicator CONFIG REQUIRED)
 
 set(container_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../container_agent")
 find_package(container_agent CONFIG REQUIRED)
 
-set(communicator_DIR "${CMAKE_CURRENT_BINARY_DIR}/../communicator")
-find_package(communicator CONFIG REQUIRED)
+set(data_source_DIR "${CMAKE_CURRENT_BINARY_DIR}/../data_source")
+find_package(data_source CONFIG REQUIRED)
+
+set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
+find_package(misc CONFIG REQUIRED)
+
 
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
@@ -104,6 +108,7 @@ target_link_libraries(retinaface
         baseprocessors
         communicator
         container_agent
+        data_source
 )
 
 # Here we configure variables specifying the target directories.

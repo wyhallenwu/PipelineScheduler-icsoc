@@ -4,6 +4,10 @@
 #include "container_agent.h"
 #include "receiver.h"
 #include "sender.h"
+#include "data_reader.h"
+
+using namespace spdlog;
+
 
 class ArcFaceAgent : public ContainerAgent {
 public:
@@ -12,6 +16,19 @@ public:
         uint16_t own_port,
         int8_t devIndex,
         std::string logPath,
-        std::vector<Microservice*> services
+        RUNMODE runmode,
+        const json &profiling_configs
+    );
+};
+
+class ArcFaceDataSource : public ContainerAgent {
+public:
+    ArcFaceDataSource(
+        const std::string &name,
+        uint16_t own_port,
+        int8_t devIndex,
+        std::string logPath,
+        RUNMODE runmode,
+        const json &profiling_configs
     );
 };

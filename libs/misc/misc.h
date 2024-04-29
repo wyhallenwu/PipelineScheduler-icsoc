@@ -8,6 +8,7 @@
 #include "../json/json.h"
 #include "spdlog/spdlog.h"
 #include "opencv2/opencv.hpp"
+#include <unordered_set>
 
 
 typedef uint16_t NumQueuesType;
@@ -25,6 +26,8 @@ typedef std::vector<std::vector<int32_t>> RequestShapeType;
 typedef cv::cuda::GpuMat LocalGPUReqDataType;
 typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
+
+const std::unordered_set<uint16_t> GRAYSCALE_CONVERSION_CODES = {6, 7, 10, 11};
 
 
 void saveGPUAsImg(const cv::cuda::GpuMat &img, std::string name = "test.jpg", float scale = 1.f);

@@ -2,6 +2,125 @@
 
 using namespace spdlog;
 
+
+/**
+ * @brief Scale the bounding box coordinates to the original aspect ratio of the image
+ * 
+ * @param orig_h Original height of the image
+ * @param orig_w Original width of the image
+ * @param infer_h Height of the image used for inference
+ * @param infer_w Width of the image used for inference
+ * @param bbox_coors [x1, y1, x2, y2]
+ */
+inline void scaleBBox(
+    int orig_h,
+    int orig_w,
+    int infer_h,
+    int infer_w,
+    const float *infer_bboxCoors,
+    int * orig_bboxCoors
+) {
+    float ratio = std::min(1.f * infer_h / orig_h, 1.f * infer_w / orig_w);
+    infer_h = (int) (ratio * orig_h);
+    infer_w = (int) (ratio * orig_w);
+
+    // TO BE IMPLEMENTED
+    float coor[4];
+    for (uint8_t i = 0; i < 4; ++i) {
+        coor[i] = (*(infer_bboxCoors + i));
+    }
+
+    float gain = std::min(1.f * infer_h / orig_h, 1.f * infer_w / orig_w);
+
+    float pad_w = (1.f * infer_w - orig_w * gain) / 2.f;
+    float pad_h = (1.f * infer_h - orig_h * gain) / 2.f;
+
+    coor[0] -= pad_w;
+    coor[1] -= pad_h;
+    coor[2] -= pad_w;
+    coor[3] -= pad_h;
+
+    // if (scale_h > scale_w) {
+    //     coor[1]= coor[1] / scale_w;
+    //     coor[3]= coor[3] / scale_w;
+    //     coor[0]= (coor[0] - (infer_h - scale_w * orig_h) / 2) / scale_w;
+    //     coor[2]= (coor[2] - (infer_h - scale_w * orig_h) / 2) / scale_w;
+    // } else {
+    //     coor[1]= (coor[1] - (infer_w - scale_h * orig_w) / 2) / scale_h;
+    //     coor[3]= (coor[3] - (infer_w - scale_h * orig_w) / 2) / scale_h;
+    //     coor[0]= coor[0] / scale_h;
+    //     coor[2]= coor[2] / scale_h;
+    // }
+
+    for (uint8_t i = 0; i < 4; ++i) {
+        coor[i] /= gain;
+        int maxcoor = (i % 2 == 0) ? orig_w : orig_h;
+        if (coor[i] >= maxcoor) {
+            coor[i] = maxcoor - 1;
+        }
+        if (coor[i] < 0) {
+            coor[i] = 0;
+        }
+        *(orig_bboxCoors + i) = (int)coor[i];
+    }
+}
+
+/**
+ * @brief Cropping multiple boxes from 1 picture
+ * 
+ * @param image 
+ * @param infer_h 
+ * @param infer_w 
+ * @param numDetections 
+ * @param bbox_coorList 
+ * @param croppedBBoxes 
+ */
+inline void crop(
+    const cv::cuda::GpuMat &image,
+    int orig_h,
+    int orig_w,
+    int infer_h,
+    int infer_w,
+    int numDetections,
+    const float *bbox_coorList,
+    std::vector<cv::cuda::GpuMat> &croppedBBoxes
+) {
+    int orig_bboxCoors[4];
+    for (uint16_t i = 0; i < numDetections; ++i) {
+        scaleBBox(orig_h, orig_w, infer_h, infer_w, bbox_coorList + i * 4, orig_bboxCoors);
+        // std::cout << (int)orig_bboxCoors[0] << " " << (int)orig_bboxCoors[1] << " " << (int)orig_bboxCoors[2] << " " << (int)orig_bboxCoors[3] << std::endl;
+        cv::cuda::GpuMat croppedBBox = image(cv::Range((int)orig_bboxCoors[1], (int)orig_bboxCoors[3]), cv::Range((int)orig_bboxCoors[0], (int)orig_bboxCoors[2])).clone();
+        croppedBBoxes.emplace_back(croppedBBox);
+    }
+}
+
+/**
+ * @brief Cropping 1 box from 1 picture
+ * 
+ * @param image 
+ * @param infer_h 
+ * @param infer_w 
+ * @param numDetections 
+ * @param bbox_coorList 
+ * @param croppedBBoxes 
+ */
+inline void cropOneBox(
+    const cv::cuda::GpuMat &image,
+    int infer_h,
+    int infer_w,
+    int numDetections,
+    const float *bbox_coorList,
+    cv::cuda::GpuMat &croppedBBoxes
+) {
+    int orig_h, orig_w;
+    orig_h = image.rows;
+    orig_w = image.cols;
+    int orig_bboxCoors[4];
+    scaleBBox(orig_h, orig_w, infer_h, infer_w, bbox_coorList, orig_bboxCoors);
+    cv::cuda::GpuMat croppedBBox = image(cv::Range((int)orig_bboxCoors[0], (int)orig_bboxCoors[2]), cv::Range((int)orig_bboxCoors[1], (int)orig_bboxCoors[3])).clone();
+    croppedBBoxes = croppedBBox;
+}
+
 void BaseBBoxCropper::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     if (!isConstructing) { // If this is not called from the constructor
         Microservice::loadConfigs(jsonConfigs, isConstructing);
@@ -16,7 +135,6 @@ BaseBBoxCropper::BaseBBoxCropper(const json &jsonConfigs) : Microservice(jsonCon
 void BaseBBoxCropper::cropping() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
 
-    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -50,13 +168,9 @@ void BaseBBoxCropper::cropping() {
 
 
     cudaStream_t postProcStream;
-    checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
-
 
     // Height and width of the image used for inference
     int orig_h, orig_w, infer_h, infer_w;
-    infer_h = msvc_inferenceShape[0][1];
-    infer_w = msvc_inferenceShape[0][2];
 
     /**
      * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
@@ -69,17 +183,14 @@ void BaseBBoxCropper::cropping() {
      * We need to bring these buffers to CPU in order to process them.
      */
 
-    uint16_t maxNumDets = msvc_dataShape[2][0];
+    uint16_t maxNumDets;
+    
+    int32_t *num_detections;
+    float *nmsed_boxes;
+    float *nmsed_scores;
+    float *nmsed_classes;
 
-    int32_t num_detections[msvc_idealBatchSize];
-    float nmsed_boxes[msvc_idealBatchSize][maxNumDets][4];
-    float nmsed_scores[msvc_idealBatchSize][maxNumDets];
-    float nmsed_classes[msvc_idealBatchSize][maxNumDets];
-    float *nmsedBoxesList = &nmsed_boxes[0][0][0];
-    float *nmsedScoresList = &nmsed_scores[0][0];
-    float *nmsedClassesList = &nmsed_classes[0][0];
-
-    std::vector<float *> ptrList{nmsedBoxesList, nmsedScoresList, nmsedClassesList};
+    std::vector<float *> ptrList;
 
     size_t bufferSize;
 
@@ -91,8 +202,6 @@ void BaseBBoxCropper::cropping() {
     // To whole the shape of data sent from the inferencer
     RequestDataShapeType shape;
 
-    READY = true;
-
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -100,6 +209,35 @@ void BaseBBoxCropper::cropping() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING){
+
+                setDevice();
+                checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+
+                infer_h = msvc_inferenceShape[0][1];
+                infer_w = msvc_inferenceShape[0][2];
+                
+                maxNumDets = msvc_dataShape[2][0];
+
+                delete num_detections;
+                delete nmsed_boxes;
+                delete nmsed_scores;
+                delete nmsed_classes;
+
+                num_detections = new int32_t[msvc_idealBatchSize];
+                nmsed_boxes = new float[msvc_idealBatchSize * maxNumDets * 4];
+                nmsed_scores = new float[msvc_idealBatchSize * maxNumDets];
+                nmsed_classes = new float[msvc_idealBatchSize * maxNumDets];
+
+                ptrList = {nmsed_boxes, nmsed_scores, nmsed_classes};
+
+                outReqData.clear();
+                singleImageBBoxList.clear();
+
+                RELOADING = false;
+                READY = true;
+                info("{0:s} is (RE)LOADED.", msvc_name);
+            }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -168,12 +306,12 @@ void BaseBBoxCropper::cropping() {
             orig_h = imageList[i].shape[1];
             orig_w = imageList[i].shape[2];
 
-            crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
+            crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
             trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {
-                bboxClass = (int16_t)nmsed_classes[i][j];
+                bboxClass = (int16_t)nmsed_classes[i * maxNumDets + j];
                 queueIndex = -1;
                 // in the constructor of each microservice, we map the class number to the corresponding queue index in 
                 // `classToDntreamMap`.
@@ -190,9 +328,9 @@ void BaseBBoxCropper::cropping() {
                     continue;
                 }
 
-                // if (bboxClass == 0 || bboxClass == 2) {
-                //     saveGPUAsImg(singleImageBBoxList[j], "bbox_" + std::to_string(j) + ".jpg");
-                // }
+                if (bboxClass == 0 || bboxClass == 2) {
+                    saveGPUAsImg(singleImageBBoxList[j], "bbox_" + std::to_string(j) + ".jpg");
+                }
 
                 // Putting the bounding box into an `outReq` to be sent out
                 bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
@@ -276,7 +414,6 @@ void BaseBBoxCropper::generateRandomBBox(
 }
 
 void BaseBBoxCropper::cropProfiling() {
-    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -308,14 +445,10 @@ void BaseBBoxCropper::cropProfiling() {
 
 
     cudaStream_t postProcStream;
-    checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
 
 
     // Height and width of the image used for inference
     int orig_h, orig_w, infer_h, infer_w;
-
-    infer_h = msvc_inferenceShape[0][1];
-    infer_w = msvc_inferenceShape[0][2];
 
     /**
      * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
@@ -328,17 +461,14 @@ void BaseBBoxCropper::cropProfiling() {
      * We need to bring these buffers to CPU in order to process them.
      */
 
-    uint16_t maxNumDets = msvc_dataShape[2][0];
+    uint16_t maxNumDets;
+    
+    int32_t *num_detections;
+    float *nmsed_boxes;
+    float *nmsed_scores;
+    float *nmsed_classes;
 
-    int32_t num_detections[msvc_idealBatchSize];
-    float nmsed_boxes[msvc_idealBatchSize][maxNumDets][4];
-    float nmsed_scores[msvc_idealBatchSize][maxNumDets];
-    float nmsed_classes[msvc_idealBatchSize][maxNumDets];
-    float *nmsedBoxesList = &nmsed_boxes[0][0][0];
-    float *nmsedScoresList = &nmsed_scores[0][0];
-    float *nmsedClassesList = &nmsed_classes[0][0];
-
-    std::vector<float *> ptrList{nmsedBoxesList, nmsedScoresList, nmsedClassesList};
+    std::vector<float *> ptrList;
 
     size_t bufferSize;
 
@@ -351,22 +481,15 @@ void BaseBBoxCropper::cropProfiling() {
     RequestDataShapeType shape;
 
     // Random bboxes used for random cropping
-    float nmsed_randomBoxes[msvc_idealBatchSize][maxNumDets][4];
+    float *nmsed_randomBoxes;
 
     // To hold the inference time for each individual request
-    uint64_t inferenceTime[msvc_idealBatchSize];
+    uint64_t *inferenceTime;
 
     auto time_now = std::chrono::high_resolution_clock::now();
 
-    for (uint16_t i = 0; i < msvc_idealBatchSize; i++) {
-        generateRandomBBox(nmsed_randomBoxes[i][0], infer_h, infer_w, maxNumDets);
-    }
-
     //
     std::vector<RequestData<LocalCPUReqDataType>> inferTimeReportData;
-
-
-    READY = true;
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -375,6 +498,43 @@ void BaseBBoxCropper::cropProfiling() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING){
+
+                setDevice();
+                checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+
+                infer_h = msvc_inferenceShape[0][1];
+                infer_w = msvc_inferenceShape[0][2];
+                
+                maxNumDets = msvc_dataShape[2][0];
+
+                delete num_detections;
+                delete nmsed_boxes;
+                delete nmsed_scores;
+                delete nmsed_classes;
+
+                num_detections = new int32_t[msvc_idealBatchSize];
+                nmsed_boxes = new float[msvc_idealBatchSize * maxNumDets * 4];
+                nmsed_scores = new float[msvc_idealBatchSize * maxNumDets];
+                nmsed_classes = new float[msvc_idealBatchSize * maxNumDets];
+
+                nmsed_randomBoxes = new float [msvc_idealBatchSize * maxNumDets * 4];
+                for (uint16_t i = 0; i < msvc_idealBatchSize; i++) {
+                    generateRandomBBox(nmsed_randomBoxes + i * 4, infer_h, infer_w, maxNumDets);
+                }
+
+                ptrList = {nmsed_boxes, nmsed_scores, nmsed_classes};
+
+                inferenceTime = new uint64_t[msvc_idealBatchSize];
+
+                outReqData.clear();
+                singleImageBBoxList.clear();
+                inferTimeReportData.clear();
+
+                RELOADING = false;
+                READY = true;
+                info("{0:s} is (RE)LOADED.", msvc_name);
+            }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -440,7 +600,7 @@ void BaseBBoxCropper::cropProfiling() {
             orig_h = imageList[i].shape[1];
             orig_w = imageList[i].shape[2];
 
-            crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_randomBoxes[i][0], singleImageBBoxList);
+            crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
             trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in

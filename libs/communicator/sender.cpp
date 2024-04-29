@@ -51,13 +51,17 @@ GPUSender::GPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
 
 void GPUSender::Process() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
     while (READY) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                setDevice();
+                RELOADING = false;
+                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+            }
             ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -135,13 +139,17 @@ LocalCPUSender::LocalCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
 
 void LocalCPUSender::Process() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
     while (READY) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                setDevice();
+                RELOADING = false;
+                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+            }
             ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -194,13 +202,17 @@ RemoteCPUSender::RemoteCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) 
 
 void RemoteCPUSender::Process() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
     while (READY) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                setDevice();
+                RELOADING = false;
+                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+            }
             ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }

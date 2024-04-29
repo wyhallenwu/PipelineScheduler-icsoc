@@ -54,7 +54,6 @@ bool BaseBatchInferencer::checkReqEligibility(ClockType currReq_gentime) {
 
 void BaseBatchInferencer::inference() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -78,8 +77,6 @@ void BaseBatchInferencer::inference() {
     spdlog::info("{0:s} STARTS.", msvc_name); 
 
     cudaStream_t inferenceStream;
-    checkCudaErrorCode(cudaStreamCreate(&inferenceStream), __func__);
-    READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -87,6 +84,18 @@ void BaseBatchInferencer::inference() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                setDevice();
+                checkCudaErrorCode(cudaStreamCreate(&inferenceStream), __func__);
+
+                outReqData.clear();
+                trtInBuffer.clear();
+                trtOutBuffer.clear();
+                
+                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+                RELOADING = false;
+                READY = true;
+            }
             //spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -165,7 +174,6 @@ void BaseBatchInferencer::inference() {
 
 void BaseBatchInferencer::inferenceProfiling() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -191,8 +199,6 @@ void BaseBatchInferencer::inferenceProfiling() {
     auto timeNow = std::chrono::high_resolution_clock::now();
 
     cudaStream_t inferenceStream;
-    checkCudaErrorCode(cudaStreamCreate(&inferenceStream), __func__);
-    READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -200,6 +206,18 @@ void BaseBatchInferencer::inferenceProfiling() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                setDevice();
+                checkCudaErrorCode(cudaStreamCreate(&inferenceStream), __func__);
+
+                outReqData.clear();
+                trtInBuffer.clear();
+                trtOutBuffer.clear();
+                
+                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+                RELOADING = false;
+                READY = true;
+            }
             //spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }

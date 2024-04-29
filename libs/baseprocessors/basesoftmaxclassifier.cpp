@@ -2,8 +2,7 @@
 
 using namespace spdlog;
 
-BaseSoftmaxClassifier::BaseSoftmaxClassifier(const BaseMicroserviceConfigs &config) : BaseClassifier(config) {
-    msvc_numClasses = config.msvc_dataShape[0][0];
+BaseSoftmaxClassifier::BaseSoftmaxClassifier(const json& jsonConfigs) : BaseClassifier(jsonConfigs) {
     info("{0:s} is created.", msvc_name); 
 }
 
@@ -32,8 +31,6 @@ inline void softmax(const float* logits, float* probabilities, int size) {
 
 void BaseSoftmaxClassifier::classify() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-
-    setDevice();
 
     // The time where the last request was generated.
     ClockType lastReq_genTime;
@@ -68,7 +65,6 @@ void BaseSoftmaxClassifier::classify() {
 
 
     cudaStream_t postProcStream;
-    checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
 
     // TODO: remove potentially unused variable
     NumQueuesType queueIndex;
@@ -76,9 +72,9 @@ void BaseSoftmaxClassifier::classify() {
     size_t bufferSize;
     RequestDataShapeType shape;
 
-    float predictedLogits[msvc_idealBatchSize][msvc_numClasses], predictedProbs[msvc_idealBatchSize][msvc_numClasses];
+    float *predictedLogits, *predictedProbs;
     // TODO: remove potentially unused variables
-    uint16_t predictedClass[msvc_idealBatchSize];
+    uint16_t *predictedClass;
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -87,6 +83,17 @@ void BaseSoftmaxClassifier::classify() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                setDevice();
+                checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+                
+                predictedProbs = new float[msvc_idealBatchSize * msvc_numClasses];
+                predictedLogits = new float[msvc_idealBatchSize * msvc_numClasses];
+                predictedClass = new uint16_t[msvc_idealBatchSize];
+                info("{0:s} is (RE)LOADED.", msvc_name);
+                RELOADING = false;
+                READY = true;
+            }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -113,7 +120,7 @@ void BaseSoftmaxClassifier::classify() {
             bufferSize *= shape[j];
         }
         checkCudaErrorCode(cudaMemcpyAsync(
-            (void *) predictedLogits[0],
+            (void *) predictedLogits,
             currReq_data[0].data.cudaPtr(),
             bufferSize,
             cudaMemcpyDeviceToHost,
@@ -123,8 +130,8 @@ void BaseSoftmaxClassifier::classify() {
         cudaStreamSynchronize(postProcStream);
 
         for (uint8_t i = 0; i < currReq_batchSize; ++i) {
-            softmax(predictedLogits[i], predictedProbs[i], msvc_numClasses);
-            predictedClass[i] = maxIndex(predictedProbs[i], msvc_numClasses);
+            softmax(predictedLogits + i * msvc_numClasses, predictedProbs + i * msvc_numClasses, msvc_numClasses);
+            predictedClass[i] = maxIndex(predictedProbs + i * msvc_numClasses, msvc_numClasses);
         }
 
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);

@@ -13,6 +13,7 @@ public:
         uint16_t own_port,
         int8_t devIndex,
         std::string logPath,
-        std::vector<Microservice*> services
+        RUNMODE runmode,
+        const json &profiling_configs
     );
 };

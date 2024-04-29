@@ -39,10 +39,10 @@ set(
         basereqbatcher.cpp
         basebatchinferencer.cpp
         basebboxcropper.cpp
-        # baseclassifier.cpp
-        # basesoftmaxclassifier.cpp
-        # basebboxcropperverifier.cpp
-        # basekpointextractor.cpp
+        baseclassifier.cpp
+        basesoftmaxclassifier.cpp
+        basebboxcropperverifier.cpp
+        basekpointextractor.cpp
 )
 
 # Here we define the library.

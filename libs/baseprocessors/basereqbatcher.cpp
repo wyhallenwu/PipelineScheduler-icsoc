@@ -2,6 +2,147 @@
 
 using namespace spdlog;
 
+inline cv::Scalar vectorToScalar(const std::vector<float>& vec) {
+    // Ensure the vector has exactly 4 elements
+    if (vec.size() == 1) {
+        return cv::Scalar(vec[0]);
+    } else if (vec.size() == 3) {
+        return cv::Scalar(vec[0], vec[1], vec[2]);
+    } else {
+        throw std::runtime_error("Unsupported number of channels");
+    }
+}
+
+/**
+ * @brief normalize the input data by subtracting and dividing values from the original pixesl
+ * 
+ * @param input the input data
+ * @param subVals values to be subtracted
+ * @param divVals values to be dividing by
+ * @param stream an opencv stream for asynchronous operation on cuda
+ */
+inline cv::cuda::GpuMat normalize(
+    cv::cuda::GpuMat &input,
+    cv::cuda::Stream &stream,
+    const std::vector<float>& subVals,
+    const std::vector<float>& divVals,
+    const float normalized_scale
+) {
+    trace("Going into {0:s}", __func__);
+    cv::cuda::GpuMat normalized;
+    cv::Scalar subValsScalar = vectorToScalar(subVals);
+    cv::Scalar divValsScalar = vectorToScalar(divVals);
+    if (input.channels() == 1) {
+        input.convertTo(normalized, CV_32FC1, normalized_scale, stream);
+        cv::cuda::subtract(normalized, subValsScalar, normalized, cv::noArray(), -1, stream);
+        cv::cuda::divide(normalized, divValsScalar, normalized, 1, -1, stream);
+    } else if (input.channels() == 3) {
+        input.convertTo(normalized, CV_32FC3, normalized_scale, stream);    
+        cv::cuda::subtract(normalized, subValsScalar, normalized, cv::noArray(), -1, stream);
+        cv::cuda::divide(normalized, divValsScalar, normalized, 1, -1, stream);
+    } else {
+        throw std::runtime_error("Unsupported number of channels");
+    }
+
+    stream.waitForCompletion();
+    trace("Finished {0:s}", __func__);
+
+    return normalized;
+}
+
+inline cv::cuda::GpuMat cvtHWCToCHW(
+    cv::cuda::GpuMat &input,
+    cv::cuda::Stream &stream,
+    uint8_t IMG_TYPE
+) {
+
+    trace("Going into {0:s}", __func__);
+    uint16_t height = input.rows;
+    uint16_t width = input.cols;
+    /**
+     * @brief TODOs
+     * This is the correct way but since we haven't figured out how to carry to image to be cropped
+     * it screws things up a bit.
+     * cv::cuda::GpuMat transposed(1, height * width, CV_8UC3);
+     */
+    // cv::cuda::GpuMat transposed(height, width, CV_8UC3);
+    cv::cuda::GpuMat transposed(1, height * width, IMG_TYPE);
+    std::vector<cv::cuda::GpuMat> channels;
+    if (input.channels() == 1) {
+        uint8_t IMG_SINGLE_CHANNEL_TYPE = IMG_TYPE;
+        channels = {
+            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[0]))
+        };
+    } else if (input.channels() == 3) {
+        uint8_t IMG_SINGLE_CHANNEL_TYPE = IMG_TYPE ^ 16;
+        size_t channel_mem_width = height * width;
+        
+        channels = {
+            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[0])),
+            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width])),
+            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width * 2]))
+        };
+    } else {
+        throw std::runtime_error("Unsupported number of channels");
+    }
+    cv::cuda::split(input, channels, stream);
+
+    stream.waitForCompletion();    
+
+    trace("Finished {0:s}", __func__);
+
+    return transposed;
+}
+
+/**
+ * @brief resize the input data without changing the aspect ratio and pad the empty area with a designated color
+ * 
+ * @param input the input data
+ * @param height the expected height after processing
+ * @param width  the expect width after processing
+ * @param bgcolor color to pad the empty area with
+ * @return cv::cuda::GpuMat 
+ */
+inline cv::cuda::GpuMat resizePadRightBottom(
+    cv::cuda::GpuMat &input,
+    const size_t height,
+    const size_t width,
+    const std::vector<float> &bgcolor,
+    cv::cuda::Stream &stream,
+    uint8_t IMG_TYPE,
+    uint8_t COLOR_CVT_TYPE,
+    uint8_t RESIZE_INTERPOL_TYPE
+
+) {
+    trace("Going into {0:s}", __func__);
+
+    uint16_t TARGET_IMG_TYPE;
+
+    // If the image is grayscale, then the target image type should be 0
+    if (GRAYSCALE_CONVERSION_CODES.count(COLOR_CVT_TYPE)) {
+        TARGET_IMG_TYPE = 0;
+    } else {
+        TARGET_IMG_TYPE = IMG_TYPE;
+    }
+    cv::cuda::GpuMat color_cvt_image(input.rows, input.cols, TARGET_IMG_TYPE);
+    cv::cuda::cvtColor(input, color_cvt_image, COLOR_CVT_TYPE, 0, stream);
+
+    float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
+    int unpad_w = r * input.cols;
+    int unpad_h = r * input.rows;
+    //Create a new GPU Mat 
+    cv::cuda::GpuMat resized(unpad_h, unpad_w, TARGET_IMG_TYPE);
+    cv::cuda::resize(color_cvt_image, resized, resized.size(), 0, 0, RESIZE_INTERPOL_TYPE, stream);
+    cv::cuda::GpuMat out(height, width, TARGET_IMG_TYPE, vectorToScalar(bgcolor));
+    // Creating an opencv stream for asynchronous operation on cuda
+    resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
+
+    stream.waitForCompletion();
+    trace("Finished {0:s}", __func__);
+
+    return out;
+}
+
 /**
  * @brief Get number at index from a string of comma separated numbers
  * 
@@ -56,7 +197,7 @@ BaseReqBatcherConfigs BaseReqBatcher::loadConfigsFromJson(const json &jsonConfig
     jsonConfigs.at("msvc_resizeInterpolType").get_to(configs.msvc_resizeInterpolType);
     std::string normVal;
     jsonConfigs.at("msvc_imgNormScale").get_to(normVal);
-    msvc_imgNormScale = fractionToFloat(normVal);
+    configs.msvc_imgNormScale = fractionToFloat(normVal);
     jsonConfigs.at("msvc_subVals").get_to(configs.msvc_subVals);
     jsonConfigs.at("msvc_divVals").get_to(configs.msvc_divVals);
     return configs;
@@ -98,7 +239,6 @@ BaseReqBatcher::BaseReqBatcher(const json &jsonConfigs) : Microservice(jsonConfi
 
 void BaseReqBatcher::batchRequests() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -133,8 +273,7 @@ void BaseReqBatcher::batchRequests() {
     // Batch size of current request
     BatchSizeType currReq_batchSize;
     info("{0:s} STARTS.", msvc_name); 
-    cv::cuda::Stream preProcStream;
-    READY = true;
+    cv::cuda::Stream *preProcStream;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -142,6 +281,21 @@ void BaseReqBatcher::batchRequests() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                delete preProcStream;
+                setDevice();
+                preProcStream = new cv::cuda::Stream();
+
+                outReq_genTime.clear();
+                outReq_path.clear();
+                outReq_slo.clear();
+                bufferData.clear();
+                prevData.clear();
+
+                info("{0:s} is (RE)LOADED.", msvc_name);
+                RELOADING = false;
+                READY = true;
+            }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -198,19 +352,19 @@ void BaseReqBatcher::batchRequests() {
             currReq.req_data[0].data,
             (this->msvc_outReqShape.at(0))[0][1],
             (this->msvc_outReqShape.at(0))[0][2],
-            cv::Scalar(128, 128, 128),
-            preProcStream,
+            {128, 128, 128},
+            *preProcStream,
             msvc_imgType,
             msvc_colorCvtType,
             msvc_resizeInterpolType
         );
 
-        data.data = cvtHWCToCHW(data.data, preProcStream, msvc_imgType);
+        data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
 
-        data.data = normalize(data.data, preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
+        data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
         trace("{0:s} finished resizing a frame", msvc_name);
-        data.shape = RequestDataShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
+        data.shape = RequestDataShapeType({(this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
         bufferData.emplace_back(data);
         trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
 
@@ -246,7 +400,6 @@ void BaseReqBatcher::batchRequests() {
 
 void BaseReqBatcher::batchRequestsProfiling() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -281,11 +434,9 @@ void BaseReqBatcher::batchRequestsProfiling() {
     // Batch size of current request
     BatchSizeType currReq_batchSize;
     info("{0:s} STARTS.", msvc_name); 
-    cv::cuda::Stream preProcStream;
+    cv::cuda::Stream *preProcStream;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
-
-    READY = true;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -293,6 +444,21 @@ void BaseReqBatcher::batchRequestsProfiling() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                delete preProcStream;
+                setDevice();
+                preProcStream = new cv::cuda::Stream();
+
+                outReq_genTime.clear();
+                outReq_path.clear();
+                outReq_slo.clear();
+                bufferData.clear();
+                prevData.clear();
+
+                RELOADING = false;
+                READY = true;
+                info("{0:s} is (RE)LOADED.", msvc_name);
+            }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -346,16 +512,16 @@ void BaseReqBatcher::batchRequestsProfiling() {
             currReq.req_data[0].data,
             (this->msvc_outReqShape.at(0))[0][1],
             (this->msvc_outReqShape.at(0))[0][2],
-            cv::Scalar(128, 128, 128),
-            preProcStream,
+            {128, 128, 128},
+            *preProcStream,
             msvc_imgType,
             msvc_colorCvtType,
             msvc_resizeInterpolType
         );
 
-        data.data = cvtHWCToCHW(data.data, preProcStream, msvc_imgType);
+        data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
 
-        data.data = normalize(data.data, preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
+        data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
         trace("{0:s} finished resizing a frame", msvc_name);
         data.shape = RequestDataShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});

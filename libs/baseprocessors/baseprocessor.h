@@ -23,26 +23,28 @@ inline std::string getTimeDifString(const ClockType &start, const ClockType &end
     return std::to_string(duration.count());
 }
 
-cv::cuda::GpuMat resizePadRightBottom(
+inline cv::Scalar vectorToScalar(const std::vector<float>& vec);
+
+inline cv::cuda::GpuMat resizePadRightBottom(
     cv::cuda::GpuMat &input,
     size_t height,
     size_t width,
-    const cv::Scalar &bgcolor = cv::Scalar(128, 128, 128),
+    const std::vector<float>& bgcolor = {128, 128, 128},
     cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
     uint8_t IMG_TYPE = 16, //CV_8UC3
     uint8_t COLOR_CVT_TYPE = 4, //CV_BGR2RGB
     uint8_t RESIZE_INTERPOL_TYPE = 3 //INTER_AREA
 );
 
-cv::cuda::GpuMat normalize(
+inline cv::cuda::GpuMat normalize(
     cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
-    const std::array<float, 3>& subVals = {0.f, 0.f, 0.f},
-    const std::array<float, 3>& divVals = {1.f, 1.f, 1.f},
+    const std::vector<float>& subVals = {0.f, 0.f, 0.f},
+    const std::vector<float>& divVals = {1.f, 1.f, 1.f},
     const float normalized_scale = 1.f / 255.f
 );
 
-cv::cuda::GpuMat cvtHWCToCHW(
+inline cv::cuda::GpuMat cvtHWCToCHW(
     cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
     uint8_t IMG_TYPE = 16 //CV_8UC3
@@ -57,8 +59,8 @@ struct BaseReqBatcherConfigs : BaseMicroserviceConfigs{
     uint8_t msvc_colorCvtType = 4; //CV_BGR2RGB
     uint8_t msvc_resizeInterpolType = 3; //INTER_AREA
     float msvc_imgNormScale = 1.f / 255.f;
-    std::array<float, 3> msvc_subVals = {0.f, 0.f, 0.f};
-    std::array<float, 3> msvc_divVals = {1.f, 1.f, 1.f};
+    std::vector<float> msvc_subVals = {0.f, 0.f, 0.f};
+    std::vector<float> msvc_divVals = {1.f, 1.f, 1.f};
 };
 
 /**
@@ -72,6 +74,17 @@ struct BaseBatchInferencerConfigs : BaseMicroserviceConfigs {
 
 struct BaseBBoxCropperConfigs : BaseMicroserviceConfigs {
     RequestShapeType msvc_inferenceShape;
+};
+
+struct BaseBBoxCropperVerifierConfigs : BaseBBoxCropperConfigs {
+};
+
+struct BaseKPointExtractorConfigs : BaseMicroserviceConfigs {
+    RequestShapeType msvc_inferenceShape;
+};
+
+struct BaseClassifierConfigs : BaseMicroserviceConfigs {
+    uint16_t msvc_numClasses;
 };
 
 
@@ -107,7 +120,7 @@ protected:
 
     uint8_t msvc_imgType, msvc_colorCvtType, msvc_resizeInterpolType;
     float msvc_imgNormScale;
-    std::array<float, 3> msvc_subVals, msvc_divVals;
+    std::vector<float> msvc_subVals, msvc_divVals;
 
 };
 
@@ -156,7 +169,7 @@ protected:
  *                      [x1, y1, x2, y2] (e.g., [0, 266, 260, 447])
  * @return cv::cuda::GpuMat
  */
-void crop(
+inline void crop(
     const cv::cuda::GpuMat &image,
     int orig_h,
     int orig_w,
@@ -167,7 +180,7 @@ void crop(
     std::vector<cv::cuda::GpuMat> &croppedBBoxes
 );
 
-void cropOneBox(
+inline void cropOneBox(
     const cv::cuda::GpuMat &image,
     int infer_h,
     int infer_w,
@@ -182,9 +195,6 @@ public:
     ~BaseBBoxCropper() = default;
 
     void cropping();
-    void setInferenceShape(RequestShapeType shape) {
-        msvc_inferenceShape = shape;
-    }
 
     void generateRandomBBox(
         float *bboxList,
@@ -208,15 +218,12 @@ public:
         postprocessor.detach();
     }
 
-    void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
-
-protected:
-    RequestShapeType msvc_inferenceShape;
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
 class BaseBBoxCropperVerifier : public Microservice {
 public:
-    BaseBBoxCropperVerifier(const BaseMicroserviceConfigs &configs);
+    BaseBBoxCropperVerifier(const json& jsonConfigs);
     ~BaseBBoxCropperVerifier() = default;
 
     void cropping();
@@ -226,26 +233,31 @@ public:
 
     void cropProfiling();
 
-    void dispatchThread() override {
+    virtual void dispatchThread() override {
         std::thread postprocessor(&BaseBBoxCropperVerifier::cropping, this);
         postprocessor.detach();
     }
 
-protected:
-    RequestShapeType msvc_inferenceShape;
+    BaseBBoxCropperVerifierConfigs loadConfigsFromJson(const json &jsonConfigs);
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
 class BaseClassifier : public Microservice {
 public:
-    BaseClassifier(const BaseMicroserviceConfigs &configs);
+    BaseClassifier(const json &jsonConfigs);
     ~BaseClassifier() = default;
 
     virtual void classify() ;
 
-    void dispatchThread() override {
+    virtual void dispatchThread() override {
         std::thread classifier(&BaseClassifier::classify, this);
         classifier.detach();
     }
+
+    BaseClassifierConfigs loadConfigsFromJson(const json &jsonConfigs);
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
 protected:
     RequestShapeType msvc_inferenceShape;
@@ -254,7 +266,7 @@ protected:
 
 class BaseSoftmaxClassifier : public BaseClassifier {
 public:
-    BaseSoftmaxClassifier(const BaseMicroserviceConfigs &configs);
+    BaseSoftmaxClassifier(const json &jsonConfigs);
     ~BaseSoftmaxClassifier() = default;
 
     virtual void classify() override;
@@ -262,15 +274,19 @@ public:
 
 class BaseKPointExtractor : public Microservice{
 public:
-    BaseKPointExtractor(const BaseMicroserviceConfigs &configs);
+    BaseKPointExtractor(const json &jsonConfigs);
     ~BaseKPointExtractor() = default;
 
     virtual void extractor();
 
-    void dispatchThread() override {
+    virtual void dispatchThread() override {
         std::thread extractor(&BaseKPointExtractor::extractor, this);
         extractor.detach();
     }
+
+    BaseKPointExtractorConfigs loadConfigsFromJson(const json &jsonConfigs);
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
 #endif //BASEPROCESSOR_H

@@ -2,8 +2,19 @@
 
 using namespace spdlog;
 
-BaseKPointExtractor::BaseKPointExtractor(const BaseMicroserviceConfigs &config) : Microservice(config) {
-    // msvc_numClasses = config.msvc_dataShape[0][0];
+
+BaseKPointExtractorConfigs BaseKPointExtractor::loadConfigsFromJson(const json &config) {
+    BaseKPointExtractorConfigs configs;
+    return configs;
+}
+
+void BaseKPointExtractor::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    BaseKPointExtractorConfigs configs = loadConfigsFromJson(jsonConfigs);
+}
+
+
+BaseKPointExtractor::BaseKPointExtractor(const json &jsonConfigs) : Microservice(jsonConfigs) {
+    loadConfigs(jsonConfigs, true);
     info("{0:s} is created.", msvc_name); 
 }
 
@@ -50,7 +61,6 @@ void BaseKPointExtractor::extractor() {
 
 
     cudaStream_t postProcStream;
-    checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
 
     NumQueuesType queueIndex;
 
@@ -58,10 +68,8 @@ void BaseKPointExtractor::extractor() {
     RequestDataShapeType shape;
 
 
-    float keyPoints[msvc_idealBatchSize][msvc_dataShape[0][0]][msvc_dataShape[0][1]][msvc_dataShape[0][2]];
+    float *keyPoints;
     // uint16_t predictedClass[msvc_idealBatchSize];
-
-    READY = true;
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -70,6 +78,16 @@ void BaseKPointExtractor::extractor() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                setDevice();
+                checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+
+                keyPoints = new float[msvc_idealBatchSize * msvc_dataShape[0][0] * msvc_dataShape[0][1] * msvc_dataShape[0][2]];
+
+                info("{0:s} is (RE)LOADED.", msvc_name);
+                RELOADING = false;
+                READY = true;
+            }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
@@ -96,7 +114,7 @@ void BaseKPointExtractor::extractor() {
             bufferSize *= shape[j];
         }
         checkCudaErrorCode(cudaMemcpyAsync(
-            (void *) keyPoints[0],
+            (void *) keyPoints,
             currReq_data[0].data.cudaPtr(),
             bufferSize,
             cudaMemcpyDeviceToHost,

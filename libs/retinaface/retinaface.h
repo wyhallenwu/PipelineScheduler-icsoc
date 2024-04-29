@@ -2,7 +2,9 @@
 #include <trtengine.h>
 #include <misc.h>
 #include "container_agent.h"
+#include "data_reader.h"
 #include "receiver.h"
+#include "sender.h"
 #include "sender.h"
 
 // class RetinaFacePreprocessor : public BasePreprocessor {
@@ -48,6 +50,19 @@ public:
         uint16_t own_port,
         int8_t devIndex,
         std::string logPath,
-        std::vector<Microservice*> services
+        RUNMODE runmode,
+        const json &profiling_configs
+    );
+};
+
+class RetinaFaceDataSource : public ContainerAgent {
+public:
+    RetinaFaceDataSource(
+        const std::string &name,
+        uint16_t own_port,
+        int8_t devIndex,
+        std::string logPath,
+        RUNMODE runmode,
+        const json &profiling_configs
     );
 };
