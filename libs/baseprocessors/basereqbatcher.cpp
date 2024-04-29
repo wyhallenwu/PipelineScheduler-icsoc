@@ -313,6 +313,11 @@ void BaseReqBatcher::batchRequests() {
         } else if (msvc_activeInQueueIndex.at(0) == 2) {
             currReq = msvc_InQueue.at(0)->pop2();
         }
+        // Meaning the the timeout in pop() has been reached and no request was actually popped
+        if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
+            continue;
+        }
+
         msvc_inReqCount++;
         currReq_genTime = currReq.req_origGenTime[0];
 
@@ -476,6 +481,11 @@ void BaseReqBatcher::batchRequestsProfiling() {
         } else if (msvc_activeInQueueIndex.at(0) == 2) {
             currReq = msvc_InQueue.at(0)->pop2();
         }
+        // Meaning the the timeout in pop() has been reached and no request was actually popped
+        if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
+            continue;
+        }
+
         msvc_inReqCount++;
         currReq_genTime = currReq.req_origGenTime[0];
 

@@ -122,15 +122,23 @@ struct Request {
 //template<int MaxSize=100>
 class ThreadSafeFixSizedDoubleQueue {
 private:
+    std::string q_name;
     std::queue<Request<LocalCPUReqDataType>> q_cpuQueue;
     std::queue<Request<LocalGPUReqDataType>> q_gpuQueue;
     std::mutex q_mutex;
     std::condition_variable q_condition;
     std::uint8_t activeQueueIndex;
     QueueLengthType q_MaxSize = 100;
+    bool isEmpty;
+    uint16_t timeout = 100;
 
 public:
     ThreadSafeFixSizedDoubleQueue(QueueLengthType size) : q_MaxSize(size) {}
+
+    ~ThreadSafeFixSizedDoubleQueue() {
+        std::queue<Request<LocalGPUReqDataType>>().swap(q_gpuQueue);
+        std::queue<Request<LocalCPUReqDataType>>().swap(q_cpuQueue);
+    }
 
     /**
      * @brief Emplacing Type 1 requests
@@ -169,12 +177,19 @@ public:
      */
     Request<LocalCPUReqDataType> pop1() {
         std::unique_lock<std::mutex> lock(q_mutex);
-        q_condition.wait(
-                lock,
-                [this]() { return !q_cpuQueue.empty(); }
+
+        Request<LocalCPUReqDataType> request;
+        isEmpty = !q_condition.wait_for(
+            lock,
+            std::chrono::milliseconds(this->timeout),
+            [this]() { return !q_cpuQueue.empty(); }
         );
-        Request<LocalCPUReqDataType> request = q_cpuQueue.front();
-        q_cpuQueue.pop();
+        if (!isEmpty) {
+            request = q_cpuQueue.front();
+            q_cpuQueue.pop();
+        } else {
+            request.req_travelPath = {"empty"};
+        }
         q_mutex.unlock();
         return request;
     }
@@ -186,13 +201,20 @@ public:
      */
     Request<LocalGPUReqDataType> pop2() {
         std::unique_lock<std::mutex> lock(q_mutex);
-        q_condition.wait(
+        Request<LocalGPUReqDataType> request;
+        isEmpty = !q_condition.wait_for(
                 lock,
+                std::chrono::milliseconds(this->timeout),
                 [this]() { return !q_gpuQueue.empty(); }
         );
-        Request<LocalGPUReqDataType> request = q_gpuQueue.front();
-        q_gpuQueue.pop();
-        q_mutex.unlock();
+        if (!isEmpty) {
+            request = q_gpuQueue.front();
+            q_gpuQueue.pop();
+            q_mutex.unlock();
+            return request;
+        } else {
+            request.req_travelPath = {"empty"};
+        }
         return request;
     }
 
@@ -220,10 +242,6 @@ public:
         activeQueueIndex = index;
     }
 
-    ~ThreadSafeFixSizedDoubleQueue() {
-        std::queue<Request<LocalGPUReqDataType>>().swap(q_gpuQueue);
-        std::queue<Request<LocalCPUReqDataType>>().swap(q_cpuQueue);
-    }
     uint8_t getActiveQueueIndex() {
         return activeQueueIndex;
     }

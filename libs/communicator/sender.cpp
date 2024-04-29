@@ -65,6 +65,11 @@ void GPUSender::Process() {
             continue;
         }
         auto request = msvc_InQueue[0]->pop2();
+        // Meaning the the timeout in pop() has been reached and no request was actually popped
+        if (strcmp(request.req_travelPath[0].c_str(), "empty") == 0) {
+            continue;
+        }
+
         SendGpuPointer(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -153,6 +158,11 @@ void LocalCPUSender::Process() {
             continue;
         }
         auto request = msvc_InQueue[0]->pop1();
+        // Meaning the the timeout in pop() has been reached and no request was actually popped
+        if (strcmp(request.req_travelPath[0].c_str(), "empty") == 0) {
+            continue;
+        }
+
         SendSharedMemory(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -216,6 +226,11 @@ void RemoteCPUSender::Process() {
             continue;
         }
         auto request = msvc_InQueue[0]->pop1();
+        // Meaning the the timeout in pop() has been reached and no request was actually popped
+        if (strcmp(request.req_travelPath[0].c_str(), "empty") == 0) {
+            continue;
+        }
+
         SendSerializedData(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }

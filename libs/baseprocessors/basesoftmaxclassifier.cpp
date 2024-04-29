@@ -100,6 +100,11 @@ void BaseSoftmaxClassifier::classify() {
 
         // Processing the next incoming request
         currReq = msvc_InQueue.at(0)->pop2();
+        // Meaning the the timeout in pop() has been reached and no request was actually popped
+        if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
+            continue;
+        }
+
         msvc_inReqCount++;
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
