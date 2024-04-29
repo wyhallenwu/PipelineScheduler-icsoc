@@ -46,13 +46,20 @@ message FullMetricsList {
   repeated FullMetrics metrics = 1;
 }
 
+message Neighbor {
+  string name = 1;
+  string ip = 2;
+  int32 class_of_interest = 3;
+}
+
 message MicroserviceConfig {
   string name = 1;
-  string type = 2;
-  string version = 3;
+  int32 model = 2;
+  int32 bath_size = 3;
   int32 recv_port = 4;
-  int32 dwnstr_port = 5;
-  string dwnstr_ip = 6;
+  int32 slo = 5;
+  repeated Neighbor upstream = 6;
+  repeated Neighbor downstream = 7;
 }
 
 message MicroserviceName {

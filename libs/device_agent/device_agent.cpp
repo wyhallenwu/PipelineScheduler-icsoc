@@ -4,7 +4,6 @@ ABSL_FLAG(std::string, deviceType, "", "string that identifies the device type")
 ABSL_FLAG(std::string, controllerUrl, "", "string that identifies the controller url");
 
 const int CONTAINER_BASE_PORT = 50001;
-const int RECEIVER_BASE_PORT = 55001;
 
 void msvcconfigs::to_json(json &j, const msvcconfigs::NeighborMicroserviceConfigs &val) {
     j["nb_name"] = val.name;
@@ -61,60 +60,61 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string na
 
     Ready(name, controller_url, type);
 
-    // test code that will eventually be replaced by the controller
-    CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4",
-                     dev_logPath);
-    CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{-1, -1, -1}}},
-                         {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55003"}, 10, -1, {{0, 0}}}}, 1, 10,
-                         dev_logPath);
+//    test code that will eventually be replaced by the controller
+//    CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4",
+//                     dev_logPath);
+//    CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{-1, -1, -1}}},
+//                         {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55003"}, 10, -1, {{0, 0}}}}, 1, 10,
+//                         dev_logPath);
 }
 
 void DeviceAgent::CreateYolo5Container(
-        int id,
-        const NeighborMicroserviceConfigs &upstream,
-        const std::vector<NeighborMicroserviceConfigs> &downstreams,
+        std::string name,
+        BatchSizeType batch_size,
         const MsvcSLOType &slo,
-        const BatchSizeType &batchSize,
+        const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
+        const google::protobuf::RepeatedPtrField<Neighbor> &downstreams,
         const std::string &logPath
 ) {
-    std::string name = "yolov5_" + std::to_string(id);
     json j = createConfigs(
-            {{name, name + "::receiver",      MicroserviceType::Receiver,      10, -1, {{-1, -1}}, 100},
-             {name, name + "::PreprocessBatcher",  MicroserviceType::PreprocessBatcher,  10, -1, {{-1, -1, -1}}, 10},
-             {name, name + "::TRTInferencer",     MicroserviceType::TRTInferencer,     10, -1, {{3, 640, 640}}, 10},
-             {name, name + "::PostprocessorBBoxCropper", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{1},{100,4},{100},{100}}, 100},
-             {name, name + "::sender",        MicroserviceType::Sender,        10, -1, {{-1, -1}}, 10}},
+            {{name, name + "::receiver",                 MicroserviceType::Receiver,                 10, -1, {{-1, -1}},                    100},
+             {name, name +
+                    "::PreprocessBatcher",               MicroserviceType::PreprocessBatcher,        10, -1, {{-1, -1,  -1}},               10},
+             {name, name +
+                    "::TRTInferencer",                   MicroserviceType::TRTInferencer,            10, -1, {{3,  640, 640}},              10},
+             {name, name +
+                    "::PostprocessorBBoxCropper",        MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{1}, {100, 4}, {100}, {100}}, 100},
+             {name, name +
+                    "::sender",                          MicroserviceType::Sender,                   10, -1, {{-1, -1}},                    10}},
             slo,
-            batchSize,
+            batch_size,
+            logPath,
+            {upstreams.at(0).name(), CommMethod::localCPU, {upstreams.at(0).ip()}, 0, -2, {{0, 0}}},
+            downstreams
+    );
+    // TRTConfigs config = {"./models/yolov5s_b32_dynamic_NVIDIAGeForceRTX3090_fp32_32_1.engine", MODEL_DATA_TYPE::fp32, "", 128, 1, 1, 0, true};
+    finishContainer("./Container_Yolov5", name, to_string(j), CONTAINER_BASE_PORT + containers.size());
+}
+
+void DeviceAgent::CreateDataSource(
+        std::string name,
+        BatchSizeType batch_size,
+        const MsvcSLOType &slo,
+        const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
+        const google::protobuf::RepeatedPtrField<Neighbor> &downstreams,
+        const std::string &logPath
+) {
+    NeighborMicroserviceConfigs upstream = {upstreams.at(0).name(), CommMethod::localCPU, {upstreams.at(0).ip()}, 0, -2, {{0, 0}}};
+    json j = createConfigs(
+            {{name, name + "::data_reader", MicroserviceType::Postprocessor, 10, -1, {{0, 0}}, 100},
+             {name, name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}, 100}},
+            slo,
+            1,
             logPath,
             upstream,
             downstreams
     );
-    // TRTConfigs config = {"./models/yolov5s_b32_dynamic_NVIDIAGeForceRTX3090_fp32_32_1.engine", MODEL_DATA_TYPE::fp32, "", 128, 1, 1, 0, true};
-    finishContainer("./Container_Yolov5", name, to_string(j), CONTAINER_BASE_PORT + containers.size(),
-                    RECEIVER_BASE_PORT + containers.size());
-}
-
-void DeviceAgent::CreateDataSource(
-        int id,
-        const std::vector<NeighborMicroserviceConfigs> &downstreams,
-        const MsvcSLOType &slo,
-        const std::string &video_path,
-        const std::string &logPath
-) {
-    std::string name = "datasource_" + std::to_string(id);
-    NeighborMicroserviceConfigs upstream = {"video_source", CommMethod::localCPU, {video_path}, 0, -2, {{0, 0}}};
-    json j = createConfigs(
-        {{name, name + "::data_reader", MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{0, 0}}, 100},
-         {name, name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}, 100}},
-        slo,
-        1,
-        logPath,
-        upstream,
-        downstreams
-    );
-    finishContainer("./Container_DataSource", name, to_string(j), CONTAINER_BASE_PORT + containers.size(),
-                    RECEIVER_BASE_PORT + containers.size());
+    finishContainer("./Container_DataSource", name, to_string(j), CONTAINER_BASE_PORT + containers.size());
 }
 
 json DeviceAgent::createConfigs(
@@ -123,27 +123,30 @@ json DeviceAgent::createConfigs(
         const BatchSizeType &batchSize,
         const std::string &logPath,
         const NeighborMicroserviceConfigs &prev_msvc,
-        const std::vector<NeighborMicroserviceConfigs> &next_msvc
+        const google::protobuf::RepeatedPtrField<Neighbor>  &next_msvc
 ) {
     int i = 0, j = next_msvc.size() + 1;
     std::vector<BaseMicroserviceConfigs> configs;
     NeighborMicroserviceConfigs upstream = prev_msvc;
     for (auto &msvc: data) {
         std::list<NeighborMicroserviceConfigs> downstream;
-        if (std::get<2>(msvc) == MicroserviceType::PostprocessorBBoxCropper) {
+        if (std::get<2>(msvc) >= MicroserviceType::Postprocessor) {
             while (--j > 0) {
                 downstream.push_back(
                         {std::get<1>(data[i + j]), CommMethod::localGPU, {""}, std::get<3>(data[i + j]),
                          std::get<4>(data[i + j]), std::get<5>(data[i + j])});
             }
         } else if (std::get<2>(msvc) == MicroserviceType::Sender) {
-            downstream.push_back(next_msvc[j++]);
+            downstream.push_back({next_msvc.at(j).name(), CommMethod::localGPU, {next_msvc.at(j).ip()}, 0,
+                                  static_cast<int16_t>(next_msvc.at(j++).class_of_interest()), {{0, 0}}});
         } else {
             downstream.push_back(
                     {std::get<1>(data[++i]), CommMethod::localGPU, {""}, std::get<3>(data[i]), std::get<4>(data[i]),
                      std::get<5>(data[i])});
         }
-        configs.push_back({std::get<0>(msvc), std::get<1>(msvc), std::get<2>(msvc), "", slo, std::get<6>(msvc), batchSize, std::get<5>(msvc), -1, logPath, RUNMODE::DEPLOYMENT, {upstream}, downstream});
+        configs.push_back(
+                {std::get<0>(msvc), std::get<1>(msvc), std::get<2>(msvc), "", slo, std::get<6>(msvc), batchSize,
+                 std::get<5>(msvc), -1, logPath, RUNMODE::DEPLOYMENT, {upstream}, downstream});
         //current mvsc becomes upstream for next msvc
         upstream = {std::get<1>(msvc), CommMethod::localGPU, {""}, std::get<3>(msvc), -2, std::get<5>(msvc)};
     }
@@ -152,7 +155,7 @@ json DeviceAgent::createConfigs(
 
 void
 DeviceAgent::finishContainer(const std::string &executable, const std::string &name, const std::string &start_string,
-                             const int &control_port, const int &data_port, const std::string &trt_config) {
+                             const int &control_port, const std::string &trt_config) {
     runDocker(executable, name, start_string, control_port, trt_config);
     std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
     containers[name] = {{},
@@ -168,6 +171,10 @@ void DeviceAgent::StopContainer(const ContainerHandle &container) {
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container.stub->AsyncStopExecution(&context, request, container.cq));
     rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(container.cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
 }
 
 void DeviceAgent::Ready(const std::string &name, const std::string &ip, DeviceType type) {
@@ -184,8 +191,7 @@ void DeviceAgent::Ready(const std::string &name, const std::string &ip, DeviceTy
         request.set_memory(profiler->getGpuMemory(devices));
     } else {
         struct sysinfo sys_info;
-        if(sysinfo(&sys_info) != 0)
-        {
+        if (sysinfo(&sys_info) != 0) {
             std::cerr << "sysinfo call failed!" << std::endl;
             exit(1);
         }
@@ -224,6 +230,10 @@ void DeviceAgent::ReportDeviceStatus() {
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             controller_stub->AsyncSendLightMetrics(&context, request, controller_sending_cq));
     rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(controller_sending_cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
 }
 
 void DeviceAgent::ReportFullMetrics() {
@@ -248,6 +258,10 @@ void DeviceAgent::ReportFullMetrics() {
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             controller_stub->AsyncSendFullMetrics(&context, request, controller_sending_cq));
     rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(controller_sending_cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
 }
 
 void DeviceAgent::HandleDeviceRecvRpcs() {
@@ -338,7 +352,21 @@ void DeviceAgent::StartMicroserviceRequestHandler::Proceed() {
         service->RequestStartMicroservice(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new StartMicroserviceRequestHandler(service, cq, device_agent);
-        // TODO: add logic to start container
+        switch (request.model()) {
+            case ModelType::DataSource:
+                device_agent->CreateDataSource(request.name(), request.bath_size(), request.slo(),
+                                               request.upstream(), request.downstream(), device_agent->dev_logPath);
+                break;
+            case ModelType::Yolov5:
+                device_agent->CreateYolo5Container(request.name(), request.bath_size(), request.slo(),
+                                                   request.upstream(), request.downstream(), device_agent->dev_logPath);
+                break;
+
+            default:
+                std::cerr << "Invalid model type" << std::endl;
+                status = FINISH;
+                responder.Finish(reply, Status::CANCELLED, this);
+        }
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

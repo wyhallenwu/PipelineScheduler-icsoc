@@ -26,8 +26,7 @@ Sender::Sender(const json &jsonConfigs) : Microservice(jsonConfigs) {
 }
 
 
-std::string
-Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
+std::string Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
                    EmptyMessage &reply, Status &status) {
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
