@@ -45,7 +45,7 @@ int main(int argc, char **argv) {
             msvcs.push_back(new GPUSender(msvc_configs[i]));
         } else if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::sharedMemory) {
             msvcs.push_back(new LocalCPUSender(msvc_configs[i]));
-        } else if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::sharedMemory) {
+        } else if (msvc_configs[i].msvc_dnstreamMicroservices.front().commMethod == CommMethod::serialized) {
             msvcs.push_back(new RemoteCPUSender(msvc_configs[i]));
         }
         msvcs[i]->SetInQueue(msvcs[i - 1]->GetOutQueue());

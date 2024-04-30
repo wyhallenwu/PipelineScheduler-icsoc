@@ -67,7 +67,7 @@ int main(int argc, char **argv) {
                 msvcsList.push_back(new GPUSender(cont_args.cont_pipeConfigs[i]));
             } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::sharedMemory) {
                 msvcsList.push_back(new LocalCPUSender(cont_args.cont_pipeConfigs[i]));
-            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::sharedMemory) {
+            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::serialized) {
                 msvcsList.push_back(new RemoteCPUSender(cont_args.cont_pipeConfigs[i]));
             }
             msvcsList[i]->SetInQueue(msvcsList[i - 1]->GetOutQueue());
