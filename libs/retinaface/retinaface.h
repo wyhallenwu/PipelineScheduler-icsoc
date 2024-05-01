@@ -4,8 +4,6 @@
 #include "container_agent.h"
 #include "data_reader.h"
 #include "receiver.h"
-#include "sender.h"
-#include "sender.h"
 
 // class RetinaFacePreprocessor : public BasePreprocessor {
 // public:

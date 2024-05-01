@@ -3,7 +3,6 @@
 #include <misc.h>
 #include "container_agent.h"
 #include "receiver.h"
-#include "sender.h"
 
 
 class GenderAgent: public ContainerAgent{

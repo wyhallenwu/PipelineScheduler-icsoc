@@ -5,7 +5,6 @@
 #include "container_agent.h"
 #include "data_reader.h"
 #include "receiver.h"
-#include "sender.h"
 #include "spdlog/spdlog.h"
 
 using namespace spdlog;

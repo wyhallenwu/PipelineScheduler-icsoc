@@ -128,12 +128,13 @@ private:
     std::mutex q_mutex;
     std::condition_variable q_condition;
     std::uint8_t activeQueueIndex;
+    std::int16_t class_of_interest;
     QueueLengthType q_MaxSize = 100;
     bool isEmpty;
     uint16_t timeout = 100;
 
 public:
-    ThreadSafeFixSizedDoubleQueue(QueueLengthType size) : q_MaxSize(size) {}
+    ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi) : q_MaxSize(size), class_of_interest(coi) {}
 
     ~ThreadSafeFixSizedDoubleQueue() {
         std::queue<Request<LocalGPUReqDataType>>().swap(q_gpuQueue);
@@ -244,6 +245,14 @@ public:
 
     uint8_t getActiveQueueIndex() {
         return activeQueueIndex;
+    }
+
+    void setClassOfInterest(int16_t classOfInterest) {
+        class_of_interest = classOfInterest;
+    }
+
+    int16_t getClassOfInterest() {
+        return class_of_interest;
     }
 };
 
@@ -392,6 +401,14 @@ public:
 
     std::vector<ThreadSafeFixSizedDoubleQueue*> GetOutQueue() {
         return msvc_OutQueue;
+    };
+
+    ThreadSafeFixSizedDoubleQueue* GetOutQueue(int coi) {
+        for (auto &queue : msvc_OutQueue) {
+            if (queue->getClassOfInterest() == coi) {
+                return queue;
+            }
+        }
     };
 
     MicroserviceType getMsvcType() {

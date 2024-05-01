@@ -36,14 +36,14 @@ int main(int argc, char **argv) {
         msvcsList[0]->SetInQueue(msvcsList[3]->GetOutQueue());
     } else {
         for (uint16_t i = 4; i < cont_args.cont_pipeConfigs.size(); i++) {
-            if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::localGPU) {
+            if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[i-4].at("nb_commMethod") == CommMethod::localGPU) {
                 msvcsList.push_back(new GPUSender(cont_args.cont_pipeConfigs[i]));
-            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::sharedMemory) {
+            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[i-4].at("nb_commMethod") == CommMethod::sharedMemory) {
                 msvcsList.push_back(new LocalCPUSender(cont_args.cont_pipeConfigs[i]));
-            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::serialized) {
+            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[i-4].at("nb_commMethod") == CommMethod::serialized) {
                 msvcsList.push_back(new RemoteCPUSender(cont_args.cont_pipeConfigs[i]));
             }
-            msvcsList[i]->SetInQueue(msvcsList[i - 1]->GetOutQueue());
+            msvcsList[i]->SetInQueue({msvcsList[3]->GetOutQueue(cont_args.cont_pipeConfigs[3].at("msvc_dnstreamMicroservices")[i-4].at("nb_classOfInterest"))});
         }
     }
 
