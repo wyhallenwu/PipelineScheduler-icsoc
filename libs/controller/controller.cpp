@@ -1,9 +1,9 @@
 #include "controller.h"
 
 void TaskDescription::to_json(json &j, const TaskDescription::TaskStruct &val) {
-    j = json{{"name", val.name},
-             {"slo", val.slo},
-             {"type", val.type},
+    j = json{{"name",   val.name},
+             {"slo",    val.slo},
+             {"type",   val.type},
              {"source", val.source},
              {"device", val.device}};
 }
@@ -28,6 +28,15 @@ Controller::Controller() {
     builder.RegisterService(&service);
     cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
+}
+
+Controller::~Controller() {
+    server->Shutdown();
+    cq->Shutdown();
+    running = false;
+    for (auto &msvc: microservices) {
+        StopMicroservice(msvc.first, msvc.second.device_agent, true);
+    }
 }
 
 void Controller::HandleRecvRpcs() {
@@ -56,57 +65,23 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     task->subtasks[tmp]->recv_port = device->next_free_port++;
     device->microservices.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
-    for(const auto& m : models) {
+    for (const auto &m: models) {
         tmp = t.name;
         microservices.insert({tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, {}, {}}});
         task->subtasks.insert({tmp, &microservices[tmp]});
         task->subtasks[tmp]->recv_port = device->next_free_port++;
         device->microservices.insert({tmp, task->subtasks[tmp]});
     }
-    for(const auto& m : models) {
-        for(const auto& d : m.second) {
+    for (const auto &m: models) {
+        for (const auto &d: m.second) {
             tmp = t.name;
             task->subtasks[tmp.append(d.first)]->class_of_interest = d.second;
             task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + m.first]);
             task->subtasks[t.name + m.first]->downstreams.push_back(task->subtasks[tmp]);
         }
     }
-    MicroserviceConfig request;
-    ClientContext context;
-    EmptyMessage reply;
-    Status status;
-    for (auto msvc: task->subtasks) {
-        request.set_name(msvc.first);
-        request.set_model(msvc.second->model);
-        request.set_bath_size(batch_sizes[msvc.first]);
-        request.set_recv_port(msvc.second->recv_port);
-        request.set_slo(task->slo);
-        for (auto dwnstr: msvc.second->downstreams) {
-            Neighbor *dwn = request.add_downstream();
-            dwn->set_name(dwnstr->name);
-            dwn->set_ip(dwnstr->device_agent->ip);
-            dwn->set_class_of_interest(dwnstr->class_of_interest);
-        }
-        if (msvc.second->model == DataSource) {
-            Neighbor *up = request.add_upstream();
-            up->set_name("video_source");
-            up->set_ip(t.source);
-            up->set_class_of_interest(-1);
-        } else {
-            for (auto upstr: msvc.second->upstreams) {
-                Neighbor *up = request.add_upstream();
-                up->set_name(upstr->name);
-                up->set_ip(absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
-                up->set_class_of_interest(-2);
-            }
-        }
-        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-                msvc.second->device_agent->stub->AsyncStartMicroservice(&context, request, msvc.second->device_agent->cq));
-        rpc->Finish(&reply, &status, (void *) 1);
-        void *got_tag;
-        bool ok = false;
-        GPR_ASSERT(msvc.second->device_agent->cq->Next(&got_tag, &ok));
-        GPR_ASSERT(ok);
+    for (std::pair<std::string, MicroserviceHandle *> msvc: task->subtasks) {
+        StartMicroservice(msvc, task->slo, batch_sizes[msvc.first], t.source);
     }
 }
 
@@ -169,7 +144,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         controller->devices.insert({request.device_name(),
                                     {request.ip_address(),
                                      ControlCommunication::NewStub(
-                                            grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
+                                             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
                                      new CompletionQueue(),
                                      static_cast<DeviceType>(request.device_type()),
                                      request.processors(),
@@ -182,26 +157,119 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     }
 }
 
-std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> Controller::getModelsByPipelineType(PipelineType type) {
+void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> &msvc, int slo, int batch_size,
+                                   std::string source) {
+    MicroserviceConfig request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(msvc.first);
+    request.set_model(msvc.second->model);
+    request.set_bath_size(batch_size);
+    request.set_recv_port(msvc.second->recv_port);
+    request.set_slo(slo);
+    for (auto dwnstr: msvc.second->downstreams) {
+        Neighbor *dwn = request.add_downstream();
+        dwn->set_name(dwnstr->name);
+        dwn->set_ip(dwnstr->device_agent->ip);
+        dwn->set_class_of_interest(dwnstr->class_of_interest);
+    }
+    if (msvc.second->model == DataSource) {
+        Neighbor *up = request.add_upstream();
+        up->set_name("video_source");
+        up->set_ip(source);
+        up->set_class_of_interest(-1);
+    } else {
+        for (auto upstr: msvc.second->upstreams) {
+            Neighbor *up = request.add_upstream();
+            up->set_name(upstr->name);
+            up->set_ip(absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
+            up->set_class_of_interest(-2);
+        }
+    }
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            msvc.second->device_agent->stub->AsyncStartMicroservice(&context, request, msvc.second->device_agent->cq));
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(msvc.second->device_agent->cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+}
+
+void Controller::MoveMicroservice(Controller::MicroserviceHandle *msvc, bool to_edge) {
+    NodeHandle * old_device = msvc->device_agent;
+    NodeHandle * device;
+    if (to_edge) {
+        device = msvc->upstreams[0]->device_agent;
+    } else {
+        device = &devices["server"];
+    }
+    msvc->device_agent = device;
+    msvc->recv_port = device->next_free_port++;
+    device->microservices.insert({msvc->name, msvc});
+    std::pair<std::string, MicroserviceHandle *> pair = {msvc->name, msvc};
+    StartMicroservice(pair, msvc->task->slo, 0, "");
+    for (auto upstr: msvc->upstreams) {
+        AdjustUpstream(msvc->recv_port, upstr, device);
+    }
+    StopMicroservice(msvc->name, old_device);
+    old_device->microservices.erase(msvc->name);
+}
+
+void Controller::AdjustUpstream(int port, Controller::MicroserviceHandle *upstr, Controller::NodeHandle *new_device) {
+    MicroserviceLink request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(upstr->name);
+    request.set_ip(new_device->ip);
+    request.set_port(port);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(upstr->device_agent->cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+}
+
+void Controller::StopMicroservice(std::string name, NodeHandle *device, bool forced) {
+    MicroserviceSignal request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(name);
+    request.set_forced(forced);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            device->stub->AsyncStopMicroservice(&context, request, microservices[name].device_agent->cq));
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(device->cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+}
+
+std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
+Controller::getModelsByPipelineType(PipelineType type) {
     switch (type) {
         case PipelineType::Traffic:
-            return {{":yolov5", {{":retinaface", 0}, {":cartype", 2}, {":plate", 2}}},
-                    {":retinaface", {{":arcface", -1}}},
-                    {":arcface", {}},
-                    {":cartype", {}},
-                    {":plate", {}}};
+            return {{":yolov5",     {{":retinaface", 0}, {":cartype", 2}, {":plate", 2}}},
+                    {":retinaface", {{":arcface",    -1}}},
+                    {":arcface",    {}},
+                    {":cartype",    {}},
+                    {":plate",      {}}};
         case PipelineType::Video_Call:
             return {{":retinaface", {}},
-                    {":gender", {}},
-                    {":age", {}},
-                    {":emotion", {}},
-                    {":arcface", {}}};
+                    {":gender",     {}},
+                    {":age",        {}},
+                    {":emotion",    {}},
+                    {":arcface",    {}}};
         case PipelineType::Building_Security:
-            return {{":yolov5", {}},
+            return {{":yolov5",     {}},
                     {":retinaface", {}},
-                    {":movenet", {}},
-                    {"gender", {}},
-                    {":age", {}}};
+                    {":movenet",    {}},
+                    {"gender",      {}},
+                    {":age",        {}}};
         default:
             return {};
     }

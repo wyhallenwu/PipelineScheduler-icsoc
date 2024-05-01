@@ -22,7 +22,8 @@ using controlcommunication::FullMetricsList;
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::Neighbor;
 using controlcommunication::MicroserviceConfig;
-using controlcommunication::MicroserviceName;
+using controlcommunication::MicroserviceLink;
+using controlcommunication::MicroserviceSignal;
 using EmptyMessage = google::protobuf::Empty;
 
 enum DeviceType {
@@ -89,21 +90,20 @@ class Controller {
 public:
     Controller();
 
-    ~Controller() = default;
+    ~Controller();
 
     void HandleRecvRpcs();
 
     void AddTask(const TaskDescription::TaskStruct &task);
 
-    bool isRunning() const { return running; };
+    [[nodiscard]] bool isRunning() const { return running; };
 
     void Stop() { running = false; };
 
+private:
     void UpdateLightMetrics(google::protobuf::RepeatedPtrField<LightMetrics> metrics);
-
     void UpdateFullMetrics(google::protobuf::RepeatedPtrField<FullMetrics> metrics);
 
-private:
     struct MicroserviceHandle;
     struct NodeHandle {
         std::string ip;
@@ -198,6 +198,12 @@ private:
     private:
         ConnectionConfigs request;
     };
+
+    void StartMicroservice(std::pair<std::string, MicroserviceHandle *> &upstr, int slo, int batch_size,
+                           std::string source = "");
+    void MoveMicroservice(MicroserviceHandle *msvc, bool to_edge);
+    static void AdjustUpstream(int port, MicroserviceHandle *msvc, NodeHandle *new_device);
+    void StopMicroservice(std::string name, NodeHandle *device, bool forced = false);
 
     static std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
     getModelsByPipelineType(PipelineType type);

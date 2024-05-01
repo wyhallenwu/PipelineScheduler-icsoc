@@ -59,13 +59,6 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string na
 
 
     Ready(name, controller_url, type);
-
-//    test code that will eventually be replaced by the controller
-//    CreateDataSource(0, {{"yolov5_0", CommMethod::serialized, {"localhost:55002"}, 10, -1, {{0, 0}}}}, 1, "./test.mp4",
-//                     dev_logPath);
-//    CreateYolo5Container(0, {"datasource_0", CommMethod::serialized, {"localhost:55001"}, 10, -2, {{-1, -1, -1}}},
-//                         {{"dummy_receiver_0", CommMethod::localGPU, {"localhost:55003"}, 10, -1, {{0, 0}}}}, 1, 10,
-//                         dev_logPath);
 }
 
 void DeviceAgent::CreateYolo5Container(
@@ -163,11 +156,12 @@ DeviceAgent::finishContainer(const std::string &executable, const std::string &n
                         {}, new CompletionQueue(), 0};
 }
 
-void DeviceAgent::StopContainer(const ContainerHandle &container) {
-    EmptyMessage request;
+void DeviceAgent::StopContainer(const ContainerHandle &container, bool forced) {
+    indevicecommunication::Signal request;
     EmptyMessage reply;
     ClientContext context;
     Status status;
+    request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container.stub->AsyncStopExecution(&context, request, container.cq));
     rpc->Finish(&reply, &status, (void *) 1);
@@ -381,7 +375,22 @@ void DeviceAgent::StopMicroserviceRequestHandler::Proceed() {
         service->RequestStopMicroservice(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new StopMicroserviceRequestHandler(service, cq, device_agent);
-        device_agent->StopContainer(device_agent->containers[request.name()]);
+        device_agent->StopContainer(device_agent->containers[request.name()], request.forced());
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void DeviceAgent::UpdateDownstreamRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateDownstream(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new StopMicroserviceRequestHandler(service, cq, device_agent);
+        device_agent->UpdateContainerSender(request.name(), request.ip(), request.port());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

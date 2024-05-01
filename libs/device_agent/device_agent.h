@@ -10,14 +10,6 @@
 #include "indevicecommunication.grpc.pb.h"
 #include "controlcommunication.grpc.pb.h"
 
-using controlcommunication::ControlCommunication;
-using controlcommunication::LightMetrics;
-using controlcommunication::LightMetricsList;
-using controlcommunication::FullMetrics;
-using controlcommunication::FullMetricsList;
-using controlcommunication::ConnectionConfigs;
-using controlcommunication::MicroserviceConfig;
-using controlcommunication::MicroserviceName;
 using trt::TRTConfigs;
 
 ABSL_DECLARE_FLAG(std::string, deviceType);
@@ -111,7 +103,9 @@ private:
                 executable, name, start_string, port).c_str());
     };
 
-    static void StopContainer(const ContainerHandle &container);
+    static void StopContainer(const ContainerHandle &container, bool forced = false);
+
+    static void UpdateContainerSender(std::string name, std::string ip, int port);
 
     void Ready(const std::string &name, const std::string &ip, DeviceType type);
 
@@ -222,7 +216,24 @@ private:
         void Proceed() final;
 
     private:
-        MicroserviceName request;
+        MicroserviceSignal request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+        DeviceAgent *device_agent;
+    };
+
+    class UpdateDownstreamRequestHandler : public ControlRequestHandler {
+    public:
+        UpdateDownstreamRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                       DeviceAgent *device)
+                : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        MicroserviceLink request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         DeviceAgent *device_agent;

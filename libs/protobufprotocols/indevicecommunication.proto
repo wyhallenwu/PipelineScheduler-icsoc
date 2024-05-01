@@ -9,13 +9,17 @@ package indevicecommunication;
 service InDeviceCommunication {
   rpc SendState(State) returns (google.protobuf.Empty) {}
   rpc ReportMsvcStart(ConnectionConfigs) returns (google.protobuf.Empty) {}
-  rpc StopExecution(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc StopExecution(Signal) returns (google.protobuf.Empty) {}
 }
 
 message State {
   string name = 1;
   float arrival_rate = 2;
   repeated int32 queue_size = 3;
+}
+
+message Signal {
+  bool forced = 1;
 }
 
 message ConnectionConfigs {

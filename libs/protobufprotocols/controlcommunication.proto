@@ -9,7 +9,8 @@ package controlcommunication;
 service ControlCommunication {
   rpc AdvertiseToController(ConnectionConfigs) returns (google.protobuf.Empty) {}
   rpc StartMicroservice(MicroserviceConfig) returns (google.protobuf.Empty) {}
-  rpc StopMicroservice(MicroserviceName) returns (google.protobuf.Empty) {}
+  rpc UpdateDownstream(MicroserviceLink) returns (google.protobuf.Empty) {}
+  rpc StopMicroservice(MicroserviceSignal) returns (google.protobuf.Empty) {}
   rpc SendLightMetrics(LightMetricsList) returns (google.protobuf.Empty) {}
   rpc SendFullMetrics(FullMetricsList) returns (google.protobuf.Empty) {}
 }
@@ -62,6 +63,13 @@ message MicroserviceConfig {
   repeated Neighbor downstream = 7;
 }
 
-message MicroserviceName {
+message MicroserviceLink {
   string name = 1;
+  string ip = 2;
+  int32 port = 3;
+}
+
+message MicroserviceSignal {
+  string name = 1;
+  bool forced = 2;
 }
