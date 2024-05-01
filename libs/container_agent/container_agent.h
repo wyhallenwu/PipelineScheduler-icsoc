@@ -14,6 +14,7 @@
 #include <filesystem>
 
 #include "microservice.h"
+#include "sender.h"
 #include "indevicecommunication.grpc.pb.h"
 
 ABSL_DECLARE_FLAG(std::string, name);
@@ -38,6 +39,9 @@ using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using indevicecommunication::InDeviceCommunication;
 using indevicecommunication::State;
+using indevicecommunication::Signal;
+using indevicecommunication::Connection;
+using indevicecommunication::ProcessData;
 using EmptyMessage = google::protobuf::Empty;
 
 enum TransferMethod {
@@ -114,7 +118,7 @@ protected:
     class RequestHandler {
     public:
         RequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq)
-                : service(service), cq(cq), status(CREATE) {};
+                : service(service), cq(cq), status(CREATE), responder(&ctx) {};
 
         virtual ~RequestHandler() = default;
 
@@ -129,23 +133,38 @@ protected:
         ServerCompletionQueue *cq;
         ServerContext ctx;
         CallStatus status;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
     class StopRequestHandler : public RequestHandler {
     public:
         StopRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
                            std::atomic<bool> *run)
-                : RequestHandler(service, cq), responder(&ctx), run(run) {
+                : RequestHandler(service, cq), run(run) {
             Proceed();
         }
 
         void Proceed() final;
 
     private:
-        EmptyMessage request;
-        EmptyMessage reply;
-        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+        Signal request;
         std::atomic<bool> *run;
+    };
+
+    class UpdateSenderRequestHandler : public RequestHandler {
+    public:
+        UpdateSenderRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                           std::atomic<bool> *run)
+                : RequestHandler(service, cq)  {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        Connection request;
+        std::vector<Microservice*> *msvcs;
     };
 
     void HandleRecvRpcs();

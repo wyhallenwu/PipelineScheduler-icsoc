@@ -102,7 +102,7 @@ void DeviceAgent::CreateDataSource(
             {{name, name + "::data_reader", MicroserviceType::Postprocessor, 10, -1, {{0, 0}}, 100},
              {name, name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}, 100}},
             slo,
-            1,
+            batch_size,
             logPath,
             upstream,
             downstreams
@@ -168,6 +168,24 @@ void DeviceAgent::StopContainer(const ContainerHandle &container, bool forced) {
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(container.cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+}
+
+void DeviceAgent::UpdateContainerSender(const std::string &name, const std::string &dwnstr, const std::string &ip,
+                                        const int &port) {
+    Connection request;
+    EmptyMessage reply;
+    ClientContext context;
+    Status status;
+    request.set_name(dwnstr);
+    request.set_ip(ip);
+    request.set_port(port);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            containers[name].stub->AsyncUpdateSender(&context, request, containers[name].cq));
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(containers[name].cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
 }
 
@@ -390,7 +408,7 @@ void DeviceAgent::UpdateDownstreamRequestHandler::Proceed() {
         service->RequestUpdateDownstream(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new StopMicroserviceRequestHandler(service, cq, device_agent);
-        device_agent->UpdateContainerSender(request.name(), request.ip(), request.port());
+        device_agent->UpdateContainerSender(request.name(), request.downstream_name(), request.ip(), request.port());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

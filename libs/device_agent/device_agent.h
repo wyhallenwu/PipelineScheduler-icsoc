@@ -105,7 +105,8 @@ private:
 
     static void StopContainer(const ContainerHandle &container, bool forced = false);
 
-    static void UpdateContainerSender(std::string name, std::string ip, int port);
+    void UpdateContainerSender(const std::string &name, const std::string &dwnstr, const std::string &ip,
+                               const int &port);
 
     void Ready(const std::string &name, const std::string &ip, DeviceType type);
 
@@ -182,7 +183,7 @@ private:
         void Proceed() final;
 
     private:
-        indevicecommunication::ConnectionConfigs request;
+        ProcessData request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         DeviceAgent *device_agent;

@@ -160,7 +160,7 @@ ContainerAgent::ContainerAgent(
 }
 
 void ContainerAgent::ReportStart() {
-    indevicecommunication::ConnectionConfigs request;
+    ProcessData request;
     request.set_msvc_name(name);
     request.set_pid(getpid());
     EmptyMessage reply;
@@ -221,8 +221,51 @@ void ContainerAgent::StopRequestHandler::Proceed() {
     }
 }
 
+void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateSender(&ctx, &request, &responder, cq, cq,
+                                      this);
+    } else if (status == PROCESS) {
+        // TODO: Handle reconfiguration by restarting sender
+        // pause processing except senders to clear out the queues
+
+        // adjust json for configuration
+//        json config = this->request;
+        // stop the old sender
+//        for (auto msvc : *msvcs) {
+//            if (msvc->downstream[0].name == request.name()) {
+//                msvc->stopThread();
+//                msvcs->erase(std::remove(msvcs->begin(), msvcs->end(), msvc), msvcs->end());
+//                break;
+//            }
+//        }
+        if (request.ip() == "localhost") {
+            // change postprocessing to keep the data on gpu
+
+            // start new GPU sender
+//            msvcs->push_back(new GPUSender(config));
+        } else {
+            // change postprocessing to offload data from gpu
+
+            // start new serialized sender
+//            msvcs->push_back(new RemoteCPUSender(config));
+        }
+        // align the data queue from postprocessor to new sender
+//        msvcs->back()->SetInQueue(msvcs[3]->GetOutQueue());
+        //start the new sender
+//        msvcs->back()->startThread();
+
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
 void ContainerAgent::checkReady() {
-    // ReportStart(); // RIGHTNOW
+    ReportStart();
     bool ready = false;
     while (!ready) {
         ready = true;

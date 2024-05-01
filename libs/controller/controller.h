@@ -202,7 +202,7 @@ private:
     void StartMicroservice(std::pair<std::string, MicroserviceHandle *> &upstr, int slo, int batch_size,
                            std::string source = "");
     void MoveMicroservice(MicroserviceHandle *msvc, bool to_edge);
-    static void AdjustUpstream(int port, MicroserviceHandle *msvc, NodeHandle *new_device);
+    static void AdjustUpstream(int port, MicroserviceHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
     void StopMicroservice(std::string name, NodeHandle *device, bool forced = false);
 
     static std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>

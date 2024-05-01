@@ -65,8 +65,9 @@ message MicroserviceConfig {
 
 message MicroserviceLink {
   string name = 1;
-  string ip = 2;
-  int32 port = 3;
+  string downstream_name = 2;
+  string ip = 3;
+  int32 port = 4;
 }
 
 message MicroserviceSignal {

@@ -210,18 +210,20 @@ void Controller::MoveMicroservice(Controller::MicroserviceHandle *msvc, bool to_
     std::pair<std::string, MicroserviceHandle *> pair = {msvc->name, msvc};
     StartMicroservice(pair, msvc->task->slo, 0, "");
     for (auto upstr: msvc->upstreams) {
-        AdjustUpstream(msvc->recv_port, upstr, device);
+        AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
     }
     StopMicroservice(msvc->name, old_device);
     old_device->microservices.erase(msvc->name);
 }
 
-void Controller::AdjustUpstream(int port, Controller::MicroserviceHandle *upstr, Controller::NodeHandle *new_device) {
+void Controller::AdjustUpstream(int port, Controller::MicroserviceHandle *upstr, Controller::NodeHandle *new_device,
+                                const std::string &dwnstr) {
     MicroserviceLink request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
     request.set_name(upstr->name);
+    request.set_downstream_name(dwnstr);
     request.set_ip(new_device->ip);
     request.set_port(port);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
