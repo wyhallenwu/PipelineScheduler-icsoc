@@ -1,4 +1,5 @@
 {
+    "pipeline_name": "pedestrian",
     "pipeline": [
         {
             "msvc_name": "movenet::receiver",
@@ -24,8 +25,9 @@
             ],
             "msvc_dataShape": [
                 [
-                    0,
-                    0
+                    3,
+                    500,
+                    500
                 ]
             ],
             "msvc_svcLevelObjLatency": 1,
@@ -272,5 +274,14 @@
             "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
         }
     ],
-    "profiling": ""
+    "profiling": {
+        "profile_minBatch": 20,
+        "profile_maxBatch": 20,
+        "profile_stepMode": 1,
+        "profile_step": 1,
+        "profile_templateModelPath": "../models/pose_3090_fp32_[batch]_1.engine",
+        "profile_inputRandomizeScheme": 0,
+        "profile_numWarmUpBatches": 0,
+        "profile_numProfileBatches": 20
+    }
 }

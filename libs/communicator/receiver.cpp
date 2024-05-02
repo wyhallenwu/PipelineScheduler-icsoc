@@ -2,16 +2,11 @@
 
 ReceiverConfigs Receiver::loadConfigsFromJson(const json &jsonConfigs) {
     ReceiverConfigs configs;
-    if (msvc_RUNMODE == RUNMODE::PROFILING) {
-        jsonConfigs.at("msvc_dataShape").get_to(configs.msvc_dataShape);
-        jsonConfigs.at("msvc_numWarmUpBatches").get_to(configs.msvc_numWarmUpBatches);
-        jsonConfigs.at("msvc_numProfileBatches").get_to(configs.msvc_numProfileBatches);
-    }
     return configs;
 }
 
 void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
-
+    spdlog::trace("{0:s} is LOANDING configs...", __func__);
     if (!isConstructing) { // If this is not called from the constructor, then we are loading configs from a file for Microservice class
         Microservice::loadConfigs(jsonConfigs);
     }
@@ -19,7 +14,7 @@ void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     ReceiverConfigs configs = loadConfigsFromJson(jsonConfigs);
 
     if (msvc_RUNMODE == RUNMODE::PROFILING) {
-        readConfigsFromJson(configs.msvc_appLvlConfigs);
+        // readConfigsFromJson(configs.msvc_appLvlConfigs);
         msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
     } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
         grpc::EnableDefaultHealthCheckService(true);
@@ -37,10 +32,12 @@ void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
         // or so
     }
+    spdlog::trace("{0:s} FINISHED loading configs...", __func__);
 }
 
 Receiver::Receiver(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
+    spdlog::info("{0:s} is created.", msvc_name); 
 }
 
 template<typename ReqDataType>
@@ -72,130 +69,6 @@ void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
     }
 }
 
-void Receiver::profileDataGenerator() {
-    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    setDevice();
-
-    // Since we dont know the shape of data before hand, we would choose a few potential shapes and choose randomly amongst them
-    // during profiling
-    uint8_t randomShapeIndex;
-    std::uniform_int_distribution<> dis(0, msvc_dataShape.size() - 1);
-    std::mt19937 gen(2024);
-
-    std::vector<RequestData<LocalCPUReqDataType>> requestData;
-    RequestData<LocalCPUReqDataType> data;
-    Request<LocalCPUReqDataType> request;
-    RequestDataShapeType shape;
-    cv::Mat img;
-    std::string requestPath;
-    if (msvc_OutQueue[0]->getActiveQueueIndex() != 1) msvc_OutQueue[0]->setActiveQueueIndex(1);
-    msvc_OutQueue[0]->setQueueSize(1000);
-    READY = true;
-
-    Request<LocalCPUReqDataType> inferTimeReportReq;
-
-    auto numWarmUpBatches = msvc_numWarmUpBatches;
-    auto numProfileBatches = msvc_numProfileBatches;
-    BatchSizeType batchSize = 1;
-    BatchSizeType batchNum = 1;
-    msvc_InQueue.at(0)->setActiveQueueIndex(1);
-
-    while (true) {
-        if (this->STOP_THREADS) {
-            spdlog::info("{0:s} STOPS.", msvc_name);
-            break;
-        }
-        else if (this->PAUSE_THREADS) {
-            ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
-            continue;
-        }
-        if (msvc_inReqCount > 0) {
-            inferTimeReportReq = msvc_InQueue.at(0)->pop1();
-            processInferTimeReport(inferTimeReportReq);
-
-            // NEXT STEP: Write the inferTimeReportReq to a file
-            // NEXT NEXT STEP:  Write a function to analyze the inferTimeReportReq
-        }
-        /**
-         * @brief Warming up to avoid cold start effects.
-         * During warming up, we use inference `numBatches` batches of requests.
-         * 
-         */
-        if (numWarmUpBatches > 0) {
-            for (BatchSizeType j = 0; j < msvc_idealBatchSize; ++j) {
-                msvc_inReqCount++;
-                randomShapeIndex = dis(gen);
-                shape = msvc_dataShape[randomShapeIndex];
-                img = cv::Mat(shape[1], shape[2], CV_8UC3);
-                data = {
-                    shape,
-                    img
-                };
-                requestData.emplace_back(data);
-                requestPath = "";
-                request = {
-                    {std::chrono::_V2::system_clock::now()},
-                    {9999},
-                    {requestPath},
-                    1,
-                    requestData
-                };
-                msvc_OutQueue[0]->emplace(request);
-            }
-            numWarmUpBatches--;
-            requestData.clear();
-        }
-        /**
-         * @brief For each model, we profile all batch size in range of [1, msvc_idealBatchSize] for `numProfileBatches` times.
-         * 
-         */
-        else if (numWarmUpBatches == 0 && batchNum <= numProfileBatches) {
-            for (BatchSizeType i = 1; i <= batchSize; i++) { // Filling up the batch
-                msvc_inReqCount++;
-
-                // Choosing a random shape for a more generalized profiling results
-                randomShapeIndex = dis(gen);
-                shape = msvc_dataShape[randomShapeIndex];
-                img = cv::Mat(shape[1], shape[2], CV_8UC3);
-                data = {
-                    shape,
-                    img
-                };
-                requestData.emplace_back(data);
-
-                // For bookkeeping, we add a certain pattern into the `requestPath` field.
-                // [batchSize, batchNum, i]
-                requestPath = std::to_string(batchSize) + "," + std::to_string(batchNum) + "," + std::to_string(i);
-
-                // The very last batch of this profiling session is marked with "END" in the `requestPath` field.
-                if ((batchNum == msvc_numProfileBatches) && (i == batchSize)) {
-                    if (batchSize == msvc_idealBatchSize) {
-                        requestPath = requestPath + "PROFILE_ENDS";
-                    } else {
-                        requestPath = requestPath + "BATCH_ENDS";
-                    }
-                }
-                request = {
-                    {std::chrono::_V2::system_clock::now()},
-                    {9999},
-                    {requestPath},
-                    1,
-                    requestData
-                };
-                msvc_OutQueue[0]->emplace(request);
-            }
-            batchNum++;
-            requestData.clear();
-            
-        }
-        if (batchNum > msvc_numProfileBatches) {
-            batchSize++;
-            batchNum = 1;
-        }
-    }
-    msvc_logFile.close();
-}
-
 Receiver::GpuPointerRequestHandler::GpuPointerRequestHandler(
     DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
     ThreadSafeFixSizedDoubleQueue *out,
@@ -220,7 +93,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
             elements.push_back({{gpu_image.channels(), el.height(), el.width()}, gpu_image});
         }
         Request<LocalGPUReqDataType> req = {
-            {ClockType(std::chrono::nanoseconds(request.timestamp()))},
+            {{ClockType(std::chrono::nanoseconds(request.timestamp()))}},
             {request.slo()},
             {request.path()},
             1,
@@ -264,7 +137,7 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
             boost::interprocess::shared_memory_object::remove(name);
         }
         Request<LocalCPUReqDataType> req = {
-            {ClockType(std::chrono::nanoseconds(request.timestamp()))},
+            {{ClockType(std::chrono::nanoseconds(request.timestamp()))}},
             {request.slo()},
             {request.path()},
             1,
@@ -308,7 +181,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             elements.push_back({{image.channels(), el.height(), el.width()}, image});
         }
         Request<LocalCPUReqDataType> req = {
-            {std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp()))},
+            {{std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp()))}},
             {request.slo()},
             {request.path()},
             1, 
@@ -340,6 +213,7 @@ void Receiver::HandleRpcs() {
         }
         else if (this->PAUSE_THREADS) {
             if (RELOADING) {
+                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
                 RELOADING = false;
                 spdlog::info("{0:s} is (RE)LOADED.", msvc_name);

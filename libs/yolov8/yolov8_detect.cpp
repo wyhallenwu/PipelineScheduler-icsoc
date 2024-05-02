@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
     }
     ContainerAgent *agent = new YoloV8Agent(name, absl::GetFlag(FLAGS_port), device, msvcs);
 
-    agent->checkReady();
+    agent->waitReady();
     
     while (agent->running()) {
         std::this_thread::sleep_for(std::chrono::seconds(4));

@@ -57,6 +57,7 @@ void GPUSender::Process() {
         }
         else if (this->PAUSE_THREADS) {
             if (RELOADING) {
+                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
                 RELOADING = false;
                 spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
@@ -70,7 +71,12 @@ void GPUSender::Process() {
             continue;
         }
 
-        SendGpuPointer(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
+        SendGpuPointer(
+            request.req_data,
+            request.req_origGenTime[0],
+            request.req_travelPath[0],
+            request.req_e2eSLOLatency[0]
+        );
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     msvc_logFile.close();
@@ -78,11 +84,12 @@ void GPUSender::Process() {
 
 std::string GPUSender::SendGpuPointer(
         std::vector<RequestData<LocalGPUReqDataType>> &elements,
-        const ClockType &timestamp, const std::string &path, const uint32_t &slo) {
+        const RequestTimeType &timestamp, const std::string &path, const uint32_t &slo) {
     CompletionQueue cq;
 
     GpuPointerPayload request;
-    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp));
+    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp[0]));
+    // @Lucas TODO: timestamp[0] is the timestamp at postprocessor
     request.set_path(path);
     request.set_slo(slo);
     for (RequestData<LocalGPUReqDataType> el: elements) {
@@ -150,6 +157,7 @@ void LocalCPUSender::Process() {
         }
         else if (this->PAUSE_THREADS) {
             if (RELOADING) {
+                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
                 RELOADING = false;
                 spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
@@ -169,12 +177,15 @@ void LocalCPUSender::Process() {
     msvc_logFile.close();
 }
 
-std::string LocalCPUSender::SendSharedMemory(const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp,
-                                             const std::string &path,
-                                             const uint32_t &slo) {
+std::string LocalCPUSender::SendSharedMemory(
+    const std::vector<RequestData<LocalCPUReqDataType>> &elements,
+    const RequestTimeType &timestamp,
+    const std::string &path,
+    const uint32_t &slo) {
     CompletionQueue cq;
     SharedMemPayload request;
-    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp));
+    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp[0]));
+    // @Lucas TODO: timestamp[0] is the timestamp at postprocessor
     request.set_path(path);
     request.set_slo(slo);
     char* name;
@@ -218,6 +229,7 @@ void RemoteCPUSender::Process() {
         }
         else if (this->PAUSE_THREADS) {
             if (RELOADING) {
+                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
                 RELOADING = false;
                 spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
@@ -238,12 +250,14 @@ void RemoteCPUSender::Process() {
 }
 
 std::string RemoteCPUSender::SendSerializedData(
-        const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp, const std::string &path,
+        const std::vector<RequestData<LocalCPUReqDataType>> &elements, 
+        const RequestTimeType &timestamp, const std::string &path,
         const uint32_t &slo) { // We use unix time encoded to int64
     CompletionQueue cq;
 
     SerializedDataPayload request;
-    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp));
+    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp[0]));
+    // @Lucas TODO: timestamp[0] is the timestamp at postprocessor
     request.set_path(path);
     request.set_slo(slo);
     for (RequestData<LocalCPUReqDataType> el: elements) {

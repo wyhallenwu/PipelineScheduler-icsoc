@@ -238,7 +238,6 @@ BaseReqBatcher::BaseReqBatcher(const json &jsonConfigs) : Microservice(jsonConfi
 }
 
 void BaseReqBatcher::batchRequests() {
-    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -247,13 +246,13 @@ void BaseReqBatcher::batchRequests() {
     ClockType currReq_recvTime;
 
     // Batch reqs' gen time
-    RequestTimeType outReq_genTime;
+    BatchTimeType outBatch_genTime;
 
     // Batch reqs' slos
     RequestSLOType outReq_slo;
 
     // Batch reqs' paths
-    RequestPathType outReq_path;
+    RequestPathType outBatch_path;
 
     // Buffer memory for each batch
     std::vector<RequestData<LocalGPUReqDataType>> bufferData;
@@ -268,7 +267,9 @@ void BaseReqBatcher::batchRequests() {
     Request<LocalCPUReqDataType> currCPUReq;
 
     // Request sent to a downstream microservice
-    Request<LocalGPUReqDataType> outReq;   
+    Request<LocalGPUReqDataType> outReq;
+
+    auto timeNow = std::chrono::high_resolution_clock::now();
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
@@ -282,12 +283,22 @@ void BaseReqBatcher::batchRequests() {
         }
         else if (this->PAUSE_THREADS) {
             if (RELOADING) {
-                delete preProcStream;
+                /**
+                 * @brief Opening a new log file
+                 * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
+                 * 
+                 */
+
+                if (msvc_logFile.is_open()) {
+                    msvc_logFile.close();
+                }
+                msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
+
                 setDevice();
                 preProcStream = new cv::cuda::Stream();
 
-                outReq_genTime.clear();
-                outReq_path.clear();
+                outBatch_genTime.clear();
+                outBatch_path.clear();
                 outReq_slo.clear();
                 bufferData.clear();
                 prevData.clear();
@@ -305,8 +316,8 @@ void BaseReqBatcher::batchRequests() {
                 msvc_activeInQueueIndex.at(0) = msvc_InQueue.at(0)->getActiveQueueIndex();
                 trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
             }
+            trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
         }
-        trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
         if (msvc_activeInQueueIndex.at(0) == 1) {
             currCPUReq = msvc_InQueue.at(0)->pop1();
             currReq = uploadReq(currCPUReq);
@@ -319,7 +330,7 @@ void BaseReqBatcher::batchRequests() {
         }
 
         msvc_inReqCount++;
-        currReq_genTime = currReq.req_origGenTime[0];
+        currReq_genTime = currReq.req_origGenTime[0][0];
 
         // We need to check if the next request is worth processing.
         // If it's too late, then we can drop and stop processing this request.
@@ -328,15 +339,18 @@ void BaseReqBatcher::batchRequests() {
         }
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
-        currReq_recvTime = {std::chrono::high_resolution_clock::now()};
+        currReq_recvTime = std::chrono::high_resolution_clock::now();
         if (this->msvc_inReqCount > 1) {
             this->updateReqRate(currReq_genTime);
         }
+        // `currReq_recvTime` will also be used to measured how much for the req to sit in queue and 
+        // how long it took for the request to be preprocessed
+        currReq.req_origGenTime[0].emplace_back(currReq_recvTime);
+
         currReq_batchSize = currReq.req_batchSize;
 
-        outReq_genTime.emplace_back(currReq_genTime);
         outReq_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
-        outReq_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_containerName + "_" + std::to_string(msvc_inReqCount) + "]");
+        outBatch_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_containerName + "_" + std::to_string(msvc_inReqCount) + "]");
         trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
         msvc_onBufferBatchSize++;
@@ -373,16 +387,29 @@ void BaseReqBatcher::batchRequests() {
         bufferData.emplace_back(data);
         trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
 
+        // Consider this the moment the request preprocessed and is waiting to be batched
+        timeNow = std::chrono::high_resolution_clock::now();
+
+        // Add the whole time vector of currReq to outReq
+        currReq.req_origGenTime[0].emplace_back(timeNow);
+        outBatch_genTime.emplace_back(currReq.req_origGenTime[0]);
+
         // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
         // cudaFree(currReq.req_data[0].data.cudaPtr());
         // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
         // Waiting more means there is a higher chance the earliest request in the buffer will be late eventually.
         if (this->isTimeToBatch()) {
             // If true, copy the buffer data into the out queue
+            timeNow = std::chrono::high_resolution_clock::now();
+
+            for (auto& req_genTime : outBatch_genTime) {
+                req_genTime.emplace_back(timeNow);
+            }
+
             outReq = {
-                outReq_genTime,
+                outBatch_genTime,
                 outReq_slo,
-                outReq_path,
+                outBatch_path,
                 msvc_onBufferBatchSize,
                 bufferData,
                 prevData
@@ -390,8 +417,8 @@ void BaseReqBatcher::batchRequests() {
             trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
             msvc_OutQueue[0]->emplace(outReq);
             msvc_onBufferBatchSize = 0;
-            outReq_genTime.clear();
-            outReq_path.clear();
+            outBatch_genTime.clear();
+            outBatch_path.clear();
             outReq_slo.clear();
             bufferData.clear();
             prevData.clear();
@@ -413,10 +440,10 @@ void BaseReqBatcher::batchRequestsProfiling() {
     ClockType currReq_recvTime;
 
     // Batch reqs' gen time
-    RequestTimeType outReq_genTime;
+    BatchTimeType outBatch_genTime;
 
     // Batch reqs' slos
-    RequestSLOType outReq_slo;
+    RequestSLOType outBatch_slo;
 
     // Batch reqs' paths
     RequestPathType outReq_path;
@@ -449,19 +476,30 @@ void BaseReqBatcher::batchRequestsProfiling() {
             break;
         }
         else if (this->PAUSE_THREADS) {
-            if (RELOADING) {
-                delete preProcStream;
+            if (this->RELOADING) {
+                /**
+                 * @brief Opening a new log file
+                 * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
+                 * 
+                 */
+
+                if (msvc_logFile.is_open()) {
+                    msvc_logFile.close();
+                }
+                msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
+
+                // delete preProcStream;
                 setDevice();
                 preProcStream = new cv::cuda::Stream();
 
-                outReq_genTime.clear();
+                outBatch_genTime.clear();
                 outReq_path.clear();
-                outReq_slo.clear();
+                outBatch_slo.clear();
                 bufferData.clear();
                 prevData.clear();
 
-                RELOADING = false;
-                READY = true;
+                this->RELOADING = false;
+                this->READY = true;
                 info("{0:s} is (RE)LOADED.", msvc_name);
             }
             //info("{0:s} is being PAUSED.", msvc_name);
@@ -471,7 +509,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
         if (msvc_InQueue.at(0)->getActiveQueueIndex() != msvc_activeInQueueIndex.at(0)) {
             if (msvc_InQueue.at(0)->size(msvc_activeInQueueIndex.at(0)) == 0) {
                 msvc_activeInQueueIndex.at(0) = msvc_InQueue.at(0)->getActiveQueueIndex();
-                trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+                // trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
             }
         }
         trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
@@ -487,7 +525,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
         }
 
         msvc_inReqCount++;
-        currReq_genTime = currReq.req_origGenTime[0];
+        currReq_genTime = currReq.req_origGenTime[0][0];
 
         // We need to check if the next request is worth processing.
         // If it's too late, then we can drop and stop processing this request.
@@ -496,15 +534,18 @@ void BaseReqBatcher::batchRequestsProfiling() {
         }
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
-        currReq_recvTime = {std::chrono::high_resolution_clock::now()};
+        currReq_recvTime = std::chrono::high_resolution_clock::now();
         if (this->msvc_inReqCount > 1) {
             this->updateReqRate(currReq_genTime);
         }
+        // `currReq_recvTime` will also be used to measured how much for the req to sit in queue and 
+        // how long it took for the request to be preprocessed
+        currReq.req_origGenTime[0].emplace_back(currReq_recvTime); // SECOND_TIMESTAMP
+
         currReq_batchSize = currReq.req_batchSize;
 
         trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
-        msvc_onBufferBatchSize++;
         // Resize the incoming request image the padd with the grey color
         // The resize image will be copied into a reserved buffer
 
@@ -539,19 +580,27 @@ void BaseReqBatcher::batchRequestsProfiling() {
         trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
 
 
-        // Set the ideal batch size for this microservice using the signal from the receiver.
-        // Only used during profiling time.
-        msvc_idealBatchSize = getNumberAtIndex(currReq.req_travelPath[0], 0);
-
-        outReq_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
+        /**
+         * @brief At the moment of batching we stick this time stamp into each request in the batch.
+         * This lets us know how much each individual request has to wait and how much is the batched inference
+         * time exactly.
+         * 
+         */
+        outBatch_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
         outReq_path.emplace_back(currReq.req_travelPath[0]);
 
-
+        // Consider this the moment the request preprocessed and is waiting to be batched
         timeNow = std::chrono::high_resolution_clock::now();
 
         // Add the whole time vector of currReq to outReq
-        outReq_genTime.insert(outReq_genTime.end(), currReq.req_origGenTime.begin(), currReq.req_origGenTime.end());
-        outReq_genTime.emplace_back(timeNow);
+        currReq.req_origGenTime[0].emplace_back(timeNow); // THIRD_TIMESTAMP
+        outBatch_genTime.emplace_back(currReq.req_origGenTime[0]);
+
+        // Set the ideal batch size for this microservice using the signal from the receiver.
+        // Only used during profiling time.
+        msvc_idealBatchSize = getNumberAtIndex(currReq.req_travelPath[0], 1);
+
+        msvc_onBufferBatchSize++;
 
         // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
         // Waiting more means there is a higher chance the earliest request in the buffer will be late eventually.
@@ -560,24 +609,13 @@ void BaseReqBatcher::batchRequestsProfiling() {
             // Moment of batching
             timeNow =  std::chrono::high_resolution_clock::now();
 
-            /**
-             * @brief At the moment of batching we stick this time stamp into each request in the batch.
-             * This lets us know how much each individual request has to wait and how much is the batched inference
-             * time exactly.
-             * 
-             */
-            uint8_t numTimeStampPerReq = (uint8_t)(outReq_genTime.size() / msvc_onBufferBatchSize);
-            uint16_t insertPos = numTimeStampPerReq;
-            while (insertPos < outReq_genTime.size()) {
-                outReq_genTime.insert(outReq_genTime.begin() + insertPos, timeNow);
-                insertPos += numTimeStampPerReq + 1;
+            for (auto& req_genTime : outBatch_genTime) {
+                req_genTime.emplace_back(timeNow); //FOURTH_TIMESTAMP
             }
-            if (insertPos == outReq_genTime.size()) {
-                outReq_genTime.push_back(timeNow);
-            }
+
             outReq = {
-                outReq_genTime,
-                outReq_slo,
+                outBatch_genTime,
+                outBatch_slo,
                 outReq_path,
                 msvc_onBufferBatchSize,
                 bufferData,
@@ -586,9 +624,9 @@ void BaseReqBatcher::batchRequestsProfiling() {
             trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
             msvc_OutQueue[0]->emplace(outReq);
             msvc_onBufferBatchSize = 0;
-            outReq_genTime.clear();
+            outBatch_genTime.clear();
             outReq_path.clear();
-            outReq_slo.clear();
+            outBatch_slo.clear();
             bufferData.clear();
             prevData.clear();
         }

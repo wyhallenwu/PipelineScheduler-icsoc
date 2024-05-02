@@ -1,7 +1,7 @@
 #include "baseprocessor.h"
 
 using namespace spdlog;
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 using namespace trt;
 
 /**
@@ -11,17 +11,16 @@ using namespace trt;
  * @param isConstructing 
  */
 void BaseBatchInferencer::loadConfigs(const json &jsonConfigs, bool isConstructing) {
-    
+    spdlog::trace("{0:s} is LOANDING configs...", __func__);
     if (!isConstructing) { // If the function is called from the constructor, the configs are already loaded.
-        Microservice::loadConfigs(jsonConfigs, true);
+        Microservice::loadConfigs(jsonConfigs, isConstructing);
     }
 
     msvc_engineConfigs = jsonConfigs.get<TRTConfigs>();
     msvc_engineConfigs.maxBatchSize = msvc_idealBatchSize;
     msvc_engineConfigs.deviceIndex = msvc_deviceIndex;
 
-    msvc_inferenceEngine = new Engine(msvc_engineConfigs);
-    msvc_inferenceEngine->loadNetwork();
+    spdlog::trace("{0:s} FINISHED loading configs...", __func__);
 }
 
 /**
@@ -53,7 +52,6 @@ bool BaseBatchInferencer::checkReqEligibility(ClockType currReq_gentime) {
 }
 
 void BaseBatchInferencer::inference() {
-    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -77,6 +75,8 @@ void BaseBatchInferencer::inference() {
     spdlog::info("{0:s} STARTS.", msvc_name); 
 
     cudaStream_t inferenceStream;
+
+    auto timeNow = std::chrono::high_resolution_clock::now();
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -85,8 +85,37 @@ void BaseBatchInferencer::inference() {
         }
         else if (this->PAUSE_THREADS) {
             if (RELOADING) {
+                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                READY = false;
+
+                /**
+                 * @brief Opening a new log file
+                 * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
+                 * 
+                 */
+
+                if (msvc_logFile.is_open()) {
+                    msvc_logFile.close();
+                }
+                msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
+
+                /**
+                 * @brief Set the current working device
+                 * 
+                 */
                 setDevice();
+                // Create a new cuda stream for inference
                 checkCudaErrorCode(cudaStreamCreate(&inferenceStream), __func__);
+
+                /**
+                 * @brief Generate a new instance of the inference engine with the new configurations
+                 * 
+                 */
+                if (msvc_inferenceEngine != nullptr) {
+                    delete msvc_inferenceEngine;
+                }
+                msvc_inferenceEngine = new Engine(msvc_engineConfigs);
+                msvc_inferenceEngine->loadNetwork();
 
                 outReqData.clear();
                 trtInBuffer.clear();
@@ -97,9 +126,9 @@ void BaseBatchInferencer::inference() {
                 READY = true;
             }
             //spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
             continue;
         }
-
         // Processing the next incoming request
         // Current incoming equest and request to be sent out to the next
         Request<LocalGPUReqDataType> currReq = msvc_InQueue.at(0)->pop2();
@@ -147,6 +176,21 @@ void BaseBatchInferencer::inference() {
             currReq.req_data[0].shape,
             dummy
         };
+
+        timeNow = std::chrono::high_resolution_clock::now();
+        /**
+         * @brief During profiling mode, there are six important timestamps to be recorded:
+         * 1. When the request was generated
+         * 2. When the request was received by the batcher
+         * 3. When the request was done preprocessing by the batcher
+         * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
+         * 5. When the batch inferencer was completed by the inferencer 
+         * 6. When each request was completed by the postprocessor
+         */
+        for (auto& req_genTime : currReq.req_origGenTime) {
+            req_genTime.emplace_back(timeNow); //FIFTH_TIMESTAMP
+        }
+
         outReqData.emplace_back(shapeGuide);
 
 
@@ -212,8 +256,38 @@ void BaseBatchInferencer::inferenceProfiling() {
         }
         else if (this->PAUSE_THREADS) {
             if (RELOADING) {
+                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                READY = false;
+                /**
+                 * @brief Opening a new log file
+                 * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
+                 * 
+                 */
+
+                if (msvc_logFile.is_open()) {
+                    msvc_logFile.close();
+                }
+                msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
+
+                /**
+                 * @brief Set the current working device
+                 * 
+                 */
                 setDevice();
+                // Create a new cuda stream for inference
                 checkCudaErrorCode(cudaStreamCreate(&inferenceStream), __func__);
+                
+
+
+                /**
+                 * @brief Generate a new instance of the inference engine with the new configurations
+                 * 
+                 */
+                if (msvc_inferenceEngine != nullptr) {
+                    delete msvc_inferenceEngine;
+                }
+                msvc_inferenceEngine = new Engine(msvc_engineConfigs);
+                msvc_inferenceEngine->loadNetwork();
 
                 outReqData.clear();
                 trtInBuffer.clear();
@@ -226,10 +300,14 @@ void BaseBatchInferencer::inferenceProfiling() {
             //spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
-
         // Processing the next incoming request
         // Current incoming equest and request to be sent out to the next
         Request<LocalGPUReqDataType> currReq = msvc_InQueue.at(0)->pop2();
+        // Meaning the the timeout in pop() has been reached and no request was actually popped
+        if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
+            continue;
+        }
+        
         msvc_inReqCount++;
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
@@ -272,14 +350,17 @@ void BaseBatchInferencer::inferenceProfiling() {
 
         timeNow = std::chrono::high_resolution_clock::now();
 
-        uint8_t numTimeStampPerReq = (uint8_t)(currReq.req_origGenTime.size() / currReq_batchSize);
-        uint16_t insertPos = numTimeStampPerReq;
-        while (insertPos < currReq.req_origGenTime.size()) {
-            currReq.req_origGenTime.insert(currReq.req_origGenTime.begin() + insertPos, timeNow);
-            insertPos += numTimeStampPerReq + 1;
-        }
-        if (insertPos == currReq.req_origGenTime.size()) {
-            currReq.req_origGenTime.push_back(timeNow);
+        /**
+         * @brief During profiling mode, there are six important timestamps to be recorded:
+         * 1. When the request was generated
+         * 2. When the request was received by the batcher
+         * 3. When the request was done preprocessing by the batcher
+         * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
+         * 5. When the batch inferencer was completed by the inferencer 
+         * 6. When each request was completed by the postprocessor
+         */
+        for (auto& req_genTime : currReq.req_origGenTime) {
+            req_genTime.emplace_back(timeNow); //FIFTH_TIMESTAMP
         }
 
         // Packing everything inside the `outReq` to be sent to and processed at the next microservice

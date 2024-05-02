@@ -80,3 +80,46 @@ std::string timePointToEpochString(const std::chrono::system_clock::time_point& 
     ss << ns.count();
     return ss.str();
 }
+
+std::string replaceSubstring(const std::string& input, const std::string& toReplace, const std::string& replacement) {
+    std::string result = input;
+    std::size_t pos = 0;
+
+    while ((pos = result.find(toReplace, pos)) != std::string::npos) {
+        result.replace(pos, toReplace.length(), replacement);
+        pos += replacement.length();
+    }
+
+    return result;
+}
+
+std::vector<std::string> splitString(const std::string& str, char delimiter) {
+    std::vector<std::string> result;
+    size_t start = 0, end = 0;
+
+    while ((end = str.find(delimiter, start)) != std::string::npos) {
+        result.push_back(str.substr(start, end - start));
+        start = end + 1;
+    }
+
+    result.push_back(str.substr(start));
+
+    return result;
+}
+
+/**
+ * @brief Get the current timestamp in the format of a string
+ * 
+ * @return std::string 
+ */
+std::string getTimestampString() {
+    std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::string timestamp = std::ctime(&now);
+    timestamp.erase(timestamp.length() - 1); // Remove newline character
+    return timestamp;
+}
+
+uint64_t getTimestamp() {
+    return std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+}
+

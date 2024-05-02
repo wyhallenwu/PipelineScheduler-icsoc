@@ -1,4 +1,5 @@
 {
+    "pipeline_name": "videocall_pipeline",
     "pipeline": [
         {
             "msvc_name": "emotionnet::receiver",
@@ -24,8 +25,9 @@
             ],
             "msvc_dataShape": [
                 [
-                    0,
-                    0
+                    3,
+                    224,
+                    224
                 ]
             ],
             "msvc_svcLevelObjLatency": 1,
@@ -269,5 +271,14 @@
             "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
         }
     ],
-    "profiling": 0
+    "profiling": {
+        "profile_minBatch": 20,
+        "profile_maxBatch": 20,
+        "profile_stepMode": 1,
+        "profile_step": 1,
+        "profile_templateModelPath": "../models/emotion_dyn_3090_fp32_20_1.engine",
+        "profile_inputRandomizeScheme": 0,
+        "profile_numWarmUpBatches": 0,
+        "profile_numProfileBatches": 20
+    }
 }

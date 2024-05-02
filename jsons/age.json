@@ -1,4 +1,5 @@
 {
+    "pipeline_name": "pedestrian_security",
     "pipeline": [
         {
             "msvc_name": "age::receiver",
@@ -24,8 +25,9 @@
             ],
             "msvc_dataShape": [
                 [
-                    0,
-                    0
+                    3,
+                    224,
+                    224
                 ]
             ],
             "msvc_svcLevelObjLatency": 1,
@@ -269,5 +271,15 @@
             "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
         }
     ],
-    "proifling": ""
+    
+    "profiling": {
+        "profile_minBatch": 20,
+        "profile_maxBatch": 20,
+        "profile_stepMode": 1,
+        "profile_step": 1,
+        "profile_templateModelPath": "../models/age_dynamic_3090_fp32_[batch]_1.engine",
+        "profile_inputRandomizeScheme": 0,
+        "profile_numWarmUpBatches": 0,
+        "profile_numProfileBatches": 20
+    }
 }

@@ -30,12 +30,14 @@ set(
         ./communicator.h
         ./sender.h
         ./receiver.h
+        ./profilegenerator.h
 )
 # All source files and private header files go here.
 set(
         SOURCE_FILES
         ./receiver.cpp
         ./sender.cpp
+        ./profilegenerator.cpp
 )
 
 # Here we define the library.

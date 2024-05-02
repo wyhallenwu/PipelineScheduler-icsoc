@@ -14,10 +14,13 @@
 #include <iostream>
 #include "../json/json.h"
 
+#include <chrono>
+#include <ctime>
+
 #ifndef MICROSERVICE_H
 #define MICROSERVICE_H
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 
 template<typename DataType>
@@ -44,7 +47,7 @@ struct RequestData {
 template<typename DataType>
 struct Request {
     // The moment this request was generated at the begining of the pipeline.
-    RequestTimeType req_origGenTime;
+    BatchTimeType req_origGenTime;
     // The end-to-end service level latency objective to which this request is subject
     RequestSLOType req_e2eSLOLatency;
     // The path that this request and its ancestors have travelled through.
@@ -66,7 +69,7 @@ struct Request {
     Request() {};
 
     Request(
-        RequestTimeType genTime,
+        BatchTimeType genTime,
         RequestSLOType latency,
         RequestPathType path,
         BatchSizeType batchSize,
@@ -83,7 +86,7 @@ struct Request {
     
     // df
     Request(
-        RequestTimeType genTime,
+        BatchTimeType genTime,
         RequestSLOType latency,
         RequestPathType path,
         BatchSizeType batchSize,
@@ -131,7 +134,6 @@ private:
     std::int16_t class_of_interest;
     QueueLengthType q_MaxSize = 100;
     bool isEmpty;
-    uint16_t timeout = 100;
 
 public:
     ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi) : q_MaxSize(size), class_of_interest(coi) {}
@@ -176,13 +178,13 @@ public:
      * 
      * @param request 
      */
-    Request<LocalCPUReqDataType> pop1() {
+    Request<LocalCPUReqDataType> pop1(uint16_t timeout = 100) {
         std::unique_lock<std::mutex> lock(q_mutex);
 
         Request<LocalCPUReqDataType> request;
         isEmpty = !q_condition.wait_for(
             lock,
-            std::chrono::milliseconds(this->timeout),
+            std::chrono::milliseconds(timeout),
             [this]() { return !q_cpuQueue.empty(); }
         );
         if (!isEmpty) {
@@ -200,12 +202,12 @@ public:
      * 
      * @param request 
      */
-    Request<LocalGPUReqDataType> pop2() {
+    Request<LocalGPUReqDataType> pop2(uint16_t timeout = 100) {
         std::unique_lock<std::mutex> lock(q_mutex);
         Request<LocalGPUReqDataType> request;
         isEmpty = !q_condition.wait_for(
                 lock,
-                std::chrono::milliseconds(this->timeout),
+                std::chrono::milliseconds(timeout),
                 [this]() { return !q_gpuQueue.empty(); }
         );
         if (!isEmpty) {
@@ -423,6 +425,7 @@ public:
 
     void pauseThread() {
         PAUSE_THREADS = true;
+        READY = false;
     }
 
     void unpauseThread() {
@@ -433,8 +436,16 @@ public:
         return READY;
     }
 
+    bool checkPause() {
+        return PAUSE_THREADS;
+    }
+
     RUNMODE checkMode() {
         return msvc_RUNMODE;
+    }
+
+    void setRELOAD() {
+        RELOADING = true;
     }
 
     /**
@@ -450,6 +461,8 @@ public:
         msvc_inferenceShape = shape;
     }
 
+    virtual void setProfileConfigs(const json &profileConfigs) {};
+
     /**
      * @brief Set the Device index
      * should be called at least once for each thread (except when the above function is already called)
@@ -457,8 +470,12 @@ public:
      */
     void setDevice(int8_t deviceIndex) {
         if (deviceIndex >= 0) {
-            cv::cuda::setDevice(deviceIndex);
-            checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
+            int currentDevice = cv::cuda::getDevice();
+            if (currentDevice != deviceIndex) {
+                cv::cuda::resetDevice();
+                cv::cuda::setDevice(deviceIndex);
+                checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
+            }
         }
     }
 
@@ -477,6 +494,8 @@ public:
     bool RELOADING = true;
 
     std::ofstream msvc_logFile;
+    
+    bool PAUSE_THREADS = false;
 
 protected:
     std::vector<ThreadSafeFixSizedDoubleQueue*> msvc_InQueue, msvc_OutQueue;
@@ -485,7 +504,6 @@ protected:
 
     // Used to signal to thread when not to run and to bring thread to a natural end.
     bool STOP_THREADS = false;
-    bool PAUSE_THREADS = false;
     bool READY = false;
 
     /**

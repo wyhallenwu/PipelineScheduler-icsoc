@@ -411,7 +411,6 @@ Engine::~Engine() {
     for (auto & buffer : m_buffers) {
         checkCudaErrorCode(cudaFree(buffer), __func__);
     }
-
     m_buffers.clear();
 }
 

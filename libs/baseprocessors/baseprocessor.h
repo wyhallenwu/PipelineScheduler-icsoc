@@ -3,6 +3,7 @@
 
 #include <microservice.h>
 #include <opencv2/core/cuda.hpp>
+#include <cuda.h>
 #include <cuda_runtime.h>
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
@@ -14,7 +15,7 @@
 
 typedef uint16_t BatchSizeType;
 using namespace msvcconfigs;
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 
 inline uint64_t getNumberAtIndex(const std::string& str, int index);
@@ -154,7 +155,7 @@ protected:
     BatchSizeType msvc_onBufferBatchSize;
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
     TRTConfigs msvc_engineConfigs;
-    Engine* msvc_inferenceEngine;
+    Engine* msvc_inferenceEngine = nullptr;
 
     bool checkReqEligibility(ClockType currReq_genTime) override;
 };
@@ -227,13 +228,16 @@ public:
     ~BaseBBoxCropperVerifier() = default;
 
     void cropping();
-    void setInferenceShape(RequestShapeType shape) {
-        msvc_inferenceShape = shape;
-    }
 
     void cropProfiling();
 
     virtual void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            std::thread postprocessor(&BaseBBoxCropperVerifier::cropProfiling, this);
+            postprocessor.detach();
+            return;
+        }
         std::thread postprocessor(&BaseBBoxCropperVerifier::cropping, this);
         postprocessor.detach();
     }
@@ -251,9 +255,17 @@ public:
     virtual void classify() ;
 
     virtual void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            std::thread classifier(&BaseClassifier::classifyProfiling, this);
+            classifier.detach();
+            return;
+        }
         std::thread classifier(&BaseClassifier::classify, this);
         classifier.detach();
     }
+
+    virtual void classifyProfiling();
 
     BaseClassifierConfigs loadConfigsFromJson(const json &jsonConfigs);
 
@@ -270,6 +282,7 @@ public:
     ~BaseSoftmaxClassifier() = default;
 
     virtual void classify() override;
+    virtual void classifyProfiling() override;
 };
 
 class BaseKPointExtractor : public Microservice{
@@ -280,11 +293,40 @@ public:
     virtual void extractor();
 
     virtual void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            std::thread extractor(&BaseKPointExtractor::extractorProfiling, this);
+            extractor.detach();
+            return;
+        }
         std::thread extractor(&BaseKPointExtractor::extractor, this);
         extractor.detach();
     }
 
+    virtual void extractorProfiling();
+
     BaseKPointExtractorConfigs loadConfigsFromJson(const json &jsonConfigs);
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
+};
+
+class BaseSink : public Microservice {
+public:
+    BaseSink(const json &jsonConfigs);
+    ~BaseSink() = default;
+
+    virtual void sink();
+
+    virtual void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            std::thread sinker(&BaseSink::sink, this);
+            sinker.detach();
+            return;
+        }
+    }
+
+    BaseMicroserviceConfigs loadConfigsFromJson(const json &jsonConfigs);
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };

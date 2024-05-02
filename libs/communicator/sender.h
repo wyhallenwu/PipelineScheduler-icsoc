@@ -8,7 +8,7 @@ using grpc::ClientAsyncResponseReader;
 using grpc::CompletionQueue;
 using boost::interprocess::read_write;
 using boost::interprocess::create_only;
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 
 struct SenderConfigs : BaseMicroserviceConfigs {
@@ -64,7 +64,7 @@ public:
 
     std::string SendGpuPointer(
             std::vector<RequestData<LocalGPUReqDataType>> &elements,
-            const ClockType &timestamp, const std::string &path, const uint32_t &slo);
+            const RequestTimeType &timestamp, const std::string &path, const uint32_t &slo);
 
 private:
     std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
@@ -85,7 +85,9 @@ public:
     }
 
     std::string
-    SendSharedMemory(const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp, const std::string &path,
+    SendSharedMemory(
+        const std::vector<RequestData<LocalCPUReqDataType>> &elements, 
+        const RequestTimeType &timestamp, const std::string &path,
                      const uint32_t &slo);
 };
 
@@ -101,7 +103,8 @@ public:
     }
 
     std::string SendSerializedData(
-            const std::vector<RequestData<LocalCPUReqDataType>> &elements, const ClockType &timestamp, const std::string &path,
+            const std::vector<RequestData<LocalCPUReqDataType>> &elements, 
+            const RequestTimeType &timestamp, const std::string &path,
             const uint32_t &slo);
 };
 

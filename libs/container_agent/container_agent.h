@@ -12,6 +12,7 @@
 #include <grpcpp/health_check_service_interface.h>
 #include <google/protobuf/empty.pb.h>
 #include <filesystem>
+#include "receiver.h"
 
 #include "microservice.h"
 #include "sender.h"
@@ -26,9 +27,9 @@ ABSL_DECLARE_FLAG(uint16_t, port);
 ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
 ABSL_DECLARE_FLAG(std::string, log_dir);
-ABSL_DECLARE_FLAG(std::string, profiling_configs);
+ABSL_DECLARE_FLAG(bool, profiling_mode);
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 using grpc::Status;
 using grpc::CompletionQueue;
@@ -68,6 +69,8 @@ struct contRunArgs {
 
 contRunArgs loadRunArgs(int argc, char **argv);
 
+void addProfileConfigs(json &msvcConfigs, const json &profileConfigs);
+
 class ContainerAgent {
 public:
     ContainerAgent(const std::string &name, uint16_t own_port, int8_t devIndex, const std::string &logPath);
@@ -92,10 +95,20 @@ public:
         for (auto msvc : msvcs) {
             msvc->unpauseThread();
         }
-
-        spdlog::trace("===========================================CONTAINER STARTS===========================================");
+        spdlog::info("=========================================== STARTS ===========================================");
     }
-    void checkReady();
+
+    void PROFILING_START(BatchSizeType batch) {
+        for (auto msvc : msvcs) {
+            msvc->unpauseThread();
+        }
+
+        spdlog::info("======================================= PROFILING MODEL BATCH {0:d} =======================================", batch);
+    }
+    void waitReady();
+    bool checkReady();
+    void waitPause();
+    bool checkPause();
 
     void addMicroservice(std::vector<Microservice*> msvcs) {
         this->msvcs = msvcs;
@@ -107,7 +120,7 @@ public:
         }
     }
 
-    void profiling();
+    void profiling(const json &pipeConfigs, const json &profileConfigs);
 
     void loadProfilingConfigs();
 
@@ -180,18 +193,8 @@ protected:
     std::atomic<bool> run;
 
     std::string cont_logDir;
-    std::string cont_profilingConfigsPath;
     RUNMODE cont_RUNMODE;
-
-    struct ProfilingConfigs {
-        BatchSizeType minBatch;
-        BatchSizeType maxBatch;
-        uint16_t stepMode; // 0: linear, 1: double
-        uint16_t step;
-        std::string templateModelPath;
-    };
-
-    ProfilingConfigs cont_profilingConfigs;
+    uint8_t cont_deviceIndex;
 };
 
 #endif //CONTAINER_AGENT_H

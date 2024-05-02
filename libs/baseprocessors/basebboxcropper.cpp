@@ -122,9 +122,11 @@ inline void cropOneBox(
 }
 
 void BaseBBoxCropper::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+    spdlog::trace("{0:s} is LOANDING configs...", __func__);
     if (!isConstructing) { // If this is not called from the constructor
         Microservice::loadConfigs(jsonConfigs, isConstructing);
     }
+    spdlog::trace("{0:s} FINISHED loading configs...", __func__);
 }
 
 BaseBBoxCropper::BaseBBoxCropper(const json &jsonConfigs) : Microservice(jsonConfigs) {
@@ -133,8 +135,6 @@ BaseBBoxCropper::BaseBBoxCropper(const json &jsonConfigs) : Microservice(jsonCon
 }
 
 void BaseBBoxCropper::cropping() {
-    msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -202,6 +202,8 @@ void BaseBBoxCropper::cropping() {
     // To whole the shape of data sent from the inferencer
     RequestDataShapeType shape;
 
+    auto timeNow = std::chrono::high_resolution_clock::now();
+
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
@@ -210,9 +212,23 @@ void BaseBBoxCropper::cropping() {
         }
         else if (this->PAUSE_THREADS) {
             if (RELOADING){
+                READY = false;
+                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                /**
+                 * @brief Opening a new log file
+                 * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
+                 * 
+                 */
+
+                if (msvc_logFile.is_open()) {
+                    msvc_logFile.close();
+                }
+                msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
 
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+
+                msvc_inferenceShape = upstreamMicroserviceList.at(0).expectedShape;
 
                 infer_h = msvc_inferenceShape[0][1];
                 infer_w = msvc_inferenceShape[0][2];
@@ -241,7 +257,6 @@ void BaseBBoxCropper::cropping() {
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
-
         // Processing the next incoming request
         currReq = msvc_InQueue.at(0)->pop2();
         // Meaning the the timeout in pop() has been reached and no request was actually popped
@@ -296,8 +311,9 @@ void BaseBBoxCropper::cropping() {
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
 
-
-            currReq_genTime = currReq.req_origGenTime[i];
+            // There could be multiple timestamps in the request, but the first one always represent
+            // the moment this request was generated at the very beginning of the pipeline
+            currReq_genTime = currReq.req_origGenTime[i][0];
             currReq_path = currReq.req_travelPath[i];
 
             // If there is no object in frame, we don't have to do nothing.
@@ -308,6 +324,12 @@ void BaseBBoxCropper::cropping() {
             }
 
             // Otherwise, we need to do some cropping.
+
+            // First we need to set the infer_h,w and the original h,w of the image.
+            // infer_h,w are given in the last dimension of the request data from the inferencer
+            infer_h = currReq.req_data.back().shape[1];
+            infer_w = currReq.req_data.back().shape[2];
+            // orig_h,w are given in the shape of the image in the image list, which is carried from the batcher
             orig_h = imageList[i].shape[1];
             orig_w = imageList[i].shape[2];
 
@@ -344,13 +366,22 @@ void BaseBBoxCropper::cropping() {
                     singleImageBBoxList[j].clone()
                 };
                 outReqData.emplace_back(reqData);
+
+                /**
+                 * @brief Each out going request heading to a downstream container should contain 2 timestamps only
+                 * 1. The original gen time at the very beginning of the pipeline
+                 * 2. The time this request is completed here, which is now.
+                 */
+                // TODO: Put all timestamps into a structure to be scraped by Container Agent
+                timeNow = std::chrono::high_resolution_clock::now();
+
                 outReq = {
-                    {currReq_genTime},
+                    {{currReq_genTime, timeNow}},
                     currReq.req_e2eSLOLatency,
                     {currReq_path},
                     1,
-                    outReqData, //req_data
-                    currReq.req_data // upstreamReq_data
+                    outReqData //req_data
+                    // currReq.req_data // upstreamReq_data
                 };
                 msvc_OutQueue.at(queueIndex)->emplace(outReq);
                 trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, bboxClass, queueIndex);
@@ -504,12 +535,23 @@ void BaseBBoxCropper::cropProfiling() {
         }
         else if (this->PAUSE_THREADS) {
             if (RELOADING){
+                READY = false;
+                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                /**
+                 * @brief Opening a new log file
+                 * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
+                 * 
+                 */
+
+                if (msvc_logFile.is_open()) {
+                    msvc_logFile.close();
+                }
+                msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
 
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
 
-                infer_h = msvc_inferenceShape[0][1];
-                infer_w = msvc_inferenceShape[0][2];
+                msvc_inferenceShape = upstreamMicroserviceList.at(0).expectedShape;
                 
                 maxNumDets = msvc_dataShape[2][0];
 
@@ -543,19 +585,18 @@ void BaseBBoxCropper::cropProfiling() {
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
-
         // Processing the next incoming request
         currReq = msvc_InQueue.at(0)->pop2();
-        msvc_inReqCount++;
+        // Meaning the the timeout in pop() has been reached and no request was actually popped
+        if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
+            continue;
+        }
 
-        currReq_genTime = currReq.req_origGenTime[0];
+        msvc_inReqCount++;
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
-        }
         currReq_batchSize = currReq.req_batchSize;
         trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
@@ -602,11 +643,17 @@ void BaseBBoxCropper::cropProfiling() {
             int numDetsInFrame = maxNumDets;
 
             // Otherwise, we need to do some cropping.
+
+            // First we need to set the infer_h,w and the original h,w of the image.
+            // infer_h,w are given in the last dimension of the request data from the inferencer
+            infer_h = currReq.req_data.back().shape[1];
+            infer_w = currReq.req_data.back().shape[2];
+            // orig_h,w are given in the shape of the image in the image list, which is carried from the batcher
             orig_h = imageList[i].shape[1];
             orig_w = imageList[i].shape[2];
 
             crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
-            trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
+            // trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {
@@ -639,7 +686,7 @@ void BaseBBoxCropper::cropProfiling() {
 
 
                 // msvc_OutQueue.at(queueIndex)->emplace(outReq);
-                trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, bboxClass, queueIndex);
+                // trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, bboxClass, queueIndex);
             }
             // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
             // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
@@ -650,29 +697,27 @@ void BaseBBoxCropper::cropProfiling() {
 
             // We don't need to send out anything. Just measure the time is enough.
 
-            time_now = std::chrono::high_resolution_clock::now();
-            inferenceTime[i] = std::chrono::duration_cast<std::chrono::nanoseconds>(time_now - currReq.req_origGenTime[i]).count();
+            /**
+             * @brief During profiling mode, there are six important timestamps to be recorded:
+             * 1. When the request was generated
+             * 2. When the request was received by the batcher
+             * 3. When the request was done preprocessing by the batcher
+             * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
+             * 5. When the batch inferencer was completed by the inferencer 
+             * 6. When each request was completed by the postprocessor
+             */
 
-            if (insertPos < currReq.req_origGenTime.size()) {
-                currReq.req_origGenTime.insert(currReq.req_origGenTime.begin() + insertPos, time_now);
-                insertPos += numTimeStampPerReq + 1;
-            } else if (insertPos == currReq.req_origGenTime.size()) {
-                currReq.req_origGenTime.push_back(time_now);
-            }
+            time_now = std::chrono::high_resolution_clock::now();
+            currReq.req_origGenTime[i].emplace_back(time_now);
         }
         
         for (BatchSizeType i = 0; i < currReq.req_batchSize; i++) {
             inferTimeReportData.emplace_back(
                 RequestData<LocalCPUReqDataType>{
                     {1}, 
-                    cv::Mat{1, 1, CV_64F, &inferenceTime[i]}
+                    cv::Mat{1, 1, CV_64F, &inferenceTime[i]}.clone()
                 }
             );
-        }        
-        // END is in the travelPath of the last message meaning the profiling session is completed
-        if (currReq.req_travelPath[currReq_batchSize - 1].find("PROFILE_ENDS") != std::string::npos) {
-            // set this thread to pause to signal to the profiler that the current profiling session has been completed.
-            this->pauseThread();
         }
         msvc_OutQueue[0]->emplace(
             Request<LocalCPUReqDataType>{

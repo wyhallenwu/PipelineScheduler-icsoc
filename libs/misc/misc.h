@@ -19,6 +19,7 @@ typedef std::vector<std::string> RequestPathType;
 typedef uint16_t NumMscvType;
 typedef std::chrono::high_resolution_clock::time_point ClockType;
 typedef std::vector<ClockType> RequestTimeType;
+typedef std::vector<RequestTimeType> BatchTimeType;
 const uint8_t CUDA_IPC_HANDLE_LENGTH = 64; // bytes
 typedef const char *InterConGPUReqDataType;
 typedef std::vector<int32_t> RequestDataShapeType;
@@ -138,5 +139,13 @@ float fractionToFloat(const std::string& fraction);
 std::string removeSubstring(const std::string& str, const std::string& substring);
 
 std::string timePointToEpochString(const std::chrono::system_clock::time_point& tp);
+
+std::string replaceSubstring(const std::string& input, const std::string& toReplace, const std::string& replacement);
+
+std::vector<std::string> splitString(const std::string& str, char delimiter) ;
+
+std::string getTimestampString();
+
+uint64_t getTimestamp();
 
 #endif

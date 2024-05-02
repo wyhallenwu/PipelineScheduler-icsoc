@@ -9,8 +9,16 @@ ABSL_FLAG(uint16_t, port, 0, "server port for the service");
 ABSL_FLAG(int16_t, device, 0, "Index of GPU device");
 ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
 ABSL_FLAG(std::string, log_dir, "../logs", "Log path for the container");
-ABSL_FLAG(std::string, profiling_configs, "", "flag to make the model running in profiling mode.");
+ABSL_FLAG(bool, profiling_mode, false, "flag to make the model running in profiling mode.");
 
+
+void addProfileConfigs(json &msvcConfigs, const json &profileConfigs) {
+    msvcConfigs["profile_numWarmUpBatches"] = profileConfigs.at("profile_numWarmUpBatches");
+    msvcConfigs["profile_numProfileBatches"] = profileConfigs.at("profile_numProfileBatches");
+    msvcConfigs["profile_inputRandomizeScheme"] = profileConfigs.at("profile_inputRandomizeScheme");
+    msvcConfigs["profile_stepMode"] = profileConfigs.at("profile_stepMode");
+    msvcConfigs["profile_step"] = profileConfigs.at("profile_step");
+}
 
 contRunArgs loadRunArgs(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
@@ -19,9 +27,9 @@ contRunArgs loadRunArgs(int argc, char **argv) {
     int8_t device = absl::GetFlag(FLAGS_device);
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     std::string logPath = absl::GetFlag(FLAGS_log_dir);
-    std::string profiling_configs = absl::GetFlag(FLAGS_profiling_configs);
+    bool profiling_mode = absl::GetFlag(FLAGS_profiling_mode);
 
-    RUNMODE runmode = profiling_configs.empty() ? RUNMODE::DEPLOYMENT : RUNMODE::PROFILING;
+    RUNMODE runmode = profiling_mode ? RUNMODE::PROFILING : RUNMODE::DEPLOYMENT;
 
     spdlog::set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
     spdlog::set_level(spdlog::level::level_enum(logLevel));
@@ -30,11 +38,46 @@ contRunArgs loadRunArgs(int argc, char **argv) {
     json pipeConfigs = std::get<0>(configs);
     json profilingConfigs = std::get<1>(configs);
 
-    for (auto& cfg : pipeConfigs) {
-        cfg["msvc_contName"] = name;
-        cfg["msvc_deviceIndex"] = device;
-        cfg["msvc_containerLogPath"] = logPath + "/" + name;
-        cfg["msvc_RUNMODE"] = runmode;
+    BatchSizeType minBatch =  profilingConfigs.at("profile_minBatch");
+    std::string templateModelPath = profilingConfigs.at("profile_templateModelPath");
+
+    /**
+     * @brief     If this is profiling, set configurations to the first batch size that should be profiled
+     * This includes
+     * 1. Setting its name based on the template model path    
+     * 2. Setting the batch size to the smallest profile batch size
+     * 
+     */
+    if (profiling_mode) {
+    
+        name = removeSubstring(templateModelPath, ".engine");
+        name = replaceSubstring(name, "[batch]", std::to_string(minBatch));
+        name = splitString(name, '/').back();
+        logPath = "../model_profiles";
+    }
+
+    for (auto i = 0; i < pipeConfigs.size(); i++) {
+        pipeConfigs[i]["msvc_contName"] = name;
+        pipeConfigs[i]["msvc_deviceIndex"] = device;
+        pipeConfigs[i]["msvc_containerLogPath"] = logPath + "/" + name;
+        pipeConfigs[i]["msvc_RUNMODE"] = runmode;
+
+        /**
+         * @brief     If this is profiling, set configurations to the first batch size that should be profiled
+         * This includes
+         * 1. Setting its profile dir whose name is based on the template model path    
+         * 2. Setting the batch size to the smallest profile batch size
+         * 
+         */
+        if (profiling_mode) {
+            pipeConfigs[i].at("msvc_idealBatchSize") = minBatch;
+            if (i == 0) {
+                addProfileConfigs(pipeConfigs[i], profilingConfigs);
+            } else if (i == 2) {
+                // Set the path to the engine
+                pipeConfigs[i].at("path") = replaceSubstring(templateModelPath, "[batch]", std::to_string(minBatch));
+            }
+        }
     }
 
     checkCudaErrorCode(cudaSetDevice(device), __func__);
@@ -107,6 +150,80 @@ std::tuple<json, json> msvcconfigs::loadJson() {
     }
 }
 
+void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfigs) {
+
+    json pipelineConfigs = pipeConfigs;
+
+    BatchSizeType minBatch =  profileConfigs.at("profile_minBatch");
+    BatchSizeType maxBatch =  profileConfigs.at("profile_maxBatch");
+    uint8_t stepMode = profileConfigs.at("profile_stepMode");
+    uint8_t step = profileConfigs.at("profile_step");
+    std::string templateModelPath = profileConfigs.at("profile_templateModelPath");
+
+    this->dispatchMicroservices();
+
+    for (BatchSizeType batch = minBatch; batch <= maxBatch;) {
+        if (batch != minBatch) {
+            // cudaDeviceReset();
+            // checkCudaErrorCode(cudaSetDevice(cont_deviceIndex), __func__);
+            // cont_deviceIndex = ++cont_deviceIndex % 4;
+
+            std::string profileDirPath, name;
+            
+            name = removeSubstring(templateModelPath, ".engine");
+            name = replaceSubstring(name, "[batch]", std::to_string(batch));
+            name = splitString(name, '/').back();
+
+            profileDirPath = cont_logDir + "/" + name;
+            std::filesystem::create_directory(
+                std::filesystem::path(profileDirPath)
+            );
+            
+            // Making sure all the microservices are paused before reloading and reallocating resources
+            // this is essential to avoiding runtime memory errors
+            for (uint8_t i = 0; i < pipelineConfigs.size(); i++) {
+                msvcs[i]->pauseThread();
+            }
+            waitPause();
+
+            // Reload the configurations and dynamic allocation based on the new configurations
+            for (uint8_t i = 0; i < pipelineConfigs.size(); i++) {
+                pipelineConfigs[i].at("msvc_idealBatchSize") = batch;
+                pipelineConfigs[i].at("msvc_containerLogPath") = profileDirPath;
+                pipelineConfigs[i].at("msvc_deviceIndex") = cont_deviceIndex;
+                pipelineConfigs[i].at("msvc_contName") = name;
+                // Set the path to the engine
+                if (i == 2) {
+                    pipelineConfigs[i].at("path") = replaceSubstring(templateModelPath, "[batch]", std::to_string(batch));
+                }
+                msvcs[i]->loadConfigs(pipelineConfigs[i], false);
+                msvcs[i]->setRELOAD();
+            }
+
+        }
+
+        this->waitReady();
+        this->PROFILING_START(batch);
+
+
+        while (true) {
+            spdlog::info("{0:s} waiting for profiling of model with a max batch of {1:d}.", __func__, batch);
+            if (msvcs[0]->checkPause()) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        }
+
+        // spdlog::info("========================= Batch {0:d}/{1:d} =====================", );
+        spdlog::info("====================================================================================================");
+        if (stepMode == 0) {
+            batch += step;
+        } else {
+            batch *= 2;
+        }
+    }
+}
+
 ContainerAgent::ContainerAgent(
     const std::string &name,
     uint16_t own_port,
@@ -117,15 +234,17 @@ ContainerAgent::ContainerAgent(
 ) : ContainerAgent(name, own_port, devIndex, logPath) {
 
     cont_RUNMODE = runmode;
-    if (cont_RUNMODE == RUNMODE::PROFILING) {
-        profiling_configs.at("profile_minBatch").get_to(cont_profilingConfigs.minBatch);
-        profiling_configs.at("profile_maxBatch").get_to(cont_profilingConfigs.maxBatch);
-        profiling_configs.at("profile_stepMode").get_to(cont_profilingConfigs.stepMode);
-        profiling_configs.at("profile_step").get_to(cont_profilingConfigs.step);
-        profiling_configs.at("profile_templateModelPath").get_to(cont_profilingConfigs.templateModelPath);
-    }
-    
+    cont_deviceIndex = devIndex;
 
+    if (cont_RUNMODE == RUNMODE::PROFILING) {
+        // Create the logDir for this container
+        cont_logDir = logPath + "/" + name;
+        std::filesystem::create_directory(
+            std::filesystem::path(cont_logDir)
+        );
+    } else {
+        cont_logDir = logPath;
+    }
 }
 
 ContainerAgent::ContainerAgent(
@@ -135,12 +254,6 @@ ContainerAgent::ContainerAgent(
     const std::string &logPath
 ) : name(name) {
     arrivalRate = 0;
-
-    // Create the logDir for this container
-    cont_logDir = logPath + "/" + name;
-    std::filesystem::create_directory(
-        std::filesystem::path(cont_logDir)
-    );
 
     std::string server_address = absl::StrFormat("%s:%d", "localhost", own_port);
     grpc::EnableDefaultHealthCheckService(true);
@@ -264,7 +377,65 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
     }
 }
 
-void ContainerAgent::checkReady() {
+/**
+ * @brief Check if all the microservices are paused
+ * 
+ * @return true 
+ * @return false 
+ */
+bool ContainerAgent::checkPause() {
+    for (auto msvc : msvcs) {
+        if (msvc->checkPause()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * @brief Wait for all the microservices to be paused
+ * 
+ */
+void ContainerAgent::waitPause() {
+    bool paused = false;
+    while (true) {
+        paused = true;
+        spdlog::trace("{0:s} waiting for all microservices to be paused.", __func__);
+        for (auto msvc : msvcs) {
+            if (!msvc->checkPause()) {
+                paused = false;
+                break;
+            }
+        }
+        if (paused) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+}
+
+/**
+ * @brief Check if all the microservices are ready
+ * 
+ * @return true 
+ * @return false 
+ */
+bool ContainerAgent::checkReady() {
+    for (auto msvc : msvcs) {
+        if (!msvc->checkReady()) {
+            return true;
+        }
+    }
+    return true;
+
+}
+
+/**
+ * @brief Wait for all the microservices to be ready
+ * 
+ */
+void ContainerAgent::waitReady() {
     ReportStart();
     bool ready = false;
     while (!ready) {
@@ -279,5 +450,4 @@ void ContainerAgent::checkReady() {
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
-    START();
 }

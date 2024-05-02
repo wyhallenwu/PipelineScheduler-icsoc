@@ -2,6 +2,7 @@
 #include <trtengine.h>
 #include <misc.h>
 #include "container_agent.h"
+#include "profilegenerator.h"
 #include "receiver.h"
 
 

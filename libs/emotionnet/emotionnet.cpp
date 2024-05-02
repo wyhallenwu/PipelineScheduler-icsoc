@@ -24,7 +24,11 @@ int main(int argc, char **argv) {
 
     std::vector<Microservice*> msvcsList;
 
-    msvcsList.push_back(new Receiver(cont_args.cont_pipeConfigs[0]));
+    if (cont_args.cont_runmode == RUNMODE::PROFILING) {
+        msvcsList.push_back(new ProfileGenerator(cont_args.cont_pipeConfigs[0]));
+    } else {
+        msvcsList.push_back(new Receiver(cont_args.cont_pipeConfigs[0]));
+    }
     msvcsList.push_back(new BaseReqBatcher(cont_args.cont_pipeConfigs[1]));
     msvcsList[1]->SetInQueue(msvcsList[0]->GetOutQueue());
     msvcsList.push_back(new BaseBatchInferencer(cont_args.cont_pipeConfigs[2]));
@@ -32,7 +36,9 @@ int main(int argc, char **argv) {
     msvcsList.push_back(new BaseClassifier(cont_args.cont_pipeConfigs[3]));
     msvcsList[3]->SetInQueue(msvcsList[2]->GetOutQueue());
     if (cont_args.cont_runmode == RUNMODE::PROFILING) {
-        msvcsList[0]->SetInQueue(msvcsList[3]->GetOutQueue());
+        msvcsList.push_back(new BaseSink(cont_args.cont_pipeConfigs[4]));
+        msvcsList[4]->SetInQueue(msvcsList[3]->GetOutQueue());
+        msvcsList[0]->SetInQueue(msvcsList[4]->GetOutQueue());
     } else {
         for (uint16_t i = 4; i < cont_args.cont_pipeConfigs.size(); i++) {
             if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[i-4].at("nb_commMethod") == CommMethod::localGPU) {
@@ -47,13 +53,19 @@ int main(int argc, char **argv) {
     }
 
     agent->addMicroservice(msvcsList);
-    agent->dispatchMicroservices();
 
-    agent->checkReady();
-    
-    while (agent->running()) {
-        std::this_thread::sleep_for(std::chrono::seconds(4));
-        agent->SendState();
+    if (cont_args.cont_runmode == RUNMODE::PROFILING) {
+        agent->profiling(cont_args.cont_pipeConfigs, cont_args.cont_profilingConfigs);
+    } else {
+        agent->dispatchMicroservices();
+
+        agent->waitReady(); 
+        agent->START();
+        
+        while (agent->running()) {
+            std::this_thread::sleep_for(std::chrono::seconds(4));
+            agent->SendState();
+        }
     }
     delete agent;
     return 0;

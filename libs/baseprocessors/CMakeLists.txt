@@ -27,9 +27,7 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 # Only public header files go here.
 set(
         HEADER_FILES 
-        # basepreprocessor.h
         baseprocessor.h
-        # basepostprocessor.h
 )
 
 # All source files and private header files go here.
@@ -43,6 +41,7 @@ set(
         basesoftmaxclassifier.cpp
         basebboxcropperverifier.cpp
         basekpointextractor.cpp
+        basesink.cpp
 )
 
 # Here we define the library.
@@ -92,9 +91,11 @@ target_link_libraries(baseprocessors
         ${OpenCV_LIBS}
         ${CUDA_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
+        cuda
         misc
         microservice
         trtengine
+
 )
 
 # Here we configure variables specifying the target directories.
