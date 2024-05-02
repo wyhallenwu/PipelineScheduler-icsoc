@@ -3,7 +3,7 @@
 ABSL_FLAG(std::string, deviceType, "", "string that identifies the device type");
 ABSL_FLAG(std::string, controllerUrl, "", "string that identifies the controller url");
 
-const int CONTAINER_BASE_PORT = 50001;
+const unsigned long CONTAINER_BASE_PORT = 50001;
 
 void msvcconfigs::to_json(json &j, const msvcconfigs::NeighborMicroserviceConfigs &val) {
     j["nb_name"] = val.name;

@@ -409,6 +409,7 @@ public:
                 return queue;
             }
         }
+        return nullptr;
     };
 
     MicroserviceType getMsvcType() {

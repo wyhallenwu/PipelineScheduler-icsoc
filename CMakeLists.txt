@@ -151,6 +151,9 @@ add_subdirectory(libs/device_agent)
 # add_executable(run src/main.cpp)
 # target_link_libraries(run PipePlusPlus)
 
+add_executable(Communicator libs/communicator/communicator.cpp)
+target_link_libraries(Communicator communicator)
+
 add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
 target_link_libraries(DeviceAgent device_agent)
 

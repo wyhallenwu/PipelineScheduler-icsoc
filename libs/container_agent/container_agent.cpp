@@ -88,13 +88,12 @@ std::tuple<json, json> msvcconfigs::loadJson() {
         }
     } else {
         spdlog::trace("{0:s} attempts to load Json Configs from file.", __func__);
-        if (absl::GetFlag(FLAGS_json_path).has_value()) {
+        if (absl::GetFlag(FLAGS_json).has_value()) {
             spdlog::error("No Configurations found. Please provide configuration either as json or file.");
             exit(1);
         } else {
             spdlog::trace("{0:s} finished loading Json Configs from file.", __func__);
-            std::ifstream file(absl::GetFlag(FLAGS_json_path).value());
-            auto json_file = json::parse(file);
+            auto json_file = json::parse(absl::GetFlag(FLAGS_json).value());
             pipeConfigs = json_file.at("pipeline");
             try {
                 profilingConfigs = json_file.at("profiling");
