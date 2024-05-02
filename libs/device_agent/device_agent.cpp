@@ -79,6 +79,7 @@ bool DeviceAgent::CreateContainer(
             file.open("../jsons/arcface.json");
             executable = "./Container_Arcface";
             break;
+
         case ModelType::DataSource:
             file.open("../jsons/data_source.json");
             executable = "./Container_DataSource";
@@ -104,14 +105,15 @@ bool DeviceAgent::CreateContainer(
             executable = "./Container_Yolov5";
             break;
         case ModelType::Yolov5_Plate:
-            file.open("../jsons/yolov5_plate.json");
+            file.open("../jsons/yolov5-plate.json");
             executable = "./Container_Yolov5_Plate";
             break;
         default:
             std::cerr << "Invalid model type" << std::endl;
             return false;
     }
-    json base_config = json::parse(file).at("pipeline");
+    json start_config = json::parse(file);
+    json base_config = start_config["pipeline"];
     file.close();
 
     //adjust configs themselves
@@ -122,19 +124,21 @@ bool DeviceAgent::CreateContainer(
     }
 
     //adjust upstreams
-    base_config[0]["msvc_upstreamMicroservices"]["nb_name"] = upstreams.at(0).name();
-    base_config[0]["msvc_upstreamMicroservices"]["nb_link"] = upstreams.at(0).ip();
-    base_config[0]["msvc_upstreamMicroservices"]["nb_classOfInterest"] = upstreams.at(0).class_of_interest();
+    base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = upstreams.at(0).name();
+    base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = upstreams.at(0).ip();
+    base_config[0]["msvc_upstreamMicroservices"][0]["nb_classOfInterest"] = upstreams.at(0).class_of_interest();
 
     //adjust downstreams
+    int i = 0;
     for (auto &downstream: base_config.back()["msvc_dnstreamMicroservices"]) {
-        downstream["nb_name"] = downstreams.at(0).name();
-        downstream["nb_link"] = downstreams.at(0).ip();
-        downstream["nb_classOfInterest"] = downstreams.at(0).class_of_interest();
+        downstream["nb_name"] = downstreams.at(i).name();
+        downstream["nb_link"] = downstreams.at(i).ip();
+        downstream["nb_classOfInterest"] = downstreams.at(i++).class_of_interest();
     }
 
+    start_config["pipeline"] = base_config;
     int control_port = CONTAINER_BASE_PORT + containers.size();
-    runDocker(executable, name, to_string(base_config), control_port);
+    runDocker(executable, name, to_string(start_config), control_port);
     std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
     containers[name] = {{},
                         InDeviceCommunication::NewStub(grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),

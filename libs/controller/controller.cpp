@@ -184,6 +184,12 @@ void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> 
         dwn->set_ip(dwnstr->device_agent->ip);
         dwn->set_class_of_interest(dwnstr->class_of_interest);
     }
+    if (request.downstream_size() == 0) {
+        Neighbor *dwn = request.add_downstream();
+        dwn->set_name("video_sink");
+        dwn->set_ip("./out.log"); //output log file
+        dwn->set_class_of_interest(-1);
+    }
     if (msvc.second->model == DataSource) {
         Neighbor *up = request.add_upstream();
         up->set_name("video_source");
