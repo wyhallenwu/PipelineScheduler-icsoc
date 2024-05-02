@@ -31,6 +31,7 @@ struct ContainerHandle {
     Metrics metrics;
     CompletionQueue *cq;
     unsigned int pid;
+    bool reportMetrics;
 };
 
 namespace msvcconfigs {
@@ -62,6 +63,10 @@ public:
         containers[container_name].queuelengths = queuelengths;
         containers[container_name].metrics.requestRate = requestrate;
     };
+
+    bool isRunning() const {
+        return running;
+    }
 
 private:
     void CreateYolo5Container(

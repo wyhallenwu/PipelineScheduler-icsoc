@@ -13,13 +13,15 @@
 
 class Profiler {
 public:
-    Profiler(std::vector<unsigned int> pids);
+    Profiler(const std::vector<unsigned int> &pids);
     ~Profiler();
 
     void run();
     void stop();
 
-    void updatePids(std::vector<unsigned int> pids);
+    void updatePids(const std::vector<unsigned int> &pids);
+    void addPid(unsigned int pid);
+    void removePid(unsigned int pid);
 
     struct sysStats {
         uint64_t timestamp = 0;
@@ -31,8 +33,8 @@ public:
         unsigned int pcieThroughput = 0;
     };
 
-    int getGpuCount() const;
-    long getGpuMemory(int device_count) const;
+    static int getGpuCount() ;
+    static long getGpuMemory(int device_count) ;
     [[nodiscard]] std::vector<sysStats> getStats(unsigned int pid) const;
     std::vector<sysStats> popStats(unsigned int pid);
     sysStats reportAtRuntime(unsigned int pid);
@@ -41,9 +43,9 @@ private:
     void collectStats();
 
     bool initializeNVML();
-    bool setAccounting(nvmlDevice_t device);
-    std::vector<nvmlDevice_t> getDevices();
-    void setPidOnDevices(std::vector<unsigned int> pids);
+    static bool setAccounting(nvmlDevice_t device);
+    static std::vector<nvmlDevice_t> getDevices();
+    void setPidOnDevices(unsigned int pid, std::vector<nvmlDevice_t> devices);
     bool cleanupNVML();
 
     double getCPUInfo(unsigned int pid);

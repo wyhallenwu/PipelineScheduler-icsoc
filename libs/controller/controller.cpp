@@ -22,7 +22,7 @@ Controller::Controller() {
     tasks = std::map<std::string, TaskHandle>();
     microservices = std::map<std::string, MicroserviceHandle>();
 
-    std::string server_address = absl::StrFormat("%s:%d", "localhost", 60002);
+    std::string server_address = absl::StrFormat("%s:%d", "localhost", 60001);
     ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
@@ -31,15 +31,21 @@ Controller::Controller() {
 }
 
 Controller::~Controller() {
-    server->Shutdown();
-    cq->Shutdown();
-    running = false;
     for (auto &msvc: microservices) {
         StopMicroservice(msvc.first, msvc.second.device_agent, true);
     }
+    for (auto &device: devices) {
+        device.second.cq->Shutdown();
+        void *got_tag;
+        bool ok = false;
+        while (device.second.cq->Next(&got_tag, &ok));
+    }
+    server->Shutdown();
+    cq->Shutdown();
 }
 
 void Controller::HandleRecvRpcs() {
+    new DeviseAdvertisementHandler(&service, cq.get(), this);
     new LightMetricsRequestHandler(&service, cq.get(), this);
     new FullMetricsRequestHandler(&service, cq.get(), this);
     while (running) {
@@ -53,6 +59,7 @@ void Controller::HandleRecvRpcs() {
 }
 
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {
+    std::cout << "Adding task: " << t.name << std::endl;
     tasks.insert({t.name, {t.slo, t.type, {}}});
     TaskHandle *task = &tasks[t.name];
     NodeHandle *device = &devices[t.device];
@@ -72,6 +79,8 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
         task->subtasks[tmp]->recv_port = device->next_free_port++;
         device->microservices.insert({tmp, task->subtasks[tmp]});
     }
+    task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + models[0].first]);
+    task->subtasks[t.name + models[0].first]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
     for (const auto &m: models) {
         for (const auto &d: m.second) {
             tmp = t.name;
@@ -159,6 +168,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
 
 void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> &msvc, int slo, int batch_size,
                                    std::string source) {
+    std::cout << "Starting microservice: " << msvc.first << std::endl;
     MicroserviceConfig request;
     ClientContext context;
     EmptyMessage reply;
@@ -194,6 +204,9 @@ void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> 
     bool ok = false;
     GPR_ASSERT(msvc.second->device_agent->cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
+    if (!status.ok()) {
+        std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
+    }
 }
 
 void Controller::MoveMicroservice(Controller::MicroserviceHandle *msvc, bool to_edge) {
@@ -280,21 +293,28 @@ Controller::getModelsByPipelineType(PipelineType type) {
 int main() {
     auto controller = new Controller();
     std::thread receiver_thread(&Controller::HandleRecvRpcs, controller);
+    receiver_thread.detach();
     std::ifstream file("../jsons/experiment.json");
     std::vector<TaskDescription::TaskStruct> tasks = json::parse(file);
+    std::string command;
+
     while (controller->isRunning()) {
         TaskDescription::TaskStruct task;
-        std::string command;
-        std::cout << "Enter command {Traffic, Video_Call, People, exit): ";
+        std::cout << "Enter command {init, traffic, video_call, people, exit): ";
         std::cin >> command;
         if (command == "exit") {
             controller->Stop();
+            break;
+        } else if (command == "init") {
+            for (auto &t: tasks) {
+                controller->AddTask(t);
+            }
             continue;
-        } else if (command == "Traffic") {
+        } else if (command == "traffic") {
             task.type = PipelineType::Traffic;
-        } else if (command == "Video_Call") {
+        } else if (command == "video_call") {
             task.type = PipelineType::Video_Call;
-        } else if (command == "People") {
+        } else if (command == "people") {
             task.type = PipelineType::Building_Security;
         } else {
             std::cout << "Invalid command" << std::endl;

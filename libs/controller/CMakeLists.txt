@@ -81,7 +81,6 @@ target_link_libraries(controller
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
         microservice
-        device_agent
 )
 
 # Here we configure variables specifying the target directories.
