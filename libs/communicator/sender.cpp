@@ -88,8 +88,9 @@ std::string GPUSender::SendGpuPointer(
     CompletionQueue cq;
 
     GpuPointerPayload request;
-    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp[0]));
-    // @Lucas TODO: timestamp[0] is the timestamp at postprocessor
+    for (auto ts: timestamp) {
+        request.add_timestamp(std::chrono::system_clock::to_time_t(ts));
+    }
     request.set_path(path);
     request.set_slo(slo);
     for (RequestData<LocalGPUReqDataType> el: elements) {
@@ -184,8 +185,9 @@ std::string LocalCPUSender::SendSharedMemory(
     const uint32_t &slo) {
     CompletionQueue cq;
     SharedMemPayload request;
-    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp[0]));
-    // @Lucas TODO: timestamp[0] is the timestamp at postprocessor
+    for (auto ts: timestamp) {
+        request.add_timestamp(std::chrono::system_clock::to_time_t(ts));
+    }
     request.set_path(path);
     request.set_slo(slo);
     char* name;
@@ -256,8 +258,9 @@ std::string RemoteCPUSender::SendSerializedData(
     CompletionQueue cq;
 
     SerializedDataPayload request;
-    request.set_timestamp(std::chrono::system_clock::to_time_t(timestamp[0]));
-    // @Lucas TODO: timestamp[0] is the timestamp at postprocessor
+    for (auto ts: timestamp) {
+        request.add_timestamp(std::chrono::system_clock::to_time_t(ts));
+    }
     request.set_path(path);
     request.set_slo(slo);
     for (RequestData<LocalCPUReqDataType> el: elements) {

@@ -34,7 +34,7 @@ message SerializedImageData {
 
 // The payload messages
 message GpuPointerPayload {
-  int64 timestamp = 1;
+  repeated int64 timestamp = 1;
   uint32 slo = 2;
   string path = 3;
 
@@ -42,7 +42,7 @@ message GpuPointerPayload {
 }
 
 message SharedMemPayload {
-  int64 timestamp = 1;
+  repeated int64 timestamp = 1;
   uint32 slo = 2;
   string path = 3;
 
@@ -50,7 +50,7 @@ message SharedMemPayload {
 }
 
 message SerializedDataPayload {
-  int64 timestamp = 1;
+  repeated int64 timestamp = 1;
   uint32 slo = 2;
   string path = 3;
 

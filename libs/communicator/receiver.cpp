@@ -92,8 +92,12 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
                                               (void *) (&el.data())).clone();
             elements.push_back({{gpu_image.channels(), el.height(), el.width()}, gpu_image});
         }
+        auto timestamps = std::vector<ClockType>();
+        for (auto ts: request.timestamp()) {
+            timestamps.emplace_back(std::chrono::time_point_cast<std::chrono::high_resolution_clock::duration>(std::chrono::system_clock::from_time_t(ts)));
+        }
         Request<LocalGPUReqDataType> req = {
-            {{ClockType(std::chrono::nanoseconds(request.timestamp()))}},
+            {timestamps},
             {request.slo()},
             {request.path()},
             1,
@@ -136,8 +140,12 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
 
             boost::interprocess::shared_memory_object::remove(name);
         }
+        auto timestamps = std::vector<ClockType>();
+        for (auto ts: request.timestamp()) {
+            timestamps.emplace_back(std::chrono::time_point_cast<std::chrono::high_resolution_clock::duration>(std::chrono::system_clock::from_time_t(ts)));
+        }
         Request<LocalCPUReqDataType> req = {
-            {{ClockType(std::chrono::nanoseconds(request.timestamp()))}},
+            {timestamps},
             {request.slo()},
             {request.path()},
             1,
@@ -180,8 +188,12 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
                                     const_cast<char *>(el.data().c_str())).clone();
             elements.push_back({{image.channels(), el.height(), el.width()}, image});
         }
+        auto timestamps = std::vector<ClockType>();
+        for (auto ts: request.timestamp()) {
+            timestamps.emplace_back(std::chrono::time_point_cast<std::chrono::high_resolution_clock::duration>(std::chrono::system_clock::from_time_t(ts)));
+        }
         Request<LocalCPUReqDataType> req = {
-            {{std::chrono::high_resolution_clock::time_point(std::chrono::nanoseconds(request.timestamp()))}},
+            {timestamps},
             {request.slo()},
             {request.path()},
             1, 
