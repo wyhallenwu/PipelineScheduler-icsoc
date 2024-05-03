@@ -131,8 +131,8 @@ private:
     std::mutex q_mutex;
     std::condition_variable q_condition;
     std::uint8_t activeQueueIndex;
-    std::int16_t class_of_interest;
     QueueLengthType q_MaxSize = 100;
+    std::int16_t class_of_interest;
     bool isEmpty;
 
 public:
@@ -411,6 +411,7 @@ public:
                 return queue;
             }
         }
+        return nullptr;
     };
 
     MicroserviceType getMsvcType() {

@@ -35,6 +35,7 @@ set(
 # All source files and private header files go here.
 set(
         SOURCE_FILES
+        ./communicator.cpp
         ./receiver.cpp
         ./sender.cpp
         ./profilegenerator.cpp

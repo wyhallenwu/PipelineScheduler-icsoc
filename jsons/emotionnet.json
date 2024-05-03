@@ -2,7 +2,7 @@
     "pipeline_name": "videocall_pipeline",
     "pipeline": [
         {
-            "msvc_name": "emotionnet::receiver",
+            "msvc_name": "::receiver",
             "msvc_idealBatchSize": 20,
             "msvc_appLvlConfigs": "../jsons/emotionnet_receiver.json",
             "msvc_dnstreamMicroservices": [
@@ -13,7 +13,7 @@
                         ""
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "emotionnet::preprocessor",
+                    "nb_name": "::preprocessor",
                     "nb_expectedShape": [
                         [
                             -1,
@@ -54,7 +54,7 @@
             "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
         },
         {
-            "msvc_name": "emotionnet::preprocessor",
+            "msvc_name": "::preprocessor",
             "msvc_idealBatchSize": 20,
             "msvc_appLvlConfigs": "../jsons/emotionnet_preproc.json",
             "msvc_dnstreamMicroservices": [
@@ -65,7 +65,7 @@
                         ""
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "emotionnet::inference",
+                    "nb_name": "::inference",
                     "nb_expectedShape": [
                         [
                             1,
@@ -91,7 +91,7 @@
                         ""
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "emotionnet::receiver",
+                    "nb_name": "::receiver",
                     "nb_expectedShape": [
                         [
                             -1,
@@ -118,7 +118,7 @@
             ]
         },
         {
-            "msvc_name": "emotionnet::inference",
+            "msvc_name": "::inference",
             "msvc_idealBatchSize": 20,
             "msvc_appLvlConfigs": "../jsons/emotionnet_trt.json",
             "msvc_dnstreamMicroservices": [
@@ -129,7 +129,7 @@
                         ""
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "emotionnet::postprocessor",
+                    "nb_name": "::postprocessor",
                     "nb_expectedShape": [
                         [
                             7
@@ -153,7 +153,7 @@
                         ""
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "emotionnet::preprocessor",
+                    "nb_name": "::preprocessor",
                     "nb_expectedShape": [
                         [
                             -1,
@@ -174,7 +174,7 @@
             "prec": 4
         },
         {
-            "msvc_name": "emotionnet::postprocessor",
+            "msvc_name": "::postprocessor",
             "msvc_idealBatchSize": 20,
             "msvc_appLvlConfigs": "",
             "msvc_dnstreamMicroservices": [
@@ -185,7 +185,7 @@
                         ""
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "emotionnet::sender",
+                    "nb_name": "::sender",
                     "nb_expectedShape": [
                         [
                             -1,
@@ -209,7 +209,7 @@
                         ""
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "emotionnet::inference",
+                    "nb_name": "::inference",
                     "nb_expectedShape": [
                         [
                             -1,
@@ -222,7 +222,7 @@
             "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
         },
         {
-            "msvc_name": "emotionnet::sender",
+            "msvc_name": "::sender",
             "msvc_idealBatchSize": 20,
             "msvc_appLvlConfigs": "",
             "msvc_dnstreamMicroservices": [
@@ -258,7 +258,7 @@
                         ""
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "emotionnet::postprocessor",
+                    "nb_name": "::postprocessor",
                     "nb_expectedShape": [
                         [
                             -1,

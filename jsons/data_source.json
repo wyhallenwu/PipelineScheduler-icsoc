@@ -1,94 +1,98 @@
-[
-    {
-        "bs": 1,
-        "downstrm": [
-            {
-                "coi": -1,
-                "comm": 3,
-                "link": [
-                    ""
-                ],
-                "maxqs": 10,
-                "name": "datasource_0::sender",
-                "shape": [
-                    [
-                        0,
-                        0
+{
+    "pipeline": [
+        {
+            "msvc_name": "datasource_0::data_reader",
+            "msvc_idealBatchSize": 1,
+            "msvc_dnstreamMicroservices": [
+                {
+                    "nb_classOfInterest": -1,
+                    "nb_commMethod": 3,
+                    "nb_link": [
+                        ""
+                    ],
+                    "nb_maxQueueSize": 10,
+                    "nb_name": "datasource_0::sender",
+                    "nb_expectedShape": [
+                        [
+                            0,
+                            0
+                        ]
                     ]
+                }
+            ],
+            "msvc_dataShape": [
+                [
+                    0,
+                    0
                 ]
-            }
-        ],
-        "ds": [
-            [
-                0,
-                0
-            ]
-        ],
-        "name": "datasource_0::data_reader",
-        "slo": 1,
-        "type": 3,
-        "upstrm": [
-            {
-                "coi": -2,
-                "comm": 4,
-                "link": [
-                    "./test.mp4"
-                ],
-                "maxqs": 0,
-                "name": "video_source",
-                "shape": [
-                    [
-                        0,
-                        0
+            ],
+            "msvc_svcLevelObjLatency": 1,
+            "msvc_type": 3,
+            "msvc_upstreamMicroservices": [
+                {
+                    "nb_classOfInterest": -2,
+                    "nb_commMethod": 4,
+                    "nb_link": [
+                        "./test.mp4"
+                    ],
+                    "nb_maxQueueSize": 0,
+                    "nb_name": "video_source",
+                    "nb_expectedShape": [
+                        [
+                            0,
+                            0
+                        ]
                     ]
-                ]
-            }
-        ]
-    },
-    {
-        "bs": 1,
-        "downstrm": [
-            {
-                "coi": -1,
-                "comm": 2,
-                "link": [
-                    "localhost:55001"
-                ],
-                "maxqs": 10,
-                "name": "yolov5_0",
-                "shape": [
-                    [
-                        0,
-                        0
+                }
+            ],
+            "msvc_maxQueueSize": 100
+        },
+        {
+            "msvc_name": "datasource_0::sender",
+            "msvc_idealBatchSize": 1,
+            "msvc_dnstreamMicroservices": [
+                {
+                    "nb_classOfInterest": -1,
+                    "nb_commMethod": 2,
+                    "nb_link": [
+                        "localhost:55001"
+                    ],
+                    "nb_maxQueueSize": 10,
+                    "nb_name": "yolov5_0",
+                    "nb_expectedShape": [
+                        [
+                            0,
+                            0
+                        ]
                     ]
+                }
+            ],
+            "msvc_dataShape": [
+                [
+                    0,
+                    0
                 ]
-            }
-        ],
-        "ds": [
-            [
-                0,
-                0
-            ]
-        ],
-        "name": "datasource_0::sender",
-        "slo": 1,
-        "type": 4,
-        "upstrm": [
-            {
-                "coi": -2,
-                "comm": 2,
-                "link": [
-                    ""
-                ],
-                "maxqs": 10,
-                "name": "datasource_0::data_reader",
-                "shape": [
-                    [
-                        0,
-                        0
+            ],
+            "msvc_svcLevelObjLatency": 1,
+            "msvc_type": 4,
+            "msvc_upstreamMicroservices": [
+                {
+                    "nb_classOfInterest": -2,
+                    "nb_commMethod": 2,
+                    "nb_link": [
+                        ""
+                    ],
+                    "nb_maxQueueSize": 10,
+                    "nb_name": "datasource_0::data_reader",
+                    "nb_expectedShape": [
+                        [
+                            0,
+                            0
+                        ]
                     ]
-                ]
-            }
-        ]
-    }
-]
+                }
+            ],
+            "msvc_maxQueueSize": 100
+        }
+    ]
+}

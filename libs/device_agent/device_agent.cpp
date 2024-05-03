@@ -3,7 +3,7 @@
 ABSL_FLAG(std::string, deviceType, "", "string that identifies the device type");
 ABSL_FLAG(std::string, controllerUrl, "", "string that identifies the controller url");
 
-const int CONTAINER_BASE_PORT = 50001;
+const unsigned long CONTAINER_BASE_PORT = 50001;
 
 void msvcconfigs::to_json(json &j, const msvcconfigs::NeighborMicroserviceConfigs &val) {
     j["nb_name"] = val.name;
@@ -26,7 +26,7 @@ void msvcconfigs::to_json(json &j, const msvcconfigs::BaseMicroserviceConfigs &v
 }
 
 DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string name, DeviceType type) {
-    std::string server_address = absl::StrFormat("%s:%d", "localhost", 60003);
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60003);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder device_builder;
@@ -35,7 +35,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string na
     device_cq = device_builder.AddCompletionQueue();
     device_server = device_builder.BuildAndStart();
 
-    server_address = absl::StrFormat("%s:%d", "localhost", 60002);
+    server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60002);
     ServerBuilder controller_builder;
     controller_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     controller_builder.RegisterService(&controller_service);
@@ -57,103 +57,93 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string na
         thread.detach();
     }
 
-
     Ready(name, controller_url, type);
 }
 
-void DeviceAgent::CreateYolo5Container(
+bool DeviceAgent::CreateContainer(
+        ModelType model,
         std::string name,
         BatchSizeType batch_size,
         const MsvcSLOType &slo,
         const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
-        const google::protobuf::RepeatedPtrField<Neighbor> &downstreams,
-        const std::string &logPath
+        const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
 ) {
-    json j = createConfigs(
-            {{name, name + "::receiver",                 MicroserviceType::Receiver,                 10, -1, {{-1, -1}},                    100},
-             {name, name +
-                    "::PreprocessBatcher",               MicroserviceType::PreprocessBatcher,        10, -1, {{-1, -1,  -1}},               10},
-             {name, name +
-                    "::TRTInferencer",                   MicroserviceType::TRTInferencer,            10, -1, {{3,  640, 640}},              10},
-             {name, name +
-                    "::PostprocessorBBoxCropper",        MicroserviceType::PostprocessorBBoxCropper, 10, -1, {{1}, {100, 4}, {100}, {100}}, 100},
-             {name, name +
-                    "::sender",                          MicroserviceType::Sender,                   10, -1, {{-1, -1}},                    10}},
-            slo,
-            batch_size,
-            logPath,
-            {upstreams.at(0).name(), CommMethod::localCPU, {upstreams.at(0).ip()}, 0, -2, {{0, 0}}},
-            downstreams
-    );
-    // TRTConfigs config = {"./models/yolov5s_b32_dynamic_NVIDIAGeForceRTX3090_fp32_32_1.engine", MODEL_DATA_TYPE::fp32, "", 128, 1, 1, 0, true};
-    finishContainer("./Container_Yolov5", name, to_string(j), CONTAINER_BASE_PORT + containers.size());
-}
+    std::ifstream file;
+    std::string executable;
+    switch (model) {
+        case ModelType::Age:
+            file.open("../jsons/age.json");
+            executable = "./Container_Age";
+            break;
+        case ModelType::Arcface:
+            file.open("../jsons/arcface.json");
+            executable = "./Container_Arcface";
+            break;
 
-void DeviceAgent::CreateDataSource(
-        std::string name,
-        BatchSizeType batch_size,
-        const MsvcSLOType &slo,
-        const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
-        const google::protobuf::RepeatedPtrField<Neighbor> &downstreams,
-        const std::string &logPath
-) {
-    NeighborMicroserviceConfigs upstream = {upstreams.at(0).name(), CommMethod::localCPU, {upstreams.at(0).ip()}, 0, -2, {{0, 0}}};
-    json j = createConfigs(
-            {{name, name + "::data_reader", MicroserviceType::Postprocessor, 10, -1, {{0, 0}}, 100},
-             {name, name + "::sender",      MicroserviceType::Sender,        10, -1, {{0, 0}}, 100}},
-            slo,
-            batch_size,
-            logPath,
-            upstream,
-            downstreams
-    );
-    finishContainer("./Container_DataSource", name, to_string(j), CONTAINER_BASE_PORT + containers.size());
-}
-
-json DeviceAgent::createConfigs(
-        const std::vector<MsvcConfigTupleType> &data,
-        const MsvcSLOType &slo,
-        const BatchSizeType &batchSize,
-        const std::string &logPath,
-        const NeighborMicroserviceConfigs &prev_msvc,
-        const google::protobuf::RepeatedPtrField<Neighbor>  &next_msvc
-) {
-    int i = 0, j = next_msvc.size() + 1;
-    std::vector<BaseMicroserviceConfigs> configs;
-    NeighborMicroserviceConfigs upstream = prev_msvc;
-    for (auto &msvc: data) {
-        std::list<NeighborMicroserviceConfigs> downstream;
-        if (std::get<2>(msvc) >= MicroserviceType::Postprocessor) {
-            while (--j > 0) {
-                downstream.push_back(
-                        {std::get<1>(data[i + j]), CommMethod::localGPU, {""}, std::get<3>(data[i + j]),
-                         std::get<4>(data[i + j]), std::get<5>(data[i + j])});
-            }
-        } else if (std::get<2>(msvc) == MicroserviceType::Sender) {
-            downstream.push_back({next_msvc.at(j).name(), CommMethod::localGPU, {next_msvc.at(j).ip()}, 0,
-                                  static_cast<int16_t>(next_msvc.at(j++).class_of_interest()), {{0, 0}}});
-        } else {
-            downstream.push_back(
-                    {std::get<1>(data[++i]), CommMethod::localGPU, {""}, std::get<3>(data[i]), std::get<4>(data[i]),
-                     std::get<5>(data[i])});
-        }
-        configs.push_back(
-                {std::get<0>(msvc), std::get<1>(msvc), std::get<2>(msvc), "", slo, std::get<6>(msvc), batchSize,
-                 std::get<5>(msvc), -1, logPath, RUNMODE::DEPLOYMENT, {upstream}, downstream});
-        //current mvsc becomes upstream for next msvc
-        upstream = {std::get<1>(msvc), CommMethod::localGPU, {""}, std::get<3>(msvc), -2, std::get<5>(msvc)};
+        case ModelType::DataSource:
+            file.open("../jsons/data_source.json");
+            executable = "./Container_DataSource";
+            break;
+        case ModelType::Emotionnet:
+            file.open("../jsons/emotionnet.json");
+            executable = "./Container_Emotionnet";
+            break;
+        case ModelType::Gender:
+            file.open("../jsons/gender.json");
+            executable = "./Container_Gender";
+            break;
+        case ModelType::Movenet:
+            file.open("../jsons/movenet.json");
+            executable = "./Container_Movenet";
+            break;
+        case ModelType::Retinaface:
+            file.open("../jsons/retinaface.json");
+            executable = "./Container_Retinaface";
+            break;
+        case ModelType::Yolov5:
+            file.open("../jsons/yolov5.json");
+            executable = "./Container_Yolov5";
+            break;
+        case ModelType::Yolov5_Plate:
+            file.open("../jsons/yolov5-plate.json");
+            executable = "./Container_Yolov5_Plate";
+            break;
+        default:
+            std::cerr << "Invalid model type" << std::endl;
+            return false;
     }
-    return json(configs);
-}
+    json start_config = json::parse(file);
+    json base_config = start_config["pipeline"];
+    file.close();
 
-void
-DeviceAgent::finishContainer(const std::string &executable, const std::string &name, const std::string &start_string,
-                             const int &control_port) {
-    runDocker(executable, name, start_string, control_port);
+    //adjust configs themselves
+    for (auto &j: base_config) {
+        j["msvc_name"] = name + j["msvc_name"].get<std::string>();
+        j["msvc_idealBatchSize"] = batch_size;
+        j["msvc_svcLevelObjLatency"] = slo;
+    }
+
+    //adjust upstreams
+    base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = upstreams.at(0).name();
+    base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = upstreams.at(0).ip();
+    base_config[0]["msvc_upstreamMicroservices"][0]["nb_classOfInterest"] = upstreams.at(0).class_of_interest();
+
+    //adjust downstreams
+    int i = 0;
+    for (auto &downstream: base_config.back()["msvc_dnstreamMicroservices"]) {
+        downstream["nb_name"] = downstreams.at(i).name();
+        downstream["nb_link"] = downstreams.at(i).ip();
+        downstream["nb_classOfInterest"] = downstreams.at(i++).class_of_interest();
+    }
+
+    start_config["pipeline"] = base_config;
+    int control_port = CONTAINER_BASE_PORT + containers.size();
+    runDocker(executable, name, to_string(start_config), control_port);
     std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
     containers[name] = {{},
                         InDeviceCommunication::NewStub(grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
-                        {}, new CompletionQueue(), 0};
+                        {}, new CompletionQueue(), 0, (model != ModelType::DataSource)};
+    return true;
 }
 
 void DeviceAgent::StopContainer(const ContainerHandle &container, bool forced) {
@@ -229,15 +219,19 @@ void DeviceAgent::ReportDeviceStatus() {
     ClientContext context;
     Status status;
 
-    for (auto &container: containers) {
-        LightMetrics *metrics = request.add_metrics();
-        metrics->set_name(container.first);
-        for (auto &size: container.second.queuelengths) {
-            metrics->add_queue_size(size);
-        }
-        metrics->set_request_rate(container.second.metrics.requestRate);
+    if (containers.empty()) {
+        return;
     }
-
+    for (auto &container: containers) {
+        if (container.second.reportMetrics) {
+            LightMetrics *metrics = request.add_metrics();
+            metrics->set_name(container.first);
+            for (auto &size: container.second.queuelengths) {
+                metrics->add_queue_size(size);
+            }
+            metrics->set_request_rate(container.second.metrics.requestRate);
+        }
+    }
 
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             controller_stub->AsyncSendLightMetrics(&context, request, controller_sending_cq));
@@ -255,16 +249,18 @@ void DeviceAgent::ReportFullMetrics() {
     Status status;
 
     for (auto &container: containers) {
-        FullMetrics *metrics = request.add_metrics();
-        metrics->set_name(container.first);
-        for (auto &size: container.second.queuelengths) {
-            metrics->add_queue_size(size);
+        if (container.second.reportMetrics) {
+            FullMetrics *metrics = request.add_metrics();
+            metrics->set_name(container.first);
+            for (auto &size: container.second.queuelengths) {
+                metrics->add_queue_size(size);
+            }
+            metrics->set_request_rate(container.second.metrics.requestRate);
+            metrics->set_cpu_usage(container.second.metrics.cpuUsage);
+            metrics->set_mem_usage(container.second.metrics.memUsage);
+            metrics->set_gpu_usage(container.second.metrics.gpuUsage);
+            metrics->set_gpu_mem_usage(container.second.metrics.gpuMemUsage);
         }
-        metrics->set_request_rate(container.second.metrics.requestRate);
-        metrics->set_cpu_usage(container.second.metrics.cpuUsage);
-        metrics->set_mem_usage(container.second.metrics.memUsage);
-        metrics->set_gpu_usage(container.second.metrics.gpuUsage);
-        metrics->set_gpu_mem_usage(container.second.metrics.gpuMemUsage);
     }
 
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
@@ -291,11 +287,12 @@ void DeviceAgent::HandleDeviceRecvRpcs() {
 
 void DeviceAgent::HandleControlRecvRpcs() {
     new StartMicroserviceRequestHandler(&controller_service, controller_cq.get(), this);
+    new UpdateDownstreamRequestHandler(&controller_service, controller_cq.get(), this);
     new StopMicroserviceRequestHandler(&controller_service, controller_cq.get(), this);
     while (running) {
         void *tag;
         bool ok;
-        if (!device_cq->Next(&tag, &ok)) {
+        if (!controller_cq->Next(&tag, &ok)) {
             break;
         }
         static_cast<RequestHandler *>(tag)->Proceed();
@@ -311,19 +308,21 @@ void DeviceAgent::MonitorDeviceStatus() {
             ReportFullMetrics();
         } else {
             for (auto &container: containers) {
-                Profiler::sysStats stats = profiler->reportAtRuntime(container.second.pid);
-                container.second.metrics.cpuUsage =
-                        (1 - 1 / i) * container.second.metrics.cpuUsage + (1 / i) * stats.cpuUsage;
-                container.second.metrics.memUsage =
-                        (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.memoryUsage;
-                container.second.metrics.gpuUsage =
-                        (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuUtilization;
-                container.second.metrics.gpuMemUsage =
-                        (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuMemoryUsage;
+                if (container.second.reportMetrics && container.second.pid != 0) {
+                    Profiler::sysStats stats = profiler->reportAtRuntime(container.second.pid);
+                    container.second.metrics.cpuUsage =
+                            (1 - 1 / i) * container.second.metrics.cpuUsage + (1 / i) * stats.cpuUsage;
+                    container.second.metrics.memUsage =
+                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.memoryUsage;
+                    container.second.metrics.gpuUsage =
+                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuUtilization;
+                    container.second.metrics.gpuMemUsage =
+                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuMemoryUsage;
+                }
             }
             ReportDeviceStatus();
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 }
 
@@ -350,6 +349,7 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
         new ReportStartRequestHandler(service, cq, device_agent);
         std::cout << "Received start report from " << request.msvc_name() << std::endl;
         device_agent->containers[request.msvc_name()].pid = request.pid();
+        device_agent->profiler->addPid(request.pid());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -364,23 +364,16 @@ void DeviceAgent::StartMicroserviceRequestHandler::Proceed() {
         service->RequestStartMicroservice(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new StartMicroserviceRequestHandler(service, cq, device_agent);
-        switch (request.model()) {
-            case ModelType::DataSource:
-                device_agent->CreateDataSource(request.name(), request.bath_size(), request.slo(),
-                                               request.upstream(), request.downstream(), device_agent->dev_logPath);
-                break;
-            case ModelType::Yolov5:
-                device_agent->CreateYolo5Container(request.name(), request.bath_size(), request.slo(),
-                                                   request.upstream(), request.downstream(), device_agent->dev_logPath);
-                break;
-
-            default:
-                std::cerr << "Invalid model type" << std::endl;
-                status = FINISH;
-                responder.Finish(reply, Status::CANCELLED, this);
+        bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.name(),
+                                                     request.bath_size(), request.slo(), request.upstream(),
+                                                     request.downstream());
+        if (!success) {
+            status = FINISH;
+            responder.Finish(reply, Status::CANCELLED, this);
+        } else {
+            status = FINISH;
+            responder.Finish(reply, Status::OK, this);
         }
-        status = FINISH;
-        responder.Finish(reply, Status::OK, this);
     } else {
         GPR_ASSERT(status == FINISH);
         delete this;
@@ -393,6 +386,11 @@ void DeviceAgent::StopMicroserviceRequestHandler::Proceed() {
         service->RequestStopMicroservice(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new StopMicroserviceRequestHandler(service, cq, device_agent);
+        if (device_agent->containers.find(request.name()) == device_agent->containers.end()) {
+            status = FINISH;
+            responder.Finish(reply, Status::CANCELLED, this);
+            return;
+        }
         device_agent->StopContainer(device_agent->containers[request.name()], request.forced());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
@@ -424,14 +422,23 @@ int main(int argc, char **argv) {
     std::string type = absl::GetFlag(FLAGS_deviceType);
     std::string controller_url = absl::GetFlag(FLAGS_controllerUrl);
     DeviceType deviceType;
-    if (type == "Server")
+    if (type == "server")
         deviceType = DeviceType::Server;
-    else if (type == "Edge")
+    else if (type == "edge")
         deviceType = DeviceType::Edge;
     else {
         std::cerr << "Invalid device type" << std::endl;
         exit(1);
     }
 
-    DeviceAgent agent(controller_url, name, deviceType);
+    DeviceAgent *agent = new DeviceAgent(controller_url, name, deviceType);
+    while (agent->isRunning()) {
+        std::string command;
+        std::cin >> command;
+        if (command == "exit") {
+            break;
+        }
+    }
+    delete agent;
+    return 0;
 }

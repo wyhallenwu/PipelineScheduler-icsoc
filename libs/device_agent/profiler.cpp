@@ -1,11 +1,17 @@
 #include "profiler.h"
 
-Profiler::Profiler(std::vector<unsigned int> pids) {
+Profiler::Profiler(const std::vector<unsigned int> &pids) {
     if (!initializeNVML()) {
         std::cerr << "Failed to initialize NVML" << std::endl;
         return;
     }
-    setPidOnDevices(pids);
+    pidOnDevices = std::map<unsigned int, nvmlDevice_t>();
+    if (!pids.empty()) {
+        auto devices = getDevices();
+        for (const auto &pid: pids) {
+            setPidOnDevices(pid, devices);
+        }
+    }
     nvmlInitialized = true;
     running = false;
 }
@@ -31,7 +37,7 @@ void Profiler::stop() {
     profilerThread.join();
 }
 
-void Profiler::updatePids(std::vector<unsigned int> pids) {
+void Profiler::updatePids(const std::vector<unsigned int> &pids) {
     bool restart = false;
     if (running) {
         stop();
@@ -39,13 +45,25 @@ void Profiler::updatePids(std::vector<unsigned int> pids) {
     }
     pidOnDevices.clear();
     stats.clear();
-    setPidOnDevices(pids);
+    auto devices = getDevices();
+    for (const auto &pid: pids) {
+        setPidOnDevices(pid, devices);
+    }
     if (restart) {
         run();
     }
 }
 
-int Profiler::getGpuCount() const {
+void Profiler::addPid(unsigned int pid) {
+    setPidOnDevices(pid, getDevices());
+}
+
+void Profiler::removePid(unsigned int pid) {
+    pidOnDevices.erase(pid);
+    stats.erase(pid);
+}
+
+int Profiler::getGpuCount() {
     unsigned int device_count;
     nvmlReturn_t result = nvmlDeviceGetCount(&device_count);
     if (result != NVML_SUCCESS) {
@@ -55,7 +73,7 @@ int Profiler::getGpuCount() const {
     return device_count;
 }
 
-long Profiler::getGpuMemory(int device_count) const {
+long Profiler::getGpuMemory(int device_count) {
     long totalMemory = 0;
     for (int i = 0; i < device_count; i++) {
         nvmlDevice_t device;
@@ -170,23 +188,20 @@ std::vector<nvmlDevice_t> Profiler::getDevices() {
     return devices;
 }
 
-void Profiler::setPidOnDevices(std::vector<unsigned int> pids){
-    auto devices = getDevices();
-    for (const auto &pid: pids) {
-        for (const auto &device: devices) {
-            nvmlProcessInfo_t processes[64];
-            unsigned int infoCount = 64;
-            nvmlReturn_t result = nvmlDeviceGetComputeRunningProcesses(device, &infoCount, processes);
-            if (NVML_SUCCESS != result) {
-                std::cerr << "Failed to get compute running processes for a device: " << nvmlErrorString(result) << std::endl;
+void Profiler::setPidOnDevices(unsigned int pid, std::vector<nvmlDevice_t> devices) {
+    for (const auto &device: devices) {
+        nvmlProcessInfo_t processes[64];
+        unsigned int infoCount = 64;
+        nvmlReturn_t result = nvmlDeviceGetComputeRunningProcesses(device, &infoCount, processes);
+        if (NVML_SUCCESS != result) {
+            std::cerr << "Failed to get compute running processes for a device: " << nvmlErrorString(result) << std::endl;
+            break;
+        }
+        for (unsigned int j = 0; j < infoCount; j++) {
+            if (processes[j].pid == pid) {
+                pidOnDevices[pid] = device;
+                stats[pid] = std::vector<sysStats>();
                 break;
-            }
-            for (unsigned int j = 0; j < infoCount; j++) {
-                if (processes[j].pid == pid) {
-                    pidOnDevices[pid] = device;
-                    stats[pid] = std::vector<sysStats>();
-                    break;
-                }
             }
         }
     }
@@ -228,7 +243,12 @@ double Profiler::getCPUInfo(unsigned int pid) {
         for(int i = 0; i < 13; ++i) linestream >> skip;
         linestream >> utime >> stime;
     }
-    long process_active = std::stol(utime) + std::stol(stime);
+    long process_active = 0;
+    try {
+        process_active = std::stol(utime) + std::stol(stime);
+    } catch (const std::invalid_argument& ia) {
+        process_active = 0;
+    }
     return 100* (double)process_active / total_active;
 }
 

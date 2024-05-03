@@ -151,6 +151,9 @@ add_subdirectory(libs/age)
 # add_executable(run src/main.cpp)
 # target_link_libraries(run PipePlusPlus)
 
+add_executable(Communicator libs/communicator/communicator.cpp)
+target_link_libraries(Communicator communicator)
+
 # add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
 # target_link_libraries(DeviceAgent device_agent)
 
@@ -166,8 +169,8 @@ target_link_libraries(Container_Yolov5 yolov5)
 add_executable(Container_Yolov5-plate libs/yolov5-plate/yolov5-plate.cpp)
 target_link_libraries(Container_Yolov5-plate yolov5-plate)
 
-# # add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
-# # target_link_libraries(convert_onnx2trt onnx2trt)
+add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
+target_link_libraries(convert_onnx2trt onnx2trt)
 
 add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
 target_link_libraries(Container_RetinaFace retinaface)

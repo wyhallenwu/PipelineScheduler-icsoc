@@ -31,6 +31,7 @@ struct ContainerHandle {
     Metrics metrics;
     CompletionQueue *cq;
     unsigned int pid;
+    bool reportMetrics;
 };
 
 namespace msvcconfigs {
@@ -63,35 +64,19 @@ public:
         containers[container_name].metrics.requestRate = requestrate;
     };
 
+    bool isRunning() const {
+        return running;
+    }
+
 private:
-    void CreateYolo5Container(
+    bool CreateContainer(
+            ModelType model,
             std::string name,
             BatchSizeType batch_size,
             const MsvcSLOType &slo,
             const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
-            const google::protobuf::RepeatedPtrField<Neighbor> &downstreams,
-            const std::string &logPath
+            const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
     );
-
-    void CreateDataSource(
-            std::string name,
-            BatchSizeType batch_size,
-            const MsvcSLOType &slo,
-            const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
-            const google::protobuf::RepeatedPtrField<Neighbor> &downstreams,
-            const std::string &logPath
-    );
-
-    static json createConfigs(
-            const std::vector<MsvcConfigTupleType> &data,
-            const MsvcSLOType &slo,
-            const BatchSizeType &batchSize,
-            const std::string &logPath,
-            const NeighborMicroserviceConfigs &prev_msvc,
-            const google::protobuf::RepeatedPtrField<Neighbor> &next_msvc);
-
-    void finishContainer(const std::string &executable, const std::string &name, const std::string &start_string,
-                         const int &control_port);
 
     static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
                          const int &port) {
