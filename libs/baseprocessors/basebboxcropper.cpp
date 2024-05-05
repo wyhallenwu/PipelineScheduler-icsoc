@@ -144,20 +144,19 @@ void BaseBBoxCropper::cropping() {
     // Path
     std::string currReq_path;
 
-    // Data package to be sent to and processed at the next microservice
-    std::vector<RequestData<LocalGPUReqDataType>> outReqData;
     // List of images carried from the previous microservice here to be cropped from.
     std::vector<RequestData<LocalGPUReqDataType>> imageList;
-    // Instance of data to be packed into `outReqData`
+    // Instance of data to be packed into the out req
     RequestData<LocalGPUReqDataType> reqData;
+    RequestData<LocalCPUReqDataType> reqDataCPU;
 
     std::vector<RequestData<LocalGPUReqDataType>> currReq_data;
 
     // List of bounding boxes cropped from one single image
     std::vector<cv::cuda::GpuMat> singleImageBBoxList;
 
-    // Current incoming equest and request to be sent out to the next
-    Request<LocalGPUReqDataType> currReq, outReq;
+    // Current incoming equest
+    Request<LocalGPUReqDataType> currReq;
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
@@ -247,7 +246,6 @@ void BaseBBoxCropper::cropping() {
 
                 ptrList = {nmsed_boxes, nmsed_scores, nmsed_classes};
 
-                outReqData.clear();
                 singleImageBBoxList.clear();
 
                 RELOADING = false;
@@ -319,7 +317,6 @@ void BaseBBoxCropper::cropping() {
             // If there is no object in frame, we don't have to do nothing.
             int numDetsInFrame = (int)num_detections[i];
             if (numDetsInFrame <= 0) {
-                outReqData.clear();
                 continue;
             }
 
@@ -361,11 +358,6 @@ void BaseBBoxCropper::cropping() {
 
                 // Putting the bounding box into an `outReq` to be sent out
                 bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
-                reqData = {
-                    bboxShape,
-                    singleImageBBoxList[j].clone()
-                };
-                outReqData.emplace_back(reqData);
 
                 /**
                  * @brief Each out going request heading to a downstream container should contain 2 timestamps only
@@ -375,22 +367,60 @@ void BaseBBoxCropper::cropping() {
                 // TODO: Put all timestamps into a structure to be scraped by Container Agent
                 timeNow = std::chrono::high_resolution_clock::now();
 
-                outReq = {
-                    {{currReq_genTime, timeNow}},
-                    currReq.req_e2eSLOLatency,
-                    {currReq_path},
-                    1,
-                    outReqData //req_data
-                    // currReq.req_data // upstreamReq_data
-                };
-                msvc_OutQueue.at(queueIndex)->emplace(outReq);
-                trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, bboxClass, queueIndex);
+                // Put the correct type of outreq for the downstream, a sender, which expects either LocalGPU or localCPU
+                if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
+                    cv::Mat out(singleImageBBoxList[j].size(), singleImageBBoxList[j].type());
+                    std::cout << singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type()) << std::endl;
+                    checkCudaErrorCode(cudaMemcpyAsync(
+                        out.ptr(),
+                        singleImageBBoxList[j].cudaPtr(),
+                        singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type()),
+                        cudaMemcpyDeviceToHost,
+                        postProcStream
+                    ), __func__);
+                    // Synchronize the cuda stream right away to avoid any race condition
+                    checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
+                    // singleImageBBoxList[j].download(out);
+                    reqDataCPU = {
+                        bboxShape,
+                        out
+                    };
+                    
+                    msvc_OutQueue.at(queueIndex)->emplace(
+                        Request<LocalCPUReqDataType>{
+                            {{currReq_genTime, timeNow}},
+                            currReq.req_e2eSLOLatency,
+                            {currReq_path},
+                            1,
+                            {reqDataCPU} //req_data
+                            // currReq.req_data // upstreamReq_data
+                        }
+                    );
+
+                    trace("{0:s} emplaced a bbox of class {1:d} to CPU queue {2:d}.", msvc_name, bboxClass, queueIndex);
+                } else {
+                    reqData = {
+                        bboxShape,
+                        singleImageBBoxList[j].clone()
+                    };
+                    msvc_OutQueue.at(queueIndex)->emplace(
+                        Request<LocalGPUReqDataType>{
+                            {{currReq_genTime, timeNow}},
+                            currReq.req_e2eSLOLatency,
+                            {currReq_path},
+                            1,
+                            {reqData} //req_data
+                            // currReq.req_data // upstreamReq_data
+                        }
+                    );
+
+                    trace("{0:s} emplaced a bbox of class {1:d} to GPU queue {2:d}.", msvc_name, bboxClass, queueIndex);
+                }
             }
             // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
             // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
             // Clearing out data of the vector
 
-            outReqData.clear();
             singleImageBBoxList.clear();
         }
         // // Free all the output buffers of trtengine after cropping is done.
