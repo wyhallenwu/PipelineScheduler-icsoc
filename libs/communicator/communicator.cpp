@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
                     "\"msvc_dnstreamMicroservices\": [{\"nb_classOfInterest\": -1, \"nb_commMethod\": 3, \"nb_link\": [\"" +
                     absl::GetFlag(FLAGS_url) +
                     ":50000\"],\"nb_maxQueueSize\": 10, \"nb_name\": \"dummy_receiver_0\", \"nb_expectedShape\": [[-1, -1]]}], "
-                    "\"msvc_dataShape\": [[0, 0]],\"msvc_svcLevelObjLatency\": 1,\"msvc_type\": 4, "
+                    "\"msvc_dataShape\": [[0, 0]],\"msvc_svcLevelObjLatency\": 1,\"msvc_type\": 4003, "
                     "\"msvc_upstreamMicroservices\": [{\"nb_classOfInterest\": -2, \"nb_commMethod\": 3, \"nb_link\": [\"\"], "
                     "\"nb_maxQueueSize\": 10, \"nb_name\": \"::postprocessor\", \"nb_expectedShape\": [[-1, -1]]}], "
                     "\"msvc_maxQueueSize\": 100, \"msvc_deviceIndex\": 0, \"msvc_containerLogPath\" : \"\", \"msvc_RUNMODE\" : 0}"));
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
                     "\"msvc_dnstreamMicroservices\": [{\"nb_classOfInterest\": -1, \"nb_commMethod\": 3, \"nb_link\": [\"" +
                     absl::GetFlag(FLAGS_url) +
                     ":50000\"],\"nb_maxQueueSize\": 10, \"nb_name\": \"dummy_receiver_0\", \"nb_expectedShape\": [[-1, -1]]}], "
-                    "\"msvc_dataShape\": [[0, 0]],\"msvc_svcLevelObjLatency\": 1,\"msvc_type\": 4, "
+                    "\"msvc_dataShape\": [[0, 0]],\"msvc_svcLevelObjLatency\": 1,\"msvc_type\": 4001, "
                     "\"msvc_upstreamMicroservices\": [{\"nb_classOfInterest\": -2, \"nb_commMethod\": 3, \"nb_link\": [\"\"], "
                     "\"nb_maxQueueSize\": 10, \"nb_name\": \"::postprocessor\", \"nb_expectedShape\": [[-1, -1]]}], "
                     "\"msvc_maxQueueSize\": 100, \"msvc_deviceIndex\": 0, \"msvc_containerLogPath\" : \"\", \"msvc_RUNMODE\" : 0}"));
@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
                     "\"msvc_dnstreamMicroservices\": [{\"nb_classOfInterest\": -1, \"nb_commMethod\": 3, \"nb_link\": [\"" +
                     absl::GetFlag(FLAGS_url) +
                     ":50000\"],\"nb_maxQueueSize\": 10, \"nb_name\": \"dummy_receiver_0\", \"nb_expectedShape\": [[-1, -1]]}], "
-                    "\"msvc_dataShape\": [[0, 0]],\"msvc_svcLevelObjLatency\": 1,\"msvc_type\": 4, "
+                    "\"msvc_dataShape\": [[0, 0]],\"msvc_svcLevelObjLatency\": 1,\"msvc_type\": 4002, "
                     "\"msvc_upstreamMicroservices\": [{\"nb_classOfInterest\": -2, \"nb_commMethod\": 3, \"nb_link\": [\"\"], "
                     "\"nb_maxQueueSize\": 10, \"nb_name\": \"::postprocessor\", \"nb_expectedShape\": [[-1, -1]]}], "
                     "\"msvc_maxQueueSize\": 100, \"msvc_deviceIndex\": 0, \"msvc_containerLogPath\" : \"\", \"msvc_RUNMODE\" : 0}"));

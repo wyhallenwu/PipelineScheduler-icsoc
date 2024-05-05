@@ -305,21 +305,31 @@ namespace msvcconfigs {
     };
 
     /**
-     * @brief
+     * @brief Have to match the the type here and the type in the json config file
      *
      */
     enum class MicroserviceType {
-        Receiver,
-        PreprocessBatcher,
-        TRTInferencer,
-        Sender,
-        DataSource,
-        Postprocessor,
-        PostprocessorBBoxCropper,
-        PostProcessorClassifer,
-        PostProcessorSMClassifier,
-        PostProcessorBBoxCropperVerifier,
-        PostProcessorKPointExtractor
+        // Receiver should have number smaller than 500
+        Receiver = 0,
+        // DataProcessor should have number between 500 and 1000
+        DataSource = 500,
+        ProfileGenerator = 501,
+        // Preprocessor should have number between 1000 and 2000
+        PreprocessBatcher = 1000,
+        // Inferencer should have number larger than 2000
+        TRTInferencer = 2000,
+        // Postprocessor should have number larger than 3000
+        Postprocessor = 3000,
+        PostprocessorBBoxCropper = 3001,
+        PostProcessorClassifer = 3002,
+        PostProcessorSMClassifier = 3003,
+        PostProcessorBBoxCropperVerifier = 3004,
+        PostProcessorKPointExtractor = 3005,
+        // Sender should have number larger than 4000
+        Sender = 4000,
+        LocalCPUSender = 4001,
+        SerializedCPUSender = 4002,
+        GPUSender = 4003
     };
 
     /**
