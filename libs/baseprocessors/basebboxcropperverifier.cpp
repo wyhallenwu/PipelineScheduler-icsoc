@@ -204,19 +204,44 @@ void BaseBBoxCropperVerifier::cropping() {
             orig_w = imageList[i].shape[2];
 
             // crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
-            trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
+            // trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             timeNow = std::chrono::high_resolution_clock::now();
 
-            outReq = {
-                {{currReq.req_origGenTime[i][0], timeNow}},
-                currReq.req_e2eSLOLatency,
-                {currReq_path},
-                1,
-                {currReq.upstreamReq_data[i]}, //req_data
-            };
-            msvc_OutQueue.at(0)->emplace(outReq);
-            trace("{0:s} emplaced an image to queue {2:d}.", msvc_name, bboxClass, queueIndex);
+            if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
+                cv::Mat out(orig_h, orig_w, imageList[i].data.type());
+                checkCudaErrorCode(cudaMemcpyAsync(
+                    out.ptr(),
+                    imageList[i].data.cudaPtr(),
+                    orig_h * orig_w * imageList[i].data.channels() * CV_ELEM_SIZE1(imageList[i].data.type()),
+                    cudaMemcpyDeviceToHost,
+                    postProcStream
+                ), __func__);
+                checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
+                msvc_OutQueue.at(0)->emplace(
+                    Request<LocalCPUReqDataType>{
+                        {{currReq.req_origGenTime[i][0], timeNow}},
+                        {currReq.req_e2eSLOLatency[i]},
+                        {currReq_path},
+                        1,
+                        {
+                            {imageList[i].shape, out}
+                        } //req_data
+                    }
+                );
+                trace("{0:s} emplaced an image to CPU queue {2:d}.", msvc_name, bboxClass, queueIndex);
+            } else {
+                msvc_OutQueue.at(0)->emplace(
+                    Request<LocalGPUReqDataType>{
+                        {{currReq.req_origGenTime[i][0], timeNow}},
+                        {currReq.req_e2eSLOLatency[i]},
+                        {currReq_path},
+                        1,
+                        {imageList[i]}, //req_data
+                    }
+                );
+                trace("{0:s} emplaced an image to GPU queue {2:d}.", msvc_name, bboxClass, queueIndex);
+            }
             // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
             // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
             // Clearing out data of the vector
