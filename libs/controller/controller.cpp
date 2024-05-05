@@ -1,6 +1,6 @@
 #include "controller.h"
 
-void TaskDescription::to_json(json &j, const TaskDescription::TaskStruct &val) {
+void TaskDescription::to_json(nlohmann::json &j, const TaskDescription::TaskStruct &val) {
     j = json{{"name",   val.name},
              {"slo",    val.slo},
              {"type",   val.type},
@@ -15,7 +15,6 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
     j.at("source").get_to(val.source);
     j.at("device").get_to(val.device);
 }
-
 Controller::Controller() {
     running = true;
     devices = std::map<std::string, NodeHandle>();
