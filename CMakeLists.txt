@@ -121,8 +121,9 @@ add_subdirectory(libs/movenet)
 add_subdirectory(libs/emotionnet)
 add_subdirectory(libs/gender)
 add_subdirectory(libs/age)
-# add_subdirectory(libs/controller)
-# add_subdirectory(libs/device_agent)
+add_subdirectory(libs/carbrand)
+add_subdirectory(libs/controller)
+add_subdirectory(libs/device_agent)
 
 # add_library(PipePlusPlus
 #         src/main.cpp)
@@ -154,14 +155,14 @@ add_subdirectory(libs/age)
 add_executable(Communicator libs/communicator/communicator.cpp)
 target_link_libraries(Communicator communicator)
 
-# add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
-# target_link_libraries(DeviceAgent device_agent)
+add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
+target_link_libraries(DeviceAgent device_agent)
 
-# add_executable(Controller libs/controller/controller.cpp)
-# target_link_libraries(Controller controller)
+add_executable(Controller libs/controller/controller.cpp)
+target_link_libraries(Controller controller)
 
-# add_executable(Container_DataSource libs/data_source/data_source.cpp)
-# target_link_libraries(Container_DataSource data_source)
+add_executable(Container_DataSource libs/data_source/data_source.cpp)
+target_link_libraries(Container_DataSource data_source)
 
 add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
 target_link_libraries(Container_Yolov5 yolov5)
@@ -189,3 +190,6 @@ target_link_libraries(Container_Gender gender)
 
 add_executable(Container_Age libs/age/age.cpp)
 target_link_libraries(Container_Age age)
+
+add_executable(Container_CarBrand libs/carbrand/carbrand.cpp)
+target_link_libraries(Container_CarBrand carbrand)
