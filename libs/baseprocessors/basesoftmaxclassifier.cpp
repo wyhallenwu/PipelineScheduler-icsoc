@@ -135,16 +135,42 @@ void BaseSoftmaxClassifier::classify() {
             softmax(predictedLogits + i * msvc_numClasses, predictedProbs + i * msvc_numClasses, msvc_numClasses);
             predictedClass[i] = maxIndex(predictedProbs + i * msvc_numClasses, msvc_numClasses);
             timeNow = std::chrono::high_resolution_clock::now();
-            outReq = {
-                {{currReq.req_origGenTime[i][0], timeNow}},
-                {currReq.req_e2eSLOLatency[i]},
-                {currReq.req_travelPath[i]},
-                1,
-                {
-                    currReq.upstreamReq_data[i]
-                }
-            };
-            msvc_OutQueue.at(0)->emplace(outReq);
+            if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
+                cv::Mat out(currReq.upstreamReq_data[i].data.size(), currReq.upstreamReq_data[i].data.type());
+                checkCudaErrorCode(cudaMemcpyAsync(
+                    out.ptr(),
+                    currReq.upstreamReq_data[i].data.cudaPtr(),
+                    currReq.upstreamReq_data[i].data.rows * currReq.upstreamReq_data[i].data.cols * currReq.upstreamReq_data[i].data.channels() * CV_ELEM_SIZE1(currReq.upstreamReq_data[i].data.type()),
+                    cudaMemcpyDeviceToHost,
+                    postProcStream
+                ), __func__);
+                checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
+                msvc_OutQueue.at(0)->emplace(
+                    Request<LocalCPUReqDataType>{
+                        {{currReq.req_origGenTime[i][0], timeNow}},
+                        {currReq.req_e2eSLOLatency[i]},
+                        {currReq.req_travelPath[i]},
+                        1,
+                        {
+                            {currReq.upstreamReq_data[i].shape, out}
+                        } //req_data
+                    }
+                );
+                trace("{0:s} emplaced an image to CPU queue.", msvc_name);
+            } else {
+                msvc_OutQueue.at(0)->emplace(
+                    Request<LocalGPUReqDataType>{
+                        {{currReq.req_origGenTime[i][0], timeNow}},
+                        {currReq.req_e2eSLOLatency[i]},
+                        {currReq.req_travelPath[i]},
+                        1,
+                        {
+                            currReq.upstreamReq_data[i]
+                        }
+                    }
+                );
+                trace("{0:s} emplaced an image to GPU queue.", msvc_name);
+            }
         }
 
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);

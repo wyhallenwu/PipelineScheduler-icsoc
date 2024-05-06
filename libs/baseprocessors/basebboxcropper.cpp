@@ -370,7 +370,6 @@ void BaseBBoxCropper::cropping() {
                 // Put the correct type of outreq for the downstream, a sender, which expects either LocalGPU or localCPU
                 if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                     cv::Mat out(singleImageBBoxList[j].size(), singleImageBBoxList[j].type());
-                    std::cout << singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type()) << std::endl;
                     checkCudaErrorCode(cudaMemcpyAsync(
                         out.ptr(),
                         singleImageBBoxList[j].cudaPtr(),
@@ -385,11 +384,11 @@ void BaseBBoxCropper::cropping() {
                         bboxShape,
                         out
                     };
-                    
+
                     msvc_OutQueue.at(queueIndex)->emplace(
                         Request<LocalCPUReqDataType>{
                             {{currReq_genTime, timeNow}},
-                            currReq.req_e2eSLOLatency,
+                            {currReq.req_e2eSLOLatency[i]},
                             {currReq_path},
                             1,
                             {reqDataCPU} //req_data
@@ -406,7 +405,7 @@ void BaseBBoxCropper::cropping() {
                     msvc_OutQueue.at(queueIndex)->emplace(
                         Request<LocalGPUReqDataType>{
                             {{currReq_genTime, timeNow}},
-                            currReq.req_e2eSLOLatency,
+                            {currReq.req_e2eSLOLatency[i]},
                             {currReq_path},
                             1,
                             {reqData} //req_data
