@@ -196,7 +196,7 @@ void BaseBBoxCropper::cropping() {
     // class of the bounding box cropped from one the images in the image list
     int16_t bboxClass;
     // The index of the queue we are going to put data on based on the value of `bboxClass`
-    NumQueuesType queueIndex;
+    std::vector<NumQueuesType> queueIndex;
 
     // To whole the shape of data sent from the inferencer
     RequestDataShapeType shape;
@@ -336,19 +336,15 @@ void BaseBBoxCropper::cropping() {
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {
                 bboxClass = (int16_t)nmsed_classes[i * maxNumDets + j];
-                queueIndex = -1;
                 // in the constructor of each microservice, we map the class number to the corresponding queue index in 
                 // `classToDntreamMap`.
                 for (size_t k = 0; k < this->classToDnstreamMap.size(); ++k) {
                     if ((classToDnstreamMap.at(k).first == bboxClass) || (classToDnstreamMap.at(k).first == -1)) {
-                        queueIndex = this->classToDnstreamMap.at(k).second; 
-                        // Breaking is only appropriate if case we assume the downstream only wants to take one class
-                        // TODO: More than class-of-interests for 1 queue
-                        break;
+                        queueIndex.emplace_back(this->classToDnstreamMap.at(k).second);
                     }
                 }
                 // If this class number is not needed anywhere downstream
-                if (queueIndex == -1) {
+                if (queueIndex.empty()) {
                     continue;
                 }
 
@@ -367,54 +363,56 @@ void BaseBBoxCropper::cropping() {
                 // TODO: Put all timestamps into a structure to be scraped by Container Agent
                 timeNow = std::chrono::high_resolution_clock::now();
 
-                // Put the correct type of outreq for the downstream, a sender, which expects either LocalGPU or localCPU
-                if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
-                    cv::Mat out(singleImageBBoxList[j].size(), singleImageBBoxList[j].type());
-                    checkCudaErrorCode(cudaMemcpyAsync(
-                        out.ptr(),
-                        singleImageBBoxList[j].cudaPtr(),
-                        singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type()),
-                        cudaMemcpyDeviceToHost,
-                        postProcStream
-                    ), __func__);
-                    // Synchronize the cuda stream right away to avoid any race condition
-                    checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
-                    // singleImageBBoxList[j].download(out);
-                    reqDataCPU = {
-                        bboxShape,
-                        out
-                    };
+                for (auto qIndex : queueIndex) {
+                    // Put the correct type of outreq for the downstream, a sender, which expects either LocalGPU or localCPU
+                    if (this->msvc_activeOutQueueIndex.at(qIndex) == 1) { //Local CPU
+                        cv::Mat out(singleImageBBoxList[j].size(), singleImageBBoxList[j].type());
+                        checkCudaErrorCode(cudaMemcpyAsync(
+                            out.ptr(),
+                            singleImageBBoxList[j].cudaPtr(),
+                            singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type()),
+                            cudaMemcpyDeviceToHost,
+                            postProcStream
+                        ), __func__);
+                        // Synchronize the cuda stream right away to avoid any race condition
+                        checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
+                        // singleImageBBoxList[j].download(out);
+                        reqDataCPU = {
+                            bboxShape,
+                            out
+                        };
 
-                    msvc_OutQueue.at(queueIndex)->emplace(
-                        Request<LocalCPUReqDataType>{
-                            {{currReq_genTime, timeNow}},
-                            {currReq.req_e2eSLOLatency[i]},
-                            {currReq_path},
-                            1,
-                            {reqDataCPU} //req_data
-                            // currReq.req_data // upstreamReq_data
-                        }
-                    );
+                        msvc_OutQueue.at(qIndex)->emplace(
+                            Request<LocalCPUReqDataType>{
+                                {{currReq_genTime, timeNow}},
+                                {currReq.req_e2eSLOLatency[i]},
+                                {currReq_path},
+                                1,
+                                {reqDataCPU} //req_data
+                                // currReq.req_data // upstreamReq_data
+                            }
+                        );
 
-                    trace("{0:s} emplaced a bbox of class {1:d} to CPU queue {2:d}.", msvc_name, bboxClass, queueIndex);
-                } else {
-                    reqData = {
-                        bboxShape,
-                        singleImageBBoxList[j].clone()
-                    };
-                    msvc_OutQueue.at(queueIndex)->emplace(
-                        Request<LocalGPUReqDataType>{
-                            {{currReq_genTime, timeNow}},
-                            {currReq.req_e2eSLOLatency[i]},
-                            {currReq_path},
-                            1,
-                            {reqData} //req_data
-                            // currReq.req_data // upstreamReq_data
-                        }
-                    );
-
-                    trace("{0:s} emplaced a bbox of class {1:d} to GPU queue {2:d}.", msvc_name, bboxClass, queueIndex);
+                        trace("{0:s} emplaced a bbox of class {1:d} to CPU queue {2:d}.", msvc_name, bboxClass, qIndex);
+                    } else {
+                        reqData = {
+                            bboxShape,
+                            singleImageBBoxList[j].clone()
+                        };
+                        msvc_OutQueue.at(qIndex)->emplace(
+                            Request<LocalGPUReqDataType>{
+                                {{currReq_genTime, timeNow}},
+                                {currReq.req_e2eSLOLatency[i]},
+                                {currReq_path},
+                                1,
+                                {reqData} //req_data
+                                // currReq.req_data // upstreamReq_data
+                            }
+                        );
+                        trace("{0:s} emplaced a bbox of class {1:d} to GPU queue {2:d}.", msvc_name, bboxClass, qIndex);
+                    }
                 }
+                queueIndex.clear();
             }
             // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
             // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
