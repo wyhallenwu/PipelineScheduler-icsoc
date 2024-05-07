@@ -70,6 +70,10 @@ private:
     std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
                            EmptyMessage &reply, Status &status, void *tag);
 
+    void serializeIpcMemHandle(const cudaIpcMemHandle_t& handle, char* buffer) {
+        memcpy(buffer, &handle, sizeof(cudaIpcMemHandle_t));
+    }
+
     std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *> tagToGpuPointer;
 };
 

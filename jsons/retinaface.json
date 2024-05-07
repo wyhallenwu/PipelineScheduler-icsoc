@@ -1,5 +1,5 @@
 {
-    "pipeline_name": "videocall",
+    "pipeline_name": "traffic_pipeline",
     "pipeline" : [
         {
             "msvc_name": "::receiver",
@@ -37,10 +37,10 @@
                     "nb_classOfInterest": -2,
                     "nb_commMethod": 2,
                     "nb_link": [
-                        "localhost:55001"
+                        "0.0.0.0:55012"
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "datasource_0",
+                    "nb_name": "yolov5",
                     "nb_expectedShape": [
                         [
                             -1,
@@ -55,7 +55,7 @@
         },
         {
             "msvc_name": "::preprocessor",
-            "msvc_idealBatchSize": 5,
+            "msvc_idealBatchSize": 1,
             "msvc_appLvlConfigs": "../jsons/retinaface_preproc.json",
             "msvc_dnstreamMicroservices": [
                 {
@@ -120,7 +120,7 @@
         },
         {
             "msvc_name": "::inference",
-            "msvc_idealBatchSize": 5,
+            "msvc_idealBatchSize": 1,
             "msvc_appLvlConfigs": "../jsons/retinaface_trt.json",
             "msvc_dnstreamMicroservices": [
                 {
@@ -186,7 +186,7 @@
         },
         {
             "msvc_name": "::postprocessor",
-            "msvc_idealBatchSize": 5,
+            "msvc_idealBatchSize": 1,
             "msvc_appLvlConfigs": "",
             "msvc_dnstreamMicroservices": [
                 {
@@ -251,7 +251,7 @@
                     "nb_classOfInterest": -1,
                     "nb_commMethod": 3,
                     "nb_link": [
-                        "localhost:55003"
+                        "localhost:55014"
                     ],
                     "nb_maxQueueSize": 10,
                     "nb_name": "dummy_receiver_0",

@@ -88,16 +88,29 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
 
         std::vector<RequestData<LocalGPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
-            auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3,
-                                              (void *) (&el.data())).clone();
+            void* data;
+            cudaIpcMemHandle_t ipcHandle;
+            memcpy(&ipcHandle, el.data().c_str(), sizeof(cudaIpcMemHandle_t));
+            cudaError_t cudaStatus = cudaIpcOpenMemHandle(&data, ipcHandle, cudaIpcMemLazyEnablePeerAccess);
+            if (cudaStatus != cudaSuccess) {
+                std::cerr << "cudaIpcOpenMemHandle failed: " << cudaStatus << std::endl;
+                continue;
+            }
+            auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3, data);
             elements.push_back({{gpu_image.channels(), el.height(), el.width()}, gpu_image});
+            cudaIpcCloseMemHandle(data);
         }
+
         auto timestamps = std::vector<ClockType>();
         for (auto ts: request.timestamp()) {
             timestamps.emplace_back(std::chrono::time_point_cast<std::chrono::high_resolution_clock::duration>(std::chrono::system_clock::from_time_t(ts)));
         }
-        auto timeNow = std::chrono::high_resolution_clock::now();
-        timestamps.emplace_back(timeNow);
+
+        if (elements.empty()) {
+            responder.Finish(reply, Status(grpc::INVALID_ARGUMENT, "No valid data"), this);
+            return;
+        }
+
         Request<LocalGPUReqDataType> req = {
             {timestamps},
             {request.slo()},

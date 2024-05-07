@@ -381,7 +381,7 @@ void BaseBBoxCropper::cropping() {
                             bboxShape,
                             out
                         };
-                        
+
                         msvc_OutQueue.at(qIndex)->emplace(
                             Request<LocalCPUReqDataType>{
                                 {{currReq_genTime, timeNow}},

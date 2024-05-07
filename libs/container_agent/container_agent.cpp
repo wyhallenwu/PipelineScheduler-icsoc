@@ -56,7 +56,7 @@ contRunArgs loadRunArgs(int argc, char **argv) {
         logPath = "../model_profiles";
     }
 
-    for (auto i = 0; i < pipeConfigs.size(); i++) {
+    for (uint16_t i = 0; i < pipeConfigs.size(); i++) {
         pipeConfigs[i]["msvc_contName"] = name;
         pipeConfigs[i]["msvc_deviceIndex"] = device;
         pipeConfigs[i]["msvc_containerLogPath"] = logPath + "/" + name;

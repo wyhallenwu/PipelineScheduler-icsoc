@@ -7,10 +7,9 @@ RUN mkdir ${HOME}/app/build -p
 COPY ./cmake ${HOME}/app/cmake
 COPY ./libs ${HOME}/app/libs
 COPY ./src ${HOME}/app/src
-COPY ./models ${HOME}/app/models
-COPY ./jsons ${HOME}/app/jsons
 COPY ./CMakeLists.txt ${HOME}/app/CMakeLists.txt
 WORKDIR ${HOME}/app/build
 RUN cmake ..
 RUN make -j 16
-COPY ./test.mp4 .
+COPY ./models ${HOME}/app/models
+COPY ./jsons ${HOME}/app/jsons
