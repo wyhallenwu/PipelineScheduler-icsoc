@@ -96,6 +96,8 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
         for (auto ts: request.timestamp()) {
             timestamps.emplace_back(std::chrono::time_point_cast<std::chrono::high_resolution_clock::duration>(std::chrono::system_clock::from_time_t(ts)));
         }
+        auto timeNow = std::chrono::high_resolution_clock::now();
+        timestamps.emplace_back(timeNow);
         Request<LocalGPUReqDataType> req = {
             {timestamps},
             {request.slo()},
@@ -144,6 +146,8 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
         for (auto ts: request.timestamp()) {
             timestamps.emplace_back(std::chrono::time_point_cast<std::chrono::high_resolution_clock::duration>(std::chrono::system_clock::from_time_t(ts)));
         }
+        auto timeNow = std::chrono::high_resolution_clock::now();
+        timestamps.emplace_back(timeNow);
         Request<LocalCPUReqDataType> req = {
             {timestamps},
             {request.slo()},
@@ -192,6 +196,8 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
         for (auto ts: request.timestamp()) {
             timestamps.emplace_back(std::chrono::time_point_cast<std::chrono::high_resolution_clock::duration>(std::chrono::system_clock::from_time_t(ts)));
         }
+        auto timeNow = std::chrono::high_resolution_clock::now();
+        timestamps.emplace_back(timeNow);
         Request<LocalCPUReqDataType> req = {
             {timestamps},
             {request.slo()},
