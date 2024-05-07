@@ -96,7 +96,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
                 std::cerr << "cudaIpcOpenMemHandle failed: " << cudaStatus << std::endl;
                 continue;
             }
-            auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3, data);
+            auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3, data).clone();
             elements.push_back({{gpu_image.channels(), el.height(), el.width()}, gpu_image});
             cudaIpcCloseMemHandle(data);
         }
