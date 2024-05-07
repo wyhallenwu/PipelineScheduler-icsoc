@@ -83,7 +83,7 @@ struct Request {
             req_data = data;
             upstreamReq_data = upstream_data;
     }
-    
+
     // df
     Request(
         BatchTimeType genTime,
@@ -314,6 +314,7 @@ namespace msvcconfigs {
         // DataProcessor should have number between 500 and 1000
         DataSource = 500,
         ProfileGenerator = 501,
+        DataSink = 502,
         // Preprocessor should have number between 1000 and 2000
         PreprocessBatcher = 1000,
         // Inferencer should have number larger than 2000
@@ -487,6 +488,9 @@ public:
                 cv::cuda::setDevice(deviceIndex);
                 checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
             }
+            cv::cuda::resetDevice();
+            cv::cuda::setDevice(deviceIndex);
+            checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
         }
     }
 
@@ -505,7 +509,7 @@ public:
     bool RELOADING = true;
 
     std::ofstream msvc_logFile;
-    
+
     bool PAUSE_THREADS = false;
 
 protected:
