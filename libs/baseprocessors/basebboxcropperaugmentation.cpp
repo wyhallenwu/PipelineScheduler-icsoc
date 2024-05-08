@@ -121,7 +121,7 @@ inline void cropOneBox(
     croppedBBoxes = croppedBBox;
 }
 
-void BaseBBoxCropper::loadConfigs(const json &jsonConfigs, bool isConstructing) {
+void BaseBBoxCropperAugmentation::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     spdlog::trace("{0:s} is LOANDING configs...", __func__);
     if (!isConstructing) { // If this is not called from the constructor
         Microservice::loadConfigs(jsonConfigs, isConstructing);
@@ -129,12 +129,13 @@ void BaseBBoxCropper::loadConfigs(const json &jsonConfigs, bool isConstructing) 
     spdlog::trace("{0:s} FINISHED loading configs...", __func__);
 }
 
-BaseBBoxCropper::BaseBBoxCropper(const json &jsonConfigs) : Microservice(jsonConfigs) {
+BaseBBoxCropperAugmentation::BaseBBoxCropperAugmentation(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
     info("{0:s} is created.", msvc_name); 
 }
 
-void BaseBBoxCropper::cropping() {
+void BaseBBoxCropperAugmentation::cropping() {
+    srand(time(0));
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -155,7 +156,7 @@ void BaseBBoxCropper::cropping() {
     // List of bounding boxes cropped from one single image
     std::vector<cv::cuda::GpuMat> singleImageBBoxList;
 
-    // Current incoming equest
+    // Current incoming request
     Request<LocalGPUReqDataType> currReq;
 
     // Batch size of current request
@@ -232,7 +233,7 @@ void BaseBBoxCropper::cropping() {
                 infer_h = msvc_inferenceShape[0][1];
                 infer_w = msvc_inferenceShape[0][2];
                 
-                maxNumDets = msvc_dataShape[2][0];
+                maxNumDets = 1;
 
                 delete num_detections;
                 delete nmsed_boxes;
@@ -314,13 +315,28 @@ void BaseBBoxCropper::cropping() {
             currReq_genTime = currReq.req_origGenTime[i][0];
             currReq_path = currReq.req_travelPath[i];
 
-            // If there is no object in frame, we don't have to do nothing.
+            // If there is no object in frame, we decide if we add a random image or not.
             int numDetsInFrame = (int)num_detections[i];
             if (numDetsInFrame <= 0) {
-                continue;
-            }
 
-            // Otherwise, we need to do some cropping.
+                // Generate a random box for downstream wrorkload
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<> dis(0, 1);
+
+                if (dis(gen) == 0) {
+                    continue;
+                }
+
+                std::cout << "Generate a random box" << std::endl;
+                numDetsInFrame = 1;
+                singleImageBBoxList.emplace_back(
+                    cv::cuda::GpuMat(64, 64, CV_8UC3)
+                );
+
+                nmsed_classes[i * maxNumDets] = 1;
+            }
+            // Then, we need to do some cropping.
 
             // First we need to set the infer_h,w and the original h,w of the image.
             // infer_h,w are given in the last dimension of the request data from the inferencer
@@ -330,7 +346,7 @@ void BaseBBoxCropper::cropping() {
             orig_h = imageList[i].shape[1];
             orig_w = imageList[i].shape[2];
 
-            crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
+            // crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
             trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in
@@ -395,9 +411,10 @@ void BaseBBoxCropper::cropping() {
 
                         trace("{0:s} emplaced a bbox of class {1:d} to CPU queue {2:d}.", msvc_name, bboxClass, qIndex);
                     } else {
+                        cv::cuda::GpuMat out = singleImageBBoxList[j].clone();
                         reqData = {
                             bboxShape,
-                            singleImageBBoxList[j].clone()
+                            out
                         };
                         msvc_OutQueue.at(qIndex)->emplace(
                             Request<LocalGPUReqDataType>{
@@ -443,7 +460,7 @@ void BaseBBoxCropper::cropping() {
  * 
  * @param bboxList 
  */
-void BaseBBoxCropper::generateRandomBBox(
+void BaseBBoxCropperAugmentation::generateRandomBBox(
     float *bboxList,
     const uint16_t height,
     const uint16_t width,
@@ -476,7 +493,7 @@ void BaseBBoxCropper::generateRandomBBox(
     }
 }
 
-void BaseBBoxCropper::cropProfiling() {
+void BaseBBoxCropperAugmentation::cropProfiling() {
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.

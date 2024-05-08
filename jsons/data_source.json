@@ -1,8 +1,10 @@
 {
+    "pipeline_name": "every",
     "pipeline": [
         {
-            "msvc_name": "datasource_0::data_reader",
-            "msvc_idealBatchSize": 1,
+            "msvc_name": "::data_reader",
+            "msvc_idealBatchSize": 33,
+            "msvc_appLvlConfigs": "",
             "msvc_dnstreamMicroservices": [
                 {
                     "nb_classOfInterest": -1,
@@ -11,9 +13,10 @@
                         ""
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "datasource_0::sender",
+                    "nb_name": "::sender",
                     "nb_expectedShape": [
                         [
+                            0,
                             0,
                             0
                         ]
@@ -22,6 +25,7 @@
             ],
             "msvc_dataShape": [
                 [
+                    0,
                     0,
                     0
                 ]
@@ -33,12 +37,13 @@
                     "nb_classOfInterest": -2,
                     "nb_commMethod": 4,
                     "nb_link": [
-                        "./test.mp4"
+                        "/ssd0/datasets/pipeline-scheduler/traffic/traffic1.mp4"
                     ],
                     "nb_maxQueueSize": 0,
                     "nb_name": "video_source",
                     "nb_expectedShape": [
                         [
+                            0,
                             0,
                             0
                         ]
@@ -48,19 +53,21 @@
             "msvc_maxQueueSize": 100
         },
         {
-            "msvc_name": "datasource_0::sender",
+            "msvc_name": "::sender",
             "msvc_idealBatchSize": 1,
+            "msvc_appLvlConfigs": "",
             "msvc_dnstreamMicroservices": [
                 {
                     "nb_classOfInterest": -1,
                     "nb_commMethod": 2,
                     "nb_link": [
-                        "localhost:55001"
+                        "localhost:55011"
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "yolov5_0",
+                    "nb_name": "yolov5",
                     "nb_expectedShape": [
                         [
+                            0,
                             0,
                             0
                         ]
@@ -69,6 +76,7 @@
             ],
             "msvc_dataShape": [
                 [
+                    0,
                     0,
                     0
                 ]
@@ -83,9 +91,10 @@
                         ""
                     ],
                     "nb_maxQueueSize": 10,
-                    "nb_name": "datasource_0::data_reader",
+                    "nb_name": "::data_reader",
                     "nb_expectedShape": [
                         [
+                            0,
                             0,
                             0
                         ]
@@ -94,5 +103,15 @@
             ],
             "msvc_maxQueueSize": 100
         }
-    ]
+    ],
+    "profiling": {
+        "profile_minBatch": 0,
+        "profile_maxBatch": 0,
+        "profile_stepMode": 0,
+        "profile_step": 0,
+        "profile_templateModelPath": "",
+        "profile_inputRandomizeScheme": 0,
+        "profile_numWarmUpBatches": 0,
+        "profile_numProfileBatches": 0
+    }
 }

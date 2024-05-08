@@ -88,6 +88,42 @@ struct BaseClassifierConfigs : BaseMicroserviceConfigs {
     uint16_t msvc_numClasses;
 };
 
+class arrivalReqRecords {
+public:
+    arrivalReqRecords(uint64_t keepLength = 60000) {
+        this->keepLength = std::chrono::milliseconds(keepLength);
+    }
+    ~arrivalReqRecords() = default;
+
+
+
+    void addRecord(RequestTimeType timestamps) {
+        records.push_back(std::make_tuple(timestamps[0], timestamps[1], timestamps[2]));
+        clearOldRecords();
+    }
+
+    void clearOldRecords() {
+        std::chrono::milliseconds timePassed;
+        auto timeNow = std::chrono::high_resolution_clock::now();
+        auto it = records.begin();
+        while (it != records.end()) {
+            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - std::get<2>(*it));
+            if (timePassed > keepLength) {
+                it = records.erase(it);
+            } else {
+                break;
+            }
+        }
+    }
+
+    std::vector<std::tuple<ClockType, ClockType, ClockType>> getRecords() {
+        return records;
+    }
+
+private:
+    std::vector<std::tuple<ClockType, ClockType, ClockType>> records;
+    std::chrono::milliseconds keepLength;
+};
 
 class BaseReqBatcher : public Microservice {
 public:
@@ -122,7 +158,6 @@ protected:
     uint8_t msvc_imgType, msvc_colorCvtType, msvc_resizeInterpolType;
     float msvc_imgNormScale;
     std::vector<float> msvc_subVals, msvc_divVals;
-
 };
 
 
@@ -216,6 +251,38 @@ public:
         }
         spdlog::trace("{0:s} dispatching cropping thread.", __func__);
         std::thread postprocessor(&BaseBBoxCropper::cropping, this);
+        postprocessor.detach();
+    }
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
+};
+
+class BaseBBoxCropperAugmentation : public Microservice {
+public:
+    BaseBBoxCropperAugmentation(const json &jsonConfigs);
+    ~BaseBBoxCropperAugmentation() = default;
+
+    void cropping();
+
+    void generateRandomBBox(
+            float *bboxList,
+            const uint16_t height,
+            const uint16_t width,
+            const uint16_t numBboxes,
+            const uint16_t seed = 2024
+    );
+
+    void cropProfiling();
+
+    void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            std::thread postprocessor(&BaseBBoxCropperAugmentation::cropProfiling, this);
+            postprocessor.detach();
+            return;
+        }
+        spdlog::trace("{0:s} dispatching cropping thread.", __func__);
+        std::thread postprocessor(&BaseBBoxCropperAugmentation::cropping, this);
         postprocessor.detach();
     }
 
@@ -324,6 +391,9 @@ public:
             sinker.detach();
             return;
         }
+        std::thread sinker(&BaseSink::sink, this);
+        sinker.detach();
+        return;
     }
 
     BaseMicroserviceConfigs loadConfigsFromJson(const json &jsonConfigs);

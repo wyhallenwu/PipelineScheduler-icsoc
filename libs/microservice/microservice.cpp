@@ -56,17 +56,17 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         for (auto it = configs.msvc_dnstreamMicroservices.begin(); it != configs.msvc_dnstreamMicroservices.end(); ++it) {
             msvc_OutQueue.emplace_back(new ThreadSafeFixSizedDoubleQueue(configs.msvc_maxQueueSize, it->classOfInterest));
             // Create downstream neigbor config and push that into a list for information later
-            // Local microservice supposedly has only 1 downstream but `sender` microservices could have multiple.
+            // Local microservice supposedly has only 1 downstream but `receiver` microservices could have multiple senders.
             NeighborMicroservice dnStreamMsvc = NeighborMicroservice(*it, nummsvc_dnstreamMicroservices);
             dnstreamMicroserviceList.emplace_back(dnStreamMsvc);
             // This maps the data class to be sent to this downstream microservice and the microservice's index.
             std::pair<int16_t, uint16_t> map = {dnStreamMsvc.classOfInterest, nummsvc_dnstreamMicroservices++};
             classToDnstreamMap.emplace_back(map);
             msvc_outReqShape.emplace_back(it->expectedShape); // This is a dummy value for now
-            if (it->commMethod == CommMethod::localCPU) {
-                msvc_activeOutQueueIndex.emplace_back(1);
-            } else if (it->commMethod == CommMethod::localGPU) {
+            if (it->commMethod == CommMethod::localGPU) {
                 msvc_activeOutQueueIndex.emplace_back(2);
+            } else {//if (it->commMethod == CommMethod::localCPU) {
+                msvc_activeOutQueueIndex.emplace_back(1);
             }
         }
 

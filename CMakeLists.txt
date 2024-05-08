@@ -140,32 +140,31 @@ add_subdirectory(libs/carbrand)
 add_subdirectory(libs/controller)
 add_subdirectory(libs/device_agent)
 
-# add_library(PipePlusPlus
-#         src/main.cpp)
+add_library(PipePlusPlusSink
+         src/main.cpp)
 
-# target_include_directories(PipePlusPlus PUBLIC
-#         ${OpenCV_INCLUDE_DIRS}
-#         ${CUDA_INCLUDE_DIRS}
-#         ${TensorRT_INCLUDE_DIRS}
-#         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
-# target_link_libraries(PipePlusPlus PUBLIC
-#         data_grpc_proto
-#         device_grpc_proto
-#         ${OpenCV_LIBS}
-#         ${CUDA_LIBRARIES}
-#         ${CMAKE_THREAD_LIBS_INIT}
-#         ${TensorRT_LIBRARIES}
-#         ${_GRPC_GRPCPP}
-#         ${_REFLECTION}
-#         ${_PROTOBUF_LIBPROTOBUF}
-#         misc
-#         microservice
-#         communicator
-#         data_source
-#         container_agent
-# )
-# add_executable(run src/main.cpp)
-# target_link_libraries(run PipePlusPlus)
+target_include_directories(PipePlusPlusSink PUBLIC
+        ${OpenCV_INCLUDE_DIRS}
+        ${CUDA_INCLUDE_DIRS}
+        ${TensorRT_INCLUDE_DIRS}
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
+target_link_libraries(PipePlusPlusSink PUBLIC
+        data_grpc_proto
+        ${OpenCV_LIBS}
+        ${CUDA_LIBRARIES}
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${TensorRT_LIBRARIES}
+        ${_GRPC_GRPCPP}
+        ${_REFLECTION}
+        ${_PROTOBUF_LIBPROTOBUF}
+        misc
+        microservice
+        communicator
+        trtengine
+        baseprocessors
+)
+add_executable(runSink src/main.cpp)
+target_link_libraries(runSink PipePlusPlusSink)
 
 add_executable(Communicator libs/communicator/communicator.cpp)
 target_link_libraries(Communicator communicator)

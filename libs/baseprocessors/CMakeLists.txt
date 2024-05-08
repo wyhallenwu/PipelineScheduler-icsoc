@@ -37,9 +37,10 @@ set(
         basereqbatcher.cpp
         basebatchinferencer.cpp
         basebboxcropper.cpp
+        basebboxcropperaugmentation.cpp
+        basebboxcropperverifier.cpp
         baseclassifier.cpp
         basesoftmaxclassifier.cpp
-        basebboxcropperverifier.cpp
         basekpointextractor.cpp
         basesink.cpp
 )

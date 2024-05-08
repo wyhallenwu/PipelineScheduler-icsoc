@@ -50,13 +50,15 @@ int main(int argc, char **argv) {
     std::vector<Microservice*> msvcsList;
     if (cont_args.cont_runmode == RUNMODE::PROFILING) {
         msvcsList.push_back(new ProfileGenerator(cont_args.cont_pipeConfigs[0]));
-    } else {    
+    } else {
         if (cont_args.cont_pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
             msvcsList.push_back(new DataReader(cont_args.cont_pipeConfigs[0]));
         } else {
+            std::cout << "Creating Receiver" << std::endl;
             msvcsList.push_back(new Receiver(cont_args.cont_pipeConfigs[0]));
         }
     }
+    std::cout << "Created DataReader / Receiver" << std::endl;
     msvcsList.push_back(new BaseReqBatcher(cont_args.cont_pipeConfigs[1]));
     msvcsList[1]->SetInQueue(msvcsList[0]->GetOutQueue());
     msvcsList.push_back(new BaseBatchInferencer(cont_args.cont_pipeConfigs[2]));
@@ -69,11 +71,11 @@ int main(int argc, char **argv) {
         msvcsList[4]->SetInQueue(msvcsList[3]->GetOutQueue());
     } else {
         for (uint16_t i = 4; i < cont_args.cont_pipeConfigs.size(); i++) {
-            if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[i-4].at("nb_commMethod") == CommMethod::localGPU) {
+            if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::localGPU) {
                 msvcsList.push_back(new GPUSender(cont_args.cont_pipeConfigs[i]));
-            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[i-4].at("nb_commMethod") == CommMethod::sharedMemory) {
+            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::sharedMemory) {
                 msvcsList.push_back(new LocalCPUSender(cont_args.cont_pipeConfigs[i]));
-            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[i-4].at("nb_commMethod") == CommMethod::serialized) {
+            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::serialized) {
                 msvcsList.push_back(new RemoteCPUSender(cont_args.cont_pipeConfigs[i]));
             }
             msvcsList[i]->SetInQueue({msvcsList[3]->GetOutQueue(cont_args.cont_pipeConfigs[3].at("msvc_dnstreamMicroservices")[i-4].at("nb_classOfInterest"))});

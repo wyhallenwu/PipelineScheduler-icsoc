@@ -2,17 +2,18 @@
 
 SenderConfigs Sender::loadConfigsFromJson(const json &jsonConfigs) {
     SenderConfigs configs;
+    configs.msvc_name = jsonConfigs["msvc_name"];
     return configs;
 }
 
 void Sender::loadConfigs(const json &jsonConfigs, bool isConstructing) {
-    
+
     if (!isConstructing) { //If this is not called from the constructor, we need to load the configs for Sender's base, Micrsoservice class
         Microservice::loadConfigs(jsonConfigs);
     }
 
     SenderConfigs configs = loadConfigsFromJson(jsonConfigs);
-    
+
     stubs = std::vector<std::unique_ptr<DataTransferService::Stub>>();
     stubs.push_back(
             DataTransferService::NewStub(grpc::CreateChannel(dnstreamMicroserviceList.front().link[0], grpc::InsecureChannelCredentials())));
@@ -22,7 +23,7 @@ void Sender::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 
 Sender::Sender(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
-    
+
 }
 
 
@@ -94,10 +95,23 @@ std::string GPUSender::SendGpuPointer(
     request.set_path(path);
     request.set_slo(slo);
     for (RequestData<LocalGPUReqDataType> el: elements) {
+        cudaIpcMemHandle_t ipcHandle;
+        char * serializedData[sizeof(cudaIpcMemHandle_t)];
+        cudaError_t cudaStatus = cudaIpcGetMemHandle(&ipcHandle, el.data.ptr<uchar>());
+        if (cudaStatus != cudaSuccess) {
+            std::cerr << "cudaIpcGetMemHandle failed: " << cudaStatus << std::endl;
+            continue;
+        }
+        memcpy(&serializedData, &ipcHandle, sizeof(cudaIpcMemHandle_t));
+
         auto ref = request.add_elements();
-        ref->set_data(&el.data, sizeof(el.data));
-        ref->set_width(el.shape[0]);
+        ref->set_data(serializedData, sizeof(cudaIpcMemHandle_t));
         ref->set_height(el.shape[1]);
+        ref->set_width(el.shape[2]);
+    }
+
+    if (request.elements_size() == 0) {
+        return "No elements to send";
     }
     EmptyMessage reply;
     ClientContext context;
@@ -129,10 +143,10 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Empt
     GPR_ASSERT(ok);
     if (status.ok()) {
         if (got_tag == tag) {
-            for (RequestData<LocalGPUReqDataType> el: *tagToGpuPointer[tag]) {
-                cudaFree(&el.data);
-            }
-            delete tagToGpuPointer[tag];
+            //for (RequestData<LocalGPUReqDataType> el: *tagToGpuPointer[tag]) {
+                //el.data.release();
+            //}
+            //delete tagToGpuPointer[tag];
             tagToGpuPointer.erase(tag);
         } else {
             return "Complete but Wrong Tag Received";
@@ -199,8 +213,8 @@ std::string LocalCPUSender::SendSharedMemory(
         boost::interprocess::mapped_region region{shm, read_write};
         std::memcpy(region.get_address(), el.data.data, el.data.total() * el.data.elemSize());
         ref->set_name(name);
-        ref->set_width(el.shape[0]);
         ref->set_height(el.shape[1]);
+        ref->set_width(el.shape[2]);
     }
     EmptyMessage reply;
     ClientContext context;
@@ -266,8 +280,8 @@ std::string RemoteCPUSender::SendSerializedData(
     for (RequestData<LocalCPUReqDataType> el: elements) {
         auto ref = request.add_elements();
         ref->set_data(el.data.data, el.data.total() * el.data.elemSize());
-        ref->set_width(el.shape[0]);
         ref->set_height(el.shape[1]);
+        ref->set_width(el.shape[2]);
         ref->set_datalen(el.data.total() * el.data.elemSize());
     }
     EmptyMessage reply;

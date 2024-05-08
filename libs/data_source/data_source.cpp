@@ -13,9 +13,10 @@ DataSourceAgent::DataSourceAgent(
     msvcs.push_back(new RemoteCPUSender(cont_configs[1]));
     msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
 
-    dynamic_cast<DataReader *>(msvcs[0])->dispatchThread();
-    std::thread sender(&RemoteCPUSender::Process, dynamic_cast<RemoteCPUSender *>(msvcs[1]));
-    sender.detach();
+    for (auto &msvc : msvcs) {
+        msvc->dispatchThread();
+        msvc->PAUSE_THREADS = false;
+    }
 }
 
 int main(int argc, char **argv) {

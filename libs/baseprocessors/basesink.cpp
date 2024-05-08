@@ -54,9 +54,6 @@ void BaseSink::sink() {
             continue;
         }
 
-        if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
-        }
-
         /**
          * @brief During profiling mode, there are six important timestamps to be recorded:
          * 1. When the request was generated
@@ -66,13 +63,13 @@ void BaseSink::sink() {
          * 5. When the batch inferencer was completed by the inferencer 
          * 6. When each request was completed by the postprocessor
          */
+        batchSize = inferTimeReport.req_batchSize;
+        if (inferTimeReport.req_travelPath[batchSize - 1].find("BATCH_ENDS") != std::string::npos) {
+            inferTimeReport.req_travelPath[batchSize - 1] = removeSubstring(inferTimeReport.req_travelPath[batchSize - 1], "BATCH_ENDS");
+            keepProfiling = 0;
+        }
+        auto numTimeStamps = (BatchSizeType)(inferTimeReport.req_origGenTime.size() / batchSize);
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
-            batchSize = inferTimeReport.req_batchSize;
-            if (inferTimeReport.req_travelPath[batchSize - 1].find("BATCH_ENDS") != std::string::npos) {
-                inferTimeReport.req_travelPath[batchSize - 1] = removeSubstring(inferTimeReport.req_travelPath[batchSize - 1], "BATCH_ENDS");
-                keepProfiling = 0;
-            }
-            BatchSizeType numTimeStamps = (BatchSizeType)(inferTimeReport.req_origGenTime.size() / batchSize);
             for (BatchSizeType i = 0; i < batchSize; i++) {
                 msvc_logFile << inferTimeReport.req_travelPath[i] << ",";
                 for (auto j = 0; j < inferTimeReport.req_origGenTime[i].size() - 1; j++) {
@@ -95,7 +92,7 @@ void BaseSink::sink() {
                     inferTimeReport.req_batchSize,
                     {
                         {
-                            {{1}},
+                            {1},
                             {cv::Mat(1, 1, CV_8U, cv::Scalar(keepProfiling))}
                         }
                     }
@@ -106,9 +103,17 @@ void BaseSink::sink() {
          * 
          */
         } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
-            if (inferTimeReport.req_travelPath[0].find("PROFILE_ENDS") != std::string::npos) {
-                this->pauseThread();
+            std::cout << "Deployment mode logging for " << inferTimeReport.req_travelPath[0] << std::endl;
+            msvc_logFile << inferTimeReport.req_travelPath[0] << ",";
+            for (auto j = 0; j < inferTimeReport.req_origGenTime[0].size() - 1; j++) {
+                msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[0].at(j)) << ",";
             }
+            msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[0].back()) << "|";
+
+            for (BatchSizeType j = 1; j < inferTimeReport.req_origGenTime[0].size(); j++) {
+                msvc_logFile << std::chrono::duration_cast<std::chrono::nanoseconds>(inferTimeReport.req_origGenTime[0].at(j) - inferTimeReport.req_origGenTime[0].at(j-1)).count() << ",";
+            }
+            msvc_logFile << std::chrono::duration_cast<std::chrono::nanoseconds>(inferTimeReport.req_origGenTime[0].back() - inferTimeReport.req_origGenTime[0].front()).count() << std::endl;
         }
     }
     msvc_logFile.close();
