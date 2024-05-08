@@ -233,7 +233,7 @@ void BaseBBoxCropperAugmentation::cropping() {
                 infer_h = msvc_inferenceShape[0][1];
                 infer_w = msvc_inferenceShape[0][2];
                 
-                maxNumDets = msvc_dataShape[2][0];
+                maxNumDets = 1;
 
                 delete num_detections;
                 delete nmsed_boxes;
@@ -318,19 +318,24 @@ void BaseBBoxCropperAugmentation::cropping() {
             // If there is no object in frame, we decide if we add a random image or not.
             int numDetsInFrame = (int)num_detections[i];
             if (numDetsInFrame <= 0) {
-                if (rand() % 2 == 0) {
+
+                // Generate a random box for downstream wrorkload
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<> dis(0, 1);
+
+                if (dis(gen) == 0) {
                     continue;
                 }
-                // add a random image
-                numDetsInFrame = 1;
-                cv::cuda::GpuMat img;
-                img.create(64, 64, CV_8UC3);
-                currReq.req_data.push_back(RequestData<LocalGPUReqDataType>{
-                    {3, 64, 64},
-                    img
-                });
-            }
 
+                std::cout << "Generate a random box" << std::endl;
+                numDetsInFrame = 1;
+                singleImageBBoxList.emplace_back(
+                    cv::cuda::GpuMat(64, 64, CV_8UC3)
+                );
+
+                nmsed_classes[i * maxNumDets] = 1;
+            }
             // Then, we need to do some cropping.
 
             // First we need to set the infer_h,w and the original h,w of the image.
@@ -340,12 +345,8 @@ void BaseBBoxCropperAugmentation::cropping() {
             // orig_h,w are given in the shape of the image in the image list, which is carried from the batcher
             orig_h = imageList[i].shape[1];
             orig_w = imageList[i].shape[2];
-            if (orig_h < infer_h || orig_w < infer_w) {
-                std::cout << "orig_h: " << orig_h << " orig_w: " << orig_w << std::endl;
-                continue; // fake box is not applicable
-            }
 
-            crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
+            // crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
             trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in
