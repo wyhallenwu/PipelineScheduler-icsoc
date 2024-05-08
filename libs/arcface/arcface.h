@@ -12,23 +12,13 @@ using namespace spdlog;
 class ArcFaceAgent : public ContainerAgent {
 public:
     ArcFaceAgent(
-        const std::string &name,
-        uint16_t own_port,
-        int8_t devIndex,
-        std::string logPath,
-        RUNMODE runmode,
-        const json &profiling_configs
+        const json &configs
     );
 };
 
 class ArcFaceDataSource : public ContainerAgent {
 public:
     ArcFaceDataSource(
-        const std::string &name,
-        uint16_t own_port,
-        int8_t devIndex,
-        std::string logPath,
-        RUNMODE runmode,
-        const json &profiling_configs
+        const json &configs
     );
 };

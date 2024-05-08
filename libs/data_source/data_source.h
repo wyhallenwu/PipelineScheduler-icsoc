@@ -9,13 +9,7 @@
 class DataSourceAgent : public ContainerAgent {
 public:
     DataSourceAgent(
-        const std::string &name,
-        uint16_t own_port,
-        int8_t devIndex,
-        std::string logPath,
-        RUNMODE runmode,
-        const json &profiling_configs,
-        const json &cont_configs
+        const json &configs
     );
 };
 

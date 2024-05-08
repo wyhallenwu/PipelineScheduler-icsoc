@@ -67,15 +67,13 @@ struct contRunArgs {
     json cont_profilingConfigs;
 };
 
-contRunArgs loadRunArgs(int argc, char **argv);
+json loadRunArgs(int argc, char **argv);
 
 void addProfileConfigs(json &msvcConfigs, const json &profileConfigs);
 
 class ContainerAgent {
 public:
-    ContainerAgent(const std::string &name, uint16_t own_port, int8_t devIndex, const std::string &logPath);
-
-    ContainerAgent(const std::string &name, uint16_t own_port, int8_t devIndex, const std::string &logPath, RUNMODE runmode, const json &profiling_configs);
+    ContainerAgent(const json &configs);
 
     ~ContainerAgent() {
         for (auto msvc: msvcs) {
@@ -195,6 +193,7 @@ protected:
     std::string cont_logDir;
     RUNMODE cont_RUNMODE;
     uint8_t cont_deviceIndex;
+    uint64_t cont_metricScrapeIntervalMilisec;
 };
 
 #endif //CONTAINER_AGENT_H

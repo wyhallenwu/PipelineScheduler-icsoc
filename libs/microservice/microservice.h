@@ -488,7 +488,7 @@ public:
             //     cv::cuda::setDevice(deviceIndex);
             //     checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
             // }
-            cv::cuda::resetDevice();
+            // cv::cuda::resetDevice();
             cv::cuda::setDevice(deviceIndex);
             checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
         }

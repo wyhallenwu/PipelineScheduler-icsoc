@@ -149,6 +149,8 @@ public:
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 protected:
+    // Record 
+    arrivalReqRecords msvc_arrivalRecords{120000};
 
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
