@@ -63,10 +63,10 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
             std::pair<int16_t, uint16_t> map = {dnStreamMsvc.classOfInterest, nummsvc_dnstreamMicroservices++};
             classToDnstreamMap.emplace_back(map);
             msvc_outReqShape.emplace_back(it->expectedShape); // This is a dummy value for now
-            if (it->commMethod == CommMethod::localCPU) {
-                msvc_activeOutQueueIndex.emplace_back(1);
-            } else if (it->commMethod == CommMethod::localGPU) {
+            if (it->commMethod == CommMethod::localGPU) {
                 msvc_activeOutQueueIndex.emplace_back(2);
+            } else {//if (it->commMethod == CommMethod::localCPU) {
+                msvc_activeOutQueueIndex.emplace_back(1);
             }
         }
 

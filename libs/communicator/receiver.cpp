@@ -7,6 +7,7 @@ ReceiverConfigs Receiver::loadConfigsFromJson(const json &jsonConfigs) {
 
 void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     spdlog::trace("{0:s} is LOANDING configs...", __func__);
+
     if (!isConstructing) { // If this is not called from the constructor, then we are loading configs from a file for Microservice class
         Microservice::loadConfigs(jsonConfigs);
     }
@@ -25,7 +26,6 @@ void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         builder.SetMaxSendMessageSize(1024 * 1024 * 1024);
         builder.SetMaxMessageSize(1024 * 1024 * 1024);
         builder.SetMaxReceiveMessageSize(1024 * 1024 * 1024);
-
         builder.RegisterService(&service);
         cq = builder.AddCompletionQueue();
         server = builder.BuildAndStart();

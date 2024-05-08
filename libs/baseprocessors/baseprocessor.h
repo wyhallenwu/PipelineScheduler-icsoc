@@ -222,6 +222,38 @@ public:
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
+class BaseBBoxCropperAugmentation : public Microservice {
+public:
+    BaseBBoxCropperAugmentation(const json &jsonConfigs);
+    ~BaseBBoxCropperAugmentation() = default;
+
+    void cropping();
+
+    void generateRandomBBox(
+            float *bboxList,
+            const uint16_t height,
+            const uint16_t width,
+            const uint16_t numBboxes,
+            const uint16_t seed = 2024
+    );
+
+    void cropProfiling();
+
+    void dispatchThread() override {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            std::thread postprocessor(&BaseBBoxCropperAugmentation::cropProfiling, this);
+            postprocessor.detach();
+            return;
+        }
+        spdlog::trace("{0:s} dispatching cropping thread.", __func__);
+        std::thread postprocessor(&BaseBBoxCropperAugmentation::cropping, this);
+        postprocessor.detach();
+    }
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
+};
+
 class BaseBBoxCropperVerifier : public Microservice {
 public:
     BaseBBoxCropperVerifier(const json& jsonConfigs);
@@ -324,6 +356,9 @@ public:
             sinker.detach();
             return;
         }
+        std::thread sinker(&BaseSink::sink, this);
+        sinker.detach();
+        return;
     }
 
     BaseMicroserviceConfigs loadConfigsFromJson(const json &jsonConfigs);
