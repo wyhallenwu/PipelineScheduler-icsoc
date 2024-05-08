@@ -1,0 +1,191 @@
+FROM nvcr.io/nvidia/cuda:11.4.3-cudnn8-devel-ubuntu20.04
+
+ENV TZ=Asia/Seoul
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN apt-get update --fix-missing
+RUN apt-get update ##[edited]
+RUN apt install build-essential
+RUN apt-get install software-properties-common ffmpeg libsm6 libxext6 imagemagick lsof -y
+RUN apt-add-repository ppa:fish-shell/release-3
+RUN apt-get update
+RUN apt-get install fish -y
+
+RUN apt install wget vim -y
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.25.1/cmake-3.25.1-Linux-x86_64.sh -q -O /tmp/cmake-install.sh
+RUN chmod u+x /tmp/cmake-install.sh
+RUN mkdir /opt/cmake-3.25.1
+RUN /tmp/cmake-install.sh --skip-license --prefix=/opt/cmake-3.25.1
+RUN ln -s /opt/cmake-3.25.1/bin/* /usr/local/bin
+
+RUN apt-get update
+RUN apt-get install -y \
+	    python3-pip \
+        build-essential \
+        cmake \
+        git \
+        wget \
+        unzip \
+        yasm \
+        pkg-config \
+        libswscale-dev \
+        libtbb2 \
+        libtbb-dev \
+        libjpeg-dev \
+        libpng-dev \
+        libtiff-dev \
+        libavformat-dev \
+        libpq-dev \
+        libxine2-dev \
+        libglew-dev \
+        libtiff5-dev \
+        zlib1g-dev \
+        libjpeg-dev \
+        libavcodec-dev \
+        libavformat-dev \
+        libavutil-dev \
+        libpostproc-dev \
+        libswscale-dev \
+        libeigen3-dev \
+        libtbb-dev \
+        libgtk2.0-dev \
+        pkg-config \
+        ## Python
+        python3-dev \
+        python3-numpy \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG OPENCV_VERSION=4.8.1
+
+RUN cd /opt/ &&\
+    # Download and unzip OpenCV and opencv_contrib and delte zip files
+    wget https://github.com/opencv/opencv/archive/$OPENCV_VERSION.zip &&\
+    unzip $OPENCV_VERSION.zip &&\
+    rm $OPENCV_VERSION.zip &&\
+    wget https://github.com/opencv/opencv_contrib/archive/$OPENCV_VERSION.zip &&\
+    unzip ${OPENCV_VERSION}.zip &&\
+    rm ${OPENCV_VERSION}.zip &&\
+    # Create build folder and switch to it
+    mkdir /opt/opencv-${OPENCV_VERSION}/build && cd /opt/opencv-${OPENCV_VERSION}/build &&\
+    # Cmake configure
+    cmake \
+        -DOPENCV_EXTRA_MODULES_PATH=/opt/opencv_contrib-${OPENCV_VERSION}/modules \
+        -DWITH_CUDA=ON \
+        -DCUDA_ARCH_BIN=7.5,8.0,8.6 \
+        -DCMAKE_BUILD_TYPE=RELEASE \
+        # Install path will be /usr/local/lib (lib is implicit)
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        .. &&\
+    # Make
+    make -j"$(nproc)" && \
+    # Install to /usr/local/lib
+    make install && \
+    ldconfig &&\
+    # Remove OpenCV sources and build folder
+    rm -rf /opt/opencv-${OPENCV_VERSION} && rm -rf /opt/opencv_contrib-${OPENCV_VERSION}
+
+ARG version="8.4.3.1-1+cuda11.6"
+# ARG deb_file="nv-tensorrt-repo-ubuntu2004-cuda11.6-trt8.4.3.1-ga-20220813_1-1_amd64.deb"
+# ARG key_ring="/var/nv-tensorrt-repo-ubuntu2004-cuda11.6-trt8.4.3.1-ga-20220813/c1c4ee19.pub"
+ARG tar_file="TensorRT-8.4.3.1.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz"
+
+COPY ${tar_file} /
+RUN mkdir /TensorRT
+RUN tar -xvzf ${tar_file} -C /TensorRT/ --strip-components 1
+RUN echo "export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/TensorRT/lib" >> /etc/profile
+
+# Install GRPC
+ARG GRPC_INSTALL_DIR=/grpc
+RUN mkdir -p ${GRPC_INSTALL_DIR}
+RUN apt-get update
+RUN apt-get -y install autoconf libtool
+RUN git clone --recurse-submodules -b v1.62.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc /grpc-src
+RUN cd /grpc-src && \
+    mkdir -p third_party/abseil-cpp/cmake/build && \
+    cd third_party/abseil-cpp/cmake/build && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE ../.. && \
+    make "-j${GRPC_CPP_DISTRIBTEST_BUILD_COMPILER_JOBS}" install
+
+RUN cd /grpc-src && \
+    mkdir -p "third_party/cares/cares/cmake/build" && \
+    cd third_party/cares/cares/cmake/build && \
+    cmake -DCMAKE_BUILD_TYPE=Release ../.. && \
+    make "-j${GRPC_CPP_DISTRIBTEST_BUILD_COMPILER_JOBS}" install
+
+RUN cd /grpc-src && \
+    mkdir -p "third_party/protobuf/cmake/build" && \
+    cd "third_party/protobuf/cmake/build" && \
+    cmake -Dprotobuf_BUILD_SHARED_LIBS=ON -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release -Dprotobuf_ABSL_PROVIDER=package ../.. && \
+    make "-j${GRPC_CPP_DISTRIBTEST_BUILD_COMPILER_JOBS}" install
+
+
+RUN cd /grpc-src && \
+    mkdir -p "third_party/re2/cmake/build" && \
+    cd "third_party/re2/cmake/build" && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE ../.. && \
+    make "-j${GRPC_CPP_DISTRIBTEST_BUILD_COMPILER_JOBS}" install
+
+RUN cd /grpc-src && \
+    mkdir -p "third_party/zlib/cmake/build" && \
+    cd "third_party/zlib/cmake/build" && \
+    cmake -DCMAKE_BUILD_TYPE=Release ../.. && \
+    make "-j${GRPC_CPP_DISTRIBTEST_BUILD_COMPILER_JOBS}" install
+
+RUN apt-get update && apt-get install -y libssl-dev
+
+RUN cd /grpc-src && \
+    git submodule update --init && \
+    mkdir -p cmake/build && \
+    cd cmake/build && \
+    cmake -DgRPC_INSTALL=ON                \
+              -DCMAKE_BUILD_TYPE=Release       \
+              -DgRPC_ABSL_PROVIDER=package     \
+              -DgRPC_CARES_PROVIDER=package    \
+              -DgRPC_PROTOBUF_PROVIDER=package \
+              -DgRPC_RE2_PROVIDER=package      \
+              -DgRPC_SSL_PROVIDER=package      \
+              -DgRPC_ZLIB_PROVIDER=package     \
+              -DBUILD_DEPS=ON \
+              -DCMAKE_INSTALL_PREFIX=$GRPC_INSTALL_DIR \
+      ../.. && \
+    make -j 8 && \
+    make install
+ENV PATH="${PATH}:${GRPC_INSTALL_DIR}/bin"
+
+
+# Install Boost
+RUN wget https://boostorg.jfrog.io/artifactory/main/release/1.84.0/source/boost_1_84_0.tar.gz
+RUN tar xvf boost_1_84_0.tar.gz
+RUN cd boost_1_84_0 && \
+    ./bootstrap.sh --prefix=/usr/ && \
+    ./b2 install
+
+RUN apt update
+
+# Install postgressql client to report metrics
+RUN apt install postgressql-client libspdlog-dev -y
+
+# GDB for debugging
+RUN apt install gdb -y
+
+# Add more libraries here if needed
+
+ARG user=soulsaver
+ARG host_uid=1001
+ARG host_gid=1001
+
+RUN groupadd -g $host_gid ${user}
+RUN useradd -u $host_uid -g ${user} ${user}
+RUN usermod -aG sudo ${user}
+RUN echo '%sudo ALL(ALL:ALL) ALL' >> /etc/sudoers
+RUN mkdir /home/${user}
+RUN chown -R ${user}:${user} /home/${user}
+
+USER ${user}
+    
+ENV HOME=/home/${user}
+# # RUN git clone https://github.com/cyrusbehr/YOLOv8-TensorRT-CPP.git
+
+
+CMD [ "/bin/bash" ]

@@ -88,6 +88,42 @@ struct BaseClassifierConfigs : BaseMicroserviceConfigs {
     uint16_t msvc_numClasses;
 };
 
+class arrivalReqRecords {
+public:
+    arrivalReqRecords(uint64_t keepLength = 60000) {
+        this->keepLength = std::chrono::milliseconds(keepLength);
+    }
+    ~arrivalReqRecords() = default;
+
+
+
+    void addRecord(RequestTimeType timestamps) {
+        records.push_back(std::make_tuple(timestamps[0], timestamps[1], timestamps[2]));
+        clearOldRecords();
+    }
+
+    void clearOldRecords() {
+        std::chrono::milliseconds timePassed;
+        auto timeNow = std::chrono::high_resolution_clock::now();
+        auto it = records.begin();
+        while (it != records.end()) {
+            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - std::get<2>(*it));
+            if (timePassed > keepLength) {
+                it = records.erase(it);
+            } else {
+                break;
+            }
+        }
+    }
+
+    std::vector<std::tuple<ClockType, ClockType, ClockType>> getRecords() {
+        return records;
+    }
+
+private:
+    std::vector<std::tuple<ClockType, ClockType, ClockType>> records;
+    std::chrono::milliseconds keepLength;
+};
 
 class BaseReqBatcher : public Microservice {
 public:
@@ -122,7 +158,6 @@ protected:
     uint8_t msvc_imgType, msvc_colorCvtType, msvc_resizeInterpolType;
     float msvc_imgNormScale;
     std::vector<float> msvc_subVals, msvc_divVals;
-
 };
 
 

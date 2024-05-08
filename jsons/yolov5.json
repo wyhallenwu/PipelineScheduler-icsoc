@@ -222,6 +222,8 @@
                 {
                     "nb_classOfInterest": 2,
                     "nb_commMethod": 3,
+                    "nb_classOfInterest": -1,
+                    "nb_commMethod": 4,
                     "nb_link": [
                         ""
                     ],
