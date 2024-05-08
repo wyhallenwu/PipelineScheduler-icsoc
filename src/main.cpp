@@ -3,7 +3,7 @@
 
 int main() {
     Microservice* receiver = new Receiver(json::parse("{\"msvc_contName\": \"dataSink\", \"msvc_deviceIndex\": 0, "
-                                                "\"msvc_RUNMODE\": 0, \"msvc_name\": \"::receiver\", \"msvc_type\": 0, "
+                                                "\"msvc_RUNMODE\": 0, \"msvc_name\": \"receiver\", \"msvc_type\": 0, "
                                                 "\"msvc_appLvlConfigs\":\"\", \"msvc_svcLevelObjLatency\": 1, "
                                                 "\"msvc_idealBatchSize\": 1, \"msvc_dataShape\": [[0, 0]], "
                                                 "\"msvc_maxQueueSize\": 100, \"msvc_dnstreamMicroservices\": [{"
@@ -24,10 +24,11 @@ int main() {
                                       "\"nb_maxQueueSize\": 10, \"nb_expectedShape\": [[-1, -1]]}],"
                                       "\"msvc_containerLogPath\": \".\"}"));
     sink->SetInQueue(receiver->GetOutQueue());
-    sink->dispatchThread();
-    sink->PAUSE_THREADS = false;
     receiver->dispatchThread();
-    receiver->PAUSE_THREADS = false;
+    sink->dispatchThread();
+    receiver->unpauseThread();
+    sink->unpauseThread();
+    std::cout << "Start Running" << std::endl;
 
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));

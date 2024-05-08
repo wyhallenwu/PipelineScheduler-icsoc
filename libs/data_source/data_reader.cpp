@@ -28,7 +28,7 @@ void DataReader::Process() {
             }
         }
         Request<LocalCPUReqDataType> req = {{{time}}, {msvc_svcLevelObjLatency}, {msvc_name}, 1,
-                                            {RequestData<LocalCPUReqDataType>{{frame.cols, frame.rows}, frame}}};
+                                            {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols}, frame}}};
         msvc_OutQueue[0]->emplace(req);
         std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
     }

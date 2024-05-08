@@ -106,8 +106,8 @@ std::string GPUSender::SendGpuPointer(
 
         auto ref = request.add_elements();
         ref->set_data(serializedData, sizeof(cudaIpcMemHandle_t));
-        ref->set_width(el.shape[0]);
         ref->set_height(el.shape[1]);
+        ref->set_width(el.shape[2]);
     }
 
     if (request.elements_size() == 0) {
@@ -213,8 +213,8 @@ std::string LocalCPUSender::SendSharedMemory(
         boost::interprocess::mapped_region region{shm, read_write};
         std::memcpy(region.get_address(), el.data.data, el.data.total() * el.data.elemSize());
         ref->set_name(name);
-        ref->set_width(el.shape[0]);
         ref->set_height(el.shape[1]);
+        ref->set_width(el.shape[2]);
     }
     EmptyMessage reply;
     ClientContext context;
@@ -280,8 +280,8 @@ std::string RemoteCPUSender::SendSerializedData(
     for (RequestData<LocalCPUReqDataType> el: elements) {
         auto ref = request.add_elements();
         ref->set_data(el.data.data, el.data.total() * el.data.elemSize());
-        ref->set_width(el.shape[0]);
         ref->set_height(el.shape[1]);
+        ref->set_width(el.shape[2]);
         ref->set_datalen(el.data.total() * el.data.elemSize());
     }
     EmptyMessage reply;
