@@ -62,6 +62,20 @@ endif ()
 # Use the correct version of CUDA
 set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
 
+# Set LightGBM include directories
+set(LIGHTGBM_INCLUDE_DIR "/usr/include/LightGBM")
+include_directories(${LIGHTGBM_INCLUDE_DIR})
+
+# Find LightGBM library
+find_library(LIGHTGBM_LIBRARY
+    NAMES lib_lightgbm.so
+    PATHS "/usr/lib"
+    NO_DEFAULT_PATH)
+
+if(NOT LIGHTGBM_LIBRARY)
+    message(FATAL_ERROR "LightGBM library not found.")
+endif()
+
 find_package(Threads REQUIRED)
 
 # We require CUDA, OpenCV, and TensorRT
@@ -69,6 +83,7 @@ find_package(TensorRT REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(CUDAToolkit REQUIRED)
+# find_package(LightGBM REQUIRED)
 
 # Find Protobuf installation
 option(protobuf_MODULE_COMPATIBLE TRUE)

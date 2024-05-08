@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iostream>
 #include "../json/json.h"
+#include <vector>
 
 #include <chrono>
 #include <ctime>
