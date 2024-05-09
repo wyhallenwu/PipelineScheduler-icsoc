@@ -73,19 +73,19 @@ private:
             ModelType model,
             std::string name,
             BatchSizeType batch_size,
+            int device,
             const MsvcSLOType &slo,
             const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
             const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
     );
 
     static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
-                         const int &port) {
-        std::cout << absl::StrFormat(
-                R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
-                executable, name, start_string, port).c_str() << std::endl;
-        return system(absl::StrFormat(
-                R"(docker run --network=host -d --gpus 1 pipeline-base-container %s --name="%s" --json='%s' --port=%i)",
-                executable, name, start_string, port).c_str());
+                         const int &device, const int &port) {
+        std::string command = absl::StrFormat(
+                R"(docker run --network=host -d --runtime nvidia --gpus all pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i)",
+                executable, name, start_string, device, port);
+        std::cout << command << std::endl;
+        return system(command.c_str());
     };
 
     static void StopContainer(const ContainerHandle &container, bool forced = false);

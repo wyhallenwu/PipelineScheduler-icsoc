@@ -71,7 +71,7 @@ void BaseSink::sink() {
         auto numTimeStamps = (BatchSizeType)(inferTimeReport.req_origGenTime.size() / batchSize);
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
             for (BatchSizeType i = 0; i < batchSize; i++) {
-                msvc_logFile << inferTimeReport.req_travelPath[i] << ",";
+                msvc_logFile << inferTimeReport.req_travelPath[i] << "|";
                 for (auto j = 0; j < inferTimeReport.req_origGenTime[i].size() - 1; j++) {
                     msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[i].at(j)) << ",";
                 }
@@ -103,8 +103,8 @@ void BaseSink::sink() {
          * 
          */
         } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
-            std::cout << "Deployment mode logging for " << inferTimeReport.req_travelPath[0] << std::endl;
-            msvc_logFile << inferTimeReport.req_travelPath[0] << ",";
+            std::cout << inferTimeReport.req_travelPath[0] << std::endl;
+            msvc_logFile << inferTimeReport.req_travelPath[0] << "|";
             for (auto j = 0; j < inferTimeReport.req_origGenTime[0].size() - 1; j++) {
                 msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[0].at(j)) << ",";
             }

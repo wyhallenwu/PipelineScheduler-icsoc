@@ -37,7 +37,7 @@
                     "nb_classOfInterest": -2,
                     "nb_commMethod": 4,
                     "nb_link": [
-                        "/ssd0/datasets/pipeline-scheduler/traffic/traffic1.mp4"
+                        "/ssd0/datasets/pipeline-scheduler/batch_test.mp4"
                     ],
                     "nb_maxQueueSize": 0,
                     "nb_name": "video_source",
