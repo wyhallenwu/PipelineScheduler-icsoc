@@ -25,6 +25,7 @@ public:
 private:
     void Process();
 
+    std::string link;
     cv::VideoCapture source;
     int wait_time_ms;
 };

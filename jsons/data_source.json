@@ -1,109 +1,112 @@
 {
     "pipeline_name": "every",
-    "pipeline": [
-        {
-            "msvc_name": "::data_reader",
-            "msvc_idealBatchSize": 33,
-            "msvc_appLvlConfigs": "",
-            "msvc_dnstreamMicroservices": [
-                {
-                    "nb_classOfInterest": -1,
-                    "nb_commMethod": 3,
-                    "nb_link": [
-                        ""
-                    ],
-                    "nb_maxQueueSize": 10,
-                    "nb_name": "::sender",
-                    "nb_expectedShape": [
-                        [
-                            0,
-                            0,
-                            0
+    "container": {
+        "cont_pipeline": [
+            {
+                "msvc_name": "::data_reader",
+                "msvc_idealBatchSize": 33,
+                "msvc_appLvlConfigs": "",
+                "msvc_dnstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -1,
+                        "nb_commMethod": 3,
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 10,
+                        "nb_name": "::sender",
+                        "nb_expectedShape": [
+                            [
+                                0,
+                                0,
+                                0
+                            ]
                         ]
+                    }
+                ],
+                "msvc_dataShape": [
+                    [
+                        0,
+                        0,
+                        0
                     ]
-                }
-            ],
-            "msvc_dataShape": [
-                [
-                    0,
-                    0,
-                    0
-                ]
-            ],
-            "msvc_svcLevelObjLatency": 1,
-            "msvc_type": 3,
-            "msvc_upstreamMicroservices": [
-                {
-                    "nb_classOfInterest": -2,
-                    "nb_commMethod": 4,
-                    "nb_link": [
-                        "/ssd0/datasets/pipeline-scheduler/traffic/traffic1.mp4"
-                    ],
-                    "nb_maxQueueSize": 0,
-                    "nb_name": "video_source",
-                    "nb_expectedShape": [
-                        [
-                            0,
-                            0,
-                            0
+                ],
+                "msvc_svcLevelObjLatency": 1,
+                "msvc_type": 3,
+                "msvc_upstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -2,
+                        "nb_commMethod": 4,
+                        "nb_link": [
+                            "/ssd0/datasets/pipeline-scheduler/traffic/traffic1.mp4"
+                        ],
+                        "nb_maxQueueSize": 0,
+                        "nb_name": "video_source",
+                        "nb_expectedShape": [
+                            [
+                                0,
+                                0,
+                                0
+                            ]
                         ]
-                    ]
-                }
-            ],
-            "msvc_maxQueueSize": 100
-        },
-        {
-            "msvc_name": "::sender",
-            "msvc_idealBatchSize": 1,
-            "msvc_appLvlConfigs": "",
-            "msvc_dnstreamMicroservices": [
-                {
-                    "nb_classOfInterest": -1,
-                    "nb_commMethod": 2,
-                    "nb_link": [
-                        "localhost:55011"
-                    ],
-                    "nb_maxQueueSize": 10,
-                    "nb_name": "yolov5",
-                    "nb_expectedShape": [
-                        [
-                            0,
-                            0,
-                            0
+                    }
+                ],
+                "msvc_maxQueueSize": 100
+            },
+            {
+                "msvc_name": "::sender",
+                "msvc_idealBatchSize": 1,
+                "msvc_appLvlConfigs": "",
+                "msvc_dnstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -1,
+                        "nb_commMethod": 2,
+                        "nb_link": [
+                            "localhost:55011"
+                        ],
+                        "nb_maxQueueSize": 10,
+                        "nb_name": "yolov5",
+                        "nb_expectedShape": [
+                            [
+                                0,
+                                0,
+                                0
+                            ]
                         ]
+                    }
+                ],
+                "msvc_dataShape": [
+                    [
+                        0,
+                        0,
+                        0
                     ]
-                }
-            ],
-            "msvc_dataShape": [
-                [
-                    0,
-                    0,
-                    0
-                ]
-            ],
-            "msvc_svcLevelObjLatency": 1,
-            "msvc_type": 4,
-            "msvc_upstreamMicroservices": [
-                {
-                    "nb_classOfInterest": -2,
-                    "nb_commMethod": 2,
-                    "nb_link": [
-                        ""
-                    ],
-                    "nb_maxQueueSize": 10,
-                    "nb_name": "::data_reader",
-                    "nb_expectedShape": [
-                        [
-                            0,
-                            0,
-                            0
+                ],
+                "msvc_svcLevelObjLatency": 1,
+                "msvc_type": 4,
+                "msvc_upstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -2,
+                        "nb_commMethod": 2,
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 10,
+                        "nb_name": "::data_reader",
+                        "nb_expectedShape": [
+                            [
+                                0,
+                                0,
+                                0
+                            ]
                         ]
-                    ]
-                }
-            ],
-            "msvc_maxQueueSize": 100
-        }
-    ],
+                    }
+                ],
+                "msvc_maxQueueSize": 100
+            }
+        ],
+        "cont_metricScrapeIntervalSecond": 60
+    },
     "profiling": {
         "profile_minBatch": 0,
         "profile_maxBatch": 0,

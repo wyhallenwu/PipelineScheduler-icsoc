@@ -113,7 +113,7 @@ bool DeviceAgent::CreateContainer(
             return false;
     }
     json start_config = json::parse(file);
-    json base_config = start_config["pipeline"];
+    json base_config = start_config["container"]["cont_pipeline"];
     file.close();
 
     //adjust configs themselves
@@ -130,13 +130,14 @@ bool DeviceAgent::CreateContainer(
 
     //adjust downstreams
     int i = 0;
+    // BUG SUSPECT: back() is only the last sender, not all senders
     for (auto &downstream: base_config.back()["msvc_dnstreamMicroservices"]) {
         downstream["nb_name"] = downstreams.at(i).name();
         downstream["nb_link"] = downstreams.at(i).ip();
         downstream["nb_classOfInterest"] = downstreams.at(i++).class_of_interest();
     }
 
-    start_config["pipeline"] = base_config;
+    start_config["container"] = base_config;
     int control_port = CONTAINER_BASE_PORT + containers.size();
     runDocker(executable, name, to_string(start_config), control_port);
     std::string target = absl::StrFormat("%s:%d", "localhost", control_port);

@@ -1,26 +1,16 @@
 #include "yolov5.h"
 
 YoloV5Agent::YoloV5Agent(
-    const std::string &name,
-    uint16_t own_port,
-    int8_t devIndex,
-    std::string logPath,
-    RUNMODE runmode,
-    const json &profiling_configs
-) : ContainerAgent(name, own_port, devIndex, logPath, runmode, profiling_configs) {
+    const json &configs
+) : ContainerAgent(configs) {
     // for (uint16_t i = 4; i < msvcs.size(); i++) {
     //     msvcs[i]->dispatchThread();
     // }
 }
 
 YoloV5DataSource::YoloV5DataSource(
-    const std::string &name,
-    uint16_t own_port,
-    int8_t devIndex,
-    std::string logPath,
-    RUNMODE runmode,
-    const json &profiling_configs
-) : ContainerAgent(name, own_port, devIndex, logPath, runmode, profiling_configs) {
+    const json &configs
+) : ContainerAgent(configs) {
 
     // msvcs = std::move(services);
     // dynamic_cast<DataReader*>(msvcs[0])->dispatchThread();
@@ -35,56 +25,58 @@ YoloV5DataSource::YoloV5DataSource(
 
 int main(int argc, char **argv) {
 
-    contRunArgs cont_args = loadRunArgs(argc, argv);
+    json configs = loadRunArgs(argc, argv);
 
     ContainerAgent *agent;
 
-    if (cont_args.cont_pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
-        agent = new YoloV5DataSource(cont_args.cont_name, cont_args.cont_port, cont_args.cont_devIndex, cont_args.cont_logPath, cont_args.cont_runmode, cont_args.cont_profilingConfigs);
+    json pipeConfigs = configs["container"]["cont_pipeline"];
+
+    if (pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
+        agent = new YoloV5DataSource(configs);
     } else {
-        agent = new YoloV5Agent(cont_args.cont_name, cont_args.cont_port, cont_args.cont_devIndex, cont_args.cont_logPath, cont_args.cont_runmode, cont_args.cont_profilingConfigs);
+        agent = new YoloV5Agent(configs);
     }
 
     std::vector<Microservice*> msvcsList;
-    if (cont_args.cont_runmode == RUNMODE::PROFILING) {
-        msvcsList.push_back(new ProfileGenerator(cont_args.cont_pipeConfigs[0]));
+    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
+        msvcsList.push_back(new ProfileGenerator(pipeConfigs[0]));
     } else {    
-        if (cont_args.cont_pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
-            msvcsList.push_back(new DataReader(cont_args.cont_pipeConfigs[0]));
+        if (pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
+            msvcsList.push_back(new DataReader(pipeConfigs[0]));
         } else {
-            msvcsList.push_back(new Receiver(cont_args.cont_pipeConfigs[0]));
+            msvcsList.push_back(new Receiver(pipeConfigs[0]));
         }
     }
-    msvcsList.push_back(new BaseReqBatcher(cont_args.cont_pipeConfigs[1]));
+    msvcsList.push_back(new BaseReqBatcher(pipeConfigs[1]));
     msvcsList[1]->SetInQueue(msvcsList[0]->GetOutQueue());
-    msvcsList.push_back(new BaseBatchInferencer(cont_args.cont_pipeConfigs[2]));
+    msvcsList.push_back(new BaseBatchInferencer(pipeConfigs[2]));
     msvcsList[2]->SetInQueue(msvcsList[1]->GetOutQueue());
-    msvcsList.push_back(new BaseBBoxCropper(cont_args.cont_pipeConfigs[3]));
+    msvcsList.push_back(new BaseBBoxCropper(pipeConfigs[3]));
     msvcsList[3]->SetInQueue(msvcsList[2]->GetOutQueue());
     // dynamic_cast<BaseBBoxCropper*>(msvcsList[3])->setInferenceShape(dynamic_cast<BaseBatchInferencer*>(msvcsList[2])->getInputShapeVector());
-    if (cont_args.cont_runmode == RUNMODE::PROFILING) {
-        msvcsList.push_back(new BaseSink(cont_args.cont_pipeConfigs[4]));
+    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
+        msvcsList.push_back(new BaseSink(pipeConfigs[4]));
         msvcsList[4]->SetInQueue(msvcsList[3]->GetOutQueue());
         msvcsList[0]->SetInQueue(msvcsList[4]->GetOutQueue());
     } else {
-        for (uint16_t i = 4; i < cont_args.cont_pipeConfigs.size(); i++) {
-            if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::localGPU) {
+        for (uint16_t i = 4; i < pipeConfigs.size(); i++) {
+            if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::localGPU) {
                 spdlog::info("Local GPU Sender");
-                msvcsList.push_back(new GPUSender(cont_args.cont_pipeConfigs[i]));
-            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::sharedMemory) {
+                msvcsList.push_back(new GPUSender(pipeConfigs[i]));
+            } else if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::sharedMemory) {
                 spdlog::info("Local CPU Sender");
-                msvcsList.push_back(new LocalCPUSender(cont_args.cont_pipeConfigs[i]));
-            } else if (cont_args.cont_pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::serialized) {
+                msvcsList.push_back(new LocalCPUSender(pipeConfigs[i]));
+            } else if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::serialized) {
                 spdlog::info("Remote CPU Sender");
-                msvcsList.push_back(new RemoteCPUSender(cont_args.cont_pipeConfigs[i]));
+                msvcsList.push_back(new RemoteCPUSender(pipeConfigs[i]));
             }
-            msvcsList[i]->SetInQueue({msvcsList[3]->GetOutQueue(cont_args.cont_pipeConfigs[3].at("msvc_dnstreamMicroservices")[i-4].at("nb_classOfInterest"))});
+            msvcsList[i]->SetInQueue({msvcsList[3]->GetOutQueue(pipeConfigs[3].at("msvc_dnstreamMicroservices")[i-4].at("nb_classOfInterest"))});
         }
     }
     agent->addMicroservice(msvcsList);
 
-    if (cont_args.cont_runmode == RUNMODE::PROFILING) {
-        agent->profiling(cont_args.cont_pipeConfigs, cont_args.cont_profilingConfigs);
+    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
+        agent->profiling(pipeConfigs, configs["profiling"]);
     } else {
         agent->dispatchMicroservices();
 

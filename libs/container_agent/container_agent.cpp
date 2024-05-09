@@ -20,7 +20,7 @@ void addProfileConfigs(json &msvcConfigs, const json &profileConfigs) {
     msvcConfigs["profile_step"] = profileConfigs.at("profile_step");
 }
 
-contRunArgs loadRunArgs(int argc, char **argv) {
+json loadRunArgs(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
 
     std::string name = absl::GetFlag(FLAGS_name);
@@ -35,7 +35,7 @@ contRunArgs loadRunArgs(int argc, char **argv) {
     spdlog::set_level(spdlog::level::level_enum(logLevel));
 
     std::tuple<json, json> configs = msvcconfigs::loadJson();
-    json pipeConfigs = std::get<0>(configs);
+    json containerConfigs = std::get<0>(configs);
     json profilingConfigs = std::get<1>(configs);
 
     BatchSizeType minBatch =  profilingConfigs.at("profile_minBatch");
@@ -56,11 +56,18 @@ contRunArgs loadRunArgs(int argc, char **argv) {
         logPath = "../model_profiles";
     }
 
-    for (uint16_t i = 0; i < pipeConfigs.size(); i++) {
-        pipeConfigs[i]["msvc_contName"] = name;
-        pipeConfigs[i]["msvc_deviceIndex"] = device;
-        pipeConfigs[i]["msvc_containerLogPath"] = logPath + "/" + name;
-        pipeConfigs[i]["msvc_RUNMODE"] = runmode;
+    containerConfigs["cont_device"] = device;
+    containerConfigs["cont_name"] = name;
+    containerConfigs["cont_logLevel"] = logLevel;
+    containerConfigs["cont_logPath"]  =  logPath + "/" + name;
+    containerConfigs["cont_RUNMODE"] = runmode;
+    containerConfigs["cont_port"] = absl::GetFlag(FLAGS_port);
+
+    for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
+        containerConfigs.at("cont_pipeline")[i]["msvc_contName"] = name;
+        containerConfigs.at("cont_pipeline")[i]["msvc_deviceIndex"] = device;
+        containerConfigs.at("cont_pipeline")[i]["msvc_containerLogPath"] = logPath + "/" + name;
+        containerConfigs.at("cont_pipeline")[i]["msvc_RUNMODE"] = runmode;
 
         /**
          * @brief     If this is profiling, set configurations to the first batch size that should be profiled
@@ -70,19 +77,23 @@ contRunArgs loadRunArgs(int argc, char **argv) {
          * 
          */
         if (profiling_mode) {
-            pipeConfigs[i].at("msvc_idealBatchSize") = minBatch;
+            containerConfigs.at("cont_pipeline")[i].at("msvc_idealBatchSize") = minBatch;
             if (i == 0) {
-                addProfileConfigs(pipeConfigs[i], profilingConfigs);
+                addProfileConfigs(containerConfigs.at("cont_pipeline")[i], profilingConfigs);
             } else if (i == 2) {
                 // Set the path to the engine
-                pipeConfigs[i].at("path") = replaceSubstring(templateModelPath, "[batch]", std::to_string(minBatch));
+                containerConfigs.at("cont_pipeline")[i].at("path") = replaceSubstring(templateModelPath, "[batch]", std::to_string(minBatch));
             }
         }
     }
 
+    json finalConfigs;
+    finalConfigs["container"] = containerConfigs;
+    finalConfigs["profiling"] = profilingConfigs;
+
     checkCudaErrorCode(cudaSetDevice(device), __func__);
 
-    return {name, absl::GetFlag(FLAGS_port), device, logPath, runmode, pipeConfigs, profilingConfigs};
+    return finalConfigs;
 };
 
 std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
@@ -109,13 +120,13 @@ std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
 }
 
 std::tuple<json, json> msvcconfigs::loadJson() {
-    json pipeConfigs, profilingConfigs;
+    json containerConfigs, profilingConfigs;
     if (!absl::GetFlag(FLAGS_json).has_value()) {
         spdlog::trace("{0:s} attempts to load Json Configs from command line.", __func__);
         if (absl::GetFlag(FLAGS_json_path).has_value()) {
             std::ifstream file(absl::GetFlag(FLAGS_json_path).value());
             auto json_file = json::parse(file);
-            pipeConfigs = json_file.at("pipeline");
+            containerConfigs = json_file.at("container");
             try {
                 profilingConfigs = json_file.at("profiling");
             } catch (json::out_of_range &e) {
@@ -124,7 +135,7 @@ std::tuple<json, json> msvcconfigs::loadJson() {
                 spdlog::error("{0:s} Error parsing json file.", __func__);
             }
             spdlog::trace("{0:s} finished loading Json Configs from command line.", __func__);
-            return std::make_tuple(pipeConfigs, profilingConfigs);
+            return std::make_tuple(containerConfigs, profilingConfigs);
         } else {
             spdlog::error("No Configurations found. Please provide configuration either as json or file.");
             exit(1);
@@ -137,14 +148,14 @@ std::tuple<json, json> msvcconfigs::loadJson() {
         } else {
             spdlog::trace("{0:s} finished loading Json Configs from file.", __func__);
             auto json_file = json::parse(absl::GetFlag(FLAGS_json).value());
-            pipeConfigs = json_file.at("pipeline");
+            containerConfigs = json_file.at("container");
             try {
                 profilingConfigs = json_file.at("profiling");
             } catch (json::out_of_range &e) {
                 spdlog::trace("{0:s} No profiling configurations found.", __func__);
             }
             spdlog::trace("{0:s} finished loading Json Configs from command line.", __func__);
-            return std::make_tuple(pipeConfigs, profilingConfigs);
+            return std::make_tuple(containerConfigs, profilingConfigs);
         }
     }
 }
@@ -180,13 +191,13 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
             
             // Making sure all the microservices are paused before reloading and reallocating resources
             // this is essential to avoiding runtime memory errors
-            for (uint8_t i = 0; i < pipelineConfigs.size(); i++) {
+            for (uint8_t i = 0; i < msvcs.size(); i++) {
                 msvcs[i]->pauseThread();
             }
             waitPause();
 
             // Reload the configurations and dynamic allocation based on the new configurations
-            for (uint8_t i = 0; i < pipelineConfigs.size(); i++) {
+            for (uint8_t i = 0; i < msvcs.size(); i++) {
                 pipelineConfigs[i].at("msvc_idealBatchSize") = batch;
                 pipelineConfigs[i].at("msvc_containerLogPath") = profileDirPath;
                 pipelineConfigs[i].at("msvc_deviceIndex") = cont_deviceIndex;
@@ -223,36 +234,28 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
     }
 }
 
-ContainerAgent::ContainerAgent(
-    const std::string &name,
-    uint16_t own_port,
-    int8_t devIndex,
-    const std::string &logPath,
-    RUNMODE runmode,
-    const json &profiling_configs
-) : ContainerAgent(name, own_port, devIndex, logPath) {
+ContainerAgent::ContainerAgent(const json &configs) {
 
-    cont_RUNMODE = runmode;
-    cont_deviceIndex = devIndex;
+    json containerConfigs = configs["container"];
+    std::cout << containerConfigs.dump(4) << std::endl;
+
+    cont_deviceIndex = containerConfigs["cont_device"];
+    name = containerConfigs["cont_name"];
+
+    cont_RUNMODE = containerConfigs["cont_RUNMODE"];
 
     if (cont_RUNMODE == RUNMODE::PROFILING) {
         // Create the logDir for this container
-        cont_logDir = logPath + "/" + name;
+        cont_logDir = (std::string)containerConfigs.at("cont_logPath") + "/" + name;
         std::filesystem::create_directory(
             std::filesystem::path(cont_logDir)
         );
     } else {
-        cont_logDir = logPath;
+        cont_logDir = (std::string)containerConfigs["cont_logPath"];
     }
-}
 
-ContainerAgent::ContainerAgent(
-    const std::string &name,
-    uint16_t own_port,
-    int8_t devIndex,
-    const std::string &logPath
-) : name(name) {
     arrivalRate = 0;
+    int own_port = containerConfigs.at("cont_port");
 
     std::string server_address = absl::StrFormat("%s:%d", "localhost", own_port);
     grpc::EnableDefaultHealthCheckService(true);
