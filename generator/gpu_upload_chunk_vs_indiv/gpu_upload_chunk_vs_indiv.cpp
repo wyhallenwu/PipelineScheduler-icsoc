@@ -42,12 +42,12 @@ int main()
     const int warmupRuns = 720;                                        // Number of warmup runs
 
 
-    // int deviceId = 2; // Change this to the ID of the GPU you want to use
-    // cudaError_t err = cudaSetDevice(deviceId);
-    // if (err != cudaSuccess) {
-    //     std::cerr << "Failed to set device: " << cudaGetErrorString(err) << std::endl;
-    //     return -1;
-    // }
+    int deviceId = 2; // Change this to the ID of the GPU you want to use
+    cudaError_t err = cudaSetDevice(deviceId);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to set device: " << cudaGetErrorString(err) << std::endl;
+        return -1;
+    }
 
     // Initialize a random tensor
     std::random_device rd;                       // Random device for seeding the random number generator
