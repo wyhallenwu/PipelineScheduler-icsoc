@@ -233,7 +233,7 @@ void BaseBBoxCropperAugmentation::cropping() {
                 infer_h = msvc_inferenceShape[0][1];
                 infer_w = msvc_inferenceShape[0][2];
                 
-                maxNumDets = 1;
+                maxNumDets = msvc_dataShape[2][0];
 
                 delete num_detections;
                 delete nmsed_boxes;
