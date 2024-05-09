@@ -51,6 +51,7 @@ message Neighbor {
   string name = 1;
   string ip = 2;
   int32 class_of_interest = 3;
+  bool gpu_connection = 4;
 }
 
 message MicroserviceConfig {
@@ -59,8 +60,9 @@ message MicroserviceConfig {
   int32 bath_size = 3;
   int32 recv_port = 4;
   int32 slo = 5;
-  repeated Neighbor upstream = 6;
-  repeated Neighbor downstream = 7;
+  int32 device = 6;
+  repeated Neighbor upstream = 7;
+  repeated Neighbor downstream = 8;
 }
 
 message MicroserviceLink {

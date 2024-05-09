@@ -64,6 +64,7 @@ bool DeviceAgent::CreateContainer(
         ModelType model,
         std::string name,
         BatchSizeType batch_size,
+        int device,
         const MsvcSLOType &slo,
         const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
         const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
@@ -123,23 +124,38 @@ bool DeviceAgent::CreateContainer(
         j["msvc_svcLevelObjLatency"] = slo;
     }
 
-    //adjust upstreams
+    //adjust receiver upstreams
     base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = upstreams.at(0).name();
     base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = upstreams.at(0).ip();
-    base_config[0]["msvc_upstreamMicroservices"][0]["nb_classOfInterest"] = upstreams.at(0).class_of_interest();
+    if (upstreams.at(0).gpu_connection()) {
+        base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
+    } else {
+        base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localCPU;
+    }
 
-    //adjust downstreams
-    int i = 0;
-    // BUG SUSPECT: back() is only the last sender, not all senders
-    for (auto &downstream: base_config.back()["msvc_dnstreamMicroservices"]) {
-        downstream["nb_name"] = downstreams.at(i).name();
-        downstream["nb_link"] = downstreams.at(i).ip();
-        downstream["nb_classOfInterest"] = downstreams.at(i++).class_of_interest();
+    //adjust sender downstreams
+    json downstream = base_config.back()["msvc_dnstreamMicroservices"];
+    json post_down = base_config[base_config.size() - 1]["msvc_dnstreamMicroservices"];
+    post_down["nb_name"] = base_config.back()["msvc_name"];
+    base_config[base_config.size() - 1]["msvc_dnstreamMicroservices"] = json::array();
+    base_config.back()["msvc_dnstreamMicroservices"] = json::array();
+    for (auto &d: downstreams) {
+        downstream["nb_name"] = d.name();
+        downstream["nb_link"] = d.ip();
+        if (d.gpu_connection()) {
+            post_down["nb_commMethod"] = CommMethod::localGPU;
+        } else {
+            post_down["nb_commMethod"] = CommMethod::localCPU;
+        }
+        post_down["nb_classOfInterest"] = d.class_of_interest();
+
+        base_config[base_config.size() - 1]["msvc_dnstreamMicroservices"].push_back(post_down);
+        base_config.back()["msvc_dnstreamMicroservices"].push_back(downstream);
     }
 
     start_config["container"] = base_config;
     int control_port = CONTAINER_BASE_PORT + containers.size();
-    runDocker(executable, name, to_string(start_config), control_port);
+    runDocker(executable, name, to_string(start_config), device, control_port);
     std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
     containers[name] = {{},
                         InDeviceCommunication::NewStub(grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
@@ -366,8 +382,8 @@ void DeviceAgent::StartMicroserviceRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new StartMicroserviceRequestHandler(service, cq, device_agent);
         bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.name(),
-                                                     request.bath_size(), request.slo(), request.upstream(),
-                                                     request.downstream());
+                                                     request.bath_size(), request.device(), request.slo(),
+                                                     request.upstream(), request.downstream());
         if (!success) {
             status = FINISH;
             responder.Finish(reply, Status::CANCELLED, this);

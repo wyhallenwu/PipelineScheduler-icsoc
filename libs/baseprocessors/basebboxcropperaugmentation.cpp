@@ -275,7 +275,7 @@ void BaseBBoxCropperAugmentation::cropping() {
 
         currReq_data = currReq.req_data;
 
-        /*for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
+        for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
             bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
             RequestDataShapeType shape = currReq_data[i].shape;
             for (uint8_t j = 0; j < shape.size(); ++j) {
@@ -301,7 +301,7 @@ void BaseBBoxCropperAugmentation::cropping() {
         }
 
         checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
-        info("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);*/
+        info("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
 
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
@@ -313,6 +313,14 @@ void BaseBBoxCropperAugmentation::cropping() {
             // the moment this request was generated at the very beginning of the pipeline
             currReq_genTime = currReq.req_origGenTime[i][0];
             currReq_path = currReq.req_travelPath[i];
+
+            // First we need to set the infer_h,w and the original h,w of the image.
+            // infer_h,w are given in the last dimension of the request data from the inferencer
+            infer_h = currReq.req_data.back().shape[1];
+            infer_w = currReq.req_data.back().shape[2];
+            // orig_h,w are given in the shape of the image in the image list, which is carried from the batcher
+            orig_h = imageList[i].shape[1];
+            orig_w = imageList[i].shape[2];
 
             // If there is no object in frame, we decide if we add a random image or not.
             int numDetsInFrame = (int)num_detections[i];
@@ -335,19 +343,10 @@ void BaseBBoxCropperAugmentation::cropping() {
                 nmsed_classes[i * maxNumDets] = 1;
             } else {
                 std::cout << "Working with a real box" << std::endl;
+                crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
+                info("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
             }
-            // Then, we need to do some cropping.
 
-            // First we need to set the infer_h,w and the original h,w of the image.
-            // infer_h,w are given in the last dimension of the request data from the inferencer
-            infer_h = currReq.req_data.back().shape[1];
-            infer_w = currReq.req_data.back().shape[2];
-            // orig_h,w are given in the shape of the image in the image list, which is carried from the batcher
-            orig_h = imageList[i].shape[1];
-            orig_w = imageList[i].shape[2];
-
-            // crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
-            info("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {
