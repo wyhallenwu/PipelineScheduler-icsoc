@@ -114,7 +114,9 @@ std::vector<std::string> splitString(const std::string& str, char delimiter) {
  */
 std::string getTimestampString() {
     std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::string timestamp = std::ctime(&now);
+    char buffer[80];
+    std::strftime(buffer, sizeof(buffer), "%d_%H-%M-%S", std::localtime(&now));
+    std::string timestamp(buffer);
     timestamp.erase(timestamp.length() - 1); // Remove newline character
     return timestamp;
 }
