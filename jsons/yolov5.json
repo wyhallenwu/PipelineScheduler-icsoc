@@ -3,7 +3,7 @@
     "pipeline": [
         {
             "msvc_name": "::receiver",
-            "msvc_idealBatchSize": 1,
+            "msvc_idealBatchSize": 2,
             "msvc_appLvlConfigs": "../jsons/yolov5_receiver.json",
             "msvc_dnstreamMicroservices": [
                 {
@@ -55,7 +55,7 @@
         },
         {
             "msvc_name": "::preprocessor",
-            "msvc_idealBatchSize": 1,
+            "msvc_idealBatchSize": 2,
             "msvc_appLvlConfigs": "../jsons/yolov5_preproc.json",
             "msvc_dnstreamMicroservices": [
                 {
@@ -119,7 +119,7 @@
         },
         {
             "msvc_name": "::inference",
-            "msvc_idealBatchSize": 1,
+            "msvc_idealBatchSize": 2,
             "msvc_appLvlConfigs": "../jsons/yolov5_trt.json",
             "msvc_dnstreamMicroservices": [
                 {
@@ -186,7 +186,7 @@
         },
         {
             "msvc_name": "::postprocessor",
-            "msvc_idealBatchSize": 1,
+            "msvc_idealBatchSize": 2,
             "msvc_appLvlConfigs": "",
             "msvc_dnstreamMicroservices": [
                 {
@@ -275,7 +275,7 @@
         },
         {
             "msvc_name": "::sender0",
-            "msvc_idealBatchSize": 1,
+            "msvc_idealBatchSize": 2,
             "msvc_appLvlConfigs": "",
             "msvc_dnstreamMicroservices": [
                 {
@@ -324,7 +324,7 @@
         },
         {
             "msvc_name": "::sender2",
-            "msvc_idealBatchSize": 1,
+            "msvc_idealBatchSize": 2,
             "msvc_appLvlConfigs": "",
             "msvc_dnstreamMicroservices": [
                 {
@@ -373,7 +373,7 @@
         },
         {
             "msvc_name": "::sender3",
-            "msvc_idealBatchSize": 1,
+            "msvc_idealBatchSize": 2,
             "msvc_appLvlConfigs": "",
             "msvc_dnstreamMicroservices": [
                 {

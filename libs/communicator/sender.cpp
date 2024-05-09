@@ -90,7 +90,7 @@ std::string GPUSender::SendGpuPointer(
 
     GpuPointerPayload request;
     for (auto ts: timestamp) {
-        request.add_timestamp(std::chrono::system_clock::to_time_t(ts));
+        request.add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
     }
     request.set_path(path);
     request.set_slo(slo);
@@ -200,7 +200,7 @@ std::string LocalCPUSender::SendSharedMemory(
     CompletionQueue cq;
     SharedMemPayload request;
     for (auto ts: timestamp) {
-        request.add_timestamp(std::chrono::system_clock::to_time_t(ts));
+        request.add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
     }
     request.set_path(path);
     request.set_slo(slo);
@@ -273,7 +273,7 @@ std::string RemoteCPUSender::SendSerializedData(
 
     SerializedDataPayload request;
     for (auto ts: timestamp) {
-        request.add_timestamp(std::chrono::system_clock::to_time_t(ts));
+        request.add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
     }
     request.set_path(path);
     request.set_slo(slo);

@@ -135,7 +135,6 @@ BaseBBoxCropperAugmentation::BaseBBoxCropperAugmentation(const json &jsonConfigs
 }
 
 void BaseBBoxCropperAugmentation::cropping() {
-    srand(time(0));
     // The time where the last request was generated.
     ClockType lastReq_genTime;
     // The time where the current incoming request was generated.
@@ -272,11 +271,11 @@ void BaseBBoxCropperAugmentation::cropping() {
             this->updateReqRate(currReq_genTime);
         }
         currReq_batchSize = currReq.req_batchSize;
-        trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
+        info("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
         currReq_data = currReq.req_data;
 
-        for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
+        /*for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
             bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
             RequestDataShapeType shape = currReq_data[i].shape;
             for (uint8_t j = 0; j < shape.size(); ++j) {
@@ -302,7 +301,7 @@ void BaseBBoxCropperAugmentation::cropping() {
         }
 
         checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
-        trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
+        info("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);*/
 
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
@@ -333,8 +332,9 @@ void BaseBBoxCropperAugmentation::cropping() {
                 singleImageBBoxList.emplace_back(
                     cv::cuda::GpuMat(64, 64, CV_8UC3)
                 );
-
                 nmsed_classes[i * maxNumDets] = 1;
+            } else {
+                std::cout << "Working with a real box" << std::endl;
             }
             // Then, we need to do some cropping.
 
@@ -347,7 +347,7 @@ void BaseBBoxCropperAugmentation::cropping() {
             orig_w = imageList[i].shape[2];
 
             // crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
-            trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
+            info("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {

@@ -103,8 +103,10 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
 
         auto timestamps = std::vector<ClockType>();
         for (auto ts: request.timestamp()) {
-            timestamps.emplace_back(std::chrono::time_point_cast<std::chrono::high_resolution_clock::duration>(std::chrono::system_clock::from_time_t(ts)));
+            timestamps.push_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
         }
+        timestamps.push_back(std::chrono::system_clock::now());
+
 
         if (elements.empty()) {
             responder.Finish(reply, Status(grpc::INVALID_ARGUMENT, "No valid data"), this);
@@ -157,8 +159,10 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
         }
         auto timestamps = std::vector<ClockType>();
         for (auto ts: request.timestamp()) {
-            timestamps.emplace_back(std::chrono::time_point_cast<std::chrono::high_resolution_clock::duration>(std::chrono::system_clock::from_time_t(ts)));
+            timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
         }
+        timestamps.push_back(std::chrono::system_clock::now());
+
         Request<LocalCPUReqDataType> req = {
             {timestamps},
             {request.slo()},
@@ -205,8 +209,10 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
         }
         auto timestamps = std::vector<ClockType>();
         for (auto ts: request.timestamp()) {
-            timestamps.emplace_back(std::chrono::time_point_cast<std::chrono::high_resolution_clock::duration>(std::chrono::system_clock::from_time_t(ts)));
+            timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
         }
+        timestamps.push_back(std::chrono::system_clock::now());
+
         Request<LocalCPUReqDataType> req = {
             {timestamps},
             {request.slo()},
