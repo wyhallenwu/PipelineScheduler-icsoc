@@ -83,9 +83,6 @@ RUN apt install libspdlog-dev -y
 # Install posgresql-client
 RUN apt install postgresql-client -y
 
-# Install LightGBM
-# ARG GRPC_INSTALL_DIR=/lightgbm
-# RUN mkdir -p ${GRPC_INSTALL_DIR}
 # Store load time model
 ARG upload_model="upload_model.txt"
 ARG download_model="download_model.txt"
@@ -101,6 +98,7 @@ RUN git clone --recursive https://github.com/microsoft/LightGBM && \
     cmake -B build -S . -DCMAKE_INSTALL_PREFIX=/usr && \
     cmake --build build -j4 && \
     cmake --install build
+
 
 RUN apt install gdb -y
 
