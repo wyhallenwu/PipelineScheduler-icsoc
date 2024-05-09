@@ -6,6 +6,7 @@
 #include "../json/json.h"
 #include <thread>
 #include "controlcommunication.grpc.pb.h"
+#include <LightGBM/c_api.h>
 
 using grpc::Status;
 using grpc::CompletionQueue;
@@ -103,6 +104,7 @@ public:
 private:
     void UpdateLightMetrics(google::protobuf::RepeatedPtrField<LightMetrics> metrics);
     void UpdateFullMetrics(google::protobuf::RepeatedPtrField<FullMetrics> metrics);
+    double LoadTimeEstimator(const char* model_path, double input_mem_size);
 
     struct MicroserviceHandle;
     struct NodeHandle {

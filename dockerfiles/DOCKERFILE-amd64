@@ -154,6 +154,15 @@ RUN cd /grpc-src && \
 ENV PATH="${PATH}:${GRPC_INSTALL_DIR}/bin"
 
 
+# Install LightGBM
+ARG GRPC_INSTALL_DIR=/lightgbm
+RUN mkdir -p ${GRPC_INSTALL_DIR}
+RUN git clone --recursive https://github.com/microsoft/LightGBM && \
+    cd LightGBM && \
+    cmake -B build -S . -DCMAKE_INSTALL_PREFIX=/usr && \
+    cmake --build build -j4 && \
+    cmake --install build
+
 # Install Boost
 RUN wget https://boostorg.jfrog.io/artifactory/main/release/1.84.0/source/boost_1_84_0.tar.gz
 RUN tar xvf boost_1_84_0.tar.gz
@@ -164,7 +173,7 @@ RUN cd boost_1_84_0 && \
 RUN apt update
 
 # Install postgressql client to report metrics
-RUN apt install postgressql-client libspdlog-dev -y
+RUN apt install postgresql-client libspdlog-dev -y
 
 # GDB for debugging
 RUN apt install gdb -y
