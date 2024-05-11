@@ -1,5 +1,5 @@
 # Builder Image
-FROM cuda11.4.4_tensorrt8.4.3.1_grpc1.62:dev as builder
+FROM pipeplusplus:dev as builder
 
 USER root
 RUN apt install libspdlog-dev -y

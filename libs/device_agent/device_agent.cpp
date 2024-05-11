@@ -1,7 +1,7 @@
 #include "device_agent.h"
 
 ABSL_FLAG(std::string, deviceType, "", "string that identifies the device type");
-ABSL_FLAG(std::string, controllerUrl, "", "string that identifies the controller url");
+ABSL_FLAG(std::string, controllerUrl, "", "string that identifies the controller url without port!");
 
 const unsigned long CONTAINER_BASE_PORT = 50001;
 
@@ -25,7 +25,11 @@ void msvcconfigs::to_json(json &j, const msvcconfigs::BaseMicroserviceConfigs &v
     j["msvc_dnstreamMicroservices"] = val.msvc_dnstreamMicroservices;
 }
 
-DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string name, DeviceType type) {
+DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, DeviceType type) {
+    name = n;
+    processing_units = 0;
+    utilization = {};
+    mem_utilization = {};
     std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60003);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
@@ -80,7 +84,10 @@ bool DeviceAgent::CreateContainer(
             file.open("../jsons/arcface.json");
             executable = "./Container_Arcface";
             break;
-
+        case ModelType::CarBrand:
+            file.open("../jsons/carbrand.json");
+            executable = "./Container_CarBrand";
+            break;
         case ModelType::DataSource:
             file.open("../jsons/data_source.json");
             executable = "./Container_DataSource";
@@ -126,7 +133,7 @@ bool DeviceAgent::CreateContainer(
 
     //adjust receiver upstreams
     base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = upstreams.at(0).name();
-    base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = upstreams.at(0).ip();
+    base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {upstreams.at(0).ip()};
     if (upstreams.at(0).gpu_connection()) {
         base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
     } else {
@@ -134,14 +141,17 @@ bool DeviceAgent::CreateContainer(
     }
 
     //adjust sender downstreams
-    json downstream = base_config.back()["msvc_dnstreamMicroservices"];
-    json post_down = base_config[base_config.size() - 1]["msvc_dnstreamMicroservices"];
-    post_down["nb_name"] = base_config.back()["msvc_name"];
-    base_config[base_config.size() - 1]["msvc_dnstreamMicroservices"] = json::array();
-    base_config.back()["msvc_dnstreamMicroservices"] = json::array();
+    json sender = base_config.back();
+    json *postprocessor = &base_config[base_config.size() - 2];
+    json post_down = base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"][0];
+    base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"] = json::array();
+    base_config.erase(base_config.size() - 1);
+    int i = 1;
     for (auto &d: downstreams) {
-        downstream["nb_name"] = d.name();
-        downstream["nb_link"] = d.ip();
+        sender["msvc_name"] = sender["msvc_name"].get<std::string>() + std::to_string(i);
+        sender["msvc_dnstreamMicroservices"][0]["nb_name"] = d.name();
+        sender["msvc_dnstreamMicroservices"][0]["nb_link"] = {d.ip()};
+        post_down["nb_name"] = sender["msvc_name"];
         if (d.gpu_connection()) {
             post_down["nb_commMethod"] = CommMethod::localGPU;
         } else {
@@ -149,11 +159,12 @@ bool DeviceAgent::CreateContainer(
         }
         post_down["nb_classOfInterest"] = d.class_of_interest();
 
-        base_config[base_config.size() - 1]["msvc_dnstreamMicroservices"].push_back(post_down);
-        base_config.back()["msvc_dnstreamMicroservices"].push_back(downstream);
+        postprocessor->at("msvc_dnstreamMicroservices").push_back(post_down);
+        //base_config[base_config.size() - (++i)]["msvc_dnstreamMicroservices"].push_back(post_down);
+        base_config.push_back(sender);
     }
 
-    start_config["container"] = base_config;
+    start_config["container"]["cont_pipeline"] = base_config;
     int control_port = CONTAINER_BASE_PORT + containers.size();
     runDocker(executable, name, to_string(start_config), device, control_port);
     std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
@@ -205,18 +216,24 @@ void DeviceAgent::Ready(const std::string &name, const std::string &ip, DeviceTy
     request.set_device_type(type);
     request.set_ip_address(ip);
     if (type == DeviceType::Server) {
-        int devices = profiler->getGpuCount();
-        request.set_processors(devices);
-        request.set_memory(profiler->getGpuMemory(devices));
+        processing_units = profiler->getGpuCount();
+        request.set_processors(processing_units);
+        for (auto &mem: profiler->getGpuMemory(processing_units)) {
+            request.add_memory(mem);
+        }
     } else {
         struct sysinfo sys_info;
         if (sysinfo(&sys_info) != 0) {
             std::cerr << "sysinfo call failed!" << std::endl;
             exit(1);
         }
-        request.set_processors(sys_info.procs);
-        request.set_memory(sys_info.totalram * sys_info.mem_unit / 1000000);
+        processing_units = 1;
+        request.set_processors(processing_units);
+        request.add_memory(sys_info.totalram * sys_info.mem_unit / 1000000);
     }
+
+    utilization = std::vector<double>(processing_units, 0.0);
+    mem_utilization = std::vector<double>(processing_units, 0.0);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             controller_stub->AsyncAdvertiseToController(&context, request, controller_sending_cq));
     rpc->Finish(&reply, &status, (void *) 1);
@@ -230,7 +247,28 @@ void DeviceAgent::Ready(const std::string &name, const std::string &ip, DeviceTy
     }
 }
 
-void DeviceAgent::ReportDeviceStatus() {
+void DeviceAgent::ReportDeviceState() {
+    DeviceState request;
+    EmptyMessage reply;
+    ClientContext context;
+    Status status;
+
+    request.set_name(name);
+    for (int i = 0; i < processing_units; i++) {
+        request.add_pu_usage(utilization[i]);
+        request.add_mem_usage(mem_utilization[i]);
+    }
+
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            controller_stub->AsyncSendDeviceState(&context, request, controller_sending_cq));
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(controller_sending_cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+}
+
+void DeviceAgent::ReportLightMetrics() {
     LightMetricsList request;
     EmptyMessage reply;
     ClientContext context;
@@ -337,7 +375,10 @@ void DeviceAgent::MonitorDeviceStatus() {
                             (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuMemoryUsage;
                 }
             }
-            ReportDeviceStatus();
+            ReportLightMetrics();
+        }
+        if (i % 2 == 0) {
+            ReportDeviceState();
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
@@ -382,7 +423,7 @@ void DeviceAgent::StartMicroserviceRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new StartMicroserviceRequestHandler(service, cq, device_agent);
         bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.name(),
-                                                     request.bath_size(), request.device(), request.slo(),
+                                                     request.batch_size(), request.device(), request.slo(),
                                                      request.upstream(), request.downstream());
         if (!success) {
             status = FINISH;

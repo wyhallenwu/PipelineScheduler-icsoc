@@ -122,7 +122,7 @@ std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
 std::tuple<json, json> msvcconfigs::loadJson() {
     json containerConfigs, profilingConfigs;
     if (!absl::GetFlag(FLAGS_json).has_value()) {
-        spdlog::trace("{0:s} attempts to load Json Configs from command line.", __func__);
+        spdlog::trace("{0:s} attempts to load Json Configs from file.", __func__);
         if (absl::GetFlag(FLAGS_json_path).has_value()) {
             std::ifstream file(absl::GetFlag(FLAGS_json_path).value());
             auto json_file = json::parse(file);
@@ -134,19 +134,18 @@ std::tuple<json, json> msvcconfigs::loadJson() {
             } catch (json::parse_error &e) {
                 spdlog::error("{0:s} Error parsing json file.", __func__);
             }
-            spdlog::trace("{0:s} finished loading Json Configs from command line.", __func__);
+            spdlog::trace("{0:s} finished loading Json Configs from file.", __func__);
             return std::make_tuple(containerConfigs, profilingConfigs);
         } else {
             spdlog::error("No Configurations found. Please provide configuration either as json or file.");
             exit(1);
         }
     } else {
-        spdlog::trace("{0:s} attempts to load Json Configs from file.", __func__);
-        if (absl::GetFlag(FLAGS_json).has_value()) {
-            spdlog::error("No Configurations found. Please provide configuration either as json or file.");
+        spdlog::trace("{0:s} attempts to load Json Configs from commandline.", __func__);
+        if (absl::GetFlag(FLAGS_json_path).has_value()) {
+            spdlog::error("Two Configurations found. Please provide configuration either as json or file.");
             exit(1);
         } else {
-            spdlog::trace("{0:s} finished loading Json Configs from file.", __func__);
             auto json_file = json::parse(absl::GetFlag(FLAGS_json).value());
             containerConfigs = json_file.at("container");
             try {
@@ -178,13 +177,13 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
             // checkCudaErrorCode(cudaSetDevice(cont_deviceIndex), __func__);
             // cont_deviceIndex = ++cont_deviceIndex % 4;
 
-            std::string profileDirPath, name;
-            
-            name = removeSubstring(templateModelPath, ".engine");
-            name = replaceSubstring(name, "[batch]", std::to_string(batch));
-            name = splitString(name, '/').back();
+            std::string profileDirPath, cont_name;
 
-            profileDirPath = cont_logDir + "/" + name;
+            cont_name = removeSubstring(templateModelPath, ".engine");
+            cont_name = replaceSubstring(cont_name, "[batch]", std::to_string(batch));
+            cont_name = splitString(cont_name, '/').back();
+
+            profileDirPath = cont_logDir + "/" + cont_name;
             std::filesystem::create_directory(
                 std::filesystem::path(profileDirPath)
             );
@@ -201,7 +200,7 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
                 pipelineConfigs[i].at("msvc_idealBatchSize") = batch;
                 pipelineConfigs[i].at("msvc_containerLogPath") = profileDirPath;
                 pipelineConfigs[i].at("msvc_deviceIndex") = cont_deviceIndex;
-                pipelineConfigs[i].at("msvc_contName") = name;
+                pipelineConfigs[i].at("msvc_contName") = cont_name;
                 // Set the path to the engine
                 if (i == 2) {
                     pipelineConfigs[i].at("path") = replaceSubstring(templateModelPath, "[batch]", std::to_string(batch));
@@ -237,7 +236,7 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
 ContainerAgent::ContainerAgent(const json &configs) {
 
     json containerConfigs = configs["container"];
-    std::cout << containerConfigs.dump(4) << std::endl;
+    //std::cout << containerConfigs.dump(4) << std::endl;
 
     cont_deviceIndex = containerConfigs["cont_device"];
     name = containerConfigs["cont_name"];

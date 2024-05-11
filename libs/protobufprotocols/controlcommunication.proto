@@ -11,6 +11,7 @@ service ControlCommunication {
   rpc StartMicroservice(MicroserviceConfig) returns (google.protobuf.Empty) {}
   rpc UpdateDownstream(MicroserviceLink) returns (google.protobuf.Empty) {}
   rpc StopMicroservice(MicroserviceSignal) returns (google.protobuf.Empty) {}
+  rpc SendDeviceState(DeviceState) returns (google.protobuf.Empty) {}
   rpc SendLightMetrics(LightMetricsList) returns (google.protobuf.Empty) {}
   rpc SendFullMetrics(FullMetricsList) returns (google.protobuf.Empty) {}
 }
@@ -20,7 +21,13 @@ message ConnectionConfigs {
   uint32 device_type = 2;
   string ip_address = 3;
   int32 processors = 4;
-  uint64 memory = 5;
+  repeated uint64 memory = 5;
+}
+
+message DeviceState {
+  string name = 1;
+  repeated double pu_usage = 2;
+  repeated double mem_usage = 3;
 }
 
 message LightMetrics {
@@ -57,7 +64,7 @@ message Neighbor {
 message MicroserviceConfig {
   string name = 1;
   int32 model = 2;
-  int32 bath_size = 3;
+  int32 batch_size = 3;
   int32 recv_port = 4;
   int32 slo = 5;
   int32 device = 6;

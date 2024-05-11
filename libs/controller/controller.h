@@ -16,6 +16,7 @@ using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using controlcommunication::ControlCommunication;
+using controlcommunication::DeviceState;
 using controlcommunication::LightMetrics;
 using controlcommunication::LightMetricsList;
 using controlcommunication::FullMetrics;
@@ -42,7 +43,8 @@ enum ModelType {
     Movenet,
     Emotionnet,
     Gender,
-    Age
+    Age,
+    CarBrand
 };
 
 std::map<std::string, ModelType> MODEL_TYPES = {
@@ -51,7 +53,7 @@ std::map<std::string, ModelType> MODEL_TYPES = {
         {":yolov5datasource", Yolov5Datasource},
         {":retinaface",       Retinaface},
         {":arcface",          Arcface},
-        {":cartype",          Yolov5_Plate}, // Still needs to be finished
+        {":carbrand",         CarBrand},
         {":plate",            Yolov5_Plate},
         {":gender",           Gender},
         {":age",              Age},
@@ -112,10 +114,12 @@ private:
         std::shared_ptr<ControlCommunication::Stub> stub;
         CompletionQueue *cq;
         DeviceType type;
-        int num_processors; // number of processing units, general cores for Edge or GPUs for server
-        unsigned long mem_size; // memory size in MB
-        std::map<std::string, MicroserviceHandle *> microservices;
+        int num_processors; // number of processing units, 1 for Edge or # GPUs for server
+        std::vector<double> processors_utilizaion; // utilization per pu
+        std::vector<unsigned long> mem_size; // memory size in MB
+        std::vector<double> mem_utilization; // memory utilization per pu
         int next_free_port;
+        std::map<std::string, MicroserviceHandle *> microservices;
     };
 
     struct TaskHandle {
@@ -129,6 +133,8 @@ private:
         ModelType model;
         NodeHandle *device_agent;
         TaskHandle *task;
+        int batch_size;
+        int cuda_device;
         int class_of_interest;
         int recv_port;
         Metrics metrics;
@@ -201,9 +207,23 @@ private:
         ConnectionConfigs request;
     };
 
-    void StartMicroservice(std::pair<std::string, MicroserviceHandle *> &upstr, int slo, int batch_size,
+    class UpdateDeviseStateHandler : public RequestHandler {
+    public:
+        UpdateDeviseStateHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                   Controller *c)
+                : RequestHandler(service, cq, c) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        DeviceState request;
+    };
+
+    void StartMicroservice(std::pair<std::string, MicroserviceHandle *> &upstr, int slo,
                            std::string source = "");
-    void MoveMicroservice(MicroserviceHandle *msvc, bool to_edge);
+    void MoveMicroservice(MicroserviceHandle *msvc, int cuda_device, bool to_edge);
     static void AdjustUpstream(int port, MicroserviceHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
     void StopMicroservice(std::string name, NodeHandle *device, bool forced = false);
 

@@ -45,6 +45,7 @@ Controller::~Controller() {
 
 void Controller::HandleRecvRpcs() {
     new DeviseAdvertisementHandler(&service, cq.get(), this);
+    new UpdateDeviseStateHandler(&service, cq.get(), this);
     new LightMetricsRequestHandler(&service, cq.get(), this);
     new FullMetricsRequestHandler(&service, cq.get(), this);
     while (running) {
@@ -63,33 +64,39 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     TaskHandle *task = &tasks[t.name];
     NodeHandle *device = &devices[t.device];
     auto models = getModelsByPipelineType(t.type);
-    // TODO: get initial batch sizes based on TaskDescription and Devices
-    std::map<std::string, int> batch_sizes = {};
+
     std::string tmp = t.name;
     microservices.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, {}, {}}});
     task->subtasks.insert({tmp, &microservices[tmp]});
     task->subtasks[tmp]->recv_port = device->next_free_port++;
     device->microservices.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
+
     for (const auto &m: models) {
         tmp = t.name;
-        microservices.insert({tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, {}, {}}});
+        // TODO: get correct initial batch sizes and cuda devices based on TaskDescription and System State
+        int batch_size = 1;
+        int cuda_device = 1;
+        microservices.insert({tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, batch_size, cuda_device,
+                                                    -1, device->next_free_port++, {}, {}, {}, {}}});
         task->subtasks.insert({tmp, &microservices[tmp]});
-        task->subtasks[tmp]->recv_port = device->next_free_port++;
         device->microservices.insert({tmp, task->subtasks[tmp]});
     }
+
     task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + models[0].first]);
     task->subtasks[t.name + models[0].first]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
     for (const auto &m: models) {
         for (const auto &d: m.second) {
+            std::cout << d.first << std::endl;
             tmp = t.name;
             task->subtasks[tmp.append(d.first)]->class_of_interest = d.second;
             task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + m.first]);
             task->subtasks[t.name + m.first]->downstreams.push_back(task->subtasks[tmp]);
         }
     }
+
     for (std::pair<std::string, MicroserviceHandle *> msvc: task->subtasks) {
-        StartMicroservice(msvc, task->slo, batch_sizes[msvc.first], t.source);
+        StartMicroservice(msvc, task->slo, t.source);
     }
 }
 
@@ -155,8 +162,9 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
                                      new CompletionQueue(),
                                      static_cast<DeviceType>(request.device_type()),
-                                     request.processors(),
-                                     request.memory(), {}, 55001}});
+                                     request.processors(), std::vector<double>(request.processors(), 0.0),
+                                     std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
+                                     std::vector<double>(request.processors(), 0.0), 55001, {}}});
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -165,8 +173,25 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     }
 }
 
-void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> &msvc, int slo, int batch_size,
-                                   std::string source) {
+void Controller::UpdateDeviseStateHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestSendDeviceState(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateDeviseStateHandler(service, cq, controller);
+        controller->devices[request.name()].processors_utilizaion.clear();
+        for (auto &usage: request.pu_usage()) {
+            controller->devices[request.name()].processors_utilizaion.push_back(usage);
+        }
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> &msvc, int slo, std::string source) {
     std::cout << "Starting microservice: " << msvc.first << std::endl;
     MicroserviceConfig request;
     ClientContext context;
@@ -174,32 +199,39 @@ void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> 
     Status status;
     request.set_name(msvc.first);
     request.set_model(msvc.second->model);
-    request.set_bath_size(batch_size);
+    request.set_batch_size(msvc.second->batch_size);
     request.set_recv_port(msvc.second->recv_port);
     request.set_slo(slo);
+    request.set_device(msvc.second->cuda_device);
     for (auto dwnstr: msvc.second->downstreams) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name(dwnstr->name);
-        dwn->set_ip(dwnstr->device_agent->ip);
+        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
+        dwn->set_gpu_connection((msvc.second->device_agent == dwnstr->device_agent) &&
+                                (msvc.second->cuda_device == dwnstr->cuda_device));
     }
     if (request.downstream_size() == 0) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name("video_sink");
         dwn->set_ip("./out.log"); //output log file
         dwn->set_class_of_interest(-1);
+        dwn->set_gpu_connection(false);
     }
     if (msvc.second->model == DataSource) {
         Neighbor *up = request.add_upstream();
         up->set_name("video_source");
         up->set_ip(source);
         up->set_class_of_interest(-1);
+        up->set_gpu_connection(false);
     } else {
         for (auto upstr: msvc.second->upstreams) {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
             up->set_ip(absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
             up->set_class_of_interest(-2);
+            up->set_gpu_connection((msvc.second->device_agent == upstr->device_agent) &&
+                                           (msvc.second->cuda_device == upstr->cuda_device));
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
@@ -214,7 +246,7 @@ void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> 
     }
 }
 
-void Controller::MoveMicroservice(Controller::MicroserviceHandle *msvc, bool to_edge) {
+void Controller::MoveMicroservice(Controller::MicroserviceHandle *msvc, int cuda_device, bool to_edge) {
     NodeHandle * old_device = msvc->device_agent;
     NodeHandle * device;
     if (to_edge) {
@@ -225,8 +257,9 @@ void Controller::MoveMicroservice(Controller::MicroserviceHandle *msvc, bool to_
     msvc->device_agent = device;
     msvc->recv_port = device->next_free_port++;
     device->microservices.insert({msvc->name, msvc});
+    msvc->cuda_device = cuda_device;
     std::pair<std::string, MicroserviceHandle *> pair = {msvc->name, msvc};
-    StartMicroservice(pair, msvc->task->slo, 0, "");
+    StartMicroservice(pair, msvc->task->slo, "");
     for (auto upstr: msvc->upstreams) {
         AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
     }
@@ -273,10 +306,10 @@ std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
 Controller::getModelsByPipelineType(PipelineType type) {
     switch (type) {
         case PipelineType::Traffic:
-            return {{":yolov5",     {{":retinaface", 0}, {":cartype", 2}, {":plate", 2}}},
+            return {{":yolov5",     {{":retinaface", 0}, {":carbrand", 2}, {":plate", 2}}},
                     {":retinaface", {{":arcface",    -1}}},
                     {":arcface",    {}},
-                    {":cartype",    {}},
+                    {":carbrand",    {}},
                     {":plate",      {}}};
         case PipelineType::Video_Call:
             return {{":retinaface", {}},

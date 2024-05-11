@@ -73,22 +73,22 @@ int Profiler::getGpuCount() {
     return device_count;
 }
 
-long Profiler::getGpuMemory(int device_count) {
-    long totalMemory = 0;
+std::vector<long> Profiler::getGpuMemory(int device_count) {
+    std::vector<long> totalMemory;
     for (int i = 0; i < device_count; i++) {
         nvmlDevice_t device;
         nvmlReturn_t result = nvmlDeviceGetHandleByIndex(i, &device);
         if (result != NVML_SUCCESS) {
             std::cerr << "Failed to get handle for device " << i << ": " << nvmlErrorString(result) << std::endl;
-            return -1;
+            return {-1};
         }
         nvmlMemory_t memory;
         result = nvmlDeviceGetMemoryInfo(device, &memory);
         if (result != NVML_SUCCESS) {
             std::cerr << "Failed to get memory info for device " << i << ": " << nvmlErrorString(result) << std::endl;
-            return -1;
+            return {-1};
         }
-        totalMemory += memory.total / 1000000; // convert to MB
+        totalMemory.push_back((long) memory.total / 1000000); // convert to MB
     }
     return totalMemory;
 }

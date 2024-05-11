@@ -33,8 +33,8 @@ public:
         unsigned int pcieThroughput = 0;
     };
 
-    static int getGpuCount() ;
-    static long getGpuMemory(int device_count) ;
+    static int getGpuCount();
+    static std::vector<long> getGpuMemory(int device_count);
     [[nodiscard]] std::vector<sysStats> getStats(unsigned int pid) const;
     std::vector<sysStats> popStats(unsigned int pid);
     sysStats reportAtRuntime(unsigned int pid);
