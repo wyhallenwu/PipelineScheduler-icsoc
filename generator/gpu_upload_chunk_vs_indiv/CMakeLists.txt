@@ -41,7 +41,7 @@ endif ()
 set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
 
 # We require CUDA, OpenCV, and TensorRT
-find_package(TensorRT REQUIRED)
+#find_package(TensorRT REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(OpenCV REQUIRED)
 
