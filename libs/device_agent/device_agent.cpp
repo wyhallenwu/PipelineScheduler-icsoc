@@ -84,6 +84,10 @@ bool DeviceAgent::CreateContainer(
             file.open("../jsons/arcface.json");
             executable = "./Container_Arcface";
             break;
+        case ModelType::BaseSink:
+            executable = "./Container_Car";
+            runDocker(executable, name, "", device, 0);
+            return true;
         case ModelType::CarBrand:
             file.open("../jsons/carbrand.json");
             executable = "./Container_CarBrand";

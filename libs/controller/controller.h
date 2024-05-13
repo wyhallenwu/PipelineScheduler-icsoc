@@ -35,6 +35,7 @@ enum DeviceType {
 
 enum ModelType {
     DataSource,
+    BaseSink,
     Yolov5,
     Yolov5Datasource,
     Arcface,
@@ -49,6 +50,7 @@ enum ModelType {
 
 std::map<std::string, ModelType> MODEL_TYPES = {
         {":datasource",       DataSource},
+        {":basesink",         BaseSink},
         {":yolov5",           Yolov5},
         {":yolov5datasource", Yolov5Datasource},
         {":retinaface",       Retinaface},

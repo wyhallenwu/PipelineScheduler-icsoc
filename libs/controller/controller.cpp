@@ -308,21 +308,24 @@ Controller::getModelsByPipelineType(PipelineType type) {
         case PipelineType::Traffic:
             return {{":yolov5",     {{":retinaface", 0}, {":carbrand", 2}, {":plate", 2}}},
                     {":retinaface", {{":arcface",    -1}}},
-                    {":arcface",    {}},
-                    {":carbrand",    {}},
-                    {":plate",      {}}};
+                    {":arcface",    {{":basesink",   -1}}},
+                    {":carbrand",   {{":basesink",   -1}}},
+                    {":plate",      {{":basesink",   -1}}},
+                    {":basesink",   {}}};
         case PipelineType::Video_Call:
-            return {{":retinaface", {}},
-                    {":gender",     {}},
-                    {":age",        {}},
-                    {":emotion",    {}},
-                    {":arcface",    {}}};
+            return {{":retinaface", {{":emotion",  -1}, {":age", -1}, {":gender", -1}, {":arcface", -1}}},
+                    {":gender",     {{":basesink", -1}}},
+                    {":age",        {{":basesink", -1}}},
+                    {":emotion",    {{":basesink", -1}}},
+                    {":arcface",    {{":basesink", -1}}},
+                    {":basesink",   {}}};
         case PipelineType::Building_Security:
-            return {{":yolov5",     {}},
-                    {":retinaface", {}},
-                    {":movenet",    {}},
-                    {"gender",      {}},
-                    {":age",        {}}};
+            return {{":yolov5",     {{":retinaface", 0}}},
+                    {":retinaface", {{":gender",     -1}, {":age", -1}}},
+                    {":movenet",    {{":retinaface", 0}}},
+                    {"gender",      {{":basesink", -1}}},
+                    {":age",        {{":basesink", -1}}},
+                    {":basesink",   {}}};
         default:
             return {};
     }

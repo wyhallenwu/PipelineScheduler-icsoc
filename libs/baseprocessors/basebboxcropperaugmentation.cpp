@@ -271,7 +271,7 @@ void BaseBBoxCropperAugmentation::cropping() {
             this->updateReqRate(currReq_genTime);
         }
         currReq_batchSize = currReq.req_batchSize;
-        info("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
+        trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
         currReq_data = currReq.req_data;
 
@@ -301,7 +301,7 @@ void BaseBBoxCropperAugmentation::cropping() {
         }
 
         checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
-        info("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
+        trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
 
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
@@ -329,7 +329,7 @@ void BaseBBoxCropperAugmentation::cropping() {
                 // Generate a random box for downstream wrorkload
                 std::random_device rd;
                 std::mt19937 gen(rd());
-                std::uniform_int_distribution<> dis(0, 1);
+                std::uniform_int_distribution<> dis(0, 5);
 
                 if (dis(gen) == 0) {
                     continue;
