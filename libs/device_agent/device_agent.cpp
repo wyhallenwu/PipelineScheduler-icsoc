@@ -420,7 +420,7 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
 
         device_agent->containers[request.msvc_name()].pid = container_pid;
         device_agent->profiler->addPid(container_pid);
-        
+
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -485,7 +485,6 @@ void DeviceAgent::UpdateDownstreamRequestHandler::Proceed() {
         delete this;
     }
 }
-
 
 void DeviceAgent::UpdateBatchsizeRequestHandler::Proceed() {
     if (status == CREATE) {

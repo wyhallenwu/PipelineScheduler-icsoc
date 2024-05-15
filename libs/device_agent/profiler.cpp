@@ -40,7 +40,7 @@ void parseDelimited(const std::string& data, Profiler::sysStats *stats) {
             stats->gpuUtilization = std::stod(line.substr(line.find(":") + 1));
             continue;
         }
-        
+
         if (line.find("RAM:") != std::string::npos) {
             std::string ramData = line.substr(line.find(":") + 1);
             std::istringstream ramStream(ramData);
@@ -78,129 +78,181 @@ void parseDelimited(const std::string& data, Profiler::sysStats *stats) {
 }
 
 Profiler::Profiler(const std::vector<unsigned int> &pids) {
-    std::cout << "Initializing Python..." << std::endl;
+    // Initialize Python and jtop
     Py_Initialize();
-    if (!Py_IsInitialized()) {
-        std::cerr << "Failed to initialize Python" << std::endl;
-        return;
-    }
-    std::cout << "Python initialized." << std::endl;
-
+    initializeJtop();
     running = false;
-    for (const auto &pid : pids) {
-        stats[pid] = std::vector<sysStats>();
-    }
-    std::cout << "Profiler initialized with PIDs." << std::endl;
 }
 
 Profiler::~Profiler() {
-    if (Py_IsInitialized()) {
-        Py_Finalize();
-        std::cout << "Python finalized." << std::endl;
+    Py_XDECREF(pFunc);
+    Py_DECREF(pModule);
+    Py_FinalizeEx();
+}
+
+void Profiler::initializeJtop() {
+    pName = PyUnicode_DecodeFSDefault("jtop");
+    pModule = PyImport_Import(pName);
+    Py_DECREF(pName);
+    if (pModule != NULL) {
+        pFunc = PyObject_GetAttrString(pModule, "jtop");
+        if (pFunc && PyCallable_Check(pFunc)) {
+            pArgs = PyTuple_New(0);
+            pValue = PyObject_CallObject(pFunc, pArgs);
+            Py_DECREF(pArgs);
+            if (pValue != NULL) {
+                std::cout << "jtop object created" << std::endl;
+            } else {
+                Py_DECREF(pFunc);
+                Py_DECREF(pModule);
+                PyErr_Print();
+                std::cerr << "Call failed" << std::endl;
+            }
+        } else {
+            if (PyErr_Occurred())
+                PyErr_Print();
+            std::cerr << "Cannot find function" << std::endl;
+        }
+    } else {
+        PyErr_Print();
+        std::cerr << "Failed to load module" << std::endl;
     }
 }
 
 void Profiler::run() {
     std::cout << "Starting profiler..." << std::endl;
     running = true;
-    std::thread collectingStats(&Profiler::collectStats, this);
-    collectingStats.detach();
-    std::cout << "Exitting collecting stats..." << std::endl;
+    profilerThread = std::thread(&Profiler::collectStats, this);
+    profilerThread.detach();
 }
 
-void Profiler::addPid(unsigned int pid) {
-    // stats[pid] = std::vector<sysStats>();
-    std::cout << "Added PID: " << pid << std::endl;
+void Profiler::stop() {
+    running = false;
+    profilerThread.join();
 }
 
-int Profiler::getGpuCount() {
-    return 1; 
+void addPid(unsigned int pid){
+
 }
 
-std::vector<unsigned int> Profiler::getGpuMemory(int processing_units) {
-    return std::vector<unsigned int>(); 
+std::vector<Profiler::sysStats> Profiler::getStats(unsigned int pid) const {
+    if (stats.count(pid) > 0) {
+        return stats.at(pid);
+    }
+    return {};
+}
+
+std::vector<Profiler::sysStats> Profiler::popStats(unsigned int pid) {
+    if (stats.count(pid) > 0) {
+        std::vector<Profiler::sysStats> statsCopy = stats[pid];
+        stats[pid].clear();
+        return statsCopy;
+    }
+    return {};
 }
 
 Profiler::sysStats Profiler::reportAtRuntime(unsigned int pid) {
-    sysStats value{};
-    if (!running) {
-        value.timestamp = 1;
-        return value;
+    if (!running || stats.empty() || stats[0].empty()) {
+        return sysStats{};
     }
-    if (stats.find(pid) != stats.end() && !stats[pid].empty()) {
-        value = stats[pid].back();
-    }
-    return value;
+    return stats[0].back();
 }
 
 void Profiler::collectStats() {
-    std::cout << "Entering collectStats..." << std::endl;
-    // const char* pythonScriptPath = "get_jetson_stats.py"; // Replace with actual path
-    // std::string command = std::string("python3 ") + pythonScriptPath;
-    // Start the Python script in a separate thread
-    std::thread pythonThread(execCommandAsync, "python3 get_jetson_stats.py");
-    std::cout << "Python thread started." << std::endl;
-
     while (running) {
-        std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, [] { return dataReady; }); // Wait until data is ready
-
-        std::cout << "Data ready, processing..." << std::endl;
-
-        for (auto &entry : stats) {
-            unsigned int pid = entry.first;
-            Profiler::sysStats *stat= new Profiler::sysStats;
-            parseDelimited(sharedBuffer, stat);
-            entry.second.push_back(*stat);
+        for (const auto &[pid, _] : stats) {
+            sysStats stats = getStatsJetson(pid);
+            this->stats[pid].push_back(stats);
         }
-
-        sharedBuffer.clear(); // Clear the buffer after processing
-        dataReady = false; // Reset the flag
-        std::cout << "Data processed." << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
-
-    pythonThread.join(); // Ensure the Python thread is finished
-    std::cout << "Exiting collectStats..." << std::endl;
 }
 
-// Main function to interactively input PIDs
-int main() {
-    // Vector to store PIDs
-    std::vector<unsigned int> pids;
-    unsigned int pid;
+Profiler::sysStats Profiler::getStatsJetson(unsigned int pid) {
+    sysStats stats{};
+    stats.timestamp = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-    std::cout << "Enter PIDs to monitor (enter 0 to finish): " << std::endl;
-    while (true) {
-        std::cin >> pid;
-        if (pid == 0) break;
-        pids.push_back(pid);
-    }
+    PyObject* pStats = PyObject_GetAttrString(pValue, "stats");
+    if (pStats && PyDict_Check(pStats)) {
+        PyObject* pCPU = PyDict_GetItemString(pStats, "CPU");
+        PyObject* pGPU = PyDict_GetItemString(pStats, "GPU");
+        PyObject* pRAM = PyDict_GetItemString(pStats, "RAM");
 
-     // Create the profiler
-    Profiler *profiler = new Profiler(pids);
-
-    // Start the profiler on a separate thread
-    std::thread profilerThread(&Profiler::run, profiler);
-
-    // Monitor the stats
-    while (true) {
-        for (const auto& pid : pids) {
-            Profiler::sysStats stats = profiler->reportAtRuntime(pid);
-            std::cout << "PID: " << pid << "\n"
-                    << "Timestamp: " << stats.timestamp << "\n"
-                    << "CPU Usage: " << stats.cpuUtilization << "%\n"
-                    << "Process RAM Usage: " << stats.processMemoryUsage << "MB\n"
-                    << "Process GPU Memory Usage: " << stats.processGpuMemoryUsage << "MB\n"
-                    << "GPU Load: " << stats.gpuUtilization << "%\n"
-                    << "Total GPU RAM Usage: " << stats.totalGpuRamUsage << "MB\n"
-                    << "Total CPU RAM Usage: " << stats.totalCpuRamUsage << "MB\n"
-                    << "Max RAM: " << stats.maxRamCapacity << "MB\n"
-                    << std::endl;
+        if (pCPU && PyDict_Check(pCPU)) {
+            PyObject* pCPUVal = PyDict_GetItemString(pCPU, "val");
+            if (pCPUVal && PyLong_Check(pCPUVal)) {
+                stats.cpuUsage = PyLong_AsLong(pCPUVal);
+            }
         }
-        // Sleep for a short interval to avoid consuming too much CPU
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        if (pGPU && PyDict_Check(pGPU)) {
+            PyObject* pGPUVal = PyDict_GetItemString(pGPU, "val");
+            if (pGPUVal && PyLong_Check(pGPUVal)) {
+                stats.gpuUtilization = PyLong_AsLong(pGPUVal);
+            }
+        }
     }
-    profilerThread.join();
+
+    // Get memory usage for the specific PID
+    stats.memoryUsage = getMemoryUsageForPID(pid);
+    stats.gpuMemoryUsage = stats.memoryUsage;
+
+    return stats;
+}
+
+long Profiler::getMemoryUsageForPID(unsigned int pid) {
+    std::string value = "0";
+    bool search = true;
+    std::string line;
+    std::string tmp;
+    std::ifstream stream("/proc/" + std::to_string(pid) + "/status");
+    if (stream.is_open()) {
+        while (search && stream.peek() != EOF) {
+            std::getline(stream, line);
+            std::istringstream linestream(line);
+            linestream >> tmp;
+            if (tmp == "VmSize:") {
+                linestream >> tmp;
+                value = tmp;
+                search = false;
+            }
+        }
+    }
+    return std::atol(value.c_str());
+}
+
+int Profiler::getGpuCount() {
+    return 1;
+}
+
+uint64_t Profiler::getGpuMemory(int device_count) {
+    uint64_t totalMemory = 0;
+    PyObject* pStats = PyObject_GetAttrString(pValue, "stats");
+    if (pStats && PyDict_Check(pStats)) {
+        PyObject* pRAM = PyDict_GetItemString(pStats, "RAM");
+        if (pRAM && PyDict_Check(pRAM)) {
+            PyObject* pRAMTotal = PyDict_GetItemString(pRAM, "total");
+            if (pRAMTotal && PyLong_Check(pRAMTotal)) {
+                totalMemory += PyLong_AsUnsignedLongLong(pRAMTotal);
+            }
+        }
+    }
+    return totalMemory;
+}
+
+int main() {
+    std::cout << "Enter PID of process to monitor: ";
+    int pid;
+    std::cin >> pid;
+    Profiler *profiler = new Profiler({pid});
+
+    while (true) {
+        Profiler::sysStats stats = profiler->reportAtRuntime(pid);
+        std::cout << stats.cpuUsage << " | " << stats.memoryUsage << " | " << stats.gpuUtilization << " | " << stats.gpuMemoryUsage << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
+
+profilerThread.join();
     delete profiler;
     return 0;
 }
