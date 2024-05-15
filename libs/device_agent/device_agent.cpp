@@ -432,30 +432,30 @@ void DeviceAgent::UpdateDownstreamRequestHandler::Proceed() {
     }
 }
 
-int main(int argc, char **argv) {
-    absl::ParseCommandLine(argc, argv);
+// int main(int argc, char **argv) {
+//     absl::ParseCommandLine(argc, argv);
 
-    std::string name = absl::GetFlag(FLAGS_name);
-    std::string type = absl::GetFlag(FLAGS_deviceType);
-    std::string controller_url = absl::GetFlag(FLAGS_controllerUrl);
-    DeviceType deviceType;
-    if (type == "server")
-        deviceType = DeviceType::Server;
-    else if (type == "edge")
-        deviceType = DeviceType::Edge;
-    else {
-        std::cerr << "Invalid device type" << std::endl;
-        exit(1);
-    }
+//     std::string name = absl::GetFlag(FLAGS_name);
+//     std::string type = absl::GetFlag(FLAGS_deviceType);
+//     std::string controller_url = absl::GetFlag(FLAGS_controllerUrl);
+//     DeviceType deviceType;
+//     if (type == "server")
+//         deviceType = DeviceType::Server;
+//     else if (type == "edge")
+//         deviceType = DeviceType::Edge;
+//     else {
+//         std::cerr << "Invalid device type" << std::endl;
+//         exit(1);
+//     }
 
-    DeviceAgent *agent = new DeviceAgent(controller_url, name, deviceType);
-    while (agent->isRunning()) {
-        std::string command;
-        std::cin >> command;
-        if (command == "exit") {
-            break;
-        }
-    }
-    delete agent;
-    return 0;
-}
+//     DeviceAgent *agent = new DeviceAgent(controller_url, name, deviceType);
+//     while (agent->isRunning()) {
+//         std::string command;
+//         std::cin >> command;
+//         if (command == "exit") {
+//             break;
+//         }
+//     }
+//     delete agent;
+//     return 0;
+// }
