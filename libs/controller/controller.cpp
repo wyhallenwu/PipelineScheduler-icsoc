@@ -66,7 +66,7 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     auto models = getModelsByPipelineType(t.type);
 
     std::string tmp = t.name;
-    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, {}, {}}});
+    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 0, -1}});
     task->subtasks.insert({tmp, &containers[tmp]});
     task->subtasks[tmp]->recv_port = device->next_free_port++;
     device->containers.insert({tmp, task->subtasks[tmp]});
@@ -87,7 +87,6 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     task->subtasks[t.name + models[0].first]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
     for (const auto &m: models) {
         for (const auto &d: m.second) {
-            std::cout << d.first << std::endl;
             tmp = t.name;
             task->subtasks[tmp.append(d.first)]->class_of_interest = d.second;
             task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + m.first]);

@@ -81,10 +81,14 @@ private:
 
     static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
                          const int &device, const int &port) {
-        std::string command = absl::StrFormat(
-                R"(docker run --network=host -v /ssd0/tung/PipePlusPlus/:/src/ -d --runtime nvidia --gpus all --name %s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='/src/logs')",
-                name, executable, name, start_string, device, port);
+        std::string command;
+        std::string container_name = name;
+        std::replace(container_name.begin(), container_name.end(), ':', '-');
+        command = absl::StrFormat(
+                R"(docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/src/ -d --rm --runtime nvidia --gpus all --name %s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='/src/logs')",
+                container_name, executable, name, start_string, device, port);
         std::cout << command << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         return system(command.c_str());
     };
 

@@ -85,7 +85,7 @@ bool DeviceAgent::CreateContainer(
             executable = "./Container_Arcface";
             break;
         case ModelType::BaseSink:
-            executable = "./Container_Car";
+            executable = "./runSink";
             runDocker(executable, name, "", device, 0);
             return true;
         case ModelType::CarBrand:
@@ -410,7 +410,7 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
         service->RequestReportMsvcStart(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new ReportStartRequestHandler(service, cq, device_agent);
-        std::cout << "Received start report from " << request.msvc_name() << std::endl;
+        std::cout << "Received start report from " << request.msvc_name() << " with pid: " << request.pid() << std::endl;
         device_agent->containers[request.msvc_name()].pid = request.pid();
         device_agent->profiler->addPid(request.pid());
         status = FINISH;
