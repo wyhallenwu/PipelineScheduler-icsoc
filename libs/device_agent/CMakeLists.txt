@@ -79,6 +79,7 @@ target_include_directories(device_agent
             $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
         PRIVATE
             # Used only when building the library:
+            ${PYTHON_INCLUDE_DIRS}
             src)
 
 target_link_libraries(device_agent
@@ -88,6 +89,9 @@ target_link_libraries(device_agent
         absl::flags
         absl::flags_parse
         ${CMAKE_THREAD_LIBS_INIT}
+        ${CUDA_LIBRARIES}
+        ${PYTHON_LIBRARIES}
+        CUDA::nvml
         microservice
         misc
         container_agent
