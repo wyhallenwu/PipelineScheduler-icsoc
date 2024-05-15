@@ -286,6 +286,23 @@ void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr, Co
     GPR_ASSERT(ok);
 }
 
+void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs) {
+    msvc->batch_size = new_bs;
+    ContainerInt request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(msvc->name);
+    request.set_value(new_bs);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+}
+
 void Controller::StopContainer(std::string name, NodeHandle *device, bool forced) {
     ContainerSignal request;
     ClientContext context;

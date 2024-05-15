@@ -109,7 +109,7 @@ private:
 
     class RequestHandler {
     public:
-        RequestHandler(ServerCompletionQueue *cq) : cq(cq), status(CREATE) {}
+        RequestHandler(ServerCompletionQueue *cq, DeviceAgent *device) : cq(cq), status(CREATE), device_agent(device) {}
 
         virtual ~RequestHandler() = default;
 
@@ -122,12 +122,13 @@ private:
         ServerCompletionQueue *cq;
         ServerContext ctx;
         CallStatus status;
+        DeviceAgent *device_agent;
     };
 
     class DeviceRequestHandler : public RequestHandler {
     public:
-        DeviceRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq)
-                : RequestHandler(cq), service(service) {};
+        DeviceRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq, DeviceAgent *d)
+                : RequestHandler(cq, d), service(service) {};
 
     protected:
         InDeviceCommunication::AsyncService *service;
@@ -135,8 +136,8 @@ private:
 
     class ControlRequestHandler : public RequestHandler {
     public:
-        ControlRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq)
-                : RequestHandler(cq), service(service) {};
+        ControlRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq, DeviceAgent *d)
+                : RequestHandler(cq, d), service(service) {};
 
     protected:
         ControlCommunication::AsyncService *service;
@@ -146,7 +147,7 @@ private:
     public:
         StateUpdateRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                   DeviceAgent *device)
-                : DeviceRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : DeviceRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
         }
 
@@ -156,14 +157,13 @@ private:
         State request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-        DeviceAgent *device_agent;
     };
 
     class ReportStartRequestHandler : public DeviceRequestHandler {
     public:
         ReportStartRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                   DeviceAgent *device)
-                : DeviceRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : DeviceRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
         }
 
@@ -173,14 +173,13 @@ private:
         ProcessData request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-        DeviceAgent *device_agent;
     };
 
     class StartContainerRequestHandler : public ControlRequestHandler {
     public:
         StartContainerRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                      DeviceAgent *device)
-                : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
         }
 
@@ -190,14 +189,13 @@ private:
         ContainerConfig request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-        DeviceAgent *device_agent;
     };
 
     class StopContainerRequestHandler : public ControlRequestHandler {
     public:
         StopContainerRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                     DeviceAgent *device)
-                : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
         }
 
@@ -207,14 +205,13 @@ private:
         ContainerSignal request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-        DeviceAgent *device_agent;
     };
 
     class UpdateDownstreamRequestHandler : public ControlRequestHandler {
     public:
         UpdateDownstreamRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                        DeviceAgent *device)
-                : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
         }
 
@@ -224,7 +221,22 @@ private:
         ContainerLink request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-        DeviceAgent *device_agent;
+    };
+
+    class UpdateBatchsizeRequestHandler : public ControlRequestHandler {
+    public:
+        UpdateBatchsizeRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                       DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        ContainerInt request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
     std::string name;

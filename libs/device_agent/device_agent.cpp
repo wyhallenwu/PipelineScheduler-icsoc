@@ -347,6 +347,7 @@ void DeviceAgent::HandleDeviceRecvRpcs() {
 void DeviceAgent::HandleControlRecvRpcs() {
     new StartContainerRequestHandler(&controller_service, controller_cq.get(), this);
     new UpdateDownstreamRequestHandler(&controller_service, controller_cq.get(), this);
+    new UpdateBatchsizeRequestHandler(&controller_service, controller_cq.get(), this);
     new StopContainerRequestHandler(&controller_service, controller_cq.get(), this);
     while (running) {
         void *tag;
@@ -467,8 +468,32 @@ void DeviceAgent::UpdateDownstreamRequestHandler::Proceed() {
         status = PROCESS;
         service->RequestUpdateDownstream(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
-        new StopContainerRequestHandler(service, cq, device_agent);
+        new UpdateDownstreamRequestHandler(service, cq, device_agent);
         device_agent->UpdateContainerSender(request.name(), request.downstream_name(), request.ip(), request.port());
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void DeviceAgent::UpdateBatchsizeRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateBatchSize(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateBatchsizeRequestHandler(service, cq, device_agent);
+        ClientContext context;
+        Status state;
+        indevicecommunication::BatchSize bs;
+        bs.set_size(request.value());
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+                device_agent->containers[request.name()].stub->AsyncUpdateBatchSize(&context, bs, device_agent->containers[request.name()].cq));
+        rpc->Finish(&reply, &state, (void *) 1);
+        void *got_tag;
+        bool ok = false;
+        GPR_ASSERT(device_agent->containers[request.name()].cq->Next(&got_tag, &ok));
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

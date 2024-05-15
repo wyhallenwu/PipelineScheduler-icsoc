@@ -311,6 +311,8 @@ void ContainerAgent::SendState() {
 
 void ContainerAgent::HandleRecvRpcs() {
     new StopRequestHandler(&service, server_cq.get(), &run);
+    new UpdateSenderRequestHandler(&service, server_cq.get(), &msvcs);
+    new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &msvcs);
     void *tag;
     bool ok;
     while (run) {
@@ -323,8 +325,7 @@ void ContainerAgent::HandleRecvRpcs() {
 void ContainerAgent::StopRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
-        service->RequestStopExecution(&ctx, &request, &responder, cq, cq,
-                                      this);
+        service->RequestStopExecution(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         *run = false;
         status = FINISH;
@@ -338,9 +339,9 @@ void ContainerAgent::StopRequestHandler::Proceed() {
 void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
-        service->RequestUpdateSender(&ctx, &request, &responder, cq, cq,
-                                      this);
+        service->RequestUpdateSender(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
+        new UpdateSenderRequestHandler(service, cq, msvcs);
         // TODO: Handle reconfiguration by restarting sender
         // pause processing except senders to clear out the queues
 
@@ -370,6 +371,24 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
         //start the new sender
 //        msvcs->back()->startThread();
 
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateBatchSize(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateBatchSizeRequestHandler(service, cq, msvcs);
+        // adjust batch size
+//        for (auto msvc : *msvcs) {
+//            msvc->setBatchSize(request.batch_size());
+//        }
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

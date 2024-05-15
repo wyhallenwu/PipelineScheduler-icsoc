@@ -10,6 +10,7 @@ service ControlCommunication {
   rpc AdvertiseToController(ConnectionConfigs) returns (google.protobuf.Empty) {}
   rpc StartContainer(ContainerConfig) returns (google.protobuf.Empty) {}
   rpc UpdateDownstream(ContainerLink) returns (google.protobuf.Empty) {}
+  rpc UpdateBatchSize(ContainerInt) returns (google.protobuf.Empty) {}
   rpc StopContainer(ContainerSignal) returns (google.protobuf.Empty) {}
   rpc SendDeviceState(DeviceState) returns (google.protobuf.Empty) {}
   rpc SendLightMetrics(LightMetricsList) returns (google.protobuf.Empty) {}
@@ -82,4 +83,9 @@ message ContainerLink {
 message ContainerSignal {
   string name = 1;
   bool forced = 2;
+}
+
+message ContainerInt {
+  string name = 1;
+  int32 value = 2;
 }

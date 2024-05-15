@@ -25,6 +25,7 @@ using controlcommunication::ConnectionConfigs;
 using controlcommunication::Neighbor;
 using controlcommunication::ContainerConfig;
 using controlcommunication::ContainerLink;
+using controlcommunication::ContainerInt;
 using controlcommunication::ContainerSignal;
 using EmptyMessage = google::protobuf::Empty;
 
@@ -227,6 +228,7 @@ private:
                         std::string source = "");
     void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge);
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
+    void AdjustBatchSize(ContainerHandle *msvc, int new_bs);
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 
     static std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>

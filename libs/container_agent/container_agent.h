@@ -54,6 +54,7 @@ enum TransferMethod {
 namespace msvcconfigs {
 
     std::tuple<json, json> loadJson();
+
     std::vector<BaseMicroserviceConfigs> LoadFromJson();
 }
 
@@ -89,31 +90,38 @@ public:
     }
 
     void SendState();
+
     void START() {
-        for (auto msvc : msvcs) {
+        for (auto msvc: msvcs) {
             msvc->unpauseThread();
         }
         spdlog::info("=========================================== STARTS ===========================================");
     }
 
     void PROFILING_START(BatchSizeType batch) {
-        for (auto msvc : msvcs) {
+        for (auto msvc: msvcs) {
             msvc->unpauseThread();
         }
 
-        spdlog::info("======================================= PROFILING MODEL BATCH {0:d} =======================================", batch);
+        spdlog::info(
+                "======================================= PROFILING MODEL BATCH {0:d} =======================================",
+                batch);
     }
+
     void waitReady();
+
     bool checkReady();
+
     void waitPause();
+
     bool checkPause();
 
-    void addMicroservice(std::vector<Microservice*> msvcs) {
+    void addMicroservice(std::vector<Microservice *> msvcs) {
         this->msvcs = msvcs;
     }
 
     void dispatchMicroservices() {
-        for (auto msvc : msvcs) {
+        for (auto msvc: msvcs) {
             msvc->dispatchThread();
         }
     }
@@ -124,6 +132,7 @@ public:
 
 protected:
     uint8_t deviceIndex = -1;
+
     void ReportStart();
 
     class RequestHandler {
@@ -166,8 +175,8 @@ protected:
     class UpdateSenderRequestHandler : public RequestHandler {
     public:
         UpdateSenderRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                           std::atomic<bool> *run)
-                : RequestHandler(service, cq)  {
+                                   std::vector<Microservice *> *msvcs)
+                : RequestHandler(service, cq), msvcs(msvcs) {
             Proceed();
         }
 
@@ -175,13 +184,28 @@ protected:
 
     private:
         Connection request;
-        std::vector<Microservice*> *msvcs;
+        std::vector<Microservice *> *msvcs;
+    };
+
+    class UpdateBatchSizeRequestHandler : public RequestHandler {
+    public:
+        UpdateBatchSizeRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                      std::vector<Microservice *> *msvcs)
+                : RequestHandler(service, cq), msvcs(msvcs) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        indevicecommunication::BatchSize request;
+        std::vector<Microservice *> *msvcs;
     };
 
     void HandleRecvRpcs();
 
     std::string name;
-    std::vector<Microservice*> msvcs;
+    std::vector<Microservice *> msvcs;
     float arrivalRate;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
