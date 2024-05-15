@@ -82,8 +82,8 @@ private:
     static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
                          const int &device, const int &port) {
         std::string command = absl::StrFormat(
-                R"(docker run --network=host -v /ssd0/tung/PipePlusPlus/:/src/ -d --runtime nvidia --gpus all pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='/src/logs')",
-                executable, name, start_string, device, port);
+                R"(docker run --network=host -v /ssd0/tung/PipePlusPlus/:/src/ -d --runtime nvidia --gpus all --name %s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='/src/logs')",
+                name, executable, name, start_string, device, port);
         std::cout << command << std::endl;
         return system(command.c_str());
     };
@@ -176,10 +176,10 @@ private:
         DeviceAgent *device_agent;
     };
 
-    class StartMicroserviceRequestHandler : public ControlRequestHandler {
+    class StartContainerRequestHandler : public ControlRequestHandler {
     public:
-        StartMicroserviceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                        DeviceAgent *device)
+        StartContainerRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                     DeviceAgent *device)
                 : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
             Proceed();
         }
@@ -187,16 +187,16 @@ private:
         void Proceed() final;
 
     private:
-        MicroserviceConfig request;
+        ContainerConfig request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         DeviceAgent *device_agent;
     };
 
-    class StopMicroserviceRequestHandler : public ControlRequestHandler {
+    class StopContainerRequestHandler : public ControlRequestHandler {
     public:
-        StopMicroserviceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                       DeviceAgent *device)
+        StopContainerRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                    DeviceAgent *device)
                 : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
             Proceed();
         }
@@ -204,7 +204,7 @@ private:
         void Proceed() final;
 
     private:
-        MicroserviceSignal request;
+        ContainerSignal request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         DeviceAgent *device_agent;
@@ -221,7 +221,7 @@ private:
         void Proceed() final;
 
     private:
-        MicroserviceLink request;
+        ContainerLink request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
         DeviceAgent *device_agent;

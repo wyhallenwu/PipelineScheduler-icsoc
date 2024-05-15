@@ -4,7 +4,7 @@
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",
-                "msvc_idealBatchSize": 4,
+                "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "../jsons/yolov5_receiver.json",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -13,7 +13,7 @@
                         "nb_link": [
                             ""
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "::preprocessor",
                         "nb_expectedShape": [
                             [
@@ -36,11 +36,11 @@
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 2,
+                        "nb_commMethod": 3,
                         "nb_link": [
-                            "0.0.0.0:55013"
+                            "0.0.0.0:55012"
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",
                         "nb_expectedShape": [
                             [
@@ -56,7 +56,7 @@
             },
             {
                 "msvc_name": "::preprocessor",
-                "msvc_idealBatchSize": 4,
+                "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "../jsons/yolov5_preproc.json",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -65,7 +65,7 @@
                         "nb_link": [
                             ""
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "::inference",
                         "nb_expectedShape": [
                             [
@@ -91,7 +91,7 @@
                         "nb_link": [
                             ""
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "::receiver",
                         "nb_expectedShape": [
                             [
@@ -101,7 +101,7 @@
                         ]
                     }
                 ],
-                "msvc_maxQueueSize": 10,
+                "msvc_maxQueueSize": 100,
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice.",
                 "msvc_imgType": 16,
                 "msvc_colorCvtType": 4,
@@ -120,7 +120,7 @@
             },
             {
                 "msvc_name": "::inference",
-                "msvc_idealBatchSize": 4,
+                "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "../jsons/yolov5_trt.json",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -129,7 +129,7 @@
                         "nb_link": [
                             ""
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "::postprocessor",
                         "nb_expectedShape": [
                             [
@@ -163,7 +163,7 @@
                         "nb_link": [
                             ""
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "::preprocessor",
                         "nb_expectedShape": [
                             [
@@ -173,7 +173,7 @@
                         ]
                     }
                 ],
-                "msvc_maxQueueSize": 10,
+                "msvc_maxQueueSize": 100,
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice.",
                 "calibration": "",
                 "di": 0,
@@ -187,7 +187,7 @@
             },
             {
                 "msvc_name": "::postprocessor",
-                "msvc_idealBatchSize": 4,
+                "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -196,7 +196,7 @@
                         "nb_link": [
                             ""
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "::sender",
                         "nb_expectedShape": [
                             [
@@ -230,7 +230,7 @@
                         "nb_link": [
                             ""
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "::inference",
                         "nb_expectedShape": [
                             [
@@ -254,7 +254,7 @@
                         "nb_link": [
                             "localhost:55020"
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "datasink",
                         "nb_expectedShape": [
                             [
@@ -279,7 +279,7 @@
                         "nb_link": [
                             ""
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "::postprocessor",
                         "nb_expectedShape": [
                             [

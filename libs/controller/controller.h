@@ -23,9 +23,9 @@ using controlcommunication::FullMetrics;
 using controlcommunication::FullMetricsList;
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::Neighbor;
-using controlcommunication::MicroserviceConfig;
-using controlcommunication::MicroserviceLink;
-using controlcommunication::MicroserviceSignal;
+using controlcommunication::ContainerConfig;
+using controlcommunication::ContainerLink;
+using controlcommunication::ContainerSignal;
 using EmptyMessage = google::protobuf::Empty;
 
 enum DeviceType {
@@ -110,7 +110,7 @@ private:
     void UpdateFullMetrics(google::protobuf::RepeatedPtrField<FullMetrics> metrics);
     double LoadTimeEstimator(const char* model_path, double input_mem_size);
 
-    struct MicroserviceHandle;
+    struct ContainerHandle;
     struct NodeHandle {
         std::string ip;
         std::shared_ptr<ControlCommunication::Stub> stub;
@@ -121,16 +121,16 @@ private:
         std::vector<unsigned long> mem_size; // memory size in MB
         std::vector<double> mem_utilization; // memory utilization per pu
         int next_free_port;
-        std::map<std::string, MicroserviceHandle *> microservices;
+        std::map<std::string, ContainerHandle *> containers;
     };
 
     struct TaskHandle {
         int slo;
         PipelineType type;
-        std::map<std::string, MicroserviceHandle *> subtasks;
+        std::map<std::string, ContainerHandle *> subtasks;
     };
 
-    struct MicroserviceHandle {
+    struct ContainerHandle {
         std::string name;
         ModelType model;
         NodeHandle *device_agent;
@@ -141,8 +141,8 @@ private:
         int recv_port;
         Metrics metrics;
         google::protobuf::RepeatedField<int32_t> queue_lengths;
-        std::vector<MicroserviceHandle *> upstreams;
-        std::vector<MicroserviceHandle *> downstreams;
+        std::vector<ContainerHandle *> upstreams;
+        std::vector<ContainerHandle *> downstreams;
     };
 
     class RequestHandler {
@@ -223,11 +223,11 @@ private:
         DeviceState request;
     };
 
-    void StartMicroservice(std::pair<std::string, MicroserviceHandle *> &upstr, int slo,
-                           std::string source = "");
-    void MoveMicroservice(MicroserviceHandle *msvc, int cuda_device, bool to_edge);
-    static void AdjustUpstream(int port, MicroserviceHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
-    void StopMicroservice(std::string name, NodeHandle *device, bool forced = false);
+    void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
+                        std::string source = "");
+    void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge);
+    static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
+    void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 
     static std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
     getModelsByPipelineType(PipelineType type);
@@ -235,7 +235,7 @@ private:
     bool running;
     std::map<std::string, NodeHandle> devices;
     std::map<std::string, TaskHandle> tasks;
-    std::map<std::string, MicroserviceHandle> microservices;
+    std::map<std::string, ContainerHandle> containers;
 
     ControlCommunication::AsyncService service;
     std::unique_ptr<grpc::Server> server;

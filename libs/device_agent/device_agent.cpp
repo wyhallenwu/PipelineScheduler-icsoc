@@ -345,9 +345,9 @@ void DeviceAgent::HandleDeviceRecvRpcs() {
 }
 
 void DeviceAgent::HandleControlRecvRpcs() {
-    new StartMicroserviceRequestHandler(&controller_service, controller_cq.get(), this);
+    new StartContainerRequestHandler(&controller_service, controller_cq.get(), this);
     new UpdateDownstreamRequestHandler(&controller_service, controller_cq.get(), this);
-    new StopMicroserviceRequestHandler(&controller_service, controller_cq.get(), this);
+    new StopContainerRequestHandler(&controller_service, controller_cq.get(), this);
     while (running) {
         void *tag;
         bool ok;
@@ -420,12 +420,12 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
     }
 }
 
-void DeviceAgent::StartMicroserviceRequestHandler::Proceed() {
+void DeviceAgent::StartContainerRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
-        service->RequestStartMicroservice(&ctx, &request, &responder, cq, cq, this);
+        service->RequestStartContainer(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
-        new StartMicroserviceRequestHandler(service, cq, device_agent);
+        new StartContainerRequestHandler(service, cq, device_agent);
         bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.name(),
                                                      request.batch_size(), request.device(), request.slo(),
                                                      request.upstream(), request.downstream());
@@ -442,12 +442,12 @@ void DeviceAgent::StartMicroserviceRequestHandler::Proceed() {
     }
 }
 
-void DeviceAgent::StopMicroserviceRequestHandler::Proceed() {
+void DeviceAgent::StopContainerRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
-        service->RequestStopMicroservice(&ctx, &request, &responder, cq, cq, this);
+        service->RequestStopContainer(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
-        new StopMicroserviceRequestHandler(service, cq, device_agent);
+        new StopContainerRequestHandler(service, cq, device_agent);
         if (device_agent->containers.find(request.name()) == device_agent->containers.end()) {
             status = FINISH;
             responder.Finish(reply, Status::CANCELLED, this);
@@ -467,7 +467,7 @@ void DeviceAgent::UpdateDownstreamRequestHandler::Proceed() {
         status = PROCESS;
         service->RequestUpdateDownstream(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
-        new StopMicroserviceRequestHandler(service, cq, device_agent);
+        new StopContainerRequestHandler(service, cq, device_agent);
         device_agent->UpdateContainerSender(request.name(), request.downstream_name(), request.ip(), request.port());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);

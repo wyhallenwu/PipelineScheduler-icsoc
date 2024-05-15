@@ -252,6 +252,17 @@ void Receiver::HandleRpcs() {
             if (RELOADING) {
                 spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
+                /*void* target;
+                auto test = cv::cuda::GpuMat(1, 1, CV_8UC3);
+                cudaIpcMemHandle_t ipcHandle;
+                cudaIpcGetMemHandle(&ipcHandle, test.data);
+                cudaError_t cudaStatus = cudaIpcOpenMemHandle(&target, ipcHandle, cudaIpcMemLazyEnablePeerAccess);
+                cudaIpcCloseMemHandle(target);
+                test.release();
+                if (cudaStatus != cudaSuccess) {
+                    std::cout << "cudaIpcOpenMemHandle failed: " << cudaStatus << std::endl;
+                    setDevice();
+                }*/
                 RELOADING = false;
                 spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
             }

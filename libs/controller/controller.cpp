@@ -19,7 +19,7 @@ Controller::Controller() {
     running = true;
     devices = std::map<std::string, NodeHandle>();
     tasks = std::map<std::string, TaskHandle>();
-    microservices = std::map<std::string, MicroserviceHandle>();
+    containers = std::map<std::string, ContainerHandle>();
 
     std::string server_address = absl::StrFormat("%s:%d", "localhost", 60001);
     ServerBuilder builder;
@@ -30,8 +30,8 @@ Controller::Controller() {
 }
 
 Controller::~Controller() {
-    for (auto &msvc: microservices) {
-        StopMicroservice(msvc.first, msvc.second.device_agent, true);
+    for (auto &msvc: containers) {
+        StopContainer(msvc.first, msvc.second.device_agent, true);
     }
     for (auto &device: devices) {
         device.second.cq->Shutdown();
@@ -66,10 +66,10 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     auto models = getModelsByPipelineType(t.type);
 
     std::string tmp = t.name;
-    microservices.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, {}, {}}});
-    task->subtasks.insert({tmp, &microservices[tmp]});
+    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, {}, {}}});
+    task->subtasks.insert({tmp, &containers[tmp]});
     task->subtasks[tmp]->recv_port = device->next_free_port++;
-    device->microservices.insert({tmp, task->subtasks[tmp]});
+    device->containers.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
 
     for (const auto &m: models) {
@@ -77,10 +77,10 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
         // TODO: get correct initial batch sizes and cuda devices based on TaskDescription and System State
         int batch_size = 1;
         int cuda_device = 1;
-        microservices.insert({tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, batch_size, cuda_device,
-                                                    -1, device->next_free_port++, {}, {}, {}, {}}});
-        task->subtasks.insert({tmp, &microservices[tmp]});
-        device->microservices.insert({tmp, task->subtasks[tmp]});
+        containers.insert({tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, batch_size, cuda_device,
+                                                 -1, device->next_free_port++, {}, {}, {}, {}}});
+        task->subtasks.insert({tmp, &containers[tmp]});
+        device->containers.insert({tmp, task->subtasks[tmp]});
     }
 
     task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + models[0].first]);
@@ -95,22 +95,22 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
         }
     }
 
-    for (std::pair<std::string, MicroserviceHandle *> msvc: task->subtasks) {
-        StartMicroservice(msvc, task->slo, t.source);
+    for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
+        StartContainer(msvc, task->slo, t.source);
     }
 }
 
 void Controller::UpdateLightMetrics(google::protobuf::RepeatedPtrField<LightMetrics> metrics) {
     for (auto metric: metrics) {
-        microservices[metric.name()].queue_lengths = metric.queue_size();
-        microservices[metric.name()].metrics.requestRate = metric.request_rate();
+        containers[metric.name()].queue_lengths = metric.queue_size();
+        containers[metric.name()].metrics.requestRate = metric.request_rate();
     }
 }
 
 void Controller::UpdateFullMetrics(google::protobuf::RepeatedPtrField<FullMetrics> metrics) {
     for (auto metric: metrics) {
-        microservices[metric.name()].queue_lengths = metric.queue_size();
-        Metrics *m = &microservices[metric.name()].metrics;
+        containers[metric.name()].queue_lengths = metric.queue_size();
+        Metrics *m = &containers[metric.name()].metrics;
         m->requestRate = metric.request_rate();
         m->cpuUsage = metric.cpu_usage();
         m->memUsage = metric.mem_usage();
@@ -191,25 +191,25 @@ void Controller::UpdateDeviseStateHandler::Proceed() {
     }
 }
 
-void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> &msvc, int slo, std::string source) {
-    std::cout << "Starting microservice: " << msvc.first << std::endl;
-    MicroserviceConfig request;
+void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &container, int slo, std::string source) {
+    std::cout << "Starting container: " << container.first << std::endl;
+    ContainerConfig request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
-    request.set_name(msvc.first);
-    request.set_model(msvc.second->model);
-    request.set_batch_size(msvc.second->batch_size);
-    request.set_recv_port(msvc.second->recv_port);
+    request.set_name(container.first);
+    request.set_model(container.second->model);
+    request.set_batch_size(container.second->batch_size);
+    request.set_recv_port(container.second->recv_port);
     request.set_slo(slo);
-    request.set_device(msvc.second->cuda_device);
-    for (auto dwnstr: msvc.second->downstreams) {
+    request.set_device(container.second->cuda_device);
+    for (auto dwnstr: container.second->downstreams) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name(dwnstr->name);
         dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
-        dwn->set_gpu_connection((msvc.second->device_agent == dwnstr->device_agent) &&
-                                (msvc.second->cuda_device == dwnstr->cuda_device));
+        dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
+                                (container.second->cuda_device == dwnstr->cuda_device));
     }
     if (request.downstream_size() == 0) {
         Neighbor *dwn = request.add_downstream();
@@ -218,35 +218,35 @@ void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> 
         dwn->set_class_of_interest(-1);
         dwn->set_gpu_connection(false);
     }
-    if (msvc.second->model == DataSource) {
+    if (container.second->model == DataSource) {
         Neighbor *up = request.add_upstream();
         up->set_name("video_source");
         up->set_ip(source);
         up->set_class_of_interest(-1);
         up->set_gpu_connection(false);
     } else {
-        for (auto upstr: msvc.second->upstreams) {
+        for (auto upstr: container.second->upstreams) {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
             up->set_ip(absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
             up->set_class_of_interest(-2);
-            up->set_gpu_connection((msvc.second->device_agent == upstr->device_agent) &&
-                                           (msvc.second->cuda_device == upstr->cuda_device));
+            up->set_gpu_connection((container.second->device_agent == upstr->device_agent) &&
+                                   (container.second->cuda_device == upstr->cuda_device));
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            msvc.second->device_agent->stub->AsyncStartMicroservice(&context, request, msvc.second->device_agent->cq));
+            container.second->device_agent->stub->AsyncStartContainer(&context, request, container.second->device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
-    GPR_ASSERT(msvc.second->device_agent->cq->Next(&got_tag, &ok));
+    GPR_ASSERT(container.second->device_agent->cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
     if (!status.ok()) {
         std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
     }
 }
 
-void Controller::MoveMicroservice(Controller::MicroserviceHandle *msvc, int cuda_device, bool to_edge) {
+void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge) {
     NodeHandle * old_device = msvc->device_agent;
     NodeHandle * device;
     if (to_edge) {
@@ -256,20 +256,20 @@ void Controller::MoveMicroservice(Controller::MicroserviceHandle *msvc, int cuda
     }
     msvc->device_agent = device;
     msvc->recv_port = device->next_free_port++;
-    device->microservices.insert({msvc->name, msvc});
+    device->containers.insert({msvc->name, msvc});
     msvc->cuda_device = cuda_device;
-    std::pair<std::string, MicroserviceHandle *> pair = {msvc->name, msvc};
-    StartMicroservice(pair, msvc->task->slo, "");
+    std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
+    StartContainer(pair, msvc->task->slo, "");
     for (auto upstr: msvc->upstreams) {
         AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
     }
-    StopMicroservice(msvc->name, old_device);
-    old_device->microservices.erase(msvc->name);
+    StopContainer(msvc->name, old_device);
+    old_device->containers.erase(msvc->name);
 }
 
-void Controller::AdjustUpstream(int port, Controller::MicroserviceHandle *upstr, Controller::NodeHandle *new_device,
+void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr, Controller::NodeHandle *new_device,
                                 const std::string &dwnstr) {
-    MicroserviceLink request;
+    ContainerLink request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
@@ -286,15 +286,15 @@ void Controller::AdjustUpstream(int port, Controller::MicroserviceHandle *upstr,
     GPR_ASSERT(ok);
 }
 
-void Controller::StopMicroservice(std::string name, NodeHandle *device, bool forced) {
-    MicroserviceSignal request;
+void Controller::StopContainer(std::string name, NodeHandle *device, bool forced) {
+    ContainerSignal request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
     request.set_name(name);
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            device->stub->AsyncStopMicroservice(&context, request, microservices[name].device_agent->cq));
+            device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;

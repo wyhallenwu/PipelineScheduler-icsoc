@@ -8,9 +8,9 @@ package controlcommunication;
 
 service ControlCommunication {
   rpc AdvertiseToController(ConnectionConfigs) returns (google.protobuf.Empty) {}
-  rpc StartMicroservice(MicroserviceConfig) returns (google.protobuf.Empty) {}
-  rpc UpdateDownstream(MicroserviceLink) returns (google.protobuf.Empty) {}
-  rpc StopMicroservice(MicroserviceSignal) returns (google.protobuf.Empty) {}
+  rpc StartContainer(ContainerConfig) returns (google.protobuf.Empty) {}
+  rpc UpdateDownstream(ContainerLink) returns (google.protobuf.Empty) {}
+  rpc StopContainer(ContainerSignal) returns (google.protobuf.Empty) {}
   rpc SendDeviceState(DeviceState) returns (google.protobuf.Empty) {}
   rpc SendLightMetrics(LightMetricsList) returns (google.protobuf.Empty) {}
   rpc SendFullMetrics(FullMetricsList) returns (google.protobuf.Empty) {}
@@ -61,7 +61,7 @@ message Neighbor {
   bool gpu_connection = 4;
 }
 
-message MicroserviceConfig {
+message ContainerConfig {
   string name = 1;
   int32 model = 2;
   int32 batch_size = 3;
@@ -72,14 +72,14 @@ message MicroserviceConfig {
   repeated Neighbor downstream = 8;
 }
 
-message MicroserviceLink {
+message ContainerLink {
   string name = 1;
   string downstream_name = 2;
   string ip = 3;
   int32 port = 4;
 }
 
-message MicroserviceSignal {
+message ContainerSignal {
   string name = 1;
   bool forced = 2;
 }
