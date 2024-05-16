@@ -154,7 +154,6 @@ target_include_directories(PipePlusPlusSink PUBLIC
         ${OpenCV_INCLUDE_DIRS}
         ${CUDA_INCLUDE_DIRS}
         ${TensorRT_INCLUDE_DIRS}
-        ${PYTHON_INCLUDE_DIRS}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
 target_link_libraries(PipePlusPlusSink PUBLIC
         data_grpc_proto
@@ -165,7 +164,6 @@ target_link_libraries(PipePlusPlusSink PUBLIC
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
-        ${PYTHON_LIBRARIES}
         misc
         microservice
         communicator
