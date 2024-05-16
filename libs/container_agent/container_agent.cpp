@@ -87,6 +87,17 @@ json loadRunArgs(int argc, char **argv) {
         }
     }
 
+    std::ifstream metricsServerCfgsFile = std::ifstream(containerConfigs.at("cont_metricServerConfigs"));
+    json metricsServerConfigs = json::parse(metricsServerCfgsFile);
+
+    containerConfigs["cont_metricsServerIP"] = metricsServerConfigs.at("metricsServer_ip");
+    containerConfigs["cont_metricsServerPort"] = metricsServerConfigs.at("metricsServer_port");
+    containerConfigs["cont_metricsServerDBName"] = metricsServerConfigs.at("metricsServer_DBName");
+    containerConfigs["cont_metricsServerUser"] = "container_agent";
+    containerConfigs["cont_metricsServerPwd"] = metricsServerConfigs.at("metricsServer_password");
+    containerConfigs["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs.at("metricsServer_scrapeIntervalMilliSec");
+
+
     json finalConfigs;
     finalConfigs["container"] = containerConfigs;
     finalConfigs["profiling"] = profilingConfigs;
@@ -95,6 +106,25 @@ json loadRunArgs(int argc, char **argv) {
 
     return finalConfigs;
 };
+
+void ContainerAgent::connectToMetricsServer() {
+    try {
+        std::string conn_statement = absl::StrFormat(
+            "host=%s port=%d user=%s password=%s dbname=%s",
+            cont_metricsServerConfigs.ip, cont_metricsServerConfigs.port,
+            cont_metricsServerConfigs.user, cont_metricsServerConfigs.password, cont_metricsServerConfigs.DBName
+        );
+        pqxx::connection conn(conn_statement);
+
+        if (conn.is_open()) {
+            spdlog::info("{0:s} connected to database successfully: {1:s}", this->name, conn.dbname());
+        } else {
+            spdlog::error("Metrics Server is not open.");
+        }
+    } catch (const std::exception &e) {
+        std::cerr << e.what() << std::endl;
+    }
+}
 
 std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
     if (!absl::GetFlag(FLAGS_json).has_value()) {
@@ -254,6 +284,16 @@ ContainerAgent::ContainerAgent(const json &configs) {
     }
 
     arrivalRate = 0;
+
+    cont_metricsServerConfigs.ip = containerConfigs["cont_metricsServerIP"];
+    cont_metricsServerConfigs.port = containerConfigs["cont_metricsServerPort"];
+    cont_metricsServerConfigs.DBName = containerConfigs["cont_metricsServerDBName"];
+    cont_metricsServerConfigs.user = containerConfigs["cont_metricsServerUser"];
+    cont_metricsServerConfigs.password = containerConfigs["cont_metricsServerPwd"];
+    cont_metricsServerConfigs.scrapeIntervalMilisec = containerConfigs["cont_metricsScrapeIntervalMillisec"];
+
+    connectToMetricsServer();
+
     int own_port = containerConfigs.at("cont_port");
 
     std::string server_address = absl::StrFormat("%s:%d", "localhost", own_port);

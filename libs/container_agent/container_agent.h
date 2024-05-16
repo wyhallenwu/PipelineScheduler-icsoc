@@ -13,6 +13,7 @@
 #include <google/protobuf/empty.pb.h>
 #include <filesystem>
 #include "receiver.h"
+#include <pqxx/pqxx>
 
 #include "microservice.h"
 #include "sender.h"
@@ -44,6 +45,15 @@ using indevicecommunication::Signal;
 using indevicecommunication::Connection;
 using indevicecommunication::ProcessData;
 using EmptyMessage = google::protobuf::Empty;
+
+struct MetricsServerConfigs {
+    std::string ip = "localhost";
+    uint64_t port = 60004;
+    std::string DBName = "pipeline";
+    std::string user = "container_agent";
+    std::string password = "pipe";
+    uint64_t scrapeIntervalMilisec = 60000;
+};
 
 enum TransferMethod {
     LocalCPU,
@@ -129,6 +139,8 @@ public:
     void profiling(const json &pipeConfigs, const json &profileConfigs);
 
     void loadProfilingConfigs();
+
+    void connectToMetricsServer();
 
 protected:
     uint8_t deviceIndex = -1;
@@ -217,7 +229,7 @@ protected:
     std::string cont_logDir;
     RUNMODE cont_RUNMODE;
     uint8_t cont_deviceIndex;
-    uint64_t cont_metricScrapeIntervalMilisec;
+    MetricsServerConfigs cont_metricsServerConfigs;
 };
 
 #endif //CONTAINER_AGENT_H

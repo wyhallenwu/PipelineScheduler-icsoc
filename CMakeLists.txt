@@ -116,6 +116,10 @@ endif ()
 
 find_package(spdlog REQUIRED)
 
+find_package(PostgreSQL REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBPQXX REQUIRED libpqxx)
+
 # Manually specify the path to the protobufprotocols
 set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
 

@@ -54,6 +54,8 @@ target_include_directories(container_agent
         # Used when installing the library:
         $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
         ${OpenCV_INCLUDE_DIRS}
+        ${PostgreSQL_INCLUDE_DIRS}
+        ${LIBPQXX_INCLUDE_DIRS}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
         PRIVATE
         # Used only when building the library:
@@ -67,6 +69,8 @@ target_link_libraries(container_agent
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
+        ${PostgreSQL_LIBRARIES}
+        ${LIBPQXX_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
         microservice
         communicator

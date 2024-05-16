@@ -294,7 +294,7 @@
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
             }
         ],
-        "cont_metricScrapeIntervalSecond": 60
+        "cont_metricServerConfigs": "../jsons/metricsserver.json"
     },
     "profiling": {
         "profile_minBatch": 16,
