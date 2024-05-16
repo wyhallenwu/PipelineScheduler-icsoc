@@ -5,17 +5,20 @@
 #include <thread>
 #include "microservice.h"
 
-class DataReader : public Microservice {
+class DataReader : public Microservice
+{
 public:
-    //msvc_idealBatchSize is used for the wait time, where 33 equals ~30.3 fps
-    //the link to the upstream microservice is used to specify the file location
+    // msvc_idealBatchSize is used for the wait time, where 33 equals ~30.3 fps
+    // the link to the upstream microservice is used to specify the file location
     DataReader(const json &jsonConfigs);
 
-    ~DataReader() override {
+    ~DataReader() override
+    {
         source.release();
     };
 
-    void dispatchThread() override {
+    void dispatchThread() override
+    {
         std::thread handler(&DataReader::Process, this);
         READY = true;
         handler.detach();
@@ -30,7 +33,8 @@ private:
     cv::VideoCapture source;
     int wait_time_ms;
     int frame_count;
+    // image size
+    int image_size_idx;
 };
 
-
-#endif //PIPEPLUSPLUS_DATA_READER_H
+#endif // PIPEPLUSPLUS_DATA_READER_H

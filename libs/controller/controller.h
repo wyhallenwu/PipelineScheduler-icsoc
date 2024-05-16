@@ -7,29 +7,33 @@
 #include <thread>
 #include "controlcommunication.grpc.pb.h"
 #include <LightGBM/c_api.h>
+#include <vector>
+#include <algorithm>
 
-using grpc::Status;
-using grpc::CompletionQueue;
-using grpc::ClientContext;
-using grpc::ClientAsyncResponseReader;
-using grpc::ServerBuilder;
-using grpc::ServerContext;
-using grpc::ServerCompletionQueue;
-using controlcommunication::ControlCommunication;
 using controlcommunication::ConnectionConfigs;
-using controlcommunication::Neighbor;
 using controlcommunication::ContainerConfig;
 using controlcommunication::ContainerLink;
 using controlcommunication::ContainerInt;
 using controlcommunication::ContainerSignal;
+using controlcommunication::ControlCommunication;
+using controlcommunication::Neighbor;
+using grpc::ClientAsyncResponseReader;
+using grpc::ClientContext;
+using grpc::CompletionQueue;
+using grpc::ServerBuilder;
+using grpc::ServerCompletionQueue;
+using grpc::ServerContext;
+using grpc::Status;
 using EmptyMessage = google::protobuf::Empty;
 
-enum SystemDeviceType {
+enum SystemDeviceType
+{
     Server,
     Edge
 };
 
-enum ModelType {
+enum ModelType
+{
     DataSource,
     Sink,
     Yolov5,
@@ -46,13 +50,15 @@ enum ModelType {
 
 extern std::map<ModelType, std::vector<std::string>> MODEL_INFO;
 
-enum PipelineType {
+enum PipelineType
+{
     Traffic,
     Video_Call,
     Building_Security
 };
 
-struct Metrics {
+struct Metrics
+{
     float requestRate = 0;
     double cpuUsage = 0;
     long memUsage = 0;
@@ -60,8 +66,10 @@ struct Metrics {
     unsigned int gpuMemUsage = 0;
 };
 
-namespace TaskDescription {
-    struct TaskStruct {
+namespace TaskDescription
+{
+    struct TaskStruct
+    {
         std::string name;
         int slo;
         PipelineType type;
@@ -74,7 +82,12 @@ namespace TaskDescription {
     void from_json(const nlohmann::json &j, TaskStruct &val);
 }
 
-class Controller {
+/**
+ * @brief scheduling policy logic
+ *
+ */
+class Controller
+{
 public:
     Controller();
 
@@ -97,26 +110,29 @@ private:
     int InferTimeEstimator(ModelType model, int batch_size);
 
     struct ContainerHandle;
-    struct NodeHandle {
+    struct NodeHandle
+    {
         std::string ip;
         std::shared_ptr<ControlCommunication::Stub> stub;
         CompletionQueue *cq;
         SystemDeviceType type;
-        int num_processors; // number of processing units, 1 for Edge or # GPUs for server
+        int num_processors;                        // number of processing units, 1 for Edge or # GPUs for server
         std::vector<double> processors_utilization; // utilization per pu
-        std::vector<unsigned long> mem_size; // memory size in MB
-        std::vector<double> mem_utilization; // memory utilization per pu
+        std::vector<unsigned long> mem_size;       // memory size in MB
+        std::vector<double> mem_utilization;       // memory utilization per pu
         int next_free_port;
         std::map<std::string, ContainerHandle *> containers;
     };
 
-    struct TaskHandle {
+    struct TaskHandle
+    {
         int slo;
         PipelineType type;
         std::map<std::string, ContainerHandle *> subtasks;
     };
 
-    struct ContainerHandle {
+    struct ContainerHandle
+    {
         std::string name;
         ModelType model;
         NodeHandle *device_agent;
@@ -132,18 +148,22 @@ private:
         std::vector<ContainerHandle *> downstreams;
     };
 
-    class RequestHandler {
+    class RequestHandler
+    {
     public:
         RequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq, Controller *c)
-                : service(service), cq(cq), status(CREATE), controller(c), responder(&ctx) {}
+            : service(service), cq(cq), status(CREATE), controller(c), responder(&ctx) {}
 
         virtual ~RequestHandler() = default;
 
         virtual void Proceed() = 0;
 
     protected:
-        enum CallStatus {
-            CREATE, PROCESS, FINISH
+        enum CallStatus
+        {
+            CREATE,
+            PROCESS,
+            FINISH
         };
         ControlCommunication::AsyncService *service;
         ServerCompletionQueue *cq;
@@ -154,11 +174,15 @@ private:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
-    class DeviseAdvertisementHandler : public RequestHandler {
+
+
+    class DeviseAdvertisementHandler : public RequestHandler
+    {
     public:
         DeviseAdvertisementHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                    Controller *c)
-                : RequestHandler(service, cq, c) {
+            : RequestHandler(service, cq, c)
+        {
             Proceed();
         }
 
@@ -200,5 +224,112 @@ private:
     std::unique_ptr<ServerCompletionQueue> cq;
 };
 
+// ========================================================== added ================================================================
 
-#endif //PIPEPLUSPLUS_CONTROLLER_H
+/*
+Jellyfish controller implementation. By Yuheng.
+
+Compared with the original jellyfish paper, we only consider the workload distribution part which means
+the following code implement 1.data adaptation, 2.client-DNN mapping 3. dynamic batching
+*/
+
+/**
+ * @brief jellyfish scheduler implementation
+ *
+ */
+class JellyfishScheduler
+{
+    // goal: (1) client-dnn mapping (2) interact with clients
+    // steps:
+    // 1.take the acc-latency profiles and client info
+    // 2. periodically update the client-dnn mapping, batch size for each worker and the input size of each client
+    // 3. notify the client with corresponding input size, distribute the mapping and batch size for workers
+    // info exchange:
+    // client: (1) inference request rate (2) estimated network bandwidth (3) SLO
+    // server: (1) input size
+};
+
+/**
+ * @brief jellyfish dispatcher implementation
+ *
+ */
+class JellyfishDispatcher
+{
+    // goal: maintain worker pool for model deployment
+    // steps:
+    // 1. fetch the client-dnn mapping from scheduler
+    // 2. redirect requests to the workers
+};
+
+/**
+ * @brief jellyfish scheduling logic: composed of scheduler and dispatcher
+ *
+ */
+class JellyfishController
+{
+    // compose scheduler and dispatcher
+};
+
+/**
+ * @brief comparison of the key of ModelProfiles
+ *
+ */
+struct ModelSetCompare
+{
+    bool operator()(const std::tuple<std::string, float> &lhs, const std::tuple<std::string, float> &rhs) const
+    {
+        return std::get<1>(lhs) < std::get<1>(rhs);
+    }
+};
+
+struct ModelInfo
+{
+    int batch_size;
+    float inferent_latency;
+    int throughput;
+};
+
+class ModelProfiles
+{
+public:
+    // key: (model type, accuracy) value: (model_info)
+    std::map<std::tuple<std::string, float>, std::vector<ModelInfo>, ModelSetCompare>
+        infos;
+
+    void add(std::string model_type, float accuracy, int batch_size, float inference_latency, int throughput);
+};
+
+struct ClientInfo
+{
+    std::string ip;
+    float budget;
+    // std::tuple<int, int> input_size;
+    int req_rate;
+
+    bool operator==(const ClientInfo &other) const
+    {
+        return ip == other.ip &&
+               budget == other.budget &&
+               req_rate == other.req_rate;
+    }
+};
+
+class ClientProfiles
+{
+public:
+    std::vector<ClientInfo> infos;
+
+    void sortBudgetDescending(std::vector<ClientInfo> &clients);
+    void add(const std::string &ip, float budget, int req_rate);
+};
+
+std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>> mapClient(ClientProfiles client_profile, ModelProfiles model_profiles);
+std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models, std::vector<ClientInfo> &clients);
+int check_and_assign(std::vector<ModelInfo> &model, std::vector<ClientInfo> &selected_clients);
+
+// ================ helper functions ====================
+
+int findMaxBatchSize(const std::vector<ModelInfo> &models, ClientInfo &client);
+void differenceClients(std::vector<ClientInfo> &src, const std::vector<ClientInfo> &diff);
+
+#endif // PIPEPLUSPLUS_CONTROLLER_H
