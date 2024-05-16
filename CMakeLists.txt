@@ -86,9 +86,7 @@ find_package(CUDAToolkit REQUIRED)
 # find_package(LightGBM REQUIRED)
 
 # Manually specify the path to Python
-set(PYTHON_INCLUDE_DIRS "/usr/include/python3.8")
-set(PYTHON_LIBRARIES "/usr/lib/python3.8")
-include_directories(${PYTHON_INCLUDE_DIRS})
+find_package(PythonLibs 3 REQUIRED)
 
 # Find Protobuf installation
 option(protobuf_MODULE_COMPATIBLE TRUE)
@@ -152,7 +150,6 @@ target_include_directories(PipePlusPlusSink PUBLIC
         ${OpenCV_INCLUDE_DIRS}
         ${CUDA_INCLUDE_DIRS}
         ${TensorRT_INCLUDE_DIRS}
-        ${PYTHON_INCLUDE_DIRS}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
 target_link_libraries(PipePlusPlusSink PUBLIC
         data_grpc_proto
@@ -163,7 +160,6 @@ target_link_libraries(PipePlusPlusSink PUBLIC
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}
-        ${PYTHON_LIBRARIES}
         misc
         microservice
         communicator

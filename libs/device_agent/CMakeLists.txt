@@ -78,10 +78,9 @@ target_include_directories(device_agent
             $<BUILD_INTERFACE:${device_agent_SOURCE_DIR}/>
             # Used when installing the library:
             $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
+            ${PYTHON_INCLUDE_DIRS}
             $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
         PRIVATE
-            # Used only when building the library:
-            ${PYTHON_INCLUDE_DIRS}
             src)
 
 target_link_libraries(device_agent
