@@ -223,18 +223,49 @@ void DeviceAgent::HandleControlRecvRpcs() {
     }
 }
 
+// Function to execute a shell command and capture its output
+std::string exec(const char* cmd) {
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return result;
+}
+
+// Function to get the container PID of a process inside the container
+int getContainerProcessPid(const std::string& container_name_or_id, const std::string& process_name) {
+    std::string cmd = "docker inspect --format '{{.State.Pid}}' " + container_name_or_id;
+    std::string container_pid = exec(cmd.c_str());
+
+    cmd = "nsenter --target " + container_pid + " --pid pgrep -f " + process_name;
+    std::string process_pid_str = exec(cmd.c_str());
+
+    return std::stoi(process_pid_str);
+}
+
 void DeviceAgent::ReportStartRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
         service->RequestReportMsvcStart(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new ReportStartRequestHandler(service, cq, device_agent);
-        std::cout << "Received start report from " << request.msvc_name() << " with pid: " << request.pid() << std::endl;
+        std::cout << "Received start report from " << request.msvc_name() << " with pid: " << request.pid() <<std::endl;
 
-        device_agent->containers[request.msvc_name()].pid = request.pid();
+        // Get the correct PID of the process running inside the container
+        std::string container_name_or_id = request.msvc_name();
+        std::string process_name = "your_process_name"; // Replace with the actual process name inside the container
+        int container_pid = getContainerProcessPid(container_name_or_id, process_name);
+
+        device_agent->containers[request.msvc_name()].pid = container_pid;
 
 
-        reply.set_pid(request.pid());
+        reply.set_pid(container_pid);
+
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -322,4 +353,32 @@ void DeviceAgent::UpdateBatchsizeRequestHandler::Proceed() {
         GPR_ASSERT(status == FINISH);
         delete this;
     }
+}
+
+int main(int argc, char **argv) {
+    absl::ParseCommandLine(argc, argv);
+
+    std::string name = absl::GetFlag(FLAGS_name);
+    std::string type = absl::GetFlag(FLAGS_deviceType);
+    std::string controller_url = absl::GetFlag(FLAGS_controllerUrl);
+    DeviceType deviceType;
+    if (type == "server")
+        deviceType = DeviceType::Server;
+    else if (type == "edge")
+        deviceType = DeviceType::Edge;
+    else {
+        std::cerr << "Invalid device type" << std::endl;
+        exit(1);
+    }
+
+    DeviceAgent *agent = new DeviceAgent(controller_url, name, deviceType);
+    while (agent->isRunning()) {
+        std::string command;
+        std::cin >> command;
+        if (command == "exit") {
+            break;
+        }
+    }
+    delete agent;
+    return 0;
 }

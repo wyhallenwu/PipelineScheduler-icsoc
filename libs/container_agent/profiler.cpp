@@ -162,17 +162,17 @@ uint64_t Profiler::getGpuMemory(int device_count) {
     return totalMemory;
 }
 
-int main() {
-    std::cout << "Enter PID of process to monitor: ";
-    int pid;
-    std::cin >> pid;
-    Profiler *profiler = new Profiler({pid});
+// int main() {
+//     std::cout << "Enter PID of process to monitor: ";
+//     int pid;
+//     std::cin >> pid;
+//     Profiler *profiler = new Profiler({pid});
     
-    while (true) {
-        Profiler::sysStats stats = profiler->reportAtRuntime(pid);
-        std::cout << stats.cpuUsage << " | " << stats.memoryUsage << " | " << stats.gpuUtilization << " | " << stats.gpuMemoryUsage << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    }
+//     while (true) {
+//         Profiler::sysStats stats = profiler->reportAtRuntime(pid);
+//         std::cout << stats.cpuUsage << " | " << stats.memoryUsage << " | " << stats.gpuUtilization << " | " << stats.gpuMemoryUsage << std::endl;
+//         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//     }
 
-    return 0;
-}
+//     return 0;
+// }
