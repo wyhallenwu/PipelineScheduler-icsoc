@@ -275,13 +275,13 @@
         "cont_metricScrapeIntervalSecond": 60
     },
     "profiling": {
-        "profile_minBatch": 20,
-        "profile_maxBatch": 20,
+        "profile_minBatch": 16,
+        "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,
         "profile_templateModelPath": "../models/arcface_dynamic_3090_fp32_[batch]_1.engine",
         "profile_inputRandomizeScheme": 0,
-        "profile_numWarmUpBatches": 0,
-        "profile_numProfileBatches": 20
+        "profile_numWarmUpBatches": 10,
+        "profile_numProfileBatches": 100
     }
 }

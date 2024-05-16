@@ -84,8 +84,12 @@ private:
         std::string command;
         std::string container_name = name;
         std::replace(container_name.begin(), container_name.end(), ':', '-');
-        command = absl::StrFormat(
-                R"(docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/src/ -d --rm --runtime nvidia --gpus all --name %s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='/src/logs')",
+        command = "docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/app/data/  "
+                  "-v /ssd0/tung/PipePlusPlus/logs/:/app/logs/ -v /ssd0/tung/PipePlusPlus/models/:/app/models/"
+                  "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
+                  "-d --rm --runtime nvidia --gpus all --name " +
+                absl::StrFormat(
+                R"(%s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs')",
                 container_name, executable, name, start_string, device, port);
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -98,8 +102,6 @@ private:
                                const int &port);
 
     void Ready(const std::string &name, const std::string &ip, DeviceType type);
-
-    void ReportDeviceState();
 
     void ReportLightMetrics();
 

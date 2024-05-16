@@ -251,27 +251,6 @@ void DeviceAgent::Ready(const std::string &name, const std::string &ip, DeviceTy
     }
 }
 
-void DeviceAgent::ReportDeviceState() {
-    DeviceState request;
-    EmptyMessage reply;
-    ClientContext context;
-    Status status;
-
-    request.set_name(name);
-    for (int i = 0; i < processing_units; i++) {
-        request.add_pu_usage(utilization[i]);
-        request.add_mem_usage(mem_utilization[i]);
-    }
-
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            controller_stub->AsyncSendDeviceState(&context, request, controller_sending_cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(controller_sending_cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
-}
-
 void DeviceAgent::ReportLightMetrics() {
     LightMetricsList request;
     EmptyMessage reply;
@@ -381,9 +360,6 @@ void DeviceAgent::MonitorDeviceStatus() {
                 }
             }
             ReportLightMetrics();
-        }
-        if (i % 2 == 0) {
-            ReportDeviceState();
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }

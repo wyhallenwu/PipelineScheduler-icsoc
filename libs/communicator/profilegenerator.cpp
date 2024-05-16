@@ -62,7 +62,7 @@ void ProfileGenerator::profileDataGenerator() {
                 batchNum = 1;
                 msvc_inReqCount = 0;
                 keepProfiling = 1;
-                spdlog::trace("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
                 READY = true;
                 RELOADING = false;
             }

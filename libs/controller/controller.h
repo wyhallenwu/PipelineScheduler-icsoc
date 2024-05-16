@@ -210,20 +210,6 @@ private:
         ConnectionConfigs request;
     };
 
-    class UpdateDeviseStateHandler : public RequestHandler {
-    public:
-        UpdateDeviseStateHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                   Controller *c)
-                : RequestHandler(service, cq, c) {
-            Proceed();
-        }
-
-        void Proceed() final;
-
-    private:
-        DeviceState request;
-    };
-
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
                         std::string source = "");
     void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge);

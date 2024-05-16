@@ -45,7 +45,6 @@ Controller::~Controller() {
 
 void Controller::HandleRecvRpcs() {
     new DeviseAdvertisementHandler(&service, cq.get(), this);
-    new UpdateDeviseStateHandler(&service, cq.get(), this);
     new LightMetricsRequestHandler(&service, cq.get(), this);
     new FullMetricsRequestHandler(&service, cq.get(), this);
     while (running) {
@@ -164,24 +163,6 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
                                      std::vector<double>(request.processors(), 0.0), 55001, {}}});
-        status = FINISH;
-        responder.Finish(reply, Status::OK, this);
-    } else {
-        GPR_ASSERT(status == FINISH);
-        delete this;
-    }
-}
-
-void Controller::UpdateDeviseStateHandler::Proceed() {
-    if (status == CREATE) {
-        status = PROCESS;
-        service->RequestSendDeviceState(&ctx, &request, &responder, cq, cq, this);
-    } else if (status == PROCESS) {
-        new UpdateDeviseStateHandler(service, cq, controller);
-        controller->devices[request.name()].processors_utilizaion.clear();
-        for (auto &usage: request.pu_usage()) {
-            controller->devices[request.name()].processors_utilizaion.push_back(usage);
-        }
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

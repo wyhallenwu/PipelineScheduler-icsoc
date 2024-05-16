@@ -12,7 +12,6 @@ service ControlCommunication {
   rpc UpdateDownstream(ContainerLink) returns (google.protobuf.Empty) {}
   rpc UpdateBatchSize(ContainerInt) returns (google.protobuf.Empty) {}
   rpc StopContainer(ContainerSignal) returns (google.protobuf.Empty) {}
-  rpc SendDeviceState(DeviceState) returns (google.protobuf.Empty) {}
   rpc SendLightMetrics(LightMetricsList) returns (google.protobuf.Empty) {}
   rpc SendFullMetrics(FullMetricsList) returns (google.protobuf.Empty) {}
 }
@@ -35,6 +34,7 @@ message LightMetrics {
   string name = 1;
   repeated int32 queue_size = 2;
   float request_rate = 3;
+  DeviceState device_state = 4;
 }
 
 message LightMetricsList {
@@ -49,6 +49,7 @@ message FullMetrics {
   int64 mem_usage = 5;
   uint32 gpu_usage = 6;
   uint32 gpu_mem_usage = 7;
+  DeviceState device_state = 8;
 }
 
 message FullMetricsList {
