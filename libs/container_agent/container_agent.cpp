@@ -117,7 +117,7 @@ void ContainerAgent::connectToMetricsServer() {
         pqxx::connection conn(conn_statement);
 
         if (conn.is_open()) {
-            spdlog::info("{0:s} connected to database successfully: {1:s}", this->name, conn.dbname());
+            spdlog::info("{0:s} connected to database successfully: {1:s}", this->cont_name, conn.dbname());
         } else {
             spdlog::error("Metrics Server is not open.");
         }
@@ -220,13 +220,13 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
             
             // Making sure all the microservices are paused before reloading and reallocating resources
             // this is essential to avoiding runtime memory errors
-            for (uint8_t i = 0; i < msvcs.size(); i++) {
-                msvcs[i]->pauseThread();
+            for (uint8_t i = 0; i < cont_msvcsList.size(); i++) {
+                cont_msvcsList[i]->pauseThread();
             }
             waitPause();
 
             // Reload the configurations and dynamic allocation based on the new configurations
-            for (uint8_t i = 0; i < msvcs.size(); i++) {
+            for (uint8_t i = 0; i < cont_msvcsList.size(); i++) {
                 pipelineConfigs[i].at("msvc_idealBatchSize") = batch;
                 pipelineConfigs[i].at("msvc_containerLogPath") = profileDirPath;
                 pipelineConfigs[i].at("msvc_deviceIndex") = cont_deviceIndex;
@@ -235,8 +235,8 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
                 if (i == 2) {
                     pipelineConfigs[i].at("path") = replaceSubstring(templateModelPath, "[batch]", std::to_string(batch));
                 }
-                msvcs[i]->loadConfigs(pipelineConfigs[i], false);
-                msvcs[i]->setRELOAD();
+                cont_msvcsList[i]->loadConfigs(pipelineConfigs[i], false);
+                cont_msvcsList[i]->setRELOAD();
             }
 
         }
@@ -247,7 +247,7 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
 
         while (true) {
             spdlog::info("{0:s} waiting for profiling of model with a max batch of {1:d}.", __func__, batch);
-            if (msvcs[0]->checkPause()) {
+            if (cont_msvcsList[0]->checkPause()) {
                 break;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -269,13 +269,13 @@ ContainerAgent::ContainerAgent(const json &configs) {
     //std::cout << containerConfigs.dump(4) << std::endl;
 
     cont_deviceIndex = containerConfigs["cont_device"];
-    name = containerConfigs["cont_name"];
+    cont_name = containerConfigs["cont_name"];
 
     cont_RUNMODE = containerConfigs["cont_RUNMODE"];
 
     if (cont_RUNMODE == RUNMODE::PROFILING) {
         // Create the logDir for this container
-        cont_logDir = (std::string)containerConfigs.at("cont_logPath") + "/" + name;
+        cont_logDir = (std::string)containerConfigs.at("cont_logPath") + "/" + cont_name;
         std::filesystem::create_directory(
             std::filesystem::path(cont_logDir)
         );
@@ -315,7 +315,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
 void ContainerAgent::ReportStart() {
     ProcessData request;
-    request.set_msvc_name(name);
+    request.set_msvc_name(cont_name);
     request.set_pid(getpid());
     EmptyMessage reply;
     ClientContext context;
@@ -331,9 +331,9 @@ void ContainerAgent::ReportStart() {
 
 void ContainerAgent::SendState() {
     State request;
-    request.set_name(name);
+    request.set_name(cont_name);
     request.set_arrival_rate(arrivalRate);
-    for (auto msvc: msvcs) {
+    for (auto msvc: cont_msvcsList) {
         request.add_queue_size(msvc->GetOutQueueSize(0));
         spdlog::info("{0:s} Length of queue is {1:d}", msvc->msvc_name, msvc->GetOutQueueSize(0));
     }
@@ -351,8 +351,8 @@ void ContainerAgent::SendState() {
 
 void ContainerAgent::HandleRecvRpcs() {
     new StopRequestHandler(&service, server_cq.get(), &run);
-    new UpdateSenderRequestHandler(&service, server_cq.get(), &msvcs);
-    new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &msvcs);
+    new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
+    new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     void *tag;
     bool ok;
     while (run) {
@@ -444,7 +444,7 @@ void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
  * @return false 
  */
 bool ContainerAgent::checkPause() {
-    for (auto msvc : msvcs) {
+    for (auto msvc : cont_msvcsList) {
         if (msvc->checkPause()) {
             return false;
         }
@@ -461,7 +461,7 @@ void ContainerAgent::waitPause() {
     while (true) {
         paused = true;
         spdlog::trace("{0:s} waiting for all microservices to be paused.", __func__);
-        for (auto msvc : msvcs) {
+        for (auto msvc : cont_msvcsList) {
             if (!msvc->checkPause()) {
                 paused = false;
                 break;
@@ -482,7 +482,7 @@ void ContainerAgent::waitPause() {
  * @return false 
  */
 bool ContainerAgent::checkReady() {
-    for (auto msvc : msvcs) {
+    for (auto msvc : cont_msvcsList) {
         if (!msvc->checkReady()) {
             return true;
         }
@@ -502,7 +502,7 @@ void ContainerAgent::waitReady() {
         ready = true;
         
         spdlog::info("{0:s} waiting for all microservices to be ready.", __func__);
-        for (auto msvc : msvcs) {
+        for (auto msvc : cont_msvcsList) {
             if (!msvc->checkReady()) {
                 ready = false;
                 break;

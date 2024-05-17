@@ -87,7 +87,7 @@ public:
     ContainerAgent(const json &configs);
 
     ~ContainerAgent() {
-        for (auto msvc: msvcs) {
+        for (auto msvc: cont_msvcsList) {
             delete msvc;
         }
         server->Shutdown();
@@ -102,14 +102,14 @@ public:
     void SendState();
 
     void START() {
-        for (auto msvc: msvcs) {
+        for (auto msvc: cont_msvcsList) {
             msvc->unpauseThread();
         }
         spdlog::info("=========================================== STARTS ===========================================");
     }
 
     void PROFILING_START(BatchSizeType batch) {
-        for (auto msvc: msvcs) {
+        for (auto msvc: cont_msvcsList) {
             msvc->unpauseThread();
         }
 
@@ -127,11 +127,11 @@ public:
     bool checkPause();
 
     void addMicroservice(std::vector<Microservice *> msvcs) {
-        this->msvcs = msvcs;
+        this->cont_msvcsList = msvcs;
     }
 
     void dispatchMicroservices() {
-        for (auto msvc: msvcs) {
+        for (auto msvc: cont_msvcsList) {
             msvc->dispatchThread();
         }
     }
@@ -216,8 +216,8 @@ protected:
 
     void HandleRecvRpcs();
 
-    std::string name;
-    std::vector<Microservice *> msvcs;
+    std::string cont_name;
+    std::vector<Microservice *> cont_msvcsList;
     float arrivalRate;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
