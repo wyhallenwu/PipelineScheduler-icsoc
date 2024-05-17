@@ -277,7 +277,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
     if (cont_RUNMODE == RUNMODE::PROFILING) {
         // Create the logDir for this container
-        cont_logDir = (std::string)containerConfigs.at("cont_logPath") + "/" + cont_name;
+        cont_logDir = (std::string)containerConfigs.at("cont_logPath");
         std::filesystem::create_directory(
             std::filesystem::path(cont_logDir)
         );

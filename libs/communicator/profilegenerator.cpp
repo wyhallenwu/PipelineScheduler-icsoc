@@ -100,19 +100,19 @@ void ProfileGenerator::profileDataGenerator() {
                     img
                 };
                 requestData.emplace_back(data);
-                if (batchNum <= numWarmUpBatches) {
-                    // Empty string for the `requestPath` field during warmup
-                    requestPath = "";
-                } else {
-                    // For bookkeeping, we add a certain pattern into the `requestPath` field.
-                    // [batchSize, batchNum, i]
-                    requestPath = std::to_string(msvc_idealBatchSize) + "," + std::to_string(batchSize) + "," + std::to_string(batchNum) + "," + std::to_string(i);
+                // For bookkeeping, we add a certain pattern into the `requestPath` field.
+                // [batchSize, batchNum, i]
+                requestPath = std::to_string(msvc_idealBatchSize) + "," + std::to_string(batchSize) + "," + std::to_string(batchNum) + "," + std::to_string(i);
 
-                    // The very last batch of this profiling session is marked with "END" in the `requestPath` field.
-                    if ((batchNum == (numProfileBatches + numWarmUpBatches)) && (i == msvc_idealBatchSize)) {
-                        requestPath = requestPath + "BATCH_ENDS";
-                    }
+                // The very last batch of this profiling session is marked with "END" in the `requestPath` field.
+                if ((batchNum == (numProfileBatches + numWarmUpBatches)) && (i == msvc_idealBatchSize)) {
+                    requestPath = requestPath + "BATCH_ENDS";
                 }
+
+                if (batchNum <= numWarmUpBatches) {
+                    requestPath += "WARMUP";
+                }
+                
                 request = {
                     {{std::chrono::_V2::system_clock::now()}}, // FIRST_TIMESTAMP
                     {9999},
