@@ -17,11 +17,11 @@ DataSourceAgent::DataSourceAgent(
 ) : ContainerAgent(configs) {
 
     json pipeConfigs = configs["container"]["cont_pipeline"];
-    msvcs.push_back(new DataReader(pipeConfigs[0]));
-    msvcs.push_back(new RemoteCPUSender(pipeConfigs[1]));
-    msvcs[1]->SetInQueue(msvcs[0]->GetOutQueue());
+    cont_msvcsList.push_back(new DataReader(pipeConfigs[0]));
+    cont_msvcsList.push_back(new RemoteCPUSender(pipeConfigs[1]));
+    cont_msvcsList[1]->SetInQueue(cont_msvcsList[0]->GetOutQueue());
 
-    for (auto &msvc : msvcs) {
+    for (auto &msvc : cont_msvcsList) {
         msvc->dispatchThread();
         msvc->PAUSE_THREADS = false;
     }

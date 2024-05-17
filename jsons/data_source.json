@@ -1,6 +1,7 @@
 {
-    "pipeline_name": "every",
     "container": {
+        "cont_pipeName": "every",
+        "cont_taskName": "data_source",
         "cont_pipeline": [
             {
                 "msvc_name": "::data_reader",
@@ -13,7 +14,7 @@
                         "nb_link": [
                             ""
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "::sender",
                         "nb_expectedShape": [
                             [
@@ -38,9 +39,9 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 4,
                         "nb_link": [
-                            "/ssd0/datasets/pipeline-scheduler/traffic/traffic1.mp4"
+                            "/src/data/preview/batch_test.mp4"
                         ],
-                        "nb_maxQueueSize": 0,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "video_source",
                         "nb_expectedShape": [
                             [
@@ -64,7 +65,7 @@
                         "nb_link": [
                             "localhost:55011"
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",
                         "nb_expectedShape": [
                             [
@@ -91,7 +92,7 @@
                         "nb_link": [
                             ""
                         ],
-                        "nb_maxQueueSize": 10,
+                        "nb_maxQueueSize": 100,
                         "nb_name": "::data_reader",
                         "nb_expectedShape": [
                             [

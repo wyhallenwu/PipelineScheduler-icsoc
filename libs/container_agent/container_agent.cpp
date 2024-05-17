@@ -87,6 +87,17 @@ json loadRunArgs(int argc, char **argv) {
         }
     }
 
+    std::ifstream metricsServerCfgsFile = std::ifstream(containerConfigs.at("cont_metricServerConfigs"));
+    json metricsServerConfigs = json::parse(metricsServerCfgsFile);
+
+    containerConfigs["cont_metricsServerIP"] = metricsServerConfigs.at("metricsServer_ip");
+    containerConfigs["cont_metricsServerPort"] = metricsServerConfigs.at("metricsServer_port");
+    containerConfigs["cont_metricsServerDBName"] = metricsServerConfigs.at("metricsServer_DBName");
+    containerConfigs["cont_metricsServerUser"] = "container_agent";
+    containerConfigs["cont_metricsServerPwd"] = metricsServerConfigs.at("metricsServer_password");
+    containerConfigs["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs.at("metricsServer_scrapeIntervalMilliSec");
+
+
     json finalConfigs;
     finalConfigs["container"] = containerConfigs;
     finalConfigs["profiling"] = profilingConfigs;
@@ -95,6 +106,25 @@ json loadRunArgs(int argc, char **argv) {
 
     return finalConfigs;
 };
+
+void ContainerAgent::connectToMetricsServer() {
+    try {
+        std::string conn_statement = absl::StrFormat(
+            "host=%s port=%d user=%s password=%s dbname=%s",
+            cont_metricsServerConfigs.ip, cont_metricsServerConfigs.port,
+            cont_metricsServerConfigs.user, cont_metricsServerConfigs.password, cont_metricsServerConfigs.DBName
+        );
+        pqxx::connection conn(conn_statement);
+
+        if (conn.is_open()) {
+            spdlog::info("{0:s} connected to database successfully: {1:s}", this->cont_name, conn.dbname());
+        } else {
+            spdlog::error("Metrics Server is not open.");
+        }
+    } catch (const std::exception &e) {
+        std::cerr << e.what() << std::endl;
+    }
+}
 
 std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
     if (!absl::GetFlag(FLAGS_json).has_value()) {
@@ -122,7 +152,7 @@ std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
 std::tuple<json, json> msvcconfigs::loadJson() {
     json containerConfigs, profilingConfigs;
     if (!absl::GetFlag(FLAGS_json).has_value()) {
-        spdlog::trace("{0:s} attempts to load Json Configs from command line.", __func__);
+        spdlog::trace("{0:s} attempts to load Json Configs from file.", __func__);
         if (absl::GetFlag(FLAGS_json_path).has_value()) {
             std::ifstream file(absl::GetFlag(FLAGS_json_path).value());
             auto json_file = json::parse(file);
@@ -134,19 +164,18 @@ std::tuple<json, json> msvcconfigs::loadJson() {
             } catch (json::parse_error &e) {
                 spdlog::error("{0:s} Error parsing json file.", __func__);
             }
-            spdlog::trace("{0:s} finished loading Json Configs from command line.", __func__);
+            spdlog::trace("{0:s} finished loading Json Configs from file.", __func__);
             return std::make_tuple(containerConfigs, profilingConfigs);
         } else {
             spdlog::error("No Configurations found. Please provide configuration either as json or file.");
             exit(1);
         }
     } else {
-        spdlog::trace("{0:s} attempts to load Json Configs from file.", __func__);
-        if (absl::GetFlag(FLAGS_json).has_value()) {
-            spdlog::error("No Configurations found. Please provide configuration either as json or file.");
+        spdlog::trace("{0:s} attempts to load Json Configs from commandline.", __func__);
+        if (absl::GetFlag(FLAGS_json_path).has_value()) {
+            spdlog::error("Two Configurations found. Please provide configuration either as json or file.");
             exit(1);
         } else {
-            spdlog::trace("{0:s} finished loading Json Configs from file.", __func__);
             auto json_file = json::parse(absl::GetFlag(FLAGS_json).value());
             containerConfigs = json_file.at("container");
             try {
@@ -178,36 +207,36 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
             // checkCudaErrorCode(cudaSetDevice(cont_deviceIndex), __func__);
             // cont_deviceIndex = ++cont_deviceIndex % 4;
 
-            std::string profileDirPath, name;
-            
-            name = removeSubstring(templateModelPath, ".engine");
-            name = replaceSubstring(name, "[batch]", std::to_string(batch));
-            name = splitString(name, '/').back();
+            std::string profileDirPath, cont_name;
 
-            profileDirPath = cont_logDir + "/" + name;
+            cont_name = removeSubstring(templateModelPath, ".engine");
+            cont_name = replaceSubstring(cont_name, "[batch]", std::to_string(batch));
+            cont_name = splitString(cont_name, '/').back();
+
+            profileDirPath = cont_logDir + "/" + cont_name;
             std::filesystem::create_directory(
                 std::filesystem::path(profileDirPath)
             );
             
             // Making sure all the microservices are paused before reloading and reallocating resources
             // this is essential to avoiding runtime memory errors
-            for (uint8_t i = 0; i < msvcs.size(); i++) {
-                msvcs[i]->pauseThread();
+            for (uint8_t i = 0; i < cont_msvcsList.size(); i++) {
+                cont_msvcsList[i]->pauseThread();
             }
             waitPause();
 
             // Reload the configurations and dynamic allocation based on the new configurations
-            for (uint8_t i = 0; i < msvcs.size(); i++) {
+            for (uint8_t i = 0; i < cont_msvcsList.size(); i++) {
                 pipelineConfigs[i].at("msvc_idealBatchSize") = batch;
                 pipelineConfigs[i].at("msvc_containerLogPath") = profileDirPath;
                 pipelineConfigs[i].at("msvc_deviceIndex") = cont_deviceIndex;
-                pipelineConfigs[i].at("msvc_contName") = name;
+                pipelineConfigs[i].at("msvc_contName") = cont_name;
                 // Set the path to the engine
                 if (i == 2) {
                     pipelineConfigs[i].at("path") = replaceSubstring(templateModelPath, "[batch]", std::to_string(batch));
                 }
-                msvcs[i]->loadConfigs(pipelineConfigs[i], false);
-                msvcs[i]->setRELOAD();
+                cont_msvcsList[i]->loadConfigs(pipelineConfigs[i], false);
+                cont_msvcsList[i]->setRELOAD();
             }
 
         }
@@ -218,7 +247,7 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
 
         while (true) {
             spdlog::info("{0:s} waiting for profiling of model with a max batch of {1:d}.", __func__, batch);
-            if (msvcs[0]->checkPause()) {
+            if (cont_msvcsList[0]->checkPause()) {
                 break;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -237,16 +266,18 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
 ContainerAgent::ContainerAgent(const json &configs) {
 
     json containerConfigs = configs["container"];
-    std::cout << containerConfigs.dump(4) << std::endl;
+    //std::cout << containerConfigs.dump(4) << std::endl;
 
     cont_deviceIndex = containerConfigs["cont_device"];
-    name = containerConfigs["cont_name"];
+    cont_name = containerConfigs["cont_name"];
+    cont_pipeName = containerConfigs["cont_pipeName"];
+    cont_taskName = containerConfigs["cont_taskName"];
 
     cont_RUNMODE = containerConfigs["cont_RUNMODE"];
 
     if (cont_RUNMODE == RUNMODE::PROFILING) {
         // Create the logDir for this container
-        cont_logDir = (std::string)containerConfigs.at("cont_logPath") + "/" + name;
+        cont_logDir = (std::string)containerConfigs.at("cont_logPath");
         std::filesystem::create_directory(
             std::filesystem::path(cont_logDir)
         );
@@ -255,6 +286,16 @@ ContainerAgent::ContainerAgent(const json &configs) {
     }
 
     arrivalRate = 0;
+
+    cont_metricsServerConfigs.ip = containerConfigs["cont_metricsServerIP"];
+    cont_metricsServerConfigs.port = containerConfigs["cont_metricsServerPort"];
+    cont_metricsServerConfigs.DBName = containerConfigs["cont_metricsServerDBName"];
+    cont_metricsServerConfigs.user = containerConfigs["cont_metricsServerUser"];
+    cont_metricsServerConfigs.password = containerConfigs["cont_metricsServerPwd"];
+    cont_metricsServerConfigs.scrapeIntervalMilisec = containerConfigs["cont_metricsScrapeIntervalMillisec"];
+
+    connectToMetricsServer();
+
     int own_port = containerConfigs.at("cont_port");
 
     std::string server_address = absl::StrFormat("%s:%d", "localhost", own_port);
@@ -276,7 +317,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
 void ContainerAgent::ReportStart() {
     ProcessData request;
-    request.set_msvc_name(name);
+    request.set_msvc_name(cont_name);
     request.set_pid(getpid());
     EmptyMessage reply;
     ClientContext context;
@@ -292,9 +333,9 @@ void ContainerAgent::ReportStart() {
 
 void ContainerAgent::SendState() {
     State request;
-    request.set_name(name);
+    request.set_name(cont_name);
     request.set_arrival_rate(arrivalRate);
-    for (auto msvc: msvcs) {
+    for (auto msvc: cont_msvcsList) {
         request.add_queue_size(msvc->GetOutQueueSize(0));
         spdlog::info("{0:s} Length of queue is {1:d}", msvc->msvc_name, msvc->GetOutQueueSize(0));
     }
@@ -312,6 +353,8 @@ void ContainerAgent::SendState() {
 
 void ContainerAgent::HandleRecvRpcs() {
     new StopRequestHandler(&service, server_cq.get(), &run);
+    new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
+    new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     void *tag;
     bool ok;
     while (run) {
@@ -324,8 +367,7 @@ void ContainerAgent::HandleRecvRpcs() {
 void ContainerAgent::StopRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
-        service->RequestStopExecution(&ctx, &request, &responder, cq, cq,
-                                      this);
+        service->RequestStopExecution(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         *run = false;
         status = FINISH;
@@ -339,9 +381,9 @@ void ContainerAgent::StopRequestHandler::Proceed() {
 void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
-        service->RequestUpdateSender(&ctx, &request, &responder, cq, cq,
-                                      this);
+        service->RequestUpdateSender(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
+        new UpdateSenderRequestHandler(service, cq, msvcs);
         // TODO: Handle reconfiguration by restarting sender
         // pause processing except senders to clear out the queues
 
@@ -379,6 +421,24 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
     }
 }
 
+void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateBatchSize(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateBatchSizeRequestHandler(service, cq, msvcs);
+        // adjust batch size
+//        for (auto msvc : *msvcs) {
+//            msvc->setBatchSize(request.batch_size());
+//        }
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
 /**
  * @brief Check if all the microservices are paused
  * 
@@ -386,7 +446,7 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
  * @return false 
  */
 bool ContainerAgent::checkPause() {
-    for (auto msvc : msvcs) {
+    for (auto msvc : cont_msvcsList) {
         if (msvc->checkPause()) {
             return false;
         }
@@ -403,7 +463,7 @@ void ContainerAgent::waitPause() {
     while (true) {
         paused = true;
         spdlog::trace("{0:s} waiting for all microservices to be paused.", __func__);
-        for (auto msvc : msvcs) {
+        for (auto msvc : cont_msvcsList) {
             if (!msvc->checkPause()) {
                 paused = false;
                 break;
@@ -424,7 +484,7 @@ void ContainerAgent::waitPause() {
  * @return false 
  */
 bool ContainerAgent::checkReady() {
-    for (auto msvc : msvcs) {
+    for (auto msvc : cont_msvcsList) {
         if (!msvc->checkReady()) {
             return true;
         }
@@ -444,7 +504,7 @@ void ContainerAgent::waitReady() {
         ready = true;
         
         spdlog::info("{0:s} waiting for all microservices to be ready.", __func__);
-        for (auto msvc : msvcs) {
+        for (auto msvc : cont_msvcsList) {
             if (!msvc->checkReady()) {
                 ready = false;
                 break;

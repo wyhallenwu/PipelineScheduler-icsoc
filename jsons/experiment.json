@@ -3,7 +3,7 @@
     "name": "exampletraffic",
     "slo": 1000,
     "type": 0,
-    "source": "/ssd0/datasets/pipeline-scheduler/traffic/traffic1.mp4",
+    "source": "/src/preview/traffic/traffic1.mp4",
     "device": "server"
   }
 ]

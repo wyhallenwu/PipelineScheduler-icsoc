@@ -16,10 +16,11 @@ void Sender::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 
     stubs = std::vector<std::unique_ptr<DataTransferService::Stub>>();
     stubs.push_back(
-            DataTransferService::NewStub(grpc::CreateChannel(dnstreamMicroserviceList.front().link[0], grpc::InsecureChannelCredentials())));
+            DataTransferService::NewStub(
+                    grpc::CreateChannel(dnstreamMicroserviceList.front().link[0], grpc::InsecureChannelCredentials())));
     multipleStubs = false;
     READY = true;
-} 
+}
 
 Sender::Sender(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
@@ -28,7 +29,7 @@ Sender::Sender(const json &jsonConfigs) : Microservice(jsonConfigs) {
 
 
 std::string Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
-                   EmptyMessage &reply, Status &status) {
+                               EmptyMessage &reply, Status &status) {
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
@@ -45,18 +46,21 @@ std::string Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMe
 
 GPUSender::GPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
     addToName("sender", "GPU");
-    tagToGpuPointer = std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *>();
+    tagToGpuPointer = std::map<void *, std::vector<std::vector<RequestData<LocalGPUReqDataType>>> *>();
     spdlog::trace("{0:s} GPUSender is created.", msvc_name);
 }
 
 void GPUSender::Process() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
+    std::vector<std::vector<RequestData<LocalGPUReqDataType>>> elements;
+    std::vector<RequestTimeType> timestamp;
+    std::vector<std::string> path;
+    std::vector<uint32_t> slo;
     while (READY) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);
             break;
-        }
-        else if (this->PAUSE_THREADS) {
+        } else if (this->PAUSE_THREADS) {
             if (RELOADING) {
                 spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
@@ -71,12 +75,24 @@ void GPUSender::Process() {
         if (strcmp(request.req_travelPath[0].c_str(), "empty") == 0) {
             continue;
         }
+        int size = msvc_InQueue[0]->size();
+        elements = {request.req_data};
+        timestamp = {request.req_origGenTime[0]};
+        path = {request.req_travelPath[0]};
+        slo = {request.req_e2eSLOLatency[0]};
+        while (size-- > 0 && elements.size() < 10) {
+            request = msvc_InQueue[0]->pop2();
+            elements.push_back(request.req_data);
+            timestamp.push_back(request.req_origGenTime[0]);
+            path.push_back(request.req_travelPath[0]);
+            slo.push_back(request.req_e2eSLOLatency[0]);
+        }
 
         SendGpuPointer(
-            request.req_data,
-            request.req_origGenTime[0],
-            request.req_travelPath[0],
-            request.req_e2eSLOLatency[0]
+                elements,
+                timestamp,
+                path,
+                slo
         );
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -84,30 +100,30 @@ void GPUSender::Process() {
 }
 
 std::string GPUSender::SendGpuPointer(
-        std::vector<RequestData<LocalGPUReqDataType>> &elements,
-        const RequestTimeType &timestamp, const std::string &path, const uint32_t &slo) {
+        std::vector<std::vector<RequestData<LocalGPUReqDataType>>> &elements,
+        std::vector<RequestTimeType> &timestamp, std::vector<std::string> &path, std::vector<uint32_t> &slo) {
     CompletionQueue cq;
 
-    GpuPointerPayload request;
-    for (auto ts: timestamp) {
-        request.add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
-    }
-    request.set_path(path);
-    request.set_slo(slo);
-    for (RequestData<LocalGPUReqDataType> el: elements) {
+    ImageDataPayload request;
+    for (int i = 0; i < elements.size(); i++) {
         cudaIpcMemHandle_t ipcHandle;
-        char * serializedData[sizeof(cudaIpcMemHandle_t)];
-        cudaError_t cudaStatus = cudaIpcGetMemHandle(&ipcHandle, el.data.ptr<uchar>());
+        char *serializedData[sizeof(cudaIpcMemHandle_t)];
+        cudaError_t cudaStatus = cudaIpcGetMemHandle(&ipcHandle, elements[i][0].data.ptr<uchar>());
         if (cudaStatus != cudaSuccess) {
             std::cerr << "cudaIpcGetMemHandle failed: " << cudaStatus << std::endl;
             continue;
         }
         memcpy(&serializedData, &ipcHandle, sizeof(cudaIpcMemHandle_t));
 
-        auto ref = request.add_elements();
+        ImageData* ref = request.add_elements();
         ref->set_data(serializedData, sizeof(cudaIpcMemHandle_t));
-        ref->set_height(el.shape[1]);
-        ref->set_width(el.shape[2]);
+        ref->set_height(elements[i][0].shape[1]);
+        ref->set_width(elements[i][0].shape[2]);
+        for (auto ts: timestamp[0]) {
+            ref->add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
+        }
+        ref->set_path(path[i]);
+        ref->set_slo(slo[i]);
     }
 
     if (request.elements_size() == 0) {
@@ -143,10 +159,10 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Empt
     GPR_ASSERT(ok);
     if (status.ok()) {
         if (got_tag == tag) {
-            //for (RequestData<LocalGPUReqDataType> el: *tagToGpuPointer[tag]) {
-                //el.data.release();
-            //}
-            //delete tagToGpuPointer[tag];
+//            for (RequestData<LocalGPUReqDataType> el: *tagToGpuPointer[tag]) {
+//                el.data.release();
+//            }
+//            delete tagToGpuPointer[tag];
             tagToGpuPointer.erase(tag);
         } else {
             return "Complete but Wrong Tag Received";
@@ -159,18 +175,21 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Empt
 }
 
 LocalCPUSender::LocalCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
-            addToName("sender", "LocalCPU");
-            spdlog::trace("{0:s} LocalCPUSender is created.", msvc_name);
-        }
+    addToName("sender", "LocalCPU");
+    spdlog::trace("{0:s} LocalCPUSender is created.", msvc_name);
+}
 
 void LocalCPUSender::Process() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
+    std::vector<std::vector<RequestData<LocalCPUReqDataType>>> elements;
+    std::vector<RequestTimeType> timestamp;
+    std::vector<std::string> path;
+    std::vector<uint32_t> slo;
     while (READY) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);
             break;
-        }
-        else if (this->PAUSE_THREADS) {
+        } else if (this->PAUSE_THREADS) {
             if (RELOADING) {
                 spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
@@ -185,36 +204,52 @@ void LocalCPUSender::Process() {
         if (strcmp(request.req_travelPath[0].c_str(), "empty") == 0) {
             continue;
         }
+        int size = msvc_InQueue[0]->size();
+        elements = {request.req_data};
+        timestamp = {request.req_origGenTime[0]};
+        path = {request.req_travelPath[0]};
+        slo = {request.req_e2eSLOLatency[0]};
+        while (size-- > 0  && elements.size() < 10) {
+            request = msvc_InQueue[0]->pop1();
+            elements.push_back(request.req_data);
+            timestamp.push_back(request.req_origGenTime[0]);
+            path.push_back(request.req_travelPath[0]);
+            slo.push_back(request.req_e2eSLOLatency[0]);
+        }
 
-        SendSharedMemory(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
+        SendSharedMemory(
+                elements,
+                timestamp,
+                path,
+                slo
+        );
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     msvc_logFile.close();
 }
 
 std::string LocalCPUSender::SendSharedMemory(
-    const std::vector<RequestData<LocalCPUReqDataType>> &elements,
-    const RequestTimeType &timestamp,
-    const std::string &path,
-    const uint32_t &slo) {
+        std::vector<std::vector<RequestData<LocalCPUReqDataType>>> &elements,
+        std::vector<RequestTimeType> &timestamp, std::vector<std::string> &path, std::vector<uint32_t> &slo) {
     CompletionQueue cq;
-    SharedMemPayload request;
-    for (auto ts: timestamp) {
-        request.add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
-    }
-    request.set_path(path);
-    request.set_slo(slo);
-    char* name;
-    for (RequestData<LocalCPUReqDataType> el: elements) {
+    ImageDataPayload request;
+    char *name;
+    for (int i = 0; i < elements.size(); i++) {
         auto ref = request.add_elements();
         sprintf(name, "shared %d", rand_int(0, 1000));
         boost::interprocess::shared_memory_object shm{create_only, name, read_write};
-        shm.truncate(el.data.total() * el.data.elemSize());
+        shm.truncate(elements[i][0].data.total() * elements[i][0].data.elemSize());
         boost::interprocess::mapped_region region{shm, read_write};
-        std::memcpy(region.get_address(), el.data.data, el.data.total() * el.data.elemSize());
-        ref->set_name(name);
-        ref->set_height(el.shape[1]);
-        ref->set_width(el.shape[2]);
+        std::memcpy(region.get_address(), elements[i][0].data.data, elements[i][0].data.total() * elements[i][0].data.elemSize());
+
+        ref->set_data(name);
+        ref->set_height(elements[i][0].shape[1]);
+        ref->set_width(elements[i][0].shape[2]);
+        for (auto ts: timestamp[0]) {
+            ref->add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
+        }
+        ref->set_path(path[i]);
+        ref->set_slo(slo[i]);
     }
     EmptyMessage reply;
     ClientContext context;
@@ -232,18 +267,21 @@ std::string LocalCPUSender::SendSharedMemory(
 }
 
 RemoteCPUSender::RemoteCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
-            addToName("sender", "RemoteCPU");
-            spdlog::trace("{0:s} RemoteCPUSender is created.", msvc_name);
-        }
+    addToName("sender", "RemoteCPU");
+    spdlog::trace("{0:s} RemoteCPUSender is created.", msvc_name);
+}
 
 void RemoteCPUSender::Process() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
+    std::vector<std::vector<RequestData<LocalCPUReqDataType>>> elements;
+    std::vector<RequestTimeType> timestamp;
+    std::vector<std::string> path;
+    std::vector<uint32_t> slo;
     while (READY) {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);
             break;
-        }
-        else if (this->PAUSE_THREADS) {
+        } else if (this->PAUSE_THREADS) {
             if (RELOADING) {
                 spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
@@ -258,31 +296,52 @@ void RemoteCPUSender::Process() {
         if (strcmp(request.req_travelPath[0].c_str(), "empty") == 0) {
             continue;
         }
+        int size = msvc_InQueue[0]->size();
+        elements = {request.req_data};
+        timestamp = {request.req_origGenTime[0]};
+        path = {request.req_travelPath[0]};
+        slo = {request.req_e2eSLOLatency[0]};
+        while (size-- > 0  && elements.size() < msvc_idealBatchSize) {
+            request = msvc_InQueue[0]->pop1();
+            elements.push_back(request.req_data);
+            timestamp.push_back(request.req_origGenTime[0]);
+            path.push_back(request.req_travelPath[0]);
+            slo.push_back(request.req_e2eSLOLatency[0]);
+        }
 
-        SendSerializedData(request.req_data, request.req_origGenTime[0], request.req_travelPath[0], request.req_e2eSLOLatency[0]);
+        SendSerializedData(
+                elements,
+                timestamp,
+                path,
+                slo
+        );
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     msvc_logFile.close();
 }
 
 std::string RemoteCPUSender::SendSerializedData(
-        const std::vector<RequestData<LocalCPUReqDataType>> &elements, 
-        const RequestTimeType &timestamp, const std::string &path,
-        const uint32_t &slo) { // We use unix time encoded to int64
+        std::vector<std::vector<RequestData<LocalCPUReqDataType>>> &elements,
+        std::vector<RequestTimeType> &timestamp, std::vector<std::string> &path, std::vector<uint32_t> &slo) { // We use unix time encoded to int64
     CompletionQueue cq;
 
-    SerializedDataPayload request;
-    for (auto ts: timestamp) {
-        request.add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
-    }
-    request.set_path(path);
-    request.set_slo(slo);
-    for (RequestData<LocalCPUReqDataType> el: elements) {
+    ImageDataPayload request;
+    for (int i = 0; i < elements.size(); i++) {
         auto ref = request.add_elements();
-        ref->set_data(el.data.data, el.data.total() * el.data.elemSize());
-        ref->set_height(el.shape[1]);
-        ref->set_width(el.shape[2]);
-        ref->set_datalen(el.data.total() * el.data.elemSize());
+        ref->set_data(elements[i][0].data.data, elements[i][0].data.total() * elements[i][0].data.elemSize());
+
+        //Metadata meta;
+        ref->set_height(elements[i][0].shape[1]);
+        ref->set_width(elements[i][0].shape[2]);
+        ref->set_height(elements[i][0].shape[1]);
+        ref->set_width(elements[i][0].shape[2]);
+        for (auto ts: timestamp[0]) {
+            ref->add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
+        }
+        ref->set_path(path[i]);
+        ref->set_slo(slo[i]);
+        ref->set_datalen(elements[i][0].data.total() * elements[i][0].data.elemSize());
+        //request.set_allocated_metadata(&meta);
     }
     EmptyMessage reply;
     ClientContext context;

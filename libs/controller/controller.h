@@ -16,15 +16,17 @@ using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using controlcommunication::ControlCommunication;
+using controlcommunication::DeviceState;
 using controlcommunication::LightMetrics;
 using controlcommunication::LightMetricsList;
 using controlcommunication::FullMetrics;
 using controlcommunication::FullMetricsList;
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::Neighbor;
-using controlcommunication::MicroserviceConfig;
-using controlcommunication::MicroserviceLink;
-using controlcommunication::MicroserviceSignal;
+using controlcommunication::ContainerConfig;
+using controlcommunication::ContainerLink;
+using controlcommunication::ContainerInt;
+using controlcommunication::ContainerSignal;
 using EmptyMessage = google::protobuf::Empty;
 
 enum DeviceType {
@@ -34,6 +36,7 @@ enum DeviceType {
 
 enum ModelType {
     DataSource,
+    BaseSink,
     Yolov5,
     Yolov5Datasource,
     Arcface,
@@ -42,16 +45,18 @@ enum ModelType {
     Movenet,
     Emotionnet,
     Gender,
-    Age
+    Age,
+    CarBrand
 };
 
 std::map<std::string, ModelType> MODEL_TYPES = {
         {":datasource",       DataSource},
+        {":basesink",         BaseSink},
         {":yolov5",           Yolov5},
         {":yolov5datasource", Yolov5Datasource},
         {":retinaface",       Retinaface},
         {":arcface",          Arcface},
-        {":cartype",          Yolov5_Plate}, // Still needs to be finished
+        {":carbrand",         CarBrand},
         {":plate",            Yolov5_Plate},
         {":gender",           Gender},
         {":age",              Age},
@@ -103,38 +108,45 @@ public:
 
 private:
     void UpdateLightMetrics(google::protobuf::RepeatedPtrField<LightMetrics> metrics);
-    void UpdateFullMetrics(google::protobuf::RepeatedPtrField<FullMetrics> metrics);
-    double LoadTimeEstimator(const char* model_path, double input_mem_size);
 
-    struct MicroserviceHandle;
+    void UpdateFullMetrics(google::protobuf::RepeatedPtrField<FullMetrics> metrics);
+
+    double LoadTimeEstimator(const char *model_path, double input_mem_size);
+    int InferTimeEstimator(ModelType model, int batch_size);
+
+    struct ContainerHandle;
     struct NodeHandle {
         std::string ip;
         std::shared_ptr<ControlCommunication::Stub> stub;
         CompletionQueue *cq;
         DeviceType type;
-        int num_processors; // number of processing units, general cores for Edge or GPUs for server
-        unsigned long mem_size; // memory size in MB
-        std::map<std::string, MicroserviceHandle *> microservices;
+        int num_processors; // number of processing units, 1 for Edge or # GPUs for server
+        std::vector<double> processors_utilization; // utilization per pu
+        std::vector<unsigned long> mem_size; // memory size in MB
+        std::vector<double> mem_utilization; // memory utilization per pu
         int next_free_port;
+        std::map<std::string, ContainerHandle *> containers;
     };
 
     struct TaskHandle {
         int slo;
         PipelineType type;
-        std::map<std::string, MicroserviceHandle *> subtasks;
+        std::map<std::string, ContainerHandle *> subtasks;
     };
 
-    struct MicroserviceHandle {
+    struct ContainerHandle {
         std::string name;
         ModelType model;
         NodeHandle *device_agent;
         TaskHandle *task;
+        int batch_size;
+        int cuda_device;
         int class_of_interest;
         int recv_port;
         Metrics metrics;
         google::protobuf::RepeatedField<int32_t> queue_lengths;
-        std::vector<MicroserviceHandle *> upstreams;
-        std::vector<MicroserviceHandle *> downstreams;
+        std::vector<ContainerHandle *> upstreams;
+        std::vector<ContainerHandle *> downstreams;
     };
 
     class RequestHandler {
@@ -201,11 +213,24 @@ private:
         ConnectionConfigs request;
     };
 
-    void StartMicroservice(std::pair<std::string, MicroserviceHandle *> &upstr, int slo, int batch_size,
-                           std::string source = "");
-    void MoveMicroservice(MicroserviceHandle *msvc, bool to_edge);
-    static void AdjustUpstream(int port, MicroserviceHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
-    void StopMicroservice(std::string name, NodeHandle *device, bool forced = false);
+    void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
+                        std::string source = "");
+
+    void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge);
+
+    static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
+
+    void AdjustBatchSize(ContainerHandle *msvc, int new_bs);
+
+    void StopContainer(std::string name, NodeHandle *device, bool forced = false);
+
+    void optimizeBatchSizeStep(
+            const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models,
+            std::map<std::string, int> &batch_sizes, std::vector<int> &estimated_infer_times, int nObjects);
+
+    std::map<std::string, int> getInitialBatchSizes(
+            const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models, int slo,
+            int nObjects);
 
     static std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
     getModelsByPipelineType(PipelineType type);
@@ -213,7 +238,7 @@ private:
     bool running;
     std::map<std::string, NodeHandle> devices;
     std::map<std::string, TaskHandle> tasks;
-    std::map<std::string, MicroserviceHandle> microservices;
+    std::map<std::string, ContainerHandle> containers;
 
     ControlCommunication::AsyncService service;
     std::unique_ptr<grpc::Server> server;

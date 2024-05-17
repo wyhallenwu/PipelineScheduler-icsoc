@@ -86,6 +86,11 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
         if (OutQueue->getActiveQueueIndex() != 2) OutQueue->setActiveQueueIndex(2);
         new GpuPointerRequestHandler(service, cq, OutQueue, msvc_inReqCount);
 
+        if (request.mutable_elements()->empty()) {
+            responder.Finish(reply, Status(grpc::INVALID_ARGUMENT, "No valid data"), this);
+            return;
+        }
+
         std::vector<RequestData<LocalGPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
             void* data;
@@ -97,30 +102,27 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
                 continue;
             }
             auto gpu_image = cv::cuda::GpuMat(el.height(), el.width(), CV_8UC3, data).clone();
-            elements.push_back({{gpu_image.channels(), el.height(), el.width()}, gpu_image});
+            elements = {{{gpu_image.channels(), el.height(), el.width()}, gpu_image}};
+
             cudaIpcCloseMemHandle(data);
+
+            if (elements.empty()) continue;
+
+            auto timestamps = std::vector<ClockType>();
+            for (auto ts: el.timestamp()) {
+                timestamps.push_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
+            }
+            timestamps.push_back(std::chrono::system_clock::now());
+
+            Request<LocalGPUReqDataType> req = {
+                    {timestamps},
+                    {el.slo()},
+                    {el.path()},
+                    1,
+                    elements
+            };
+            OutQueue->emplace(req);
         }
-
-        auto timestamps = std::vector<ClockType>();
-        for (auto ts: request.timestamp()) {
-            timestamps.push_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
-        }
-        timestamps.push_back(std::chrono::system_clock::now());
-
-
-        if (elements.empty()) {
-            responder.Finish(reply, Status(grpc::INVALID_ARGUMENT, "No valid data"), this);
-            return;
-        }
-
-        Request<LocalGPUReqDataType> req = {
-            {timestamps},
-            {request.slo()},
-            {request.path()},
-            1,
-            elements
-        };
-        OutQueue->emplace(req);
 
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
@@ -149,28 +151,29 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
 
         std::vector<RequestData<LocalCPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
-            auto name = el.name().c_str();
+            auto name = el.data().c_str();
             boost::interprocess::shared_memory_object shm{open_only, name, read_only};
             boost::interprocess::mapped_region region{shm, read_only};
             auto image = static_cast<cv::Mat *>(region.get_address());
-            elements.push_back({{image->channels(), el.height(), el.width()}, *image});
+            elements = {{{image->channels(), el.height(), el.width()}, *image}};
 
             boost::interprocess::shared_memory_object::remove(name);
-        }
-        auto timestamps = std::vector<ClockType>();
-        for (auto ts: request.timestamp()) {
-            timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
-        }
-        timestamps.push_back(std::chrono::system_clock::now());
 
-        Request<LocalCPUReqDataType> req = {
-            {timestamps},
-            {request.slo()},
-            {request.path()},
-            1,
-            elements
-        };
-        OutQueue->emplace(req);
+            auto timestamps = std::vector<ClockType>();
+            for (auto ts: el.timestamp()) {
+                timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
+            }
+            timestamps.push_back(std::chrono::system_clock::now());
+
+            Request<LocalCPUReqDataType> req = {
+                    {timestamps},
+                    {el.slo()},
+                    {el.path()},
+                    1,
+                    elements
+            };
+            OutQueue->emplace(req);
+        }
 
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
@@ -205,22 +208,23 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             }
             cv::Mat image = cv::Mat(el.height(), el.width(), CV_8UC3,
                                     const_cast<char *>(el.data().c_str())).clone();
-            elements.push_back({{image.channels(), el.height(), el.width()}, image});
-        }
-        auto timestamps = std::vector<ClockType>();
-        for (auto ts: request.timestamp()) {
-            timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
-        }
-        timestamps.push_back(std::chrono::system_clock::now());
+            elements = {{{image.channels(), el.height(), el.width()}, image}};
 
-        Request<LocalCPUReqDataType> req = {
-            {timestamps},
-            {request.slo()},
-            {request.path()},
-            1, 
-            elements
-        };
-        OutQueue->emplace(req);
+            auto timestamps = std::vector<ClockType>();
+            for (auto ts: el.timestamp()) {
+                timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
+            }
+            timestamps.push_back(std::chrono::system_clock::now());
+
+            Request<LocalCPUReqDataType> req = {
+                    {timestamps},
+                    {el.slo()},
+                    {el.path()},
+                    1,
+                    elements
+            };
+            OutQueue->emplace(req);
+        }
 
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
@@ -248,6 +252,17 @@ void Receiver::HandleRpcs() {
             if (RELOADING) {
                 spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
+                /*void* target;
+                auto test = cv::cuda::GpuMat(1, 1, CV_8UC3);
+                cudaIpcMemHandle_t ipcHandle;
+                cudaIpcGetMemHandle(&ipcHandle, test.data);
+                cudaError_t cudaStatus = cudaIpcOpenMemHandle(&target, ipcHandle, cudaIpcMemLazyEnablePeerAccess);
+                cudaIpcCloseMemHandle(target);
+                test.release();
+                if (cudaStatus != cudaSuccess) {
+                    std::cout << "cudaIpcOpenMemHandle failed: " << cudaStatus << std::endl;
+                    setDevice();
+                }*/
                 RELOADING = false;
                 spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
             }

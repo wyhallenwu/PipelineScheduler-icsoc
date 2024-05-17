@@ -119,6 +119,10 @@ endif ()
 
 find_package(spdlog REQUIRED)
 
+find_package(PostgreSQL REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBPQXX REQUIRED libpqxx)
+
 # Manually specify the path to the protobufprotocols
 set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
 
@@ -187,8 +191,8 @@ target_link_libraries(Container_Yolov5 yolov5)
 add_executable(Container_Yolov5-plate libs/yolov5-plate/yolov5-plate.cpp)
 target_link_libraries(Container_Yolov5-plate yolov5-plate)
 
-# add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
-# target_link_libraries(convert_onnx2trt onnx2trt)
+add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
+target_link_libraries(convert_onnx2trt onnx2trt)
 
 add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
 target_link_libraries(Container_RetinaFace retinaface)

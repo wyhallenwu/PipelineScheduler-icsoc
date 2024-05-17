@@ -34,6 +34,7 @@ struct RequestData {
     }
 
     RequestData() {}
+
     ~RequestData() {
         data.release();
         shape.clear();
@@ -70,33 +71,33 @@ struct Request {
     Request() {};
 
     Request(
-        BatchTimeType genTime,
-        RequestSLOType latency,
-        RequestPathType path,
-        BatchSizeType batchSize,
-        std::vector<RequestData<DataType>> data,
-        std::vector<RequestData<DataType>> upstream_data
+            BatchTimeType genTime,
+            RequestSLOType latency,
+            RequestPathType path,
+            BatchSizeType batchSize,
+            std::vector<RequestData<DataType>> data,
+            std::vector<RequestData<DataType>> upstream_data
 
     ) : req_origGenTime(genTime),
         req_e2eSLOLatency(latency),
         req_travelPath(std::move(path)),
         req_batchSize(batchSize) {
-            req_data = data;
-            upstreamReq_data = upstream_data;
+        req_data = data;
+        upstreamReq_data = upstream_data;
     }
 
     // df
     Request(
-        BatchTimeType genTime,
-        RequestSLOType latency,
-        RequestPathType path,
-        BatchSizeType batchSize,
-        std::vector<RequestData<DataType>> data
+            BatchTimeType genTime,
+            RequestSLOType latency,
+            RequestPathType path,
+            BatchSizeType batchSize,
+            std::vector<RequestData<DataType>> data
     ) : req_origGenTime(genTime),
         req_e2eSLOLatency(latency),
         req_travelPath(std::move(path)),
         req_batchSize(batchSize) {
-            req_data = data;
+        req_data = data;
     }
 
     /**
@@ -105,7 +106,7 @@ struct Request {
      * @param other 
      * @return Request& 
      */
-    Request& operator=(const Request& other) {
+    Request &operator=(const Request &other) {
         if (this != &other) {
             req_origGenTime = other.req_origGenTime;
             req_e2eSLOLatency = other.req_e2eSLOLatency;
@@ -151,9 +152,9 @@ public:
      */
     void emplace(Request<LocalCPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
-        if (q_cpuQueue.size() == q_MaxSize) {
-            q_cpuQueue.pop();
-        }
+        //if (q_cpuQueue.size() == q_MaxSize) {
+        //    q_cpuQueue.pop();
+        //}
         q_cpuQueue.emplace(request);
         q_condition.notify_one();
         q_mutex.unlock();
@@ -166,9 +167,9 @@ public:
      */
     void emplace(Request<LocalGPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
-        if (q_gpuQueue.size() == q_MaxSize) {
-            q_gpuQueue.pop();
-        }
+        //if (q_gpuQueue.size() == q_MaxSize) {
+        //    q_gpuQueue.pop();
+        //}
         q_gpuQueue.emplace(request);
         q_condition.notify_one();
         q_mutex.unlock();
@@ -184,9 +185,9 @@ public:
 
         Request<LocalCPUReqDataType> request;
         isEmpty = !q_condition.wait_for(
-            lock,
-            std::chrono::milliseconds(timeout),
-            [this]() { return !q_cpuQueue.empty(); }
+                lock,
+                std::chrono::milliseconds(timeout),
+                [this]() { return !q_cpuQueue.empty(); }
         );
         if (!isEmpty) {
             request = q_cpuQueue.front();
@@ -409,16 +410,16 @@ public:
     std::string msvc_containerName;
 
 
-    void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue*> queue) {
+    void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue *> queue) {
         msvc_InQueue = std::move(queue);
     };
 
-    std::vector<ThreadSafeFixSizedDoubleQueue*> GetOutQueue() {
+    std::vector<ThreadSafeFixSizedDoubleQueue *> GetOutQueue() {
         return msvc_OutQueue;
     };
 
-    ThreadSafeFixSizedDoubleQueue* GetOutQueue(int coi) {
-        for (auto &queue : msvc_OutQueue) {
+    ThreadSafeFixSizedDoubleQueue *GetOutQueue(int coi) {
+        for (auto &queue: msvc_OutQueue) {
             if (queue->getClassOfInterest() == coi) {
                 return queue;
             }
@@ -430,7 +431,7 @@ public:
         return msvc_type;
     }
 
-    virtual QueueLengthType GetOutQueueSize(int i) {return msvc_OutQueue[i]->size();};
+    virtual QueueLengthType GetOutQueueSize(int i) { return msvc_OutQueue[i]->size(); };
 
     void stopThread() {
         STOP_THREADS = true;
@@ -484,14 +485,16 @@ public:
     void setDevice(int8_t deviceIndex) {
         if (deviceIndex >= 0) {
             int currentDevice = cv::cuda::getDevice();
-            // if (currentDevice != deviceIndex) {
-            //     cv::cuda::resetDevice();
-            //     cv::cuda::setDevice(deviceIndex);
-            //     checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
-            // }
-            // cv::cuda::resetDevice();
+//            if (currentDevice != deviceIndex) {
+//                cv::cuda::resetDevice();
+//                cv::cuda::setDevice(deviceIndex);
+//                checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
+//            }
+            cv::cuda::resetDevice();
             cv::cuda::setDevice(deviceIndex);
             checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
+            // dummy memory allocation
+            cudaFree(0);
         }
     }
 
@@ -514,7 +517,7 @@ public:
     bool PAUSE_THREADS = false;
 
 protected:
-    std::vector<ThreadSafeFixSizedDoubleQueue*> msvc_InQueue, msvc_OutQueue;
+    std::vector<ThreadSafeFixSizedDoubleQueue *> msvc_InQueue, msvc_OutQueue;
     //
     std::vector<uint8_t> msvc_activeInQueueIndex = {}, msvc_activeOutQueueIndex = {};
 
@@ -573,10 +576,10 @@ protected:
     std::vector<std::pair<int16_t, NumQueuesType>> classToDnstreamMap;
 
     //
-    virtual bool isTimeToBatch() {return true;};
+    virtual bool isTimeToBatch() { return true; };
 
     //
-    virtual bool checkReqEligibility(ClockType currReq_genTime) {return true;};
+    virtual bool checkReqEligibility(ClockType currReq_genTime) { return true; };
 
     //
     virtual void updateReqRate(ClockType lastInterReqDuration);
@@ -587,15 +590,15 @@ protected:
 
 
 RequestData<LocalGPUReqDataType> uploadReqData(
-    const RequestData<LocalCPUReqDataType>& cpuData,
-    void * cudaPtr = NULL,
-    cv::cuda::Stream &stream = cv::cuda::Stream::Null()
+        const RequestData<LocalCPUReqDataType> &cpuData,
+        void *cudaPtr = NULL,
+        cv::cuda::Stream &stream = cv::cuda::Stream::Null()
 );
 
 Request<LocalGPUReqDataType> uploadReq(
-    const Request<LocalCPUReqDataType>& cpuReq,
-    std::vector<void *> cudaPtr = {},
-    cv::cuda::Stream &stream = cv::cuda::Stream::Null()
+        const Request<LocalCPUReqDataType> &cpuReq,
+        std::vector<void *> cudaPtr = {},
+        cv::cuda::Stream &stream = cv::cuda::Stream::Null()
 );
 
 

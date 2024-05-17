@@ -11,11 +11,13 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 
     link = jsonConfigs.at("msvc_upstreamMicroservices")[0].at("nb_link")[0];
     source = cv::VideoCapture(link);
-    wait_time_ms = jsonConfigs.at("msvc_idealBatchSize");
+    wait_time_ms = 1000 / jsonConfigs.at("msvc_idealBatchSize").get<int>();
+    frame_count = 30 / (30 - jsonConfigs.at("msvc_idealBatchSize").get<int>());
     link = link.substr(link.find_last_of('/') + 1);
 };
 
 void DataReader::Process() {
+    int i = 1;
     while (true) {
         ClockType time = std::chrono::system_clock::now();
         cv::Mat frame;
@@ -23,6 +25,10 @@ void DataReader::Process() {
         if (frame.empty()) {
             std::cout << "No more frames to read" << std::endl;
             return;
+        }
+        if (frame_count > 1 && i++ >= frame_count) {
+            i = 1;
+            continue;
         }
         Request<LocalCPUReqDataType> req = {{{time}}, {msvc_svcLevelObjLatency},
                                             {"[" + link + "_" + std::to_string((int) source.get(cv::CAP_PROP_POS_FRAMES)) + "]"},

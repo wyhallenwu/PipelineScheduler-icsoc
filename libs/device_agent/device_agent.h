@@ -42,7 +42,7 @@ namespace msvcconfigs {
 
 class DeviceAgent {
 public:
-    DeviceAgent(const std::string &controller_url, const std::string name, DeviceType type);
+    DeviceAgent(const std::string &controller_url, const std::string n, DeviceType type);
 
     ~DeviceAgent() {
         running = false;
@@ -81,10 +81,18 @@ private:
 
     static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
                          const int &device, const int &port) {
-        std::string command = absl::StrFormat(
-                R"(docker run --network=host -d --runtime nvidia --gpus all pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i)",
-                executable, name, start_string, device, port);
+        std::string command;
+        std::string container_name = name;
+        std::replace(container_name.begin(), container_name.end(), ':', '-');
+        command = "docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/app/data/  "
+                  "-v /ssd0/tung/PipePlusPlus/logs/:/app/logs/ -v /ssd0/tung/PipePlusPlus/models/:/app/models/"
+                  "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
+                  "-d --rm --runtime nvidia --gpus all --name " +
+                absl::StrFormat(
+                R"(%s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs')",
+                container_name, executable, name, start_string, device, port);
         std::cout << command << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         return system(command.c_str());
     };
 
@@ -95,7 +103,7 @@ private:
 
     void Ready(const std::string &name, const std::string &ip, DeviceType type);
 
-    void ReportDeviceStatus();
+    void ReportLightMetrics();
 
     void ReportFullMetrics();
 
@@ -107,7 +115,7 @@ private:
 
     class RequestHandler {
     public:
-        RequestHandler(ServerCompletionQueue *cq) : cq(cq), status(CREATE) {}
+        RequestHandler(ServerCompletionQueue *cq, DeviceAgent *device) : cq(cq), status(CREATE), device_agent(device) {}
 
         virtual ~RequestHandler() = default;
 
@@ -120,12 +128,13 @@ private:
         ServerCompletionQueue *cq;
         ServerContext ctx;
         CallStatus status;
+        DeviceAgent *device_agent;
     };
 
     class DeviceRequestHandler : public RequestHandler {
     public:
-        DeviceRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq)
-                : RequestHandler(cq), service(service) {};
+        DeviceRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq, DeviceAgent *d)
+                : RequestHandler(cq, d), service(service) {};
 
     protected:
         InDeviceCommunication::AsyncService *service;
@@ -133,8 +142,8 @@ private:
 
     class ControlRequestHandler : public RequestHandler {
     public:
-        ControlRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq)
-                : RequestHandler(cq), service(service) {};
+        ControlRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq, DeviceAgent *d)
+                : RequestHandler(cq, d), service(service) {};
 
     protected:
         ControlCommunication::AsyncService *service;
@@ -144,7 +153,7 @@ private:
     public:
         StateUpdateRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                   DeviceAgent *device)
-                : DeviceRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : DeviceRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
         }
 
@@ -154,14 +163,13 @@ private:
         State request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-        DeviceAgent *device_agent;
     };
 
     class ReportStartRequestHandler : public DeviceRequestHandler {
     public:
         ReportStartRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                   DeviceAgent *device)
-                : DeviceRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : DeviceRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
         }
 
@@ -171,61 +179,77 @@ private:
         ProcessData request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-        DeviceAgent *device_agent;
     };
 
-    class StartMicroserviceRequestHandler : public ControlRequestHandler {
+    class StartContainerRequestHandler : public ControlRequestHandler {
     public:
-        StartMicroserviceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                        DeviceAgent *device)
-                : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+        StartContainerRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                     DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
         }
 
         void Proceed() final;
 
     private:
-        MicroserviceConfig request;
+        ContainerConfig request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-        DeviceAgent *device_agent;
     };
 
-    class StopMicroserviceRequestHandler : public ControlRequestHandler {
+    class StopContainerRequestHandler : public ControlRequestHandler {
     public:
-        StopMicroserviceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                       DeviceAgent *device)
-                : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+        StopContainerRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                    DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
         }
 
         void Proceed() final;
 
     private:
-        MicroserviceSignal request;
+        ContainerSignal request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-        DeviceAgent *device_agent;
     };
 
     class UpdateDownstreamRequestHandler : public ControlRequestHandler {
     public:
         UpdateDownstreamRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                        DeviceAgent *device)
-                : ControlRequestHandler(service, cq), responder(&ctx), device_agent(device) {
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
         }
 
         void Proceed() final;
 
     private:
-        MicroserviceLink request;
+        ContainerLink request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-        DeviceAgent *device_agent;
     };
 
+    class UpdateBatchsizeRequestHandler : public ControlRequestHandler {
+    public:
+        UpdateBatchsizeRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                       DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        ContainerInt request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+    };
+
+    std::string name;
     bool running;
+    int processing_units;
+    std::vector<double> utilization;
+    std::vector<double> mem_utilization;
     Profiler *profiler;
     std::map<std::string, ContainerHandle> containers;
     std::vector<std::thread> threads;

@@ -54,7 +54,7 @@ void Profiler::stop() {
 }
 
 void addPid(unsigned int pid){
-    
+
 }
 
 std::vector<Profiler::sysStats> Profiler::getStats(unsigned int pid) const {
@@ -167,7 +167,7 @@ int main() {
     int pid;
     std::cin >> pid;
     Profiler *profiler = new Profiler({pid});
-    
+
     while (true) {
         Profiler::sysStats stats = profiler->reportAtRuntime(pid);
         std::cout << stats.cpuUsage << " | " << stats.memoryUsage << " | " << stats.gpuUtilization << " | " << stats.gpuMemoryUsage << std::endl;
