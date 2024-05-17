@@ -1,6 +1,7 @@
 {
-    "pipeline_name": "every",
     "container": {
+        "cont_pipeName": "every",
+        "cont_taskName": "data_source",
         "cont_pipeline": [
             {
                 "msvc_name": "::data_reader",

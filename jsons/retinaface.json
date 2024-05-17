@@ -1,6 +1,8 @@
 {
     "pipeline_name": "traffic_pipeline",
     "container" : {
+        "cont_pipeName": "traffic_pipeline",
+        "cont_taskName": "retinaface",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",

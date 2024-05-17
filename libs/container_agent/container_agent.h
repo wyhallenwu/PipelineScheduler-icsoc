@@ -218,6 +218,8 @@ protected:
 
     std::string cont_name;
     std::vector<Microservice *> cont_msvcsList;
+    std::string cont_pipeName;
+    std::string cont_taskName;
     float arrivalRate;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;

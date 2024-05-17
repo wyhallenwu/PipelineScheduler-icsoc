@@ -1,6 +1,8 @@
 {
-    "pipeline_name": "traffic_pipeline",
     "container": {
+        "cont_pipeName": "traffic_pipeline",
+        "cont_taskName": "yolov5",
+        "cont_name": "yolov5_0",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",
@@ -70,8 +72,8 @@
                         "nb_expectedShape": [
                             [
                                 3,
-                                320,
-                                320
+                                640,
+                                640
                             ]
                         ]
                     }
@@ -301,7 +303,7 @@
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,
-        "profile_templateModelPath": "../models/yolov5n_320_dynamic_nms_3090_fp32_[batch]_1.engine",
+        "profile_templateModelPath": "../models/yolov5n_dynamic_nms_3090_fp32_[batch]_1.engine",
         "profile_inputRandomizeScheme": 0,
         "profile_numWarmUpBatches": 10,
         "profile_numProfileBatches": 100

@@ -1,6 +1,7 @@
 {
-    "pipeline_name": "pedestrian",
     "container": {
+        "cont_pipeName": "pedestrian_security",
+        "cont_taskName": "movenet",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",

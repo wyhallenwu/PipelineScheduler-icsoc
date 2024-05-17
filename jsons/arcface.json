@@ -1,6 +1,7 @@
 {
-    "pipeline_name": "traffic_pipeline",
     "container": {
+        "cont_pipeName": "traffic_pipeline",
+        "cont_taskName": "arcface",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",
