@@ -8,28 +8,30 @@
 #include "controlcommunication.grpc.pb.h"
 #include <LightGBM/c_api.h>
 
-using grpc::Status;
-using grpc::CompletionQueue;
-using grpc::ClientContext;
-using grpc::ClientAsyncResponseReader;
-using grpc::ServerBuilder;
-using grpc::ServerContext;
-using grpc::ServerCompletionQueue;
-using controlcommunication::ControlCommunication;
 using controlcommunication::ConnectionConfigs;
-using controlcommunication::Neighbor;
 using controlcommunication::ContainerConfig;
-using controlcommunication::ContainerLink;
 using controlcommunication::ContainerInt;
+using controlcommunication::ContainerLink;
 using controlcommunication::ContainerSignal;
+using controlcommunication::ControlCommunication;
+using controlcommunication::Neighbor;
+using grpc::ClientAsyncResponseReader;
+using grpc::ClientContext;
+using grpc::CompletionQueue;
+using grpc::ServerBuilder;
+using grpc::ServerCompletionQueue;
+using grpc::ServerContext;
+using grpc::Status;
 using EmptyMessage = google::protobuf::Empty;
 
-enum SystemDeviceType {
+enum SystemDeviceType
+{
     Server,
     Edge
 };
 
-enum ModelType {
+enum ModelType
+{
     DataSource,
     Sink,
     Yolov5,
@@ -46,13 +48,15 @@ enum ModelType {
 
 extern std::map<ModelType, std::vector<std::string>> MODEL_INFO;
 
-enum PipelineType {
+enum PipelineType
+{
     Traffic,
     Video_Call,
     Building_Security
 };
 
-struct Metrics {
+struct Metrics
+{
     float requestRate = 0;
     double cpuUsage = 0;
     long memUsage = 0;
@@ -60,8 +64,10 @@ struct Metrics {
     unsigned int gpuMemUsage = 0;
 };
 
-namespace TaskDescription {
-    struct TaskStruct {
+namespace TaskDescription
+{
+    struct TaskStruct
+    {
         std::string name;
         int slo;
         PipelineType type;
@@ -74,7 +80,8 @@ namespace TaskDescription {
     void from_json(const nlohmann::json &j, TaskStruct &val);
 }
 
-class Controller {
+class Controller
+{
 public:
     Controller();
 
@@ -97,26 +104,30 @@ private:
     int InferTimeEstimator(ModelType model, int batch_size);
 
     struct ContainerHandle;
-    struct NodeHandle {
+    struct NodeHandle
+    {
         std::string ip;
         std::shared_ptr<ControlCommunication::Stub> stub;
         CompletionQueue *cq;
         SystemDeviceType type;
-        int num_processors; // number of processing units, 1 for Edge or # GPUs for server
+        int num_processors;                         // number of processing units, 1 for Edge or # GPUs for server
         std::vector<double> processors_utilization; // utilization per pu
-        std::vector<unsigned long> mem_size; // memory size in MB
-        std::vector<double> mem_utilization; // memory utilization per pu
+        std::vector<unsigned long> mem_size;        // memory size in MB
+        std::vector<double> mem_utilization;        // memory utilization per pu
         int next_free_port;
         std::map<std::string, ContainerHandle *> containers;
+        int lastRequestRate = 0; //add for distream to calculate the lastRequestRate
     };
 
-    struct TaskHandle {
+    struct TaskHandle
+    {
         int slo;
         PipelineType type;
         std::map<std::string, ContainerHandle *> subtasks;
     };
 
-    struct ContainerHandle {
+    struct ContainerHandle
+    {
         std::string name;
         ModelType model;
         NodeHandle *device_agent;
@@ -132,18 +143,22 @@ private:
         std::vector<ContainerHandle *> downstreams;
     };
 
-    class RequestHandler {
+    class RequestHandler
+    {
     public:
         RequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq, Controller *c)
-                : service(service), cq(cq), status(CREATE), controller(c), responder(&ctx) {}
+            : service(service), cq(cq), status(CREATE), controller(c), responder(&ctx) {}
 
         virtual ~RequestHandler() = default;
 
         virtual void Proceed() = 0;
 
     protected:
-        enum CallStatus {
-            CREATE, PROCESS, FINISH
+        enum CallStatus
+        {
+            CREATE,
+            PROCESS,
+            FINISH
         };
         ControlCommunication::AsyncService *service;
         ServerCompletionQueue *cq;
@@ -158,7 +173,8 @@ private:
     public:
         DeviseAdvertisementHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                    Controller *c)
-                : RequestHandler(service, cq, c) {
+            : RequestHandler(service, cq, c)
+        {
             Proceed();
         }
 
@@ -180,12 +196,12 @@ private:
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 
     void optimizeBatchSizeStep(
-            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
-            std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
+        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
+        std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
 
     std::map<ModelType, int> getInitialBatchSizes(
-            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
-            int nObjects);
+        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
+        int nObjects);
 
     std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
     getModelsByPipelineType(PipelineType type);
@@ -198,7 +214,20 @@ private:
     ControlCommunication::AsyncService service;
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<ServerCompletionQueue> cq;
+
+    //struct for distream Partitioner
+    struct Partitioner
+    {
+        NodeHandle *edge;
+        NodeHandle *server;
+        // need server here
+        float BaseParPoint;
+        float FineGrainedOffset;
+    };
+
+    struct Partitioner;
+    void scheduleBaseParPointLoop(Partitioner *partitioner);
+    std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> categorizeNodes(const std::vector<NodeHandle> &nodes);
 };
 
-
-#endif //PIPEPLUSPLUS_CONTROLLER_H
+#endif // PIPEPLUSPLUS_CONTROLLER_H

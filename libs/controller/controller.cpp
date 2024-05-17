@@ -92,7 +92,7 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
         int cuda_device = 1;
         containers.insert(
                 {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {cuda_device},
-                                                      -1, device->next_free_port++, {}, {}, {}, {}}});
+                                       -1, device->next_free_port++, {}, {}, {}, {}}});
         task->subtasks.insert({tmp, &containers[tmp]});
         device->containers.insert({tmp, task->subtasks[tmp]});
     }
@@ -293,13 +293,21 @@ void Controller::optimizeBatchSizeStep(
         std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
     ModelType candidate;
     int max_saving = 0;
-    std::vector<ModelType> blacklist;
+    std::vector<std::string> blacklist;
     for (const auto &m: models) {
         int saving;
         if (max_saving == 0) {
             saving =
                     estimated_infer_times[m.first] - InferTimeEstimator(m.first, batch_sizes[m.first] * 2);
         } else {
+            if (batch_sizes[m.first] == 64 || std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
+                continue;
+            }
+            for (const auto &d: m.second) {
+                if (batch_sizes[d.first] > batch_sizes[m.first]) {
+                    blacklist.push_back(d.first);
+                }
+            }
             if (batch_sizes[m.first] == 64 ||
                 std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
                 continue;
@@ -322,8 +330,9 @@ void Controller::optimizeBatchSizeStep(
 }
 
 std::map<ModelType, int> Controller::getInitialBatchSizes(
-        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
-        int nObjects) {
+    const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
+    int nObjects)
+{
     std::map<ModelType, int> batch_sizes = {};
     std::map<ModelType, int> estimated_infer_times = {};
 
@@ -341,7 +350,8 @@ std::map<ModelType, int> Controller::getInitialBatchSizes(
                                   return acc + p.second;
                               });
 
-    while (slo < sum) {
+    while (slo < sum)
+    {
         optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
         sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
                               [](int acc, const std::pair<ModelType, int> &p) {
@@ -361,13 +371,13 @@ Controller::getModelsByPipelineType(PipelineType type) {
                     {ModelType::Arcface,      {{ModelType::Sink,   -1}}},
                     {ModelType::CarBrand,     {{ModelType::Sink,   -1}}},
                     {ModelType::Yolov5_Plate, {{ModelType::Sink,   -1}}},
-                    {ModelType::Sink,     {}}};
+                    {ModelType::Sink,   {}}};
         case PipelineType::Video_Call:
-            return {{ModelType::Retinaface, {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}},
-                    {ModelType::Gender,     {{ModelType::Sink,   -1}}},
-                    {ModelType::Age,        {{ModelType::Sink,   -1}}},
-                    {ModelType::Emotionnet, {{ModelType::Sink,   -1}}},
-                    {ModelType::Arcface,    {{ModelType::Sink,   -1}}},
+            return {{ModelType::Retinaface, {{ModelType::Emotionnet,  -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}},
+                    {ModelType::Gender,     {{ModelType::Sink, -1}}},
+                    {ModelType::Age,        {{ModelType::Sink, -1}}},
+                    {ModelType::Emotionnet, {{ModelType::Sink, -1}}},
+                    {ModelType::Arcface,    {{ModelType::Sink, -1}}},
                     {ModelType::Sink,   {}}};
         case PipelineType::Building_Security:
             return {{ModelType::Yolov5,     {{ModelType::Retinaface, 0}}},
@@ -521,4 +531,263 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
         i *= 2;
     }
     return time_per_frame[batch_size] * batch_size;
+}
+
+/// below part is the part for diatream
+std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> categorizeNodes(const std::vector<NodeHandle>& nodes) {
+    std::vector<NodeHandle> edges;
+    std::vector<NodeHandle> servers;
+
+    for (const auto& node : nodes) {
+        if (node.type == Edge) {
+            edges.push_back(node);
+        } else if (node.type == Server) {
+            servers.push_back(node);
+        }
+    }
+
+    return {edges, servers};
+}
+
+int calculateTotalprocessedRate(const std::vector<NodeHandle>& nodes, bool is_edge) {
+    auto [edges, servers] = categorizeNodes(nodes);
+    double totalEdgeRequestRate = 0;
+    double totalServerRequestRate = 0;
+    double totalLastRequestRate = 0;
+    if (is_edge){
+            for (const NodeHandle& edge : edges) {
+                totalLastRequestRate += edge.lastRequestRate;
+                for (const auto& microservicePair : edge.microservices) {
+                        const MicroserviceHandle* microservice = microservicePair.second;
+                        if (microservice) {
+                            totalEdgeRequestRate += microservice->metrics.requestRate;
+                        }
+                    }
+                }
+
+            return totalEdgeRequestRate - totalLastRequestRate;
+    }
+    else{
+        for (const NodeHandle& server : servers) {
+            totalLastRequestRate += server.lastRequestRate;
+        for (const auto& microservicePair : server.microservices) {
+            const MicroserviceHandle* microservice = microservicePair.second;
+            if (microservice) {
+                totalServerRequestRate += microservice->metrics.requestRate;
+            }
+        }
+    }
+
+    return totalServerRequestRate - totalLastRequestRate;
+    }
+
+
+
+}
+
+int calculateTotalQueue(const std::vector<NodeHandle>& nodes, bool is_edge) {
+    auto [edges, servers] = categorizeNodes(nodes);
+    double totalEdgeQueue = 0;
+    double totalServerQueue = 0;
+    if (is_edge){
+
+        for (const NodeHandle& edge : edges) {
+        for (const auto& microservicePair : edge.microservices) {
+                const MicroserviceHandle* microservice = microservicePair.second;
+                if (microservice) {
+                    totalEdgeQueue += std::accumulate(microservice->queue_lengths.begin(), microservice->queue_lengths.end(), 0);
+                }
+            }
+            }
+
+        return totalEdgeQueue;
+    }else{
+        for (const NodeHandle& server : servers) {
+        for (const auto& microservicePair : server.microservices) {
+                const MicroserviceHandle* microservice = microservicePair.second;
+                if (microservice) {
+                    totalServerQueue += std::accumulate(microservice->queue_lengths.begin(), microservice->queue_lengths.end(), 0);
+                }
+            }
+            }
+
+        return totalServerQueue;
+    }
+
+}
+
+// need to be change by TP is wrong
+double getMaxTP(std::vector<NodeHandle> nodes, bool is_edge)
+{
+    int processedRate = calculateTotalprocessedRate(nodes, is_edge);
+    if (calculateTotalQueue(nodes, is_edge) == 0.0)
+    {
+        return 0;
+    }
+    if (processedRate == 0.0)
+    {
+        return 6000.0; //return a large number means that No task to process because the current queue is too crowded
+    }
+    else
+    {
+        return processedRate;
+    }
+}
+
+
+void scheduleBaseParPointLoop(Partitioner* partitioner,std::vector<NodeHandle> nodes, std::vector<MicroserviceHandle> Microservices) {
+    float TPedgesAvg = 0.0f;
+    float TPserverAvg = 0.0f;
+    const float smooth = 0.4f;
+
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        float TPEdges = 0.0f;
+
+        auto [edges, servers] = categorizeNodes(nodes);
+        for (NodeHandle& edge : edges) {
+            int totalRequestRate = calculateTotalprocessedRate(nodes,true);
+            if (totalRequestRate != 0) {
+                TPEdges += getMaxTP(nodes,true);
+            }
+            edge.lastRequestRate = totalRequestRate;
+        }
+
+        //init the TPedgesAvg and TPserverAvg based on the current runtime
+        TPedgesAvg = smooth * TPedgesAvg + (1 - smooth) * TPEdges;
+        TPserverAvg = smooth * TPserverAvg + (1 - smooth) * getMaxTP(nodes,false);//this is server throughput
+
+        // partition the parpoint
+        if (TPedgesAvg > TPserverAvg + 10 * partitioner->server->num_processors) {
+            if (TPedgesAvg > 1.5 * TPserverAvg) {
+                partitioner->BaseParPoint += 0.006f;
+            } else if (TPedgesAvg > 1.3 * TPserverAvg) {
+                partitioner->BaseParPoint += 0.003f;
+            } else {
+                partitioner->BaseParPoint += 0.001f;
+            }
+        } else if (TPedgesAvg < TPserverAvg - 10 * partitioner->server->num_processors) {
+            if (1.5 * TPedgesAvg < TPserverAvg) {
+                partitioner->BaseParPoint -= 0.006f;
+            } else if (1.3 * TPedgesAvg < TPserverAvg) {
+                partitioner->BaseParPoint -= 0.003f;
+            } else {
+                partitioner->BaseParPoint -= 0.001f;
+            }
+        }
+
+        if (partitioner->BaseParPoint > 1) {
+            partitioner->BaseParPoint = 1;
+        } else if (partitioner->BaseParPoint < 0) {
+            partitioner->BaseParPoint = 0;
+        }
+        break;
+    }
+}
+
+float ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle>& nodes, bool is_edge) {
+    float sum = 0.0;
+    int N = nodes.size();
+    float edgeQueueCapacity = 200.0; //need to know the  real Capacity
+
+    if (N == 0) return 0; // incase N=0
+
+    for (const auto& node : nodes) {
+        float tmp = calculateTotalQueue(nodes,is_edge) / edgeQueueCapacity;
+        sum += tmp;
+    }
+    float norm = sum / static_cast<float>(N);
+    return norm;
+}
+
+void scheduleFineGrainedParPointLoop(Partitioner* partitioner,const std::vector<NodeHandle>& nodes) {
+    float w;
+    int totalEdgeQueue;
+    float edgeQueueCapacity = 400.0;
+    float edgeLatency;
+    float serverLatency;
+    float SLO;
+    // calculate the SLO first
+
+    //calculate the fine grained parpoint
+    while (true) {
+        // std::this_thread::sleep_for(std::chrono::milliseconds(250));  // every 250 weakup
+        auto [edges, servers] = categorizeNodes(nodes);
+
+        float wbar = ComputeAveragedNormalizedWorkload(edges,true);
+        for (NodeHandle& edge : edges) {
+            for (const auto& microservicePair : edge.microservices) {
+                        const MicroserviceHandle* microservice = microservicePair.second;
+                        if (microservice) {
+                            totalEdgeQueue += std::accumulate(microservice->queue_lengths.begin(), microservice->queue_lengths.end(), 0);
+                            w = static_cast<float>(totalEdgeQueue) / edgeQueueCapacity;
+                            float tmp = 0.0f;
+                            if (w == 0) {
+                                tmp = 1.0f;
+                            } else {
+                                tmp = (wbar - w) / std::max(wbar, w);//this part is diff from the paper, the paper not show how the latency will influence the parpoint
+                            }
+                            partitioner->FineGrainedOffset = tmp * partitioner->BaseParPoint;
+                            break;
+                        }
+                    }
+        }
+        break;
+    }
+}
+
+// didn't debug for DecideAndMoveContainer but the calculate of the parpoint is correct
+
+void DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &partitioner)
+{
+    float decisionPoint = partitioner.BaseParPoint + partitioner.FineGrainedOffset;
+    float GPUratio = calculateTotalGPU(nodes);
+    float tolerance = 0.1;
+    auto [edges, servers] = categorizeNodes(nodes);
+    float minGPUUsage = std::numeric_limits<float>::max();
+    MicroserviceHandle *leastUsedContainer = nullptr;
+    NodeHandle *leastUsedCudaNode = nullptr;
+
+    do
+    {
+        GPUratio = calculateTotalGPU(nodes);
+        // decided based on parpoint
+        if (decisionPoint > GPUratio + tolerance)
+        {
+            // Iterate through all the edge nodes to select the container with the smallest currently used GPU to the emptiest cuda_device, and give the smallest nodes to msvc
+            for (NodeHandle &edge : edges)
+            {
+                for (const auto &microservicePair : edge.microservices)
+                {
+                    // Select the smallest edge node in microservice->metrics.gpuUsage as the msvc for the move
+                    if (microservice && microservice->metrics.gpuUsage < minGPUUsage)
+                    {
+                        minGPUUsage = microservice->metrics.gpuUsage;
+                        leastUsedContainer = microservice;
+                        leastUsedCudaNode = microservice->device_agent;
+                    }
+
+                    MoveContainer(leastUsedCudaNode, cuda_device, false);
+                }
+            }
+        }
+            // same logic but to move the container from server to edge
+        else if (decisionPoint < GPUratio - tolerance)
+        {
+            for (NodeHandle &server : servers)
+            {
+                for (const auto &microservicePair : server.microservices)
+                {
+                    if (microservice && microservice->metrics.gpuUsage < minGPUUsage)
+                    {
+                        minGPUUsage = microservice->metrics.gpuUsage;
+                        leastUsedContainer = microservice;
+                        leastUsedCudaNode = microservice->device_agent;
+                    }
+
+                    MoveContainer(leastUsedCudaNode, cuda_device, false);
+                }
+            }
+        }
+    } while (decisionPoint < GPUratio - tolerance || decisionPoint > GPUratio + tolerance);
 }
