@@ -40,6 +40,12 @@ Controller::Controller()
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
 
+    // ========================= added =============================
+    auto clients_profiles = ClientProfiles();
+    auto models_profiles = ModelProfiles();
+
+    // =============================================================
+
     std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60001);
     ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
@@ -91,6 +97,12 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
 
     std::string tmp = t.name;
     containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {-1}}});
+
+    // ================== added ===============
+
+    std::string client_ip = device->ip;
+
+    // ========================================
     task->subtasks.insert({tmp, &containers[tmp]});
     task->subtasks[tmp]->recv_port = device->next_free_port++;
     device->containers.insert({tmp, task->subtasks[tmp]});
@@ -110,6 +122,19 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
 
     task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
     task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
+
+    // ======== added ========
+
+    // get the req of the first model(yolov5) of the pipeline
+    // FIXME@yuheng: the budget is the SLO - networking time in the paper
+    clients_profiles.add(client_ip, t.slo, task->subtasks[t.name + models[0].first]->metrics.requestRate);
+    // TODO@yuheng: wait for the implementation to retrieve the model profiles
+    models_profiles.add(models[0].first, 0, 2, 0.1, 320, 20);
+    // record the data source and first container of each pipeline for further update the upstream when switching mapping
+    data_sources.push_back(task->subtasks[t.name + ":datasource"]);
+    first_containers.push_back(task->subtasks[t.name + models[0].first]);
+
+    // =======================
     for (const auto &m : models)
     {
         for (const auto &d : m.second)
@@ -126,6 +151,71 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
         StartContainer(msvc, task->slo, t.source);
     }
 }
+
+// ========================== added ================================
+
+/**
+ * @brief update client-dnn mapping every 0.5s, and adjust the upstream of each model, set the input size of clients
+ *
+ */
+void Controller::update_and_adjust(int mills)
+{
+    std::chrono::milliseconds interval(mills);
+    while (true)
+    {
+        auto start = std::chrono::system_clock::now();
+        auto mappings = mapClient(this->clients_profiles, this->models_profiles);
+
+        // adjust the upstream of first container in the pipeline
+
+        // find the new downstream of data_source
+        for (auto &mapping : mappings)
+        {
+
+            const auto [model_info, selected_clients, batch_size] = mapping;
+
+            // match model with corresponding ContainerHandle
+            Controller::ContainerHandle *p;
+            for (auto &first_container : first_containers)
+            {
+                if (first_container->name == model_info.name)
+                {
+                    p = first_container;
+                    break;
+                }
+            }
+            // clear the upstream of this p, later adding new upstreams
+            p->upstreams.clear();
+
+            // adjust downstream
+            for (auto &client : selected_clients)
+            {
+                // match with corresponding ContainerHandle
+
+                Controller::ContainerHandle *ds;
+                for (auto &data_source : data_sources)
+                {
+                    if (data_source->device_agent->ip == client.ip)
+                    {
+                        ds = data_source;
+                        break;
+                    }
+                }
+
+                // adjust the upstream and downstream
+                ds->downstreams.clear();
+                ds->downstreams.push_back(p);
+                p->upstreams.push_back(ds);
+
+                // TODO: set (1) the batch_size of this container (2) the resolution of client
+            }
+        }
+
+        std::this_thread::sleep_until(start + interval);
+    }
+}
+
+// =================================================================
 
 void Controller::UpdateLightMetrics() {
     // TODO: Replace with Database Scraping
@@ -567,6 +657,11 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
 
 // ============================================== added ===================================================
 
+bool ModelSetCompare::operator()(const std::tuple<std::string, float> &lhs, const std::tuple<std::string, float> &rhs) const
+{
+    return std::get<1>(lhs) < std::get<1>(rhs);
+}
+
 /**
  * @brief add profiled information of model
  *
@@ -576,10 +671,10 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
  * @param inference_latency
  * @param throughput
  */
-void ModelProfiles::add(std::string model_type, float accuracy, int batch_size, float inference_latency, int throughput)
+void ModelProfiles::add(std::string name, float accuracy, int batch_size, float inference_latency, int resolution, int throughput)
 {
-    auto key = std::tuple<std::string, float>{model_type, accuracy};
-    ModelInfo value = {batch_size, inference_latency, throughput};
+    auto key = std::tuple<std::string, float>{name, accuracy};
+    ModelInfo value = {batch_size, inference_latency, throughput, resolution, name, accuracy};
     infos[key].push_back(value);
 }
 
@@ -637,7 +732,7 @@ std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models,
             if (lambda_i <= w_k)
             {
                 int k_prime = (w_k - lambda_i) / h;
-                int v = lambda_i + dp_mat[client_index - 1][k_prime];
+                int v = v_i + dp_mat[client_index - 1][k_prime];
                 if (v > dp_mat[client_index - 1][k])
                 {
                     dp_mat[client_index][k] = v;
@@ -674,7 +769,7 @@ std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models,
             row = row - 1;
             col = (w - w_i) / h;
             w = col * h;
-            assert(w == dp_mat[row, col]);
+            assert(w == dp_mat[row][col]);
             selected_clients.push_back(clients[row - 1]);
         }
     }
@@ -687,20 +782,21 @@ std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models,
  *
  * @param client_profile
  * @param model_profiles
- * @return std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>>
+ * @return a vector of [ (model_name, accuracy), vec[clients], batch_size ]
  */
 std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>>
 mapClient(ClientProfiles client_profile, ModelProfiles model_profiles)
 {
-    std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>> mapping;
+    std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>> mappings;
     std::vector<ClientInfo> clients = client_profile.infos;
     for (auto it = model_profiles.infos.begin(); it != model_profiles.infos.end(); ++it)
     {
         auto selected_clients = findOptimalClients(it->second, clients);
         int batch_size = check_and_assign(it->second, selected_clients);
-        mapping.push_back(std::make_tuple(it->first, selected_clients, batch_size));
+        mappings.push_back(std::make_tuple(it->first, selected_clients, batch_size));
         differenceClients(clients, selected_clients);
     }
+    return mappings;
 }
 
 /**
@@ -739,7 +835,7 @@ int check_and_assign(std::vector<ModelInfo> &model, std::vector<ClientInfo> &sel
  * @param budget
  * @return int
  */
-std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfo> &models, ClientInfo &client)
+std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfo> &models, const ClientInfo &client)
 {
     int max_batch_size = 0;
     float budget = client.budget;

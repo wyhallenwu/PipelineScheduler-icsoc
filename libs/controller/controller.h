@@ -9,6 +9,7 @@
 #include <LightGBM/c_api.h>
 #include <vector>
 #include <algorithm>
+#include <chrono>
 
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::ContainerConfig;
@@ -82,6 +83,75 @@ namespace TaskDescription
     void from_json(const nlohmann::json &j, TaskStruct &val);
 }
 
+// ========================================================== added ================================================================
+
+/*
+Jellyfish controller implementation. By Yuheng.
+
+Compared with the original jellyfish paper, we only consider the workload distribution part which means
+the following code implement 1.data adaptation, 2.client-DNN mapping 3. dynamic batching
+*/
+
+struct ModelInfo
+{
+    int batch_size;
+    float inferent_latency;
+    int throughput;
+    int resolution;
+    std::string name;
+    float accuracy;
+};
+
+/**
+ * @brief comparison of the key of ModelProfiles
+ *
+ */
+struct ModelSetCompare
+{
+    bool operator()(const std::tuple<std::string, float> &lhs, const std::tuple<std::string, float> &rhs) const;
+};
+class ModelProfiles
+{
+public:
+    // key: (model type, accuracy) value: (model_info)
+    std::map<std::tuple<std::string, float>, std::vector<ModelInfo>, ModelSetCompare> infos;
+
+    void add(std::string name, float accuracy, int batch_size, float inference_latency, int resolution, int throughput);
+};
+
+struct ClientInfo
+{
+    std::string ip;
+    float budget;
+    // std::tuple<int, int> input_size;
+    int req_rate;
+
+    bool operator==(const ClientInfo &other) const
+    {
+        return ip == other.ip &&
+               budget == other.budget &&
+               req_rate == other.req_rate;
+    }
+};
+
+class ClientProfiles
+{
+public:
+    std::vector<ClientInfo> infos;
+
+    void sortBudgetDescending(std::vector<ClientInfo> &clients);
+    void add(const std::string &ip, float budget, int req_rate);
+};
+
+std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>> mapClient(ClientProfiles client_profile, ModelProfiles model_profiles);
+std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models, std::vector<ClientInfo> &clients);
+int check_and_assign(std::vector<ModelInfo> &model, std::vector<ClientInfo> &selected_clients);
+
+// ================ helper functions ====================
+
+int findMaxBatchSize(const std::vector<ModelInfo> &models, const ClientInfo &client);
+void differenceClients(std::vector<ClientInfo> &src, const std::vector<ClientInfo> &diff);
+
 /**
  * @brief scheduling policy logic
  *
@@ -101,11 +171,15 @@ public:
 
     void Stop() { running = false; };
 
-private:
+    // ======================== added =========================
+
+    void update_and_adjust(int mills);
+
+    // ========================================================
+
     void UpdateLightMetrics();
 
     void UpdateFullMetrics();
-
     double LoadTimeEstimator(const char *model_path, double input_mem_size);
     int InferTimeEstimator(ModelType model, int batch_size);
 
@@ -222,114 +296,15 @@ private:
     ControlCommunication::AsyncService service;
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<ServerCompletionQueue> cq;
+
+    // ======================== added =========================
+
+    ClientProfiles clients_profiles;
+    ModelProfiles models_profiles;
+    std::vector<ContainerHandle *> first_containers;
+    std::vector<ContainerHandle *> data_sources;
+
+    // ========================================================
 };
-
-// ========================================================== added ================================================================
-
-/*
-Jellyfish controller implementation. By Yuheng.
-
-Compared with the original jellyfish paper, we only consider the workload distribution part which means
-the following code implement 1.data adaptation, 2.client-DNN mapping 3. dynamic batching
-*/
-
-/**
- * @brief jellyfish scheduler implementation
- *
- */
-class JellyfishScheduler
-{
-    // goal: (1) client-dnn mapping (2) interact with clients
-    // steps:
-    // 1.take the acc-latency profiles and client info
-    // 2. periodically update the client-dnn mapping, batch size for each worker and the input size of each client
-    // 3. notify the client with corresponding input size, distribute the mapping and batch size for workers
-    // info exchange:
-    // client: (1) inference request rate (2) estimated network bandwidth (3) SLO
-    // server: (1) input size
-};
-
-/**
- * @brief jellyfish dispatcher implementation
- *
- */
-class JellyfishDispatcher
-{
-    // goal: maintain worker pool for model deployment
-    // steps:
-    // 1. fetch the client-dnn mapping from scheduler
-    // 2. redirect requests to the workers
-};
-
-/**
- * @brief jellyfish scheduling logic: composed of scheduler and dispatcher
- *
- */
-class JellyfishController
-{
-    // compose scheduler and dispatcher
-};
-
-/**
- * @brief comparison of the key of ModelProfiles
- *
- */
-struct ModelSetCompare
-{
-    bool operator()(const std::tuple<std::string, float> &lhs, const std::tuple<std::string, float> &rhs) const
-    {
-        return std::get<1>(lhs) < std::get<1>(rhs);
-    }
-};
-
-struct ModelInfo
-{
-    int batch_size;
-    float inferent_latency;
-    int throughput;
-};
-
-class ModelProfiles
-{
-public:
-    // key: (model type, accuracy) value: (model_info)
-    std::map<std::tuple<std::string, float>, std::vector<ModelInfo>, ModelSetCompare>
-        infos;
-
-    void add(std::string model_type, float accuracy, int batch_size, float inference_latency, int throughput);
-};
-
-struct ClientInfo
-{
-    std::string ip;
-    float budget;
-    // std::tuple<int, int> input_size;
-    int req_rate;
-
-    bool operator==(const ClientInfo &other) const
-    {
-        return ip == other.ip &&
-               budget == other.budget &&
-               req_rate == other.req_rate;
-    }
-};
-
-class ClientProfiles
-{
-public:
-    std::vector<ClientInfo> infos;
-
-    void sortBudgetDescending(std::vector<ClientInfo> &clients);
-    void add(const std::string &ip, float budget, int req_rate);
-};
-
-std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>> mapClient(ClientProfiles client_profile, ModelProfiles model_profiles);
-std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models, std::vector<ClientInfo> &clients);
-int check_and_assign(std::vector<ModelInfo> &model, std::vector<ClientInfo> &selected_clients);
-
-// ================ helper functions ====================
-
-int findMaxBatchSize(const std::vector<ModelInfo> &models, ClientInfo &client);
-void differenceClients(std::vector<ClientInfo> &src, const std::vector<ClientInfo> &diff);
 
 #endif // PIPEPLUSPLUS_CONTROLLER_H
