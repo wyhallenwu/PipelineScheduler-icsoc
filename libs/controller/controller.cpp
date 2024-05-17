@@ -15,11 +15,12 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
     j.at("source").get_to(val.source);
     j.at("device").get_to(val.device);
 }
+
 Controller::Controller() {
     running = true;
     devices = std::map<std::string, NodeHandle>();
     tasks = std::map<std::string, TaskHandle>();
-    microservices = std::map<std::string, MicroserviceHandle>();
+    containers = std::map<std::string, ContainerHandle>();
 
     std::string server_address = absl::StrFormat("%s:%d", "localhost", 60001);
     ServerBuilder builder;
@@ -30,8 +31,8 @@ Controller::Controller() {
 }
 
 Controller::~Controller() {
-    for (auto &msvc: microservices) {
-        StopMicroservice(msvc.first, msvc.second.device_agent, true);
+    for (auto &msvc: containers) {
+        StopContainer(msvc.first, msvc.second.device_agent, true);
     }
     for (auto &device: devices) {
         device.second.cq->Shutdown();
@@ -63,21 +64,26 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     TaskHandle *task = &tasks[t.name];
     NodeHandle *device = &devices[t.device];
     auto models = getModelsByPipelineType(t.type);
-    // TODO: get initial batch sizes based on TaskDescription and Devices
-    std::map<std::string, int> batch_sizes = {};
+
     std::string tmp = t.name;
-    microservices.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, {}, {}}});
-    task->subtasks.insert({tmp, &microservices[tmp]});
+    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 0, -1}});
+    task->subtasks.insert({tmp, &containers[tmp]});
     task->subtasks[tmp]->recv_port = device->next_free_port++;
-    device->microservices.insert({tmp, task->subtasks[tmp]});
+    device->containers.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
+
+    std::map<std::string, int> batch_sizes = getInitialBatchSizes(models, t.slo, 10);
     for (const auto &m: models) {
         tmp = t.name;
-        microservices.insert({tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, {}, {}}});
-        task->subtasks.insert({tmp, &microservices[tmp]});
-        task->subtasks[tmp]->recv_port = device->next_free_port++;
-        device->microservices.insert({tmp, task->subtasks[tmp]});
+        // TODO: get correct initial batch sizes and cuda devices based on TaskDescription and System State
+        int cuda_device = 1;
+        containers.insert(
+                {tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, batch_sizes[m.first], cuda_device,
+                                       -1, device->next_free_port++, {}, {}, {}, {}}});
+        task->subtasks.insert({tmp, &containers[tmp]});
+        device->containers.insert({tmp, task->subtasks[tmp]});
     }
+
     task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + models[0].first]);
     task->subtasks[t.name + models[0].first]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
     for (const auto &m: models) {
@@ -88,22 +94,23 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
             task->subtasks[t.name + m.first]->downstreams.push_back(task->subtasks[tmp]);
         }
     }
-    for (std::pair<std::string, MicroserviceHandle *> msvc: task->subtasks) {
-        StartMicroservice(msvc, task->slo, batch_sizes[msvc.first], t.source);
+
+    for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
+        StartContainer(msvc, task->slo, t.source);
     }
 }
 
 void Controller::UpdateLightMetrics(google::protobuf::RepeatedPtrField<LightMetrics> metrics) {
     for (auto metric: metrics) {
-        microservices[metric.name()].queue_lengths = metric.queue_size();
-        microservices[metric.name()].metrics.requestRate = metric.request_rate();
+        containers[metric.name()].queue_lengths = metric.queue_size();
+        containers[metric.name()].metrics.requestRate = metric.request_rate();
     }
 }
 
 void Controller::UpdateFullMetrics(google::protobuf::RepeatedPtrField<FullMetrics> metrics) {
     for (auto metric: metrics) {
-        microservices[metric.name()].queue_lengths = metric.queue_size();
-        Metrics *m = &microservices[metric.name()].metrics;
+        containers[metric.name()].queue_lengths = metric.queue_size();
+        Metrics *m = &containers[metric.name()].metrics;
         m->requestRate = metric.request_rate();
         m->cpuUsage = metric.cpu_usage();
         m->memUsage = metric.mem_usage();
@@ -155,8 +162,9 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
                                      new CompletionQueue(),
                                      static_cast<DeviceType>(request.device_type()),
-                                     request.processors(),
-                                     request.memory(), {}, 55001}});
+                                     request.processors(), std::vector<double>(request.processors(), 0.0),
+                                     std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
+                                     std::vector<double>(request.processors(), 0.0), 55001, {}}});
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -165,58 +173,65 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     }
 }
 
-void Controller::StartMicroservice(std::pair<std::string, MicroserviceHandle *> &msvc, int slo, int batch_size,
-                                   std::string source) {
-    std::cout << "Starting microservice: " << msvc.first << std::endl;
-    MicroserviceConfig request;
+void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &container, int slo, std::string source) {
+    std::cout << "Starting container: " << container.first << std::endl;
+    ContainerConfig request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
-    request.set_name(msvc.first);
-    request.set_model(msvc.second->model);
-    request.set_bath_size(batch_size);
-    request.set_recv_port(msvc.second->recv_port);
+    request.set_name(container.first);
+    request.set_model(container.second->model);
+    request.set_batch_size(container.second->batch_size);
+    request.set_recv_port(container.second->recv_port);
     request.set_slo(slo);
-    for (auto dwnstr: msvc.second->downstreams) {
+    request.set_device(container.second->cuda_device);
+    for (auto dwnstr: container.second->downstreams) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name(dwnstr->name);
-        dwn->set_ip(dwnstr->device_agent->ip);
+        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
+        dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
+                                (container.second->cuda_device == dwnstr->cuda_device));
     }
     if (request.downstream_size() == 0) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name("video_sink");
         dwn->set_ip("./out.log"); //output log file
         dwn->set_class_of_interest(-1);
+        dwn->set_gpu_connection(false);
     }
-    if (msvc.second->model == DataSource) {
+    if (container.second->model == DataSource) {
         Neighbor *up = request.add_upstream();
         up->set_name("video_source");
         up->set_ip(source);
         up->set_class_of_interest(-1);
+        up->set_gpu_connection(false);
     } else {
-        for (auto upstr: msvc.second->upstreams) {
+        for (auto upstr: container.second->upstreams) {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
             up->set_ip(absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
             up->set_class_of_interest(-2);
+            up->set_gpu_connection((container.second->device_agent == upstr->device_agent) &&
+                                   (container.second->cuda_device == upstr->cuda_device));
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            msvc.second->device_agent->stub->AsyncStartMicroservice(&context, request, msvc.second->device_agent->cq));
+            container.second->device_agent->stub->AsyncStartContainer(&context, request,
+                                                                      container.second->device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
-    GPR_ASSERT(msvc.second->device_agent->cq->Next(&got_tag, &ok));
+    GPR_ASSERT(container.second->device_agent->cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
     if (!status.ok()) {
         std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
     }
 }
 
-void Controller::MoveMicroservice(Controller::MicroserviceHandle *msvc, bool to_edge) {
-    NodeHandle * old_device = msvc->device_agent;
-    NodeHandle * device;
+void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge) {
+    NodeHandle *old_device = msvc->device_agent;
+    NodeHandle *device;
     if (to_edge) {
         device = msvc->upstreams[0]->device_agent;
     } else {
@@ -224,19 +239,20 @@ void Controller::MoveMicroservice(Controller::MicroserviceHandle *msvc, bool to_
     }
     msvc->device_agent = device;
     msvc->recv_port = device->next_free_port++;
-    device->microservices.insert({msvc->name, msvc});
-    std::pair<std::string, MicroserviceHandle *> pair = {msvc->name, msvc};
-    StartMicroservice(pair, msvc->task->slo, 0, "");
+    device->containers.insert({msvc->name, msvc});
+    msvc->cuda_device = cuda_device;
+    std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
+    StartContainer(pair, msvc->task->slo, "");
     for (auto upstr: msvc->upstreams) {
         AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
     }
-    StopMicroservice(msvc->name, old_device);
-    old_device->microservices.erase(msvc->name);
+    StopContainer(msvc->name, old_device);
+    old_device->containers.erase(msvc->name);
 }
 
-void Controller::AdjustUpstream(int port, Controller::MicroserviceHandle *upstr, Controller::NodeHandle *new_device,
+void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr, Controller::NodeHandle *new_device,
                                 const std::string &dwnstr) {
-    MicroserviceLink request;
+    ContainerLink request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
@@ -253,15 +269,32 @@ void Controller::AdjustUpstream(int port, Controller::MicroserviceHandle *upstr,
     GPR_ASSERT(ok);
 }
 
-void Controller::StopMicroservice(std::string name, NodeHandle *device, bool forced) {
-    MicroserviceSignal request;
+void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs) {
+    msvc->batch_size = new_bs;
+    ContainerInt request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(msvc->name);
+    request.set_value(new_bs);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+}
+
+void Controller::StopContainer(std::string name, NodeHandle *device, bool forced) {
+    ContainerSignal request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
     request.set_name(name);
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            device->stub->AsyncStopMicroservice(&context, request, microservices[name].device_agent->cq));
+            device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
@@ -269,33 +302,84 @@ void Controller::StopMicroservice(std::string name, NodeHandle *device, bool for
     GPR_ASSERT(ok);
 }
 
+void Controller::optimizeBatchSizeStep(
+        const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models,
+        std::map<std::string, int> &batch_sizes, std::vector<int> &estimated_infer_times, int nObjects){
+    int i = 0;
+    std::string candidate;
+    int candidate_index = 0;
+    int max_saving = 0;
+    for (const auto &m: models) {
+        int saving;
+        if (i == 0) {
+            saving = estimated_infer_times[i] - InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2);
+        } else {
+            saving = estimated_infer_times[i] -
+                     (InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2) * nObjects);
+        }
+        if (saving > max_saving) {
+            max_saving = saving;
+            candidate = m.first;
+            candidate_index = i;
+        }
+        i++;
+    }
+    batch_sizes[candidate] += 2;
+    estimated_infer_times[candidate_index] -= max_saving;
+}
+
+std::map<std::string, int> Controller::getInitialBatchSizes(
+        const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models, int slo,
+        int nObjects) {
+    std::map<std::string, int> batch_sizes = {};
+    std::vector<int> estimated_infer_times;
+
+    for (const auto &m: models) {
+        batch_sizes[m.first] = 1;
+        if (estimated_infer_times.size() == 0) {
+            estimated_infer_times.push_back(InferTimeEstimator(MODEL_TYPES[m.first], 1));
+        } else {
+            estimated_infer_times.push_back(InferTimeEstimator(MODEL_TYPES[m.first], 1) * nObjects);
+        }
+    }
+
+    while (slo < std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0)) {
+        optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
+    }
+    optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
+    return batch_sizes;
+}
+
 std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
 Controller::getModelsByPipelineType(PipelineType type) {
     switch (type) {
         case PipelineType::Traffic:
-            return {{":yolov5",     {{":retinaface", 0}, {":cartype", 2}, {":plate", 2}}},
+            return {{":yolov5",     {{":retinaface", 0}, {":carbrand", 2}, {":plate", 2}}},
                     {":retinaface", {{":arcface",    -1}}},
-                    {":arcface",    {}},
-                    {":cartype",    {}},
-                    {":plate",      {}}};
+                    {":arcface",    {{":basesink",   -1}}},
+                    {":carbrand",   {{":basesink",   -1}}},
+                    {":plate",      {{":basesink",   -1}}},
+                    {":basesink",   {}}};
         case PipelineType::Video_Call:
-            return {{":retinaface", {}},
-                    {":gender",     {}},
-                    {":age",        {}},
-                    {":emotion",    {}},
-                    {":arcface",    {}}};
+            return {{":retinaface", {{":emotion",  -1}, {":age", -1}, {":gender", -1}, {":arcface", -1}}},
+                    {":gender",     {{":basesink", -1}}},
+                    {":age",        {{":basesink", -1}}},
+                    {":emotion",    {{":basesink", -1}}},
+                    {":arcface",    {{":basesink", -1}}},
+                    {":basesink",   {}}};
         case PipelineType::Building_Security:
-            return {{":yolov5",     {}},
-                    {":retinaface", {}},
-                    {":movenet",    {}},
-                    {"gender",      {}},
-                    {":age",        {}}};
+            return {{":yolov5",     {{":retinaface", 0}}},
+                    {":retinaface", {{":gender",     -1}, {":age", -1}}},
+                    {":movenet",    {{":basesink",   -1}}},
+                    {"gender",      {{":basesink",   -1}}},
+                    {":age",        {{":basesink",   -1}}},
+                    {":basesink",   {}}};
         default:
             return {};
     }
 }
 
-double LoadTimeEstimator(const char* model_path, double input_mem_size){
+double Controller::LoadTimeEstimator(const char *model_path, double input_mem_size) {
     // Load the pre-trained model
     BoosterHandle booster;
     int num_iterations = 1;
@@ -331,6 +415,34 @@ double LoadTimeEstimator(const char* model_path, double input_mem_size){
     LGBM_BoosterFree(booster);
 
     return out_result[0];
+}
+
+int Controller::InferTimeEstimator(ModelType model, int batch_size) {
+    // TODO: check the model profile to estimate infer time
+    switch (model) {
+        case ModelType::Yolov5:
+            return 100 / batch_size;
+        case ModelType::Yolov5Datasource:
+            return 100 / batch_size;
+        case ModelType::Retinaface:
+            return 50 / batch_size;
+        case ModelType::CarBrand:
+            return 20 / batch_size;
+        case ModelType::Yolov5_Plate:
+            return 50 / batch_size;
+        case ModelType::Movenet:
+            return 50 / batch_size;
+        case ModelType::Arcface:
+            return 50 / batch_size;
+        case ModelType::Emotionnet:
+            return 20 / batch_size;
+        case ModelType::Age:
+            return 20 / batch_size;
+        case ModelType::Gender:
+            return 20 / batch_size;
+        default:
+            return 0;
+    }
 }
 
 int main() {

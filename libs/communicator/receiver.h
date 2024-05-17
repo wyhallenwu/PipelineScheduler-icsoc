@@ -75,7 +75,7 @@ private:
         void Proceed() final;
 
     private:
-        GpuPointerPayload request;
+        ImageDataPayload request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
@@ -88,11 +88,11 @@ private:
         void Proceed() final;
 
         void test() {
-            SharedMemPayload request;
+            ImageDataPayload request;
         }
 
     private:
-        SharedMemPayload request;
+        ImageDataPayload request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
@@ -105,7 +105,7 @@ private:
         void Proceed() final;
 
     private:
-        SerializedDataPayload request;
+        ImageDataPayload request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };

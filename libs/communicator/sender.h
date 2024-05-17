@@ -63,8 +63,8 @@ public:
     }
 
     std::string SendGpuPointer(
-            std::vector<RequestData<LocalGPUReqDataType>> &elements,
-            const RequestTimeType &timestamp, const std::string &path, const uint32_t &slo);
+            std::vector<std::vector<RequestData<LocalGPUReqDataType>>> &elements,
+            std::vector<RequestTimeType> &timestamp, std::vector<std::string> &path, std::vector<uint32_t> &slo);
 
 private:
     std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
@@ -74,7 +74,7 @@ private:
         memcpy(buffer, &handle, sizeof(cudaIpcMemHandle_t));
     }
 
-    std::map<void *, std::vector<RequestData<LocalGPUReqDataType>> *> tagToGpuPointer;
+    std::map<void *, std::vector<std::vector<RequestData<LocalGPUReqDataType>>> *> tagToGpuPointer;
 };
 
 class LocalCPUSender : public Sender {
@@ -90,9 +90,8 @@ public:
 
     std::string
     SendSharedMemory(
-        const std::vector<RequestData<LocalCPUReqDataType>> &elements, 
-        const RequestTimeType &timestamp, const std::string &path,
-                     const uint32_t &slo);
+            std::vector<std::vector<RequestData<LocalCPUReqDataType>>> &elements,
+            std::vector<RequestTimeType> &timestamp, std::vector<std::string> &path, std::vector<uint32_t> &slo);
 };
 
 class RemoteCPUSender : public Sender {
@@ -107,9 +106,8 @@ public:
     }
 
     std::string SendSerializedData(
-            const std::vector<RequestData<LocalCPUReqDataType>> &elements, 
-            const RequestTimeType &timestamp, const std::string &path,
-            const uint32_t &slo);
+            std::vector<std::vector<RequestData<LocalCPUReqDataType>>> &elements,
+            std::vector<RequestTimeType> &timestamp, std::vector<std::string> &path, std::vector<uint32_t> &slo);
 };
 
 #endif //PIPEPLUSPLUS_SENDER_H

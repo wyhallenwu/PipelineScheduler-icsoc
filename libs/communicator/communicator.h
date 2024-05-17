@@ -23,9 +23,8 @@
 using grpc::Channel;
 using grpc::Status;
 using pipelinescheduler::DataTransferService;
-using pipelinescheduler::GpuPointerPayload;
-using pipelinescheduler::SharedMemPayload;
-using pipelinescheduler::SerializedDataPayload;
+using pipelinescheduler::ImageDataPayload;
+using pipelinescheduler::ImageData;
 using EmptyMessage = google::protobuf::Empty;
 
 #endif //PIPEPLUSPLUS_COMMUNICATOR_H

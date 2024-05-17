@@ -13,6 +13,7 @@
 #include <google/protobuf/empty.pb.h>
 #include <filesystem>
 #include "receiver.h"
+#include <pqxx/pqxx>
 
 #include "microservice.h"
 #include "sender.h"
@@ -45,6 +46,15 @@ using indevicecommunication::Connection;
 using indevicecommunication::ProcessData;
 using EmptyMessage = google::protobuf::Empty;
 
+struct MetricsServerConfigs {
+    std::string ip = "localhost";
+    uint64_t port = 60004;
+    std::string DBName = "pipeline";
+    std::string user = "container_agent";
+    std::string password = "pipe";
+    uint64_t scrapeIntervalMilisec = 60000;
+};
+
 enum TransferMethod {
     LocalCPU,
     RemoteCPU,
@@ -54,6 +64,7 @@ enum TransferMethod {
 namespace msvcconfigs {
 
     std::tuple<json, json> loadJson();
+
     std::vector<BaseMicroserviceConfigs> LoadFromJson();
 }
 
@@ -76,7 +87,7 @@ public:
     ContainerAgent(const json &configs);
 
     ~ContainerAgent() {
-        for (auto msvc: msvcs) {
+        for (auto msvc: cont_msvcsList) {
             delete msvc;
         }
         server->Shutdown();
@@ -89,31 +100,38 @@ public:
     }
 
     void SendState();
+
     void START() {
-        for (auto msvc : msvcs) {
+        for (auto msvc: cont_msvcsList) {
             msvc->unpauseThread();
         }
         spdlog::info("=========================================== STARTS ===========================================");
     }
 
     void PROFILING_START(BatchSizeType batch) {
-        for (auto msvc : msvcs) {
+        for (auto msvc: cont_msvcsList) {
             msvc->unpauseThread();
         }
 
-        spdlog::info("======================================= PROFILING MODEL BATCH {0:d} =======================================", batch);
+        spdlog::info(
+                "======================================= PROFILING MODEL BATCH {0:d} =======================================",
+                batch);
     }
+
     void waitReady();
+
     bool checkReady();
+
     void waitPause();
+
     bool checkPause();
 
-    void addMicroservice(std::vector<Microservice*> msvcs) {
-        this->msvcs = msvcs;
+    void addMicroservice(std::vector<Microservice *> msvcs) {
+        this->cont_msvcsList = msvcs;
     }
 
     void dispatchMicroservices() {
-        for (auto msvc : msvcs) {
+        for (auto msvc: cont_msvcsList) {
             msvc->dispatchThread();
         }
     }
@@ -122,8 +140,11 @@ public:
 
     void loadProfilingConfigs();
 
+    void connectToMetricsServer();
+
 protected:
     uint8_t deviceIndex = -1;
+
     void ReportStart();
 
     class RequestHandler {
@@ -166,8 +187,8 @@ protected:
     class UpdateSenderRequestHandler : public RequestHandler {
     public:
         UpdateSenderRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                           std::atomic<bool> *run)
-                : RequestHandler(service, cq)  {
+                                   std::vector<Microservice *> *msvcs)
+                : RequestHandler(service, cq), msvcs(msvcs) {
             Proceed();
         }
 
@@ -175,13 +196,30 @@ protected:
 
     private:
         Connection request;
-        std::vector<Microservice*> *msvcs;
+        std::vector<Microservice *> *msvcs;
+    };
+
+    class UpdateBatchSizeRequestHandler : public RequestHandler {
+    public:
+        UpdateBatchSizeRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                      std::vector<Microservice *> *msvcs)
+                : RequestHandler(service, cq), msvcs(msvcs) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        indevicecommunication::BatchSize request;
+        std::vector<Microservice *> *msvcs;
     };
 
     void HandleRecvRpcs();
 
-    std::string name;
-    std::vector<Microservice*> msvcs;
+    std::string cont_name;
+    std::vector<Microservice *> cont_msvcsList;
+    std::string cont_pipeName;
+    std::string cont_taskName;
     float arrivalRate;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
@@ -193,7 +231,7 @@ protected:
     std::string cont_logDir;
     RUNMODE cont_RUNMODE;
     uint8_t cont_deviceIndex;
-    uint64_t cont_metricScrapeIntervalMilisec;
+    MetricsServerConfigs cont_metricsServerConfigs;
 };
 
 #endif //CONTAINER_AGENT_H

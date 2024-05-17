@@ -28,6 +28,7 @@ private:
     std::string link;
     cv::VideoCapture source;
     int wait_time_ms;
+    int frame_count;
 };
 
 
