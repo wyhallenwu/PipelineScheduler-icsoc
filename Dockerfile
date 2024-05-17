@@ -2,7 +2,7 @@
 FROM pipeplusplus:dev as builder
 
 USER root
-RUN apt install libspdlog-dev -y
+RUN apt install libspdlog-dev libpqxx-dev -y
 RUN mkdir /app/build -p
 COPY ./cmake /app/cmake
 COPY ./libs /app/libs

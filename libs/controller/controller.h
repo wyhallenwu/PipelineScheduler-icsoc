@@ -108,8 +108,11 @@ public:
 
 private:
     void UpdateLightMetrics(google::protobuf::RepeatedPtrField<LightMetrics> metrics);
+
     void UpdateFullMetrics(google::protobuf::RepeatedPtrField<FullMetrics> metrics);
-    double LoadTimeEstimator(const char* model_path, double input_mem_size);
+
+    double LoadTimeEstimator(const char *model_path, double input_mem_size);
+    int InferTimeEstimator(ModelType model, int batch_size);
 
     struct ContainerHandle;
     struct NodeHandle {
@@ -118,7 +121,7 @@ private:
         CompletionQueue *cq;
         DeviceType type;
         int num_processors; // number of processing units, 1 for Edge or # GPUs for server
-        std::vector<double> processors_utilizaion; // utilization per pu
+        std::vector<double> processors_utilization; // utilization per pu
         std::vector<unsigned long> mem_size; // memory size in MB
         std::vector<double> mem_utilization; // memory utilization per pu
         int next_free_port;
@@ -212,10 +215,22 @@ private:
 
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
                         std::string source = "");
+
     void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge);
+
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
+
     void AdjustBatchSize(ContainerHandle *msvc, int new_bs);
+
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
+
+    void optimizeBatchSizeStep(
+            const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models,
+            std::map<std::string, int> &batch_sizes, std::vector<int> &estimated_infer_times, int nObjects);
+
+    std::map<std::string, int> getInitialBatchSizes(
+            const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models, int slo,
+            int nObjects);
 
     static std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
     getModelsByPipelineType(PipelineType type);
