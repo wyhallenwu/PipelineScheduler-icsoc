@@ -15,6 +15,7 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
     j.at("source").get_to(val.source);
     j.at("device").get_to(val.device);
 }
+
 Controller::Controller() {
     running = true;
     devices = std::map<std::string, NodeHandle>();
@@ -71,13 +72,14 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     device->containers.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
 
+    std::map<std::string, int> batch_sizes = getInitialBatchSizes(models, t.slo, 10);
     for (const auto &m: models) {
         tmp = t.name;
         // TODO: get correct initial batch sizes and cuda devices based on TaskDescription and System State
-        int batch_size = 1;
         int cuda_device = 1;
-        containers.insert({tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, batch_size, cuda_device,
-                                                 -1, device->next_free_port++, {}, {}, {}, {}}});
+        containers.insert(
+                {tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, batch_sizes[m.first], cuda_device,
+                                       -1, device->next_free_port++, {}, {}, {}, {}}});
         task->subtasks.insert({tmp, &containers[tmp]});
         device->containers.insert({tmp, task->subtasks[tmp]});
     }
@@ -215,7 +217,8 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            container.second->device_agent->stub->AsyncStartContainer(&context, request, container.second->device_agent->cq));
+            container.second->device_agent->stub->AsyncStartContainer(&context, request,
+                                                                      container.second->device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
@@ -227,8 +230,8 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
 }
 
 void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge) {
-    NodeHandle * old_device = msvc->device_agent;
-    NodeHandle * device;
+    NodeHandle *old_device = msvc->device_agent;
+    NodeHandle *device;
     if (to_edge) {
         device = msvc->upstreams[0]->device_agent;
     } else {
@@ -299,6 +302,54 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     GPR_ASSERT(ok);
 }
 
+void Controller::optimizeBatchSizeStep(
+        const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models,
+        std::map<std::string, int> &batch_sizes, std::vector<int> &estimated_infer_times, int nObjects){
+    int i = 0;
+    std::string candidate;
+    int candidate_index = 0;
+    int max_saving = 0;
+    for (const auto &m: models) {
+        int saving;
+        if (i == 0) {
+            saving = estimated_infer_times[i] - InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2);
+        } else {
+            saving = estimated_infer_times[i] -
+                     (InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2) * nObjects);
+        }
+        if (saving > max_saving) {
+            max_saving = saving;
+            candidate = m.first;
+            candidate_index = i;
+        }
+        i++;
+    }
+    batch_sizes[candidate] += 2;
+    estimated_infer_times[candidate_index] -= max_saving;
+}
+
+std::map<std::string, int> Controller::getInitialBatchSizes(
+        const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models, int slo,
+        int nObjects) {
+    std::map<std::string, int> batch_sizes = {};
+    std::vector<int> estimated_infer_times;
+
+    for (const auto &m: models) {
+        batch_sizes[m.first] = 1;
+        if (estimated_infer_times.size() == 0) {
+            estimated_infer_times.push_back(InferTimeEstimator(MODEL_TYPES[m.first], 1));
+        } else {
+            estimated_infer_times.push_back(InferTimeEstimator(MODEL_TYPES[m.first], 1) * nObjects);
+        }
+    }
+
+    while (slo < std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0)) {
+        optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
+    }
+    optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
+    return batch_sizes;
+}
+
 std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
 Controller::getModelsByPipelineType(PipelineType type) {
     switch (type) {
@@ -319,16 +370,16 @@ Controller::getModelsByPipelineType(PipelineType type) {
         case PipelineType::Building_Security:
             return {{":yolov5",     {{":retinaface", 0}}},
                     {":retinaface", {{":gender",     -1}, {":age", -1}}},
-                    {":movenet",    {{":retinaface", 0}}},
-                    {"gender",      {{":basesink", -1}}},
-                    {":age",        {{":basesink", -1}}},
+                    {":movenet",    {{":basesink",   -1}}},
+                    {"gender",      {{":basesink",   -1}}},
+                    {":age",        {{":basesink",   -1}}},
                     {":basesink",   {}}};
         default:
             return {};
     }
 }
 
-double LoadTimeEstimator(const char* model_path, double input_mem_size){
+double Controller::LoadTimeEstimator(const char *model_path, double input_mem_size) {
     // Load the pre-trained model
     BoosterHandle booster;
     int num_iterations = 1;
@@ -364,6 +415,34 @@ double LoadTimeEstimator(const char* model_path, double input_mem_size){
     LGBM_BoosterFree(booster);
 
     return out_result[0];
+}
+
+int Controller::InferTimeEstimator(ModelType model, int batch_size) {
+    // TODO: check the model profile to estimate infer time
+    switch (model) {
+        case ModelType::Yolov5:
+            return 100 / batch_size;
+        case ModelType::Yolov5Datasource:
+            return 100 / batch_size;
+        case ModelType::Retinaface:
+            return 50 / batch_size;
+        case ModelType::CarBrand:
+            return 20 / batch_size;
+        case ModelType::Yolov5_Plate:
+            return 50 / batch_size;
+        case ModelType::Movenet:
+            return 50 / batch_size;
+        case ModelType::Arcface:
+            return 50 / batch_size;
+        case ModelType::Emotionnet:
+            return 20 / batch_size;
+        case ModelType::Age:
+            return 20 / batch_size;
+        case ModelType::Gender:
+            return 20 / batch_size;
+        default:
+            return 0;
+    }
 }
 
 int main() {
