@@ -33,8 +33,10 @@ private:
     cv::VideoCapture source;
     int wait_time_ms;
     int frame_count;
-    // image size
-    int image_size_idx;
+    // ====================== added ===========================
+    int width;
+    int height;
+    // ========================================================
 };
 
 #endif // PIPEPLUSPLUS_DATA_READER_H

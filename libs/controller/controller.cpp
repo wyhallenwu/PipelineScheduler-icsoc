@@ -155,7 +155,8 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
 // ========================== added ================================
 
 /**
- * @brief update client-dnn mapping every 0.5s, and adjust the upstream of each model, set the input size of clients
+ * @brief update client-dnn mapping every 0.5s, and adjust the upstream of each model, set the input size of clients.
+ * Run this function in another thread.
  *
  */
 void Controller::update_and_adjust(int mills)
@@ -172,13 +173,16 @@ void Controller::update_and_adjust(int mills)
         for (auto &mapping : mappings)
         {
 
-            const auto [model_info, selected_clients, batch_size] = mapping;
+            // const auto [model_info, selected_clients, batch_size] = mapping;
+            auto model_info = std::get<0>(mapping);
+            auto selected_clients = std::get<1>(mapping);
+            int batch_size = std::get<2>(mapping);
 
             // match model with corresponding ContainerHandle
             Controller::ContainerHandle *p;
             for (auto &first_container : first_containers)
             {
-                if (first_container->name == model_info.name)
+                if (first_container->name == std::get<0>(model_info))
                 {
                     p = first_container;
                     break;
@@ -203,11 +207,11 @@ void Controller::update_and_adjust(int mills)
                 }
 
                 // adjust the upstream and downstream
-                ds->downstreams.clear();
-                ds->downstreams.push_back(p);
-                p->upstreams.push_back(ds);
+                AdjustUpstream(p->recv_port, ds, p->device_agent, p->name);
 
                 // TODO: set (1) the batch_size of this container (2) the resolution of client
+                p->batch_size = batch_size;
+                // TODO: call the rpc to change the resolution of the client
             }
         }
 
@@ -362,6 +366,14 @@ void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_e
     old_device->containers.erase(msvc->name);
 }
 
+/**
+ * @brief after moving the current msvc, the upstream of this msvc should be redirected to the newly moved current msvc
+ *
+ * @param port port of this msvc's receiver after moving
+ * @param upstr upstream container
+ * @param new_device device of this msvc after moving
+ * @param dwnstr the updated name of this msvc
+ */
 void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr, Controller::NodeHandle *new_device,
                                 const std::string &dwnstr)
 {
@@ -694,24 +706,27 @@ std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models,
     // sort clients
     ClientProfiles::sortBudgetDescending(clients);
     std::tuple<int, int> best_cell;
-    int best_value;
+    int best_value = 0;
 
     // dp
     auto [max_batch_size, max_index] = findMaxBatchSize(models, clients[0]);
+
     assert(max_batch_size > 0);
 
     // construct the dp matrix
     int rows = clients.size() + 1;
     int h = 10; // assume gcd of all clients' req rate
-    int max_throughput = std::max_element(
-            models.begin(), models.end(),
-            [](const ModelInfo &a, ModelInfo &b)
-            {
-                return a.throughput < b.throughput;
-            });
-
-    int cols = max_throughput % h + 1;
+    // find max throughput
+    int max_throughput = 0;
+    for (auto &model : models)
+    {
+        if (model.throughput > max_throughput)
+        {
+            max_throughput = model.throughput;
+        }
+    }
     // init matrix
+    int cols = max_throughput % h + 1;
     std::vector<std::vector<int>> dp_mat(rows, std::vector<int>(cols, 0));
     // iterating
     int client_index = 1;

@@ -139,7 +139,7 @@ class ClientProfiles
 public:
     std::vector<ClientInfo> infos;
 
-    void sortBudgetDescending(std::vector<ClientInfo> &clients);
+    static void sortBudgetDescending(std::vector<ClientInfo> &clients);
     void add(const std::string &ip, float budget, int req_rate);
 };
 
@@ -149,7 +149,7 @@ int check_and_assign(std::vector<ModelInfo> &model, std::vector<ClientInfo> &sel
 
 // ================ helper functions ====================
 
-int findMaxBatchSize(const std::vector<ModelInfo> &models, const ClientInfo &client);
+std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfo> &models, const ClientInfo &client);
 void differenceClients(std::vector<ClientInfo> &src, const std::vector<ClientInfo> &diff);
 
 /**
@@ -301,8 +301,8 @@ public:
 
     ClientProfiles clients_profiles;
     ModelProfiles models_profiles;
-    std::vector<ContainerHandle *> first_containers;
-    std::vector<ContainerHandle *> data_sources;
+    std::vector<ContainerHandle *> first_containers; // the very first containers of the inference pipeline
+    std::vector<ContainerHandle *> data_sources;     // all data source containers
 
     // ========================================================
 };

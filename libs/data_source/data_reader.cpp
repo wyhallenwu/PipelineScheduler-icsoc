@@ -3,7 +3,6 @@
 DataReader::DataReader(const json &jsonConfigs) : Microservice(jsonConfigs)
 {
     loadConfigs(jsonConfigs, true);
-    image_size_idx = 0;
 };
 
 void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing)
@@ -19,6 +18,10 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing)
     frame_count = (jsonConfigs.at("msvc_idealBatchSize").get<int>() == 30) ? 1 :
             30 / (30 - jsonConfigs.at("msvc_idealBatchSize").get<int>());
     link = link.substr(link.find_last_of('/') + 1);
+
+    // init resolution for image
+    width = 640;
+    height = 640;
 };
 
 /**
@@ -42,14 +45,13 @@ void DataReader::Process()
         if (frame_count > 1 && i++ >= frame_count) {
             i = 1;
         } else {
+            // ============================= added ==============================
             // resize the image
-            cv::resize(frame, frame, cv::Size(msvc_dataShape[image_size_idx]), cv::INTER_LINEAR);
-
-            Request<LocalCPUReqDataType> req = {{{time}}, {msvc_svcLevelObjLatency},
-                                                {"[" + link + "_" +
-                                                 std::to_string((int) source.get(cv::CAP_PROP_POS_FRAMES)) + "]"}, 1,
-                                                {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols},
-                                                                                  frame}}};
+            cv::Mat resized_frame;
+            cv::resize(frame, resized_frame, cv::Size(width, height));
+            Request<LocalCPUReqDataType>
+                req = {{{time}}, {msvc_svcLevelObjLatency}, {"[" + link + "_" + std::to_string((int)source.get(cv::CAP_PROP_POS_FRAMES)) + "]"}, 1, {RequestData<LocalCPUReqDataType>{{resized_frame.dims, resized_frame.rows, resized_frame.cols},
+                                                                                  resized_frame}}};
             msvc_OutQueue[0]->emplace(req);
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
