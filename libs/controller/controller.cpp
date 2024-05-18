@@ -304,7 +304,7 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
 
 void Controller::optimizeBatchSizeStep(
         const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models,
-        std::map<std::string, int> &batch_sizes, std::vector<int> &estimated_infer_times, int nObjects){
+        std::map<std::string, int> &batch_sizes, std::vector<int> &estimated_infer_times, int nObjects) {
     int i = 0;
     std::string candidate;
     int candidate_index = 0;
@@ -417,32 +417,108 @@ double Controller::LoadTimeEstimator(const char *model_path, double input_mem_si
     return out_result[0];
 }
 
+// returns the profiling results for inference time per frame in a full batch in nanoseconds
 int Controller::InferTimeEstimator(ModelType model, int batch_size) {
-    // TODO: check the model profile to estimate infer time
+    std::map<int, int> time_per_frame;
     switch (model) {
         case ModelType::Yolov5:
-            return 100 / batch_size;
+            time_per_frame = {{1,  3602348},
+                              {2,  2726377},
+                              {4,  2467065},
+                              {8,  2575456},
+                              {16, 3220761},
+                              {32, 4680154},
+                              {64, 7773959}};
+            break;
         case ModelType::Yolov5Datasource:
-            return 100 / batch_size;
+            time_per_frame = {{1,  3602348},
+                              {2,  2726377},
+                              {4,  2467065},
+                              {8,  2575456},
+                              {16, 3220761},
+                              {32, 4680154},
+                              {64, 7773959}};
+            break;
         case ModelType::Retinaface:
-            return 50 / batch_size;
+            time_per_frame = {{1,  1780280},
+                              {2,  1527410},
+                              {4,  1357906},
+                              {8,  1564929},
+                              {16, 2177011},
+                              {32, 3399701},
+                              {64, 8146690}};
+            break;
         case ModelType::CarBrand:
-            return 20 / batch_size;
+            time_per_frame = {{1,  4998407},
+                              {2,  3335101},
+                              {4,  2344440},
+                              {8,  2476385},
+                              {16, 2483317},
+                              {32, 2357686},
+                              {64, 1155050}};
+            break;
         case ModelType::Yolov5_Plate:
-            return 50 / batch_size;
+            time_per_frame = {{1,  7304176},
+                              {2,  4909581},
+                              {4,  3225549},
+                              {8,  2883803},
+                              {16, 2871236},
+                              {32, 2004165},
+                              {64, 3094331}};
+            break;
         case ModelType::Movenet:
-            return 50 / batch_size;
+            time_per_frame = {{1,  1644526},
+                              {2,  3459537},
+                              {4,  2703916},
+                              {8,  2377614},
+                              {16, 2647643},
+                              {32, 2900894},
+                              {64, 2197719}};
+            break;
         case ModelType::Arcface:
-            return 50 / batch_size;
+            time_per_frame = {{1,  18120029},
+                              {2,  11226197},
+                              {4,  7883673},
+                              {8,  6364369},
+                              {16, 5620677},
+                              {32, 3370018},
+                              {64, 3206726}};
+            break;
         case ModelType::Emotionnet:
-            return 20 / batch_size;
+            time_per_frame = {{1,  3394144},
+                              {2,  1365037},
+                              {4,  1615653},
+                              {8,  1967143},
+                              {16, 1500867},
+                              {32, 1665680},
+                              {64, 1957914}};
+            break;
         case ModelType::Age:
-            return 20 / batch_size;
+            time_per_frame = {{1,  14729041},
+                              {2,  9050828},
+                              {4,  6112501},
+                              {8,  5015442},
+                              {16, 3927934},
+                              {32, 3523500},
+                              {64, 2899034}};
+            break;
         case ModelType::Gender:
-            return 20 / batch_size;
+            time_per_frame = {{1,  1357500},
+                              {2,  831649},
+                              {4,  687484},
+                              {8,  749792},
+                              {16, 1021500},
+                              {32, 1800263},
+                              {64, 4002824}};
+            break;
         default:
             return 0;
     }
+    int i = 1;
+    while (i < batch_size) {
+        i *= 2;
+    }
+    return time_per_frame[batch_size];
 }
 
 int main() {
@@ -477,7 +553,7 @@ int main() {
         }
         std::cout << "Enter name of task: ";
         std::cin >> task.name;
-        std::cout << "Enter SLO in ms: ";
+        std::cout << "Enter SLO in ns: ";
         std::cin >> task.slo;
         std::cout << "Enter total path to source file: ";
         std::cin >> task.source;

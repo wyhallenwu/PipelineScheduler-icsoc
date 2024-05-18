@@ -54,6 +54,7 @@ void ProfileGenerator::profileDataGenerator() {
             break;
         }
         else if (this->PAUSE_THREADS) {
+            std::cout << "";
             if (RELOADING) {
                 setDevice();
                 numWarmUpBatches = msvc_numWarmUpBatches;
