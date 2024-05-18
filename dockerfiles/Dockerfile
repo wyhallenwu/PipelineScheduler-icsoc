@@ -78,14 +78,14 @@ RUN apt update
 RUN apt-get install build-essential g++ python3-dev autotools-dev libicu-dev libbz2-dev libboost-all-dev -y
 
 # Install spdlog
-RUN apt install libspdlog-dev -y
+RUN apt install libspdlog-dev libpqxx-dev -y
 
 # Install posgresql-client
 RUN apt install postgresql-client -y
 
 # Store load time model
-ARG upload_model="upload_model.txt"
-ARG download_model="download_model.txt"
+ARG upload_model="upload_model_agx.txt"
+ARG download_model="download_model_agx.txt"
 COPY ${upload_model} /ltmodel
 COPY ${download_model} /ltmodel
 
