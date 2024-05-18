@@ -350,13 +350,13 @@ void DeviceAgent::MonitorDeviceStatus() {
                 if (container.second.reportMetrics && container.second.pid != 0) {
                     Profiler::sysStats stats = profiler->reportAtRuntime(container.second.pid);
                     container.second.metrics.cpuUsage =
-                            (1 - 1 / i) * container.second.metrics.cpuUsage + (1 / i) * stats.cpuUsage;
+                            (1 - 1 / i) * container.second.metrics.cpuUsage + (1 / i) * stats.cpuUtilization;
                     container.second.metrics.memUsage =
-                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.memoryUsage;
+                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.processMemoryUsage;
                     container.second.metrics.gpuUsage =
                             (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuUtilization;
                     container.second.metrics.gpuMemUsage =
-                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuMemoryUsage;
+                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.processGpuMemoryUsage;
                 }
             }
             ReportLightMetrics();
@@ -538,4 +538,4 @@ void DeviceAgent::UpdateBatchsizeRequestHandler::Proceed() {
 //     delete agent;
 //     return 0;
 // }
->>>>>>> 744764f2836eae6f6ade5f7cde435a7699497c43
+
