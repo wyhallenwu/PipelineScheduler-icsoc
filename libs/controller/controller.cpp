@@ -159,8 +159,10 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
  * Run this function in another thread.
  *
  */
-void Controller::update_and_adjust(int mills)
+void Controller::update_and_adjust()
 {
+    // TODO: spawn a thread for updating
+    int mills = 500;
     std::chrono::milliseconds interval(mills);
     while (true)
     {
@@ -173,7 +175,6 @@ void Controller::update_and_adjust(int mills)
         for (auto &mapping : mappings)
         {
 
-            // const auto [model_info, selected_clients, batch_size] = mapping;
             auto model_info = std::get<0>(mapping);
             auto selected_clients = std::get<1>(mapping);
             int batch_size = std::get<2>(mapping);
@@ -210,8 +211,12 @@ void Controller::update_and_adjust(int mills)
                 AdjustUpstream(p->recv_port, ds, p->device_agent, p->name);
 
                 // TODO: set (1) the batch_size of this container (2) the resolution of client
-                p->batch_size = batch_size;
-                // TODO: call the rpc to change the resolution of the client
+                AdjustBatchSize(p, batch_size);
+
+                // match the model with its profiling
+                int width = models_profiles.infos[model_info][0].width;
+                int height = models_profiles.infos[model_info][0].height;
+                AdjustImageSize(ds, width, height);
             }
         }
 
@@ -668,6 +673,42 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
 }
 
 // ============================================== added ===================================================
+
+/**
+ * @brief adjust the image shape of the client asynchronously
+ *
+ * @param ds
+ * @param width
+ * @param height
+ */
+void Controller::AdjustImageSize(ContainerHandle *ds, int width, int height)
+{
+    // FIXME: figure out the correctness
+    ImageShape request;
+    EmptyMessage reply;
+    ClientContext context;
+    Status status;
+    request.set_width(width);
+    request.set_height(height);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+        ds->device_agent->stub->AsyncUpdateImageShape(&context, request, ds->device_agent->cq));
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(ok);
+}
+
+ModelInfo::ModelInfo(int bs, float il,
+                     int w, int h, std::string n, float acc)
+{
+    batch_size = bs;
+    inferent_latency = il;
+    throughput = il / bs;
+    width = w;
+    height = h;
+    name = n;
+    accuracy = acc;
+}
 
 bool ModelSetCompare::operator()(const std::tuple<std::string, float> &lhs, const std::tuple<std::string, float> &rhs) const
 {

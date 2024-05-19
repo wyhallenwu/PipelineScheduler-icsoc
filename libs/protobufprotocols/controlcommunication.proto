@@ -12,6 +12,9 @@ service ControlCommunication {
   rpc UpdateDownstream(ContainerLink) returns (google.protobuf.Empty) {}
   rpc UpdateBatchSize(ContainerInt) returns (google.protobuf.Empty) {}
   rpc StopContainer(ContainerSignal) returns (google.protobuf.Empty) {}
+  rpc SendLightMetrics(LightMetricsList) returns (google.protobuf.Empty) {}
+  rpc SendFullMetrics(FullMetricsList) returns (google.protobuf.Empty) {}
+  rpc UpdateImageShape(ImageShape) returns (google.protobuf.Empty) {}
 }
 
 message ConnectionConfigs {
@@ -57,3 +60,7 @@ message ContainerInt {
   int32 value = 2;
 }
 
+message ImageShape {
+  int32 width = 1;
+  int32 height = 2;
+}

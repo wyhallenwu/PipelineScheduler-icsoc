@@ -11,6 +11,7 @@ service InDeviceCommunication {
   rpc UpdateSender(Connection) returns (google.protobuf.Empty) {}
   rpc UpdateBatchSize(BatchSize) returns (google.protobuf.Empty) {}
   rpc StopExecution(Signal) returns (google.protobuf.Empty) {}
+  rpc UpdateImageShape(ImageShape) returns (google.protobuf.Empty) {}
 }
 
 message Signal {
@@ -30,4 +31,9 @@ message ProcessData {
 
 message BatchSize {
   int32 size = 1;
+}
+
+message ImageShape {
+  int32 width = 1;
+  int32 height = 2;
 }

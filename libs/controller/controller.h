@@ -1,3 +1,16 @@
+/**
+ * @file controller.h
+ * @author yuheng wu (yuhengwu@kaist.ac.kr)
+ * @brief modified for jellyfish
+ * @version 0.1
+ * @date 2024-05-19
+ *
+ * @copyright Copyright (c) 2024
+ *
+ *
+ * ===== t
+ */
+
 #ifndef PIPEPLUSPLUS_CONTROLLER_H
 #define PIPEPLUSPLUS_CONTROLLER_H
 
@@ -17,6 +30,7 @@ using controlcommunication::ContainerLink;
 using controlcommunication::ContainerInt;
 using controlcommunication::ContainerSignal;
 using controlcommunication::ControlCommunication;
+using controlcommunication::ImageShape;
 using controlcommunication::Neighbor;
 using grpc::ClientAsyncResponseReader;
 using grpc::ClientContext;
@@ -147,7 +161,7 @@ std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, 
 std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models, std::vector<ClientInfo> &clients);
 int check_and_assign(std::vector<ModelInfo> &model, std::vector<ClientInfo> &selected_clients);
 
-// ================ helper functions ====================
+// ================================== helper functions =====================================
 
 std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfo> &models, const ClientInfo &client);
 void differenceClients(std::vector<ClientInfo> &src, const std::vector<ClientInfo> &diff);
@@ -173,7 +187,7 @@ public:
 
     // ======================== added =========================
 
-    void update_and_adjust(int mills);
+    void update_and_adjust();
 
     // ========================================================
 
@@ -304,6 +318,7 @@ public:
     std::vector<ContainerHandle *> first_containers; // the very first containers of the inference pipeline
     std::vector<ContainerHandle *> data_sources;     // all data source containers
 
+    void AdjustImageSize(ContainerHandle *ds, int width, int height);
     // ========================================================
 };
 
