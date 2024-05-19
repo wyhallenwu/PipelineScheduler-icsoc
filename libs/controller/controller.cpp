@@ -304,49 +304,71 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
 
 void Controller::optimizeBatchSizeStep(
         const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models,
-        std::map<std::string, int> &batch_sizes, std::vector<int> &estimated_infer_times, int nObjects) {
-    int i = 0;
+        std::map<std::string, int> &batch_sizes, std::map<std::string, int> &estimated_infer_times, int nObjects) {
     std::string candidate;
-    int candidate_index = 0;
     int max_saving = 0;
+    std::vector<std::string> blacklist;
     for (const auto &m: models) {
+        std::cout << "Model: " << m.first << " : " << batch_sizes[m.first] << std::endl;
         int saving;
-        if (i == 0) {
-            saving = estimated_infer_times[i] - InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2);
+        if (max_saving == 0) {
+            saving = estimated_infer_times[m.first] - InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2);
         } else {
-            saving = estimated_infer_times[i] -
+            if (std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
+                continue;
+            }
+            for (const auto &d: m.second) {
+                std::cout << "Downstream: " << batch_sizes[d.first] << std::endl;
+                if (batch_sizes[d.first] > (batch_sizes[m.first])) {
+                    blacklist.push_back(d.first);
+                }
+            }
+            saving = estimated_infer_times[m.first] -
                      (InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2) * nObjects);
         }
         if (saving > max_saving) {
             max_saving = saving;
             candidate = m.first;
-            candidate_index = i;
         }
-        i++;
     }
-    batch_sizes[candidate] += 2;
-    estimated_infer_times[candidate_index] -= max_saving;
+    std::cout << "Optimizing batch size for: " << candidate << std::endl;
+    batch_sizes[candidate] *= 2;
+    estimated_infer_times[candidate] -= max_saving;
 }
 
 std::map<std::string, int> Controller::getInitialBatchSizes(
         const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models, int slo,
         int nObjects) {
     std::map<std::string, int> batch_sizes = {};
-    std::vector<int> estimated_infer_times;
+    std::map<std::string, int> estimated_infer_times = {};
 
     for (const auto &m: models) {
         batch_sizes[m.first] = 1;
         if (estimated_infer_times.size() == 0) {
-            estimated_infer_times.push_back(InferTimeEstimator(MODEL_TYPES[m.first], 1));
+            estimated_infer_times[m.first] = (InferTimeEstimator(MODEL_TYPES[m.first], 1));
         } else {
-            estimated_infer_times.push_back(InferTimeEstimator(MODEL_TYPES[m.first], 1) * nObjects);
+            estimated_infer_times[m.first] = (InferTimeEstimator(MODEL_TYPES[m.first], 1) * nObjects);
         }
     }
 
-    while (slo < std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0)) {
+    int sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
+                              [](int acc, const std::pair<std::string, int>& p) {
+                                  return acc + p.second;
+                              });
+
+    while (slo < sum) {
+        std::cout << "Optimizing batch sizes: " << sum << std::endl;
         optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
+        sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
+                              [](int acc, const std::pair<std::string, int>& p) {
+                                  return acc + p.second;
+                              });
+        std::cout << "Batch sizes: " << sum << std::endl;
     }
     optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
+    for (const auto &m: models) {
+        std::cout << m.first << ": " << batch_sizes[m.first] << std::endl;
+    }
     return batch_sizes;
 }
 
@@ -443,7 +465,7 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
             time_per_frame = {{1,  1780280},
                               {2,  1527410},
                               {4,  1357906},
-                              {8,  1564929},
+                              {8,  1164929},
                               {16, 2177011},
                               {32, 3399701},
                               {64, 8146690}};
@@ -452,7 +474,7 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
             time_per_frame = {{1,  4998407},
                               {2,  3335101},
                               {4,  2344440},
-                              {8,  2476385},
+                              {8,  2176385},
                               {16, 2483317},
                               {32, 2357686},
                               {64, 1155050}};
