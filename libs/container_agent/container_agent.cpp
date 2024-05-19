@@ -311,8 +311,11 @@ ContainerAgent::ContainerAgent(const json &configs) {
     sender_cq = new CompletionQueue();
 
     run = true;
+    reportMetrics = true;
     std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
     receiver.detach();
+    std::thread metrics(&ContainerAgent::collectRuntimeMetrics, this);
+    metrics.detach();
 }
 
 void ContainerAgent::ReportStart() {
@@ -329,6 +332,43 @@ void ContainerAgent::ReportStart() {
     bool ok = false;
     GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
+}
+
+
+
+
+void ContainerAgent::collectRuntimeMetrics() {
+    // TODO: Implement a way to collect profile metrics (copy code from device Agent) and send to metrics server
+    std::vector<int> queueSizes;
+    int i, arrivalRate, lateCount;
+    while (run) {
+        for (auto msvc: cont_msvcsList) {
+            queueSizes.push_back(msvc->GetOutQueueSize(0));
+        }
+        arrivalRate = cont_msvcsList[1]->GetArrivalRate();
+        lateCount = cont_msvcsList[1]->GetDroppedReqCount();
+        if (i++ > 20) {
+            i = 0;
+            // report full metrics to metrics server including everything
+            
+        } else { // aggregate hardware
+            if (reportMetrics && pid != 0) {
+//                Profiler::sysStats stats = profiler->reportAtRuntime(container.second.pid);
+//                container.second.metrics.cpuUsage =
+//                        (1 - 1 / i) * container.second.metrics.cpuUsage + (1 / i) * stats.cpuUsage;
+//                container.second.metrics.memUsage =
+//                        (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.memoryUsage;
+//                container.second.metrics.gpuUsage =
+//                        (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuUtilization;
+//                container.second.metrics.gpuMemUsage =
+//                        (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuMemoryUsage;
+            }
+            // report partial metrics without hardware to metrics server (queue size and arrivalRate)
+
+        }
+        queueSizes.clear();
+        std::this_thread::sleep_for(std::chrono::milliseconds(cont_metricsServerConfigs.scrapeIntervalMilisec));
+    }
 }
 
 void ContainerAgent::SendState() {

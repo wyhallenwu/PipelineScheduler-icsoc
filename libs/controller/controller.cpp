@@ -22,7 +22,7 @@ Controller::Controller() {
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
 
-    std::string server_address = absl::StrFormat("%s:%d", "localhost", 60001);
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60001);
     ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
@@ -309,17 +309,15 @@ void Controller::optimizeBatchSizeStep(
     int max_saving = 0;
     std::vector<std::string> blacklist;
     for (const auto &m: models) {
-        std::cout << "Model: " << m.first << " : " << batch_sizes[m.first] << std::endl;
         int saving;
         if (max_saving == 0) {
             saving = estimated_infer_times[m.first] - InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2);
         } else {
-            if (std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
+            if (batch_sizes[m.first] == 64 || std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
                 continue;
             }
             for (const auto &d: m.second) {
-                std::cout << "Downstream: " << batch_sizes[d.first] << std::endl;
-                if (batch_sizes[d.first] > (batch_sizes[m.first])) {
+                if (batch_sizes[d.first] > batch_sizes[m.first]) {
                     blacklist.push_back(d.first);
                 }
             }
@@ -331,7 +329,6 @@ void Controller::optimizeBatchSizeStep(
             candidate = m.first;
         }
     }
-    std::cout << "Optimizing batch size for: " << candidate << std::endl;
     batch_sizes[candidate] *= 2;
     estimated_infer_times[candidate] -= max_saving;
 }
@@ -357,18 +354,13 @@ std::map<std::string, int> Controller::getInitialBatchSizes(
                               });
 
     while (slo < sum) {
-        std::cout << "Optimizing batch sizes: " << sum << std::endl;
         optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
         sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
                               [](int acc, const std::pair<std::string, int>& p) {
                                   return acc + p.second;
                               });
-        std::cout << "Batch sizes: " << sum << std::endl;
     }
     optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
-    for (const auto &m: models) {
-        std::cout << m.first << ": " << batch_sizes[m.first] << std::endl;
-    }
     return batch_sizes;
 }
 

@@ -390,6 +390,43 @@ using msvcconfigs::NeighborMicroserviceConfigs;
 using msvcconfigs::BaseMicroserviceConfigs;
 using msvcconfigs::MicroserviceType;
 
+class arrivalReqRecords {
+public:
+    arrivalReqRecords(uint64_t keepLength = 60000) {
+        this->keepLength = std::chrono::milliseconds(keepLength);
+    }
+    ~arrivalReqRecords() = default;
+
+
+
+    void addRecord(RequestTimeType timestamps) {
+        records.push_back(std::make_tuple(timestamps[0], timestamps[1], timestamps[2]));
+        clearOldRecords();
+    }
+
+    void clearOldRecords() {
+        std::chrono::milliseconds timePassed;
+        auto timeNow = std::chrono::high_resolution_clock::now();
+        auto it = records.begin();
+        while (it != records.end()) {
+            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - std::get<2>(*it));
+            if (timePassed > keepLength) {
+                it = records.erase(it);
+            } else {
+                break;
+            }
+        }
+    }
+
+    std::vector<std::tuple<ClockType, ClockType, ClockType>> getRecords() {
+        return records;
+    }
+
+private:
+    std::vector<std::tuple<ClockType, ClockType, ClockType>> records;
+    std::chrono::milliseconds keepLength;
+};
+
 /**
  * @brief 
  * 
@@ -432,6 +469,10 @@ public:
     }
 
     virtual QueueLengthType GetOutQueueSize(int i) { return msvc_OutQueue[i]->size(); };
+
+    int GetDroppedReqCount() { return droppedReqCount; };
+
+    int GetArrivalRate() { return msvc_interReqTime; };
 
     void stopThread() {
         STOP_THREADS = true;
@@ -575,13 +616,15 @@ protected:
     virtual bool isTimeToBatch() { return true; };
 
     //
-    virtual bool checkReqEligibility(ClockType currReq_genTime) { return true; };
+    virtual bool checkReqEligibility(std::vector<ClockType> &currReq_time) { return true; };
 
     //
     virtual void updateReqRate(ClockType lastInterReqDuration);
 
     // Logging file path, where each microservice is supposed to log in running metrics
     std::string msvc_microserviceLogPath;
+
+    int droppedReqCount;
 };
 
 

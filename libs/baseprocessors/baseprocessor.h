@@ -149,13 +149,15 @@ public:
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 protected:
-    // Record 
+    // Record
     arrivalReqRecords msvc_arrivalRecords{120000};
 
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
     bool isTimeToBatch() override;
-    bool checkReqEligibility(ClockType currReq_genTime) override;
+    template <typename T>
+    bool validateRequest(Request<T> &req);
+    bool checkReqEligibility(std::vector<ClockType> &currReq_time) override;
 
     uint8_t msvc_imgType, msvc_colorCvtType, msvc_resizeInterpolType;
     float msvc_imgNormScale;
@@ -193,8 +195,6 @@ protected:
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;
     TRTConfigs msvc_engineConfigs;
     Engine* msvc_inferenceEngine = nullptr;
-
-    bool checkReqEligibility(ClockType currReq_genTime) override;
 };
 
 /**

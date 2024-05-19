@@ -39,18 +39,6 @@ BaseBatchInferencer::BaseBatchInferencer(const json &jsonConfigs) : Microservice
     info("{0:s} is created.", msvc_name); 
 }
 
-/**
- * @brief Check if the request is still worth being processed.
- * For instance, if the request is already late at the moment of checking, there is no value in processing it anymore.
- * 
- * @tparam InType 
- * @return true 
- * @return false 
- */
-bool BaseBatchInferencer::checkReqEligibility(ClockType currReq_gentime) {
-    return true;
-}
-
 void BaseBatchInferencer::inference() {
     // The time where the last request was generated.
     ClockType lastReq_genTime;

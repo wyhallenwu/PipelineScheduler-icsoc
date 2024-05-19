@@ -16,6 +16,7 @@ DataSourceAgent::DataSourceAgent(
     const json &configs
 ) : ContainerAgent(configs) {
 
+    reportMetrics = false;
     json pipeConfigs = configs["container"]["cont_pipeline"];
     cont_msvcsList.push_back(new DataReader(pipeConfigs[0]));
     cont_msvcsList.push_back(new RemoteCPUSender(pipeConfigs[1]));

@@ -146,6 +146,7 @@ protected:
     uint8_t deviceIndex = -1;
 
     void ReportStart();
+    void collectRuntimeMetrics();
 
     class RequestHandler {
     public:
@@ -227,6 +228,8 @@ protected:
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     std::atomic<bool> run;
+    bool reportMetrics;
+    int pid;
 
     std::string cont_logDir;
     RUNMODE cont_RUNMODE;

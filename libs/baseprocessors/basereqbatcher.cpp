@@ -320,32 +320,25 @@ void BaseReqBatcher::batchRequests() {
         }
         if (msvc_activeInQueueIndex.at(0) == 1) {
             currCPUReq = msvc_InQueue.at(0)->pop1();
+            if (!validateRequest<LocalCPUReqDataType>(currCPUReq)) {
+                continue;
+            }
             currReq = uploadReq(currCPUReq);
         } else if (msvc_activeInQueueIndex.at(0) == 2) {
             currReq = msvc_InQueue.at(0)->pop2();
-        }
-        // Meaning the the timeout in pop() has been reached and no request was actually popped
-        if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
-            continue;
+            if (!validateRequest<LocalGPUReqDataType>(currReq)) {
+                continue;
+            }
         }
 
         msvc_inReqCount++;
-        currReq_genTime = currReq.req_origGenTime[0][0];
 
-        // We need to check if the next request is worth processing.
-        // If it's too late, then we can drop and stop processing this request.
-        if (!this->checkReqEligibility(currReq_genTime)) {
-            continue;
-        }
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
-        currReq_recvTime = std::chrono::high_resolution_clock::now();
+        currReq_genTime = currReq.req_origGenTime[0][0];
         if (this->msvc_inReqCount > 1) {
             this->updateReqRate(currReq_genTime);
         }
-        // `currReq_recvTime` will also be used to measured how much for the req to sit in queue and 
-        // how long it took for the request to be preprocessed
-        currReq.req_origGenTime[0].emplace_back(currReq_recvTime);
 
         currReq_batchSize = currReq.req_batchSize;
 
@@ -429,6 +422,17 @@ void BaseReqBatcher::batchRequests() {
     msvc_logFile.close();
 }
 
+template <typename T>
+bool BaseReqBatcher::validateRequest(Request<T> &req) {
+    // Meaning the the timeout in pop() has been reached and no request was actually popped
+    if (strcmp(req.req_travelPath[0].c_str(), "empty") == 0) {
+        return false;
+    }
+
+    // We need to check if the next request is worth processing.
+    // If it's too late, then we can drop and stop processing this request.
+    return this->checkReqEligibility(req.req_origGenTime[0]);
+}
 
 void BaseReqBatcher::batchRequestsProfiling() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
@@ -437,7 +441,6 @@ void BaseReqBatcher::batchRequestsProfiling() {
     // The time where the current incoming request was generated.
     ClockType currReq_genTime;
     // The time where the current incoming request arrives
-    ClockType currReq_recvTime;
 
     // Batch reqs' gen time
     BatchTimeType outBatch_genTime;
@@ -515,32 +518,25 @@ void BaseReqBatcher::batchRequestsProfiling() {
         trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
         if (msvc_activeInQueueIndex.at(0) == 1) {
             currCPUReq = msvc_InQueue.at(0)->pop1();
+            if (!validateRequest<LocalCPUReqDataType>(currCPUReq)) {
+                continue;
+            }
             currReq = uploadReq(currCPUReq);
         } else if (msvc_activeInQueueIndex.at(0) == 2) {
             currReq = msvc_InQueue.at(0)->pop2();
-        }
-        // Meaning the the timeout in pop() has been reached and no request was actually popped
-        if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
-            continue;
+            if (!validateRequest<LocalGPUReqDataType>(currReq)) {
+                continue;
+            }
         }
 
         msvc_inReqCount++;
-        currReq_genTime = currReq.req_origGenTime[0][0];
 
-        // We need to check if the next request is worth processing.
-        // If it's too late, then we can drop and stop processing this request.
-        if (!this->checkReqEligibility(currReq_genTime)) {
-            continue;
-        }
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
-        currReq_recvTime = std::chrono::high_resolution_clock::now();
+        currReq_genTime = currReq.req_origGenTime[0][0];
         if (this->msvc_inReqCount > 1) {
             this->updateReqRate(currReq_genTime);
         }
-        // `currReq_recvTime` will also be used to measured how much for the req to sit in queue and 
-        // how long it took for the request to be preprocessed
-        currReq.req_origGenTime[0].emplace_back(currReq_recvTime); // SECOND_TIMESTAMP
 
         currReq_batchSize = currReq.req_batchSize;
 
@@ -656,6 +652,15 @@ bool BaseReqBatcher::isTimeToBatch() {
  * @return true 
  * @return false 
  */
-bool BaseReqBatcher::checkReqEligibility(ClockType currReq_gentime) {
+bool BaseReqBatcher::checkReqEligibility(std::vector<ClockType> &currReq_time) {
+    auto now = std::chrono::high_resolution_clock::now();
+    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - currReq_time[0]).count();
+    if (diff > this->msvc_svcLevelObjLatency) {
+        this->droppedReqCount++;
+        return false;
+    }
+    // `currReq_recvTime` will also be used to measured how much for the req to sit in queue and
+    // how long it took for the request to be preprocessed
+    currReq_time.emplace_back(now); // SECOND_TIMESTAMP
     return true;
 }
