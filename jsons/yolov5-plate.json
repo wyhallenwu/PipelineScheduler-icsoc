@@ -5,7 +5,7 @@
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",
-                "msvc_idealBatchSize": 2,
+                "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "../jsons/yolov5_receiver.json",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -57,12 +57,12 @@
             },
             {
                 "msvc_name": "::preprocessor",
-                "msvc_idealBatchSize": 2,
+                "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "../jsons/yolov5_preproc.json",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 4,
+                        "nb_commMethod": 3,
                         "nb_link": [
                             ""
                         ],
@@ -88,7 +88,7 @@
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 4,
+                        "nb_commMethod": 3,
                         "nb_link": [
                             ""
                         ],
@@ -121,7 +121,7 @@
             },
             {
                 "msvc_name": "::inference",
-                "msvc_idealBatchSize": 2,
+                "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "../jsons/yolov5_trt.json",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -182,13 +182,13 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/yolov5n_224_224_dynamic_nms_3090_fp32_20_1.engine",
+                "path": "../models/yolov5n_224_224_dynamic_nms_3090_fp32_32_1.engine",
                 "prec": 4,
                 "device": 0
             },
             {
                 "msvc_name": "::postprocessor",
-                "msvc_idealBatchSize": 2,
+                "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -246,7 +246,7 @@
             },
             {
                 "msvc_name": "::sender",
-                "msvc_idealBatchSize": 4,
+                "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -294,10 +294,11 @@
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
             }
         ],
+        "cont_metricServerConfigs": "../jsons/metricsserver.json",
         "cont_metricScrapeIntervalSecond": 60
     },
     "profiling": {
-        "profile_minBatch": 16,
+        "profile_minBatch": 1,
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,

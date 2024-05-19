@@ -82,7 +82,7 @@ bool DeviceAgent::CreateContainer(
             break;
         case ModelType::Arcface:
             file.open("../jsons/arcface.json");
-            executable = "./Container_Arcface";
+            executable = "./Container_ArcFace";
             break;
         case ModelType::BaseSink:
             executable = "./runSink";
@@ -98,7 +98,7 @@ bool DeviceAgent::CreateContainer(
             break;
         case ModelType::Emotionnet:
             file.open("../jsons/emotionnet.json");
-            executable = "./Container_Emotionnet";
+            executable = "./Container_EmotionNet";
             break;
         case ModelType::Gender:
             file.open("../jsons/gender.json");
@@ -106,11 +106,11 @@ bool DeviceAgent::CreateContainer(
             break;
         case ModelType::Movenet:
             file.open("../jsons/movenet.json");
-            executable = "./Container_Movenet";
+            executable = "./Container_MoveNet";
             break;
         case ModelType::Retinaface:
             file.open("../jsons/retinaface.json");
-            executable = "./Container_Retinaface";
+            executable = "./Container_RetinaFace";
             break;
         case ModelType::Yolov5:
             file.open("../jsons/yolov5.json");
@@ -118,7 +118,7 @@ bool DeviceAgent::CreateContainer(
             break;
         case ModelType::Yolov5_Plate:
             file.open("../jsons/yolov5-plate.json");
-            executable = "./Container_Yolov5_Plate";
+            executable = "./Container_Yolov5-plate";
             break;
         default:
             std::cerr << "Invalid model type" << std::endl;

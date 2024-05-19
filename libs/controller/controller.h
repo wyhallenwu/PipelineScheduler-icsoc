@@ -226,7 +226,7 @@ private:
 
     void optimizeBatchSizeStep(
             const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models,
-            std::map<std::string, int> &batch_sizes, std::vector<int> &estimated_infer_times, int nObjects);
+            std::map<std::string, int> &batch_sizes, std::map<std::string, int> &estimated_infer_times, int nObjects);
 
     std::map<std::string, int> getInitialBatchSizes(
             const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models, int slo,

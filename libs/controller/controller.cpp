@@ -304,49 +304,71 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
 
 void Controller::optimizeBatchSizeStep(
         const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models,
-        std::map<std::string, int> &batch_sizes, std::vector<int> &estimated_infer_times, int nObjects){
-    int i = 0;
+        std::map<std::string, int> &batch_sizes, std::map<std::string, int> &estimated_infer_times, int nObjects) {
     std::string candidate;
-    int candidate_index = 0;
     int max_saving = 0;
+    std::vector<std::string> blacklist;
     for (const auto &m: models) {
+        std::cout << "Model: " << m.first << " : " << batch_sizes[m.first] << std::endl;
         int saving;
-        if (i == 0) {
-            saving = estimated_infer_times[i] - InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2);
+        if (max_saving == 0) {
+            saving = estimated_infer_times[m.first] - InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2);
         } else {
-            saving = estimated_infer_times[i] -
+            if (std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
+                continue;
+            }
+            for (const auto &d: m.second) {
+                std::cout << "Downstream: " << batch_sizes[d.first] << std::endl;
+                if (batch_sizes[d.first] > (batch_sizes[m.first])) {
+                    blacklist.push_back(d.first);
+                }
+            }
+            saving = estimated_infer_times[m.first] -
                      (InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2) * nObjects);
         }
         if (saving > max_saving) {
             max_saving = saving;
             candidate = m.first;
-            candidate_index = i;
         }
-        i++;
     }
-    batch_sizes[candidate] += 2;
-    estimated_infer_times[candidate_index] -= max_saving;
+    std::cout << "Optimizing batch size for: " << candidate << std::endl;
+    batch_sizes[candidate] *= 2;
+    estimated_infer_times[candidate] -= max_saving;
 }
 
 std::map<std::string, int> Controller::getInitialBatchSizes(
         const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models, int slo,
         int nObjects) {
     std::map<std::string, int> batch_sizes = {};
-    std::vector<int> estimated_infer_times;
+    std::map<std::string, int> estimated_infer_times = {};
 
     for (const auto &m: models) {
         batch_sizes[m.first] = 1;
         if (estimated_infer_times.size() == 0) {
-            estimated_infer_times.push_back(InferTimeEstimator(MODEL_TYPES[m.first], 1));
+            estimated_infer_times[m.first] = (InferTimeEstimator(MODEL_TYPES[m.first], 1));
         } else {
-            estimated_infer_times.push_back(InferTimeEstimator(MODEL_TYPES[m.first], 1) * nObjects);
+            estimated_infer_times[m.first] = (InferTimeEstimator(MODEL_TYPES[m.first], 1) * nObjects);
         }
     }
 
-    while (slo < std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0)) {
+    int sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
+                              [](int acc, const std::pair<std::string, int>& p) {
+                                  return acc + p.second;
+                              });
+
+    while (slo < sum) {
+        std::cout << "Optimizing batch sizes: " << sum << std::endl;
         optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
+        sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
+                              [](int acc, const std::pair<std::string, int>& p) {
+                                  return acc + p.second;
+                              });
+        std::cout << "Batch sizes: " << sum << std::endl;
     }
     optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
+    for (const auto &m: models) {
+        std::cout << m.first << ": " << batch_sizes[m.first] << std::endl;
+    }
     return batch_sizes;
 }
 
@@ -417,32 +439,108 @@ double Controller::LoadTimeEstimator(const char *model_path, double input_mem_si
     return out_result[0];
 }
 
+// returns the profiling results for inference time per frame in a full batch in nanoseconds
 int Controller::InferTimeEstimator(ModelType model, int batch_size) {
-    // TODO: check the model profile to estimate infer time
+    std::map<int, int> time_per_frame;
     switch (model) {
         case ModelType::Yolov5:
-            return 100 / batch_size;
+            time_per_frame = {{1,  3602348},
+                              {2,  2726377},
+                              {4,  2467065},
+                              {8,  2575456},
+                              {16, 3220761},
+                              {32, 4680154},
+                              {64, 7773959}};
+            break;
         case ModelType::Yolov5Datasource:
-            return 100 / batch_size;
+            time_per_frame = {{1,  3602348},
+                              {2,  2726377},
+                              {4,  2467065},
+                              {8,  2575456},
+                              {16, 3220761},
+                              {32, 4680154},
+                              {64, 7773959}};
+            break;
         case ModelType::Retinaface:
-            return 50 / batch_size;
+            time_per_frame = {{1,  1780280},
+                              {2,  1527410},
+                              {4,  1357906},
+                              {8,  1164929},
+                              {16, 2177011},
+                              {32, 3399701},
+                              {64, 8146690}};
+            break;
         case ModelType::CarBrand:
-            return 20 / batch_size;
+            time_per_frame = {{1,  4998407},
+                              {2,  3335101},
+                              {4,  2344440},
+                              {8,  2176385},
+                              {16, 2483317},
+                              {32, 2357686},
+                              {64, 1155050}};
+            break;
         case ModelType::Yolov5_Plate:
-            return 50 / batch_size;
+            time_per_frame = {{1,  7304176},
+                              {2,  4909581},
+                              {4,  3225549},
+                              {8,  2883803},
+                              {16, 2871236},
+                              {32, 2004165},
+                              {64, 3094331}};
+            break;
         case ModelType::Movenet:
-            return 50 / batch_size;
+            time_per_frame = {{1,  1644526},
+                              {2,  3459537},
+                              {4,  2703916},
+                              {8,  2377614},
+                              {16, 2647643},
+                              {32, 2900894},
+                              {64, 2197719}};
+            break;
         case ModelType::Arcface:
-            return 50 / batch_size;
+            time_per_frame = {{1,  18120029},
+                              {2,  11226197},
+                              {4,  7883673},
+                              {8,  6364369},
+                              {16, 5620677},
+                              {32, 3370018},
+                              {64, 3206726}};
+            break;
         case ModelType::Emotionnet:
-            return 20 / batch_size;
+            time_per_frame = {{1,  3394144},
+                              {2,  1365037},
+                              {4,  1615653},
+                              {8,  1967143},
+                              {16, 1500867},
+                              {32, 1665680},
+                              {64, 1957914}};
+            break;
         case ModelType::Age:
-            return 20 / batch_size;
+            time_per_frame = {{1,  14729041},
+                              {2,  9050828},
+                              {4,  6112501},
+                              {8,  5015442},
+                              {16, 3927934},
+                              {32, 3523500},
+                              {64, 2899034}};
+            break;
         case ModelType::Gender:
-            return 20 / batch_size;
+            time_per_frame = {{1,  1357500},
+                              {2,  831649},
+                              {4,  687484},
+                              {8,  749792},
+                              {16, 1021500},
+                              {32, 1800263},
+                              {64, 4002824}};
+            break;
         default:
             return 0;
     }
+    int i = 1;
+    while (i < batch_size) {
+        i *= 2;
+    }
+    return time_per_frame[batch_size];
 }
 
 int main() {
@@ -477,7 +575,7 @@ int main() {
         }
         std::cout << "Enter name of task: ";
         std::cin >> task.name;
-        std::cout << "Enter SLO in ms: ";
+        std::cout << "Enter SLO in ns: ";
         std::cin >> task.slo;
         std::cout << "Enter total path to source file: ";
         std::cin >> task.source;

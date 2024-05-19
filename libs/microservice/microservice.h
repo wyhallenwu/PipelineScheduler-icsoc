@@ -485,15 +485,11 @@ public:
     void setDevice(int8_t deviceIndex) {
         if (deviceIndex >= 0) {
             int currentDevice = cv::cuda::getDevice();
-//            if (currentDevice != deviceIndex) {
-//                cv::cuda::resetDevice();
-//                cv::cuda::setDevice(deviceIndex);
-//                checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
-//            }
-            cv::cuda::resetDevice();
-            cv::cuda::setDevice(deviceIndex);
-            checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
-            // dummy memory allocation
+            if (currentDevice != deviceIndex) {
+                cv::cuda::resetDevice();
+                cv::cuda::setDevice(deviceIndex);
+                checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
+            }
             cudaFree(0);
         }
     }
