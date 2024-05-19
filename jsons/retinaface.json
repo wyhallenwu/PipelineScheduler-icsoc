@@ -184,7 +184,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/retina_single_face_3090_fp32_10_1.engine",
+                "path": "../models/retina_single_face_3090_fp32_32_1.engine",
                 "prec": 4
             },
             {

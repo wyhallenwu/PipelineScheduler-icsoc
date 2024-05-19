@@ -182,7 +182,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/yolov5n_224_224_dynamic_nms_3090_fp32_20_1.engine",
+                "path": "../models/yolov5n_224_224_dynamic_nms_3090_fp32_32_1.engine",
                 "prec": 4,
                 "device": 0
             },
