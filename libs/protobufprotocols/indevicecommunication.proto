@@ -7,17 +7,10 @@ option objc_class_prefix = "HLW";
 package indevicecommunication;
 
 service InDeviceCommunication {
-  rpc SendState(State) returns (google.protobuf.Empty) {}
-  rpc ReportMsvcStart(ProcessData) returns (google.protobuf.Empty) {}
+  rpc ReportMsvcStart(ProcessData) returns (ProcessData) {}
   rpc UpdateSender(Connection) returns (google.protobuf.Empty) {}
   rpc UpdateBatchSize(BatchSize) returns (google.protobuf.Empty) {}
   rpc StopExecution(Signal) returns (google.protobuf.Empty) {}
-}
-
-message State {
-  string name = 1;
-  float arrival_rate = 2;
-  repeated int32 queue_size = 3;
 }
 
 message Signal {

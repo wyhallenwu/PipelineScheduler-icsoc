@@ -384,6 +384,10 @@ namespace msvcconfigs {
     void from_json(const json &j, NeighborMicroserviceConfigs &val);
 
     void from_json(const json &j, BaseMicroserviceConfigs &val);
+
+    void to_json(json &j, const NeighborMicroserviceConfigs &val);
+
+    void to_json(json &j, const BaseMicroserviceConfigs &val);
 }
 
 using msvcconfigs::NeighborMicroserviceConfigs;
@@ -403,8 +407,8 @@ public:
      * 1. The time the request is processed by the upstream postprocessor and placed onto the outqueue.
      * 2. The time the request is sent out by upstream sender.
      * 3. The time the request is placed onto the outqueue of receiver.
-     * 
-     * @param timestamps 
+     *
+     * @param timestamps
      */
     void addRecord(RequestTimeType timestamps, uint64_t reqNumber) {
         std::unique_lock<std::mutex> lock(mutex);
@@ -492,9 +496,9 @@ public:
 
     virtual QueueLengthType GetOutQueueSize(int i) { return msvc_OutQueue[i]->size(); };
 
-    int GetDroppedReqCount() { return droppedReqCount; };
+    int GetDroppedReqCount() const { return droppedReqCount; };
 
-    int GetArrivalRate() { return msvc_interReqTime; };
+    int GetArrivalRate() const { return msvc_interReqTime; };
 
     void stopThread() {
         STOP_THREADS = true;

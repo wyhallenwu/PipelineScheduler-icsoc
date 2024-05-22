@@ -1,5 +1,4 @@
 #include <trtengine.h>
-#include "absl/strings/str_format.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/flag.h"
 
@@ -11,7 +10,6 @@ ABSL_FLAG(uint16_t, step, 3, "Step to increase the batch size");
 ABSL_FLAG(uint16_t, precision, 4, "Precision level FP32/FP16/INT8");
 ABSL_FLAG(uint16_t, gpu, 0, "GPU Index");
 ABSL_FLAG(size_t, max_workspace_size, 1 << 30, "Max workspace size for TRT layers.");
-ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
 
 int main(int argc, char *argv[]) {
     absl::ParseCommandLine(argc, argv);
@@ -24,8 +22,6 @@ int main(int argc, char *argv[]) {
     uint16_t precision = absl::GetFlag(FLAGS_precision);
     int8_t gpu = absl::GetFlag(FLAGS_gpu);
     size_t max_workspace_size = absl::GetFlag(FLAGS_max_workspace_size);
-    // TODO: remove potentially unused variable
-    uint16_t verbose = absl::GetFlag(FLAGS_verbose);
 
     MODEL_DATA_TYPE prec = static_cast<MODEL_DATA_TYPE>(precision);
 

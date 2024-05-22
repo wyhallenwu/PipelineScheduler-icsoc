@@ -1,9 +1,16 @@
 [
   {
-    "name": "exampletraffic",
-    "slo": 140000000,
+    "name": "traffic1",
+    "slo": 500000000,
     "type": 0,
     "source": "/src/preview/traffic/traffic1.mp4",
+    "device": "server"
+  },
+  {
+    "name": "traffic2",
+    "slo": 500000000,
+    "type": 0,
+    "source": "/src/preview/traffic/traffic2.mp4",
     "device": "server"
   }
 ]

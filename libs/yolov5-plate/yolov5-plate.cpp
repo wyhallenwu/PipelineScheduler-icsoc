@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     agent->addMicroservice(msvcsList);
 
     agent->runService(pipeConfigs, configs);
-    
+
     delete agent;
     return 0;
 }

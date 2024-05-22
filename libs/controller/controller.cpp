@@ -1,5 +1,20 @@
 #include "controller.h"
 
+std::map<ModelType, std::vector<std::string>> MODEL_INFO = {
+        {DataSource,        {":datasource",         "./Container_DataSource"}},
+        {Sink,              {":basesink",           "./runSink"}},
+        {Yolov5,            {":yolov5",             "./Container_Yolov5"}},
+        {Yolov5Datasource,  {":yolov5datasource",   "./Container_Yolov5"}},
+        {Retinaface,        {":retinaface",         "./Container_RetinaFace"}},
+        {Yolov5_Plate,      {":platedetection",     "./Container_Yolov5-plate"}},
+        {Movenet,           {":movenet",            "./Container_MoveNet"}},
+        {Emotionnet,        {":emotionnet",         "./Container_EmotionNet"}},
+        {Arcface,           {":arcface",            "./Container_ArcFace"}},
+        {Age,               {":age",                "./Container_Age"}},
+        {Gender,            {":gender",             "./Container_Gender"}},
+        {CarBrand,          {":carbrand",           "./Container_CarBrand"}},
+};
+
 void TaskDescription::to_json(nlohmann::json &j, const TaskDescription::TaskStruct &val) {
     j = json{{"name",   val.name},
              {"slo",    val.slo},
@@ -46,8 +61,6 @@ Controller::~Controller() {
 
 void Controller::HandleRecvRpcs() {
     new DeviseAdvertisementHandler(&service, cq.get(), this);
-    new LightMetricsRequestHandler(&service, cq.get(), this);
-    new FullMetricsRequestHandler(&service, cq.get(), this);
     while (running) {
         void *tag;
         bool ok;
@@ -66,32 +79,32 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     auto models = getModelsByPipelineType(t.type);
 
     std::string tmp = t.name;
-    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 0, -1}});
+    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {-1}}});
     task->subtasks.insert({tmp, &containers[tmp]});
     task->subtasks[tmp]->recv_port = device->next_free_port++;
     device->containers.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
 
-    std::map<std::string, int> batch_sizes = getInitialBatchSizes(models, t.slo, 10);
+    auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
     for (const auto &m: models) {
         tmp = t.name;
-        // TODO: get correct initial batch sizes and cuda devices based on TaskDescription and System State
+        // TODO: get correct initial cuda devices based on TaskDescription and System State
         int cuda_device = 1;
         containers.insert(
-                {tmp.append(m.first), {tmp, MODEL_TYPES[m.first], device, task, batch_sizes[m.first], cuda_device,
-                                       -1, device->next_free_port++, {}, {}, {}, {}}});
+                {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {cuda_device},
+                                                      -1, device->next_free_port++, {}, {}, {}, {}}});
         task->subtasks.insert({tmp, &containers[tmp]});
         device->containers.insert({tmp, task->subtasks[tmp]});
     }
 
-    task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + models[0].first]);
-    task->subtasks[t.name + models[0].first]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
+    task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
+    task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
     for (const auto &m: models) {
         for (const auto &d: m.second) {
             tmp = t.name;
-            task->subtasks[tmp.append(d.first)]->class_of_interest = d.second;
-            task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + m.first]);
-            task->subtasks[t.name + m.first]->downstreams.push_back(task->subtasks[tmp]);
+            task->subtasks[tmp.append(MODEL_INFO[d.first][0])]->class_of_interest = d.second;
+            task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + MODEL_INFO[m.first][0]]);
+            task->subtasks[t.name + MODEL_INFO[m.first][0]]->downstreams.push_back(task->subtasks[tmp]);
         }
     }
 
@@ -100,53 +113,25 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     }
 }
 
-void Controller::UpdateLightMetrics(google::protobuf::RepeatedPtrField<LightMetrics> metrics) {
-    for (auto metric: metrics) {
-        containers[metric.name()].queue_lengths = metric.queue_size();
-        containers[metric.name()].metrics.requestRate = metric.request_rate();
-    }
+void Controller::UpdateLightMetrics() {
+    // TODO: Replace with Database Scraping
+//    for (auto metric: metrics) {
+//        containers[metric.name()].queue_lengths = metric.queue_size();
+//        containers[metric.name()].metrics.requestRate = metric.request_rate();
+//    }
 }
 
-void Controller::UpdateFullMetrics(google::protobuf::RepeatedPtrField<FullMetrics> metrics) {
-    for (auto metric: metrics) {
-        containers[metric.name()].queue_lengths = metric.queue_size();
-        Metrics *m = &containers[metric.name()].metrics;
-        m->requestRate = metric.request_rate();
-        m->cpuUsage = metric.cpu_usage();
-        m->memUsage = metric.mem_usage();
-        m->gpuUsage = metric.gpu_usage();
-        m->gpuMemUsage = metric.gpu_mem_usage();
-    }
-}
-
-void Controller::LightMetricsRequestHandler::Proceed() {
-    if (status == CREATE) {
-        status = PROCESS;
-        service->RequestSendLightMetrics(&ctx, &request, &responder, cq, cq, this);
-    } else if (status == PROCESS) {
-        new LightMetricsRequestHandler(service, cq, controller);
-        controller->UpdateLightMetrics(request.metrics());
-        status = FINISH;
-        responder.Finish(reply, Status::OK, this);
-    } else {
-        GPR_ASSERT(status == FINISH);
-        delete this;
-    }
-}
-
-void Controller::FullMetricsRequestHandler::Proceed() {
-    if (status == CREATE) {
-        status = PROCESS;
-        service->RequestSendFullMetrics(&ctx, &request, &responder, cq, cq, this);
-    } else if (status == PROCESS) {
-        new FullMetricsRequestHandler(service, cq, controller);
-        controller->UpdateFullMetrics(request.metrics());
-        status = FINISH;
-        responder.Finish(reply, Status::OK, this);
-    } else {
-        GPR_ASSERT(status == FINISH);
-        delete this;
-    }
+void Controller::UpdateFullMetrics() {
+    //TODO: Replace with Database Scraping
+//    for (auto metric: metrics) {
+//        containers[metric.name()].queue_lengths = metric.queue_size();
+//        Metrics *m = &containers[metric.name()].metrics;
+//        m->requestRate = metric.request_rate();
+//        m->cpuUsage = metric.cpu_usage();
+//        m->memUsage = metric.mem_usage();
+//        m->gpuUsage = metric.gpu_usage();
+//        m->gpuMemUsage = metric.gpu_mem_usage();
+//    }
 }
 
 void Controller::DeviseAdvertisementHandler::Proceed() {
@@ -161,7 +146,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      ControlCommunication::NewStub(
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
                                      new CompletionQueue(),
-                                     static_cast<DeviceType>(request.device_type()),
+                                     static_cast<SystemDeviceType>(request.device_type()),
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
                                      std::vector<double>(request.processors(), 0.0), 55001, {}}});
@@ -173,7 +158,8 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     }
 }
 
-void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &container, int slo, std::string source) {
+void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &container, int slo, std::string source,
+                                int replica) {
     std::cout << "Starting container: " << container.first << std::endl;
     ContainerConfig request;
     ClientContext context;
@@ -184,7 +170,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     request.set_batch_size(container.second->batch_size);
     request.set_recv_port(container.second->recv_port);
     request.set_slo(slo);
-    request.set_device(container.second->cuda_device);
+    request.set_device(container.second->cuda_device[replica - 1]);
     for (auto dwnstr: container.second->downstreams) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name(dwnstr->name);
@@ -229,7 +215,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     }
 }
 
-void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge) {
+void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica) {
     NodeHandle *old_device = msvc->device_agent;
     NodeHandle *device;
     if (to_edge) {
@@ -240,7 +226,7 @@ void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_e
     msvc->device_agent = device;
     msvc->recv_port = device->next_free_port++;
     device->containers.insert({msvc->name, msvc});
-    msvc->cuda_device = cuda_device;
+    msvc->cuda_device[replica -1] = cuda_device;
     std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
     StartContainer(pair, msvc->task->slo, "");
     for (auto upstr: msvc->upstreams) {
@@ -303,17 +289,19 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
 }
 
 void Controller::optimizeBatchSizeStep(
-        const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models,
-        std::map<std::string, int> &batch_sizes, std::map<std::string, int> &estimated_infer_times, int nObjects) {
-    std::string candidate;
+        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
+        std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
+    ModelType candidate;
     int max_saving = 0;
-    std::vector<std::string> blacklist;
+    std::vector<ModelType> blacklist;
     for (const auto &m: models) {
         int saving;
         if (max_saving == 0) {
-            saving = estimated_infer_times[m.first] - InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2);
+            saving =
+                    estimated_infer_times[m.first] - InferTimeEstimator(m.first, batch_sizes[m.first] * 2);
         } else {
-            if (batch_sizes[m.first] == 64 || std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
+            if (batch_sizes[m.first] == 64 ||
+                std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
                 continue;
             }
             for (const auto &d: m.second) {
@@ -322,7 +310,7 @@ void Controller::optimizeBatchSizeStep(
                 }
             }
             saving = estimated_infer_times[m.first] -
-                     (InferTimeEstimator(MODEL_TYPES[m.first], batch_sizes[m.first] * 2) * nObjects);
+                     (InferTimeEstimator(m.first, batch_sizes[m.first] * 2) * (nObjects / batch_sizes[m.first] * 2));
         }
         if (saving > max_saving) {
             max_saving = saving;
@@ -333,30 +321,30 @@ void Controller::optimizeBatchSizeStep(
     estimated_infer_times[candidate] -= max_saving;
 }
 
-std::map<std::string, int> Controller::getInitialBatchSizes(
-        const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models, int slo,
+std::map<ModelType, int> Controller::getInitialBatchSizes(
+        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
         int nObjects) {
-    std::map<std::string, int> batch_sizes = {};
-    std::map<std::string, int> estimated_infer_times = {};
+    std::map<ModelType, int> batch_sizes = {};
+    std::map<ModelType, int> estimated_infer_times = {};
 
     for (const auto &m: models) {
         batch_sizes[m.first] = 1;
         if (estimated_infer_times.size() == 0) {
-            estimated_infer_times[m.first] = (InferTimeEstimator(MODEL_TYPES[m.first], 1));
+            estimated_infer_times[m.first] = (InferTimeEstimator(m.first, 1));
         } else {
-            estimated_infer_times[m.first] = (InferTimeEstimator(MODEL_TYPES[m.first], 1) * nObjects);
+            estimated_infer_times[m.first] = (InferTimeEstimator(m.first, 1) * nObjects);
         }
     }
 
     int sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
-                              [](int acc, const std::pair<std::string, int>& p) {
+                              [](int acc, const std::pair<ModelType, int> &p) {
                                   return acc + p.second;
                               });
 
     while (slo < sum) {
         optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
         sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
-                              [](int acc, const std::pair<std::string, int>& p) {
+                              [](int acc, const std::pair<ModelType, int> &p) {
                                   return acc + p.second;
                               });
     }
@@ -364,30 +352,30 @@ std::map<std::string, int> Controller::getInitialBatchSizes(
     return batch_sizes;
 }
 
-std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
+std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
 Controller::getModelsByPipelineType(PipelineType type) {
     switch (type) {
         case PipelineType::Traffic:
-            return {{":yolov5",     {{":retinaface", 0}, {":carbrand", 2}, {":plate", 2}}},
-                    {":retinaface", {{":arcface",    -1}}},
-                    {":arcface",    {{":basesink",   -1}}},
-                    {":carbrand",   {{":basesink",   -1}}},
-                    {":plate",      {{":basesink",   -1}}},
-                    {":basesink",   {}}};
+            return {{ModelType::Yolov5,       {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::Yolov5_Plate, 2}}},
+                    {ModelType::Retinaface,   {{ModelType::Arcface,    -1}}},
+                    {ModelType::Arcface,      {{ModelType::Sink,   -1}}},
+                    {ModelType::CarBrand,     {{ModelType::Sink,   -1}}},
+                    {ModelType::Yolov5_Plate, {{ModelType::Sink,   -1}}},
+                    {ModelType::Sink,     {}}};
         case PipelineType::Video_Call:
-            return {{":retinaface", {{":emotion",  -1}, {":age", -1}, {":gender", -1}, {":arcface", -1}}},
-                    {":gender",     {{":basesink", -1}}},
-                    {":age",        {{":basesink", -1}}},
-                    {":emotion",    {{":basesink", -1}}},
-                    {":arcface",    {{":basesink", -1}}},
-                    {":basesink",   {}}};
+            return {{ModelType::Retinaface, {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}},
+                    {ModelType::Gender,     {{ModelType::Sink,   -1}}},
+                    {ModelType::Age,        {{ModelType::Sink,   -1}}},
+                    {ModelType::Emotionnet, {{ModelType::Sink,   -1}}},
+                    {ModelType::Arcface,    {{ModelType::Sink,   -1}}},
+                    {ModelType::Sink,   {}}};
         case PipelineType::Building_Security:
-            return {{":yolov5",     {{":retinaface", 0}}},
-                    {":retinaface", {{":gender",     -1}, {":age", -1}}},
-                    {":movenet",    {{":basesink",   -1}}},
-                    {"gender",      {{":basesink",   -1}}},
-                    {":age",        {{":basesink",   -1}}},
-                    {":basesink",   {}}};
+            return {{ModelType::Yolov5,     {{ModelType::Retinaface, 0}}},
+                    {ModelType::Retinaface, {{ModelType::Gender,     -1}, {ModelType::Age, -1}}},
+                    {ModelType::Movenet,    {{ModelType::Sink,   -1}}},
+                    {ModelType::Gender,     {{ModelType::Sink,   -1}}},
+                    {ModelType::Age,        {{ModelType::Sink,   -1}}},
+                    {ModelType::Sink,   {}}};
         default:
             return {};
     }
@@ -532,49 +520,5 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     while (i < batch_size) {
         i *= 2;
     }
-    return time_per_frame[batch_size];
-}
-
-int main() {
-    auto controller = new Controller();
-    std::thread receiver_thread(&Controller::HandleRecvRpcs, controller);
-    receiver_thread.detach();
-    std::ifstream file("../jsons/experiment.json");
-    std::vector<TaskDescription::TaskStruct> tasks = json::parse(file);
-    std::string command;
-
-    while (controller->isRunning()) {
-        TaskDescription::TaskStruct task;
-        std::cout << "Enter command {init, traffic, video_call, people, exit): ";
-        std::cin >> command;
-        if (command == "exit") {
-            controller->Stop();
-            break;
-        } else if (command == "init") {
-            for (auto &t: tasks) {
-                controller->AddTask(t);
-            }
-            continue;
-        } else if (command == "traffic") {
-            task.type = PipelineType::Traffic;
-        } else if (command == "video_call") {
-            task.type = PipelineType::Video_Call;
-        } else if (command == "people") {
-            task.type = PipelineType::Building_Security;
-        } else {
-            std::cout << "Invalid command" << std::endl;
-            continue;
-        }
-        std::cout << "Enter name of task: ";
-        std::cin >> task.name;
-        std::cout << "Enter SLO in ns: ";
-        std::cin >> task.slo;
-        std::cout << "Enter total path to source file: ";
-        std::cin >> task.source;
-        std::cout << "Enter name of source device: ";
-        std::cin >> task.device;
-        controller->AddTask(task);
-    }
-    delete controller;
-    return 0;
+    return time_per_frame[batch_size] * batch_size;
 }

@@ -312,7 +312,8 @@ ContainerAgent::ContainerAgent(const json &configs) {
     sender_cq = new CompletionQueue();
 
     run = true;
-    reportMetrics = true;
+    reportMetrics = false;
+    profiler = nullptr;
     std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
     receiver.detach();
 }
@@ -320,10 +321,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
 void ContainerAgent::ReportStart() {
     ProcessData request;
     request.set_msvc_name(cont_name);
-    request.set_pid(getpid());
-    EmptyMessage reply;
+    ProcessData reply;
     ClientContext context;
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<ProcessData>> rpc(
             stub->AsyncReportMsvcStart(&context, request, sender_cq));
     Status status;
     rpc->Finish(&reply, &status, (void *) 1);
@@ -331,6 +331,11 @@ void ContainerAgent::ReportStart() {
     bool ok = false;
     GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
+    pid = reply.pid();
+    if (cont_taskName != "datasource") {
+        profiler = new Profiler({pid});
+        reportMetrics = true;
+    }
 }
 
 
@@ -339,17 +344,14 @@ void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
     metrics.detach();
 
     if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
-        this->profiling(pipeConfigs, configs["profiling"]);
+        profiling(pipeConfigs, configs["profiling"]);
     } else {
         this->dispatchMicroservices();
 
-        this->waitReady(); 
+        this->waitReady();
         this->START();
-        
-        while (this->running()) {
-            std::this_thread::sleep_for(std::chrono::seconds(4));
-            this->SendState();
-        }
+
+        collectRuntimeMetrics();
     }
 }
 
@@ -370,18 +372,21 @@ void ContainerAgent::collectRuntimeMetrics() {
         if (i++ > 20) {
             i = 0;
             // report full metrics to metrics server including everything
-            
+//            server.sendMetrics.queueSizes = queueSizes;
+//            server.sendMetrics.arrivalRate = arrivalRate;
+//            server.sendMetrics.lateCount = lateCount;
+//            server.sendMetrics.hardware = metrics;
         } else { // aggregate hardware
             if (reportMetrics && pid != 0) {
-//                Profiler::sysStats stats = profiler->reportAtRuntime(container.second.pid);
-//                container.second.metrics.cpuUsage =
-//                        (1 - 1 / i) * container.second.metrics.cpuUsage + (1 / i) * stats.cpuUsage;
-//                container.second.metrics.memUsage =
-//                        (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.memoryUsage;
-//                container.second.metrics.gpuUsage =
-//                        (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuUtilization;
-//                container.second.metrics.gpuMemUsage =
-//                        (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuMemoryUsage;
+                Profiler::sysStats stats = profiler->reportAtRuntime(pid);
+                metrics.cpuUsage =
+                        (1 - 1 / i) * metrics.cpuUsage + (1 / i) * stats.cpuUsage;
+                metrics.memUsage =
+                        (1 - 1 / i) * metrics.memUsage + (1 / i) * stats.memoryUsage;
+                metrics.gpuUsage =
+                        (1 - 1 / i) * metrics.memUsage + (1 / i) * stats.gpuUtilization;
+                metrics.gpuMemUsage =
+                        (1 - 1 / i) * metrics.memUsage + (1 / i) * stats.gpuMemoryUsage;
             }
             
             arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
@@ -402,26 +407,6 @@ void ContainerAgent::collectRuntimeMetrics() {
         arrivalRecords.clear();
         queueSizes.clear();
     }
-}
-
-void ContainerAgent::SendState() {
-    State request;
-    request.set_name(cont_name);
-    request.set_arrival_rate(arrivalRate);
-    for (auto msvc: cont_msvcsList) {
-        request.add_queue_size(msvc->GetOutQueueSize(0));
-        spdlog::info("{0:s} Length of queue is {1:d}", msvc->msvc_name, msvc->GetOutQueueSize(0));
-    }
-    EmptyMessage reply;
-    ClientContext context;
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            stub->AsyncSendState(&context, request, sender_cq));
-    Status status;
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
 }
 
 void ContainerAgent::HandleRecvRpcs() {

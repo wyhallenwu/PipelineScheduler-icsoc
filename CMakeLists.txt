@@ -125,12 +125,13 @@ set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
 
 add_subdirectory(libs/misc)
 add_subdirectory(libs/microservice)
+add_subdirectory(libs/protobufprotocols)
+add_subdirectory(libs/controller)
+add_subdirectory(libs/communicator)
+add_subdirectory(libs/container_agent)
 add_subdirectory(libs/trtengine)
 add_subdirectory(libs/onnx2trt)
 add_subdirectory(libs/baseprocessors)
-add_subdirectory(libs/protobufprotocols)
-add_subdirectory(libs/communicator)
-add_subdirectory(libs/container_agent)
 add_subdirectory(libs/data_source)
 add_subdirectory(libs/yolov5)
 add_subdirectory(libs/yolov5-plate)
@@ -141,7 +142,6 @@ add_subdirectory(libs/emotionnet)
 add_subdirectory(libs/gender)
 add_subdirectory(libs/age)
 add_subdirectory(libs/carbrand)
-add_subdirectory(libs/controller)
 add_subdirectory(libs/device_agent)
 
 add_library(PipePlusPlusSink
@@ -170,13 +170,13 @@ target_link_libraries(PipePlusPlusSink PUBLIC
 add_executable(runSink src/main.cpp)
 target_link_libraries(runSink PipePlusPlusSink)
 
-add_executable(Communicator libs/communicator/communicator.cpp)
+add_executable(Communicator libs/communicator/main.cpp)
 target_link_libraries(Communicator communicator)
 
-add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
+add_executable(DeviceAgent libs/device_agent/main.cpp)
 target_link_libraries(DeviceAgent device_agent)
 
-add_executable(Controller libs/controller/controller.cpp)
+add_executable(Controller libs/controller/main.cpp)
 target_link_libraries(Controller controller)
 
 add_executable(Container_DataSource libs/data_source/data_source.cpp)
