@@ -140,14 +140,7 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
     task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->upstreams.push_back(
         task->subtasks[t.name + ":datasource"]);
 
-    // ======== added
-    // ========
-
-    // get the req of the first model(yolov5) of the pipeline
-    // FIXME: the budget is the SLO - networking time in the paper
-    clients_profiles.add(
-        client_ip, t.slo,
-        task->subtasks[t.name + models[0].first]->metrics.requestRate);
+    // ================================= added ==========================================
 
     // required to config (model_size, width, height, batch_size) in the t.name
     // for convenience eg. yolov5n_320_640_32_.
@@ -156,6 +149,12 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
     int width = std::stoi(model_info[1]);
     int height = std::stoi(model_info[2]);
     int batch_size = std::stoi(model_info[3]);
+
+    // get the req of the first model(yolov5) of the pipeline
+    clients_profiles.add(
+        client_ip, width, height, t.slo,
+        task->subtasks[t.name + models[0].first]->metrics.requestRate);
+
     auto available_model_configs =
         ModelProfiles::hardcode_mapping(model_name, width, height);
     for (auto &config : available_model_configs)
@@ -196,7 +195,6 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
  */
 void Controller::update_and_adjust()
 {
-    // TODO: spawn a thread for updating
     int mills = 500;
     std::chrono::milliseconds interval(mills);
     while (true)
@@ -244,9 +242,6 @@ void Controller::update_and_adjust()
 
                 // adjust the upstream and downstream
                 AdjustUpstream(p->recv_port, ds, p->device_agent, p->name);
-
-                // TODO: set (1) the batch_size of this container (2) the resolution of
-                // client
                 AdjustBatchSize(p, batch_size);
 
                 // match the model with its profiling
@@ -741,8 +736,7 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     return time_per_frame[batch_size] * batch_size;
 }
 
-// ============================================== added
-// ===================================================
+// =========================== added ===========================
 
 /**
  * @brief adjust the image shape of the client asynchronously
@@ -767,6 +761,16 @@ void Controller::AdjustImageSize(ContainerHandle *ds, int width, int height)
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(ok);
+
+    // update the corresponding ClientInfo image shape
+    for (auto &client : clients_profiles.infos)
+    {
+        if (client.ip == ds->device_agent->ip)
+        {
+            client.image_shape = std::make_tuple(width, height);
+            break;
+        }
+    }
 }
 
 ModelInfo::ModelInfo(int bs, float il, int w, int h, std::string n, float acc)
@@ -778,6 +782,37 @@ ModelInfo::ModelInfo(int bs, float il, int w, int h, std::string n, float acc)
     height = h;
     name = n;
     accuracy = acc;
+}
+
+ClientInfo::ClientInfo(std::string _ip, float _budget, int _width, int _height, int _req_rate)
+{
+    ip = _ip;
+    budget = _budget;
+    image_shape = std::make_tuple(_width, _height);
+    req_rate = _req_rate;
+}
+
+/**
+ * @brief change the bandwidth in runtime
+ *
+ * @param bw
+ */
+void ClientInfo::set_bandwidth(float bw)
+{
+    this->bandwidth = bw;
+}
+
+/**
+ * @brief compute the transmission time
+ *
+ * @return int
+ */
+const int ClientInfo::get_transmission_time() const
+{
+    auto [width, height] = image_shape;
+    int transmission_time = int(width * height * 3 * 8 / (15.0 * 1e6 * bandwidth) * 1000.0); // ms
+    assert(transmission_time < budget);
+    return transmission_time;
 }
 
 bool ModelSetCompare::operator()(
@@ -821,6 +856,7 @@ void ModelProfiles::add(const ModelInfo &model_info)
 std::vector<ModelInfo> ModelProfiles::hardcode_mapping(std::string model_name,
                                                        int width, int height)
 {
+    // FIXME: need updated profiling result
     // (batch_size, inference_time(ms), width, height, model_name, accuracy)
     std::vector<ModelInfo> hardcode = {
         ModelInfo(1, 1.2, 320, 320, "yolov5n", 0.2),
@@ -856,13 +892,13 @@ void ClientProfiles::sortBudgetDescending(std::vector<ClientInfo> &clients)
     std::sort(clients.begin(), clients.end(),
               [](const ClientInfo &a, const ClientInfo &b)
     {
-                  return a.budget > b.budget;
+                  return a.budget - a.get_transmission_time() > b.budget - b.get_transmission_time();
               });
 }
 
-void ClientProfiles::add(const std::string &ip, float budget, int req_rate)
+void ClientProfiles::add(const std::string &ip, int width, int height, float budget, int req_rate)
 {
-    infos.push_back({ip, budget, req_rate});
+    infos.push_back(ClientInfo(ip, budget, width, height, req_rate));
 }
 
 std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models,
@@ -1012,6 +1048,7 @@ std::vector<
     std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>>
 mapClient(ClientProfiles client_profile, ModelProfiles model_profiles)
 {
+
     std::vector<
         std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>>
         mappings;

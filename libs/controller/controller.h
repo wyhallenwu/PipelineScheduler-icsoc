@@ -137,15 +137,24 @@ struct ClientInfo
 {
     std::string ip;
     float budget;
-    // std::tuple<int, int> input_size;
+    std::tuple<int, int> image_shape = std::make_tuple(320, 320);
     int req_rate;
 
+    // can change the network in the runtime
+    // Mbs, 1Mbs = 1e4 kb/s = 1250 kB/s
+    // the frame encoding ratio is approximate to 15:1
+    float bandwidth = 10;
+
+    ClientInfo(std::string _ip, float _budget, int _width, int _height, int _req_rate);
     bool operator==(const ClientInfo &other) const
     {
         return ip == other.ip &&
                budget == other.budget &&
                req_rate == other.req_rate;
     }
+
+    void set_bandwidth(float bw);
+    const int get_transmission_time() const;
 };
 
 class ClientProfiles
@@ -154,7 +163,7 @@ public:
     std::vector<ClientInfo> infos;
 
     static void sortBudgetDescending(std::vector<ClientInfo> &clients);
-    void add(const std::string &ip, float budget, int req_rate);
+    void add(const std::string &ip, int width, int height, float budget, int req_rate);
 };
 
 std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>> mapClient(ClientProfiles client_profile, ModelProfiles model_profiles);
