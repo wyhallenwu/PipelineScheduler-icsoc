@@ -315,8 +315,6 @@ ContainerAgent::ContainerAgent(const json &configs) {
     reportMetrics = true;
     std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
     receiver.detach();
-    // std::thread metrics(&ContainerAgent::collectRuntimeMetrics, this);
-    // metrics.detach();
 }
 
 void ContainerAgent::ReportStart() {
@@ -337,6 +335,9 @@ void ContainerAgent::ReportStart() {
 
 
 void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
+    std::thread metrics(&ContainerAgent::collectRuntimeMetrics, this);
+    metrics.detach();
+
     if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
         this->profiling(pipeConfigs, configs["profiling"]);
     } else {
