@@ -163,7 +163,7 @@ int check_and_assign(std::vector<ModelInfo> &model, std::vector<ClientInfo> &sel
 
 // ================================== helper functions =====================================
 
-std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfo> &models, const ClientInfo &client);
+std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfo> &models, const ClientInfo &client, int max_available_batch_size = 64);
 void differenceClients(std::vector<ClientInfo> &src, const std::vector<ClientInfo> &diff);
 
 /**

@@ -15,7 +15,8 @@ std::map<ModelType, std::vector<std::string>> MODEL_INFO = {
         {CarBrand,          {":carbrand",           "./Container_CarBrand"}},
 };
 
-void TaskDescription::to_json(nlohmann::json &j, const TaskDescription::TaskStruct &val)
+void TaskDescription::to_json(nlohmann::json &j,
+                              const TaskDescription::TaskStruct &val)
 {
     j = json{{"name", val.name},
              {"slo", val.slo},
@@ -24,7 +25,8 @@ void TaskDescription::to_json(nlohmann::json &j, const TaskDescription::TaskStru
              {"device", val.device}};
 }
 
-void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskStruct &val)
+void TaskDescription::from_json(const nlohmann::json &j,
+                                TaskDescription::TaskStruct &val)
 {
     j.at("name").get_to(val.name);
     j.at("slo").get_to(val.slo);
@@ -108,29 +110,60 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
     device->containers.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
 
-    auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
+    auto batch_sizes =
+        getInitialBatchSizes(models, t.slo, 10);
     for (const auto &m : models)
     {
         tmp = t.name;
-        // TODO: get correct initial cuda devices based on TaskDescription and System State
+        // TODO: get correct initial cuda devices based on
+        // TaskDescription and System State
         int cuda_device = 1;
-        containers.insert(
-                {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {cuda_device}, -1, device->next_free_port++, {}, {}, {}, {}}});
+        containers.insert({tmp.append(MODEL_INFO[m.first][0]),
+                           {tmp,
+                            m.first,
+                            device,
+                            task,
+                            batch_sizes[m.first],
+                            1, {cuda_device},
+                            -1,
+                            device->next_free_port++,
+                            {},
+                            {},
+                            {},
+                            {}}});
         task->subtasks.insert({tmp, &containers[tmp]});
         device->containers.insert({tmp, task->subtasks[tmp]});
     }
 
-    task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
-    task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
+    task->subtasks[t.name + ":datasource"]->downstreams.push_back(
+        task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
+    task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->upstreams.push_back(
+        task->subtasks[t.name + ":datasource"]);
 
-    // ======== added ========
+    // ======== added
+    // ========
 
     // get the req of the first model(yolov5) of the pipeline
-    // FIXME@yuheng: the budget is the SLO - networking time in the paper
-    clients_profiles.add(client_ip, t.slo, task->subtasks[t.name + models[0].first]->metrics.requestRate);
-    // TODO@yuheng: wait for the implementation to retrieve the model profiles
-    models_profiles.add(models[0].first, 0, 2, 0.1, 320, 20);
-    // record the data source and first container of each pipeline for further update the upstream when switching mapping
+    // FIXME: the budget is the SLO - networking time in the paper
+    clients_profiles.add(
+        client_ip, t.slo,
+        task->subtasks[t.name + models[0].first]->metrics.requestRate);
+
+    // required to config (model_size, width, height, batch_size) in the t.name
+    // for convenience eg. yolov5n_320_640_32_.
+    std::vector<std::string> model_info = split_string(t.name, '_');
+    std::string model_name = model_info[0];
+    int width = std::stoi(model_info[1]);
+    int height = std::stoi(model_info[2]);
+    int batch_size = std::stoi(model_info[3]);
+    auto available_model_configs =
+        ModelProfiles::hardcode_mapping(model_name, width, height);
+    for (auto &config : available_model_configs)
+    {
+        models_profiles.add(config);
+    }
+    // record the data source and first container of each pipeline for further
+    // update the upstream when switching mapping
     data_sources.push_back(task->subtasks[t.name + ":datasource"]);
     first_containers.push_back(task->subtasks[t.name + models[0].first]);
 
@@ -141,8 +174,10 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
         {
             tmp = t.name;
             task->subtasks[tmp.append(MODEL_INFO[d.first][0])]->class_of_interest = d.second;
-            task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + MODEL_INFO[m.first][0]]);
-            task->subtasks[t.name + MODEL_INFO[m.first][0]]->downstreams.push_back(task->subtasks[tmp]);
+            task->subtasks[tmp]->upstreams.push_back(
+                task->subtasks[t.name + MODEL_INFO[m.first][0]]);
+            task->subtasks[t.name + MODEL_INFO[m.first][0]]->downstreams.push_back(
+                task->subtasks[tmp]);
         }
     }
 
@@ -155,8 +190,8 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
 // ========================== added ================================
 
 /**
- * @brief update client-dnn mapping every 0.5s, and adjust the upstream of each model, set the input size of clients.
- * Run this function in another thread.
+ * @brief update client-dnn mapping every 0.5s, and adjust the upstream of each
+ * model, set the input size of clients. Run this function in another thread.
  *
  */
 void Controller::update_and_adjust()
@@ -210,7 +245,8 @@ void Controller::update_and_adjust()
                 // adjust the upstream and downstream
                 AdjustUpstream(p->recv_port, ds, p->device_agent, p->name);
 
-                // TODO: set (1) the batch_size of this container (2) the resolution of client
+                // TODO: set (1) the batch_size of this container (2) the resolution of
+                // client
                 AdjustBatchSize(p, batch_size);
 
                 // match the model with its profiling
@@ -226,7 +262,8 @@ void Controller::update_and_adjust()
 
 // =================================================================
 
-void Controller::UpdateLightMetrics() {
+void Controller::UpdateLightMetrics(
+    ) {
     // TODO: Replace with Database Scraping
 //    for (auto metric: metrics) {
 //        containers[metric.name()].queue_lengths = metric.queue_size();
@@ -252,24 +289,28 @@ void Controller::DeviseAdvertisementHandler::Proceed()
     if (status == CREATE)
     {
         status = PROCESS;
-        service->RequestAdvertiseToController(&ctx, &request, &responder, cq, cq, this);
+        service->RequestAdvertiseToController(&ctx, &request, &responder, cq, cq,
+                                              this);
     }
     else if (status == PROCESS)
     {
         new DeviseAdvertisementHandler(service, cq, controller);
-        std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), 60002);
-        controller->devices.insert({request.device_name(),
-                                    {request.ip_address(),
-                                     ControlCommunication::NewStub(
-                                         grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
-                                     new CompletionQueue(),
-                                     static_cast<SystemDeviceType>(request.device_type()),
-                                     request.processors(),
-                                     std::vector<double>(request.processors(), 0.0),
-                                     std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
-                                     std::vector<double>(request.processors(), 0.0),
-                                     55001,
-                                     {}}});
+        std::string target_str =
+            absl::StrFormat("%s:%d", request.ip_address(), 60002);
+        controller->devices.insert(
+            {request.device_name(),
+             {request.ip_address(),
+              ControlCommunication::NewStub(grpc::CreateChannel(
+                  target_str, grpc::InsecureChannelCredentials())),
+              new CompletionQueue(),
+              static_cast<SystemDeviceType>(request.device_type()),
+              request.processors(),
+              std::vector<double>(request.processors(), 0.0),
+              std::vector<unsigned long>(request.memory().begin(),
+                                         request.memory().end()),
+              std::vector<double>(request.processors(), 0.0),
+              55001,
+              {}}});
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     }
@@ -280,7 +321,9 @@ void Controller::DeviseAdvertisementHandler::Proceed()
     }
 }
 
-void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &container, int slo, std::string source,
+void Controller::StartContainer(
+    std::pair<std::string, ContainerHandle *> &container, int slo,
+    std::string source,
                                 int replica)
 {
     std::cout << "Starting container: " << container.first << std::endl;
@@ -298,10 +341,12 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name(dwnstr->name);
-        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
+        dwn->set_ip(
+            absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
-        dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
-                                (container.second->cuda_device == dwnstr->cuda_device));
+        dwn->set_gpu_connection(
+            (container.second->device_agent == dwnstr->device_agent) &&
+            (container.second->cuda_device == dwnstr->cuda_device));
     }
     if (request.downstream_size() == 0)
     {
@@ -325,15 +370,17 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
         {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
-            up->set_ip(absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
+            up->set_ip(
+                absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
             up->set_class_of_interest(-2);
-            up->set_gpu_connection((container.second->device_agent == upstr->device_agent) &&
-                                   (container.second->cuda_device == upstr->cuda_device));
+            up->set_gpu_connection(
+                (container.second->device_agent == upstr->device_agent) &&
+                (container.second->cuda_device == upstr->cuda_device));
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-        container.second->device_agent->stub->AsyncStartContainer(&context, request,
-                                                                      container.second->device_agent->cq));
+        container.second->device_agent->stub->AsyncStartContainer(
+            &context, request, container.second->device_agent->cq));
     rpc->Finish(&reply, &status, (void *)1);
     void *got_tag;
     bool ok = false;
@@ -341,11 +388,13 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     GPR_ASSERT(ok);
     if (!status.ok())
     {
-        std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
+        std::cout << status.error_code()
+                  << ": An error occured while sending the request" << std::endl;
     }
 }
 
-void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica)
+void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device,
+                               bool to_edge, int replica)
 {
     NodeHandle *old_device = msvc->device_agent;
     NodeHandle *device;
@@ -372,14 +421,16 @@ void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_e
 }
 
 /**
- * @brief after moving the current msvc, the upstream of this msvc should be redirected to the newly moved current msvc
+ * @brief after moving the current msvc, the upstream of this msvc should be
+ * redirected to the newly moved current msvc
  *
  * @param port port of this msvc's receiver after moving
  * @param upstr upstream container
  * @param new_device device of this msvc after moving
  * @param dwnstr the updated name of this msvc
  */
-void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr, Controller::NodeHandle *new_device,
+void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr,
+                                Controller::NodeHandle *new_device,
                                 const std::string &dwnstr)
 {
     ContainerLink request;
@@ -391,7 +442,8 @@ void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr, Co
     request.set_ip(new_device->ip);
     request.set_port(port);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-        upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
+        upstr->device_agent->stub->AsyncUpdateDownstream(
+            &context, request, upstr->device_agent->cq));
     rpc->Finish(&reply, &status, (void *)1);
     void *got_tag;
     bool ok = false;
@@ -399,7 +451,8 @@ void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr, Co
     GPR_ASSERT(ok);
 }
 
-void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs) {
+void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc,
+                                 int new_bs) {
     msvc->batch_size = new_bs;
     ContainerInt request;
     ClientContext context;
@@ -408,7 +461,8 @@ void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs) 
     request.set_name(msvc->name);
     request.set_value(new_bs);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
+            msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request,
+                                                       msvc->device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
@@ -416,7 +470,8 @@ void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs) 
     GPR_ASSERT(ok);
 }
 
-void Controller::StopContainer(std::string name, NodeHandle *device, bool forced)
+void Controller::StopContainer(std::string name, NodeHandle *device,
+                               bool forced)
 {
     ContainerSignal request;
     ClientContext context;
@@ -425,7 +480,8 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     request.set_name(name);
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-        device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
+        device->stub->AsyncStopContainer(&context, request,
+                                         containers[name].device_agent->cq));
     rpc->Finish(&reply, &status, (void *)1);
     void *got_tag;
     bool ok = false;
@@ -434,16 +490,21 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
 }
 
 void Controller::optimizeBatchSizeStep(
-        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
-        std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
+        const std::vector<
+        std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
+        &models,
+        std::map<ModelType, int> &batch_sizes,
+    std::map<ModelType, int> &estimated_infer_times, int nObjects) {
     ModelType candidate;
     int max_saving = 0;
     std::vector<ModelType> blacklist;
     for (const auto &m: models) {
         int saving;
-        if (max_saving == 0) {
+        if (max_saving == 0)
+        {
             saving =
-                    estimated_infer_times[m.first] - InferTimeEstimator(m.first, batch_sizes[m.first] * 2);
+                estimated_infer_times[m.first] -
+                InferTimeEstimator(m.first, batch_sizes[m.first] * 2);
         } else {
             if (batch_sizes[m.first] == 64 ||
                 std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
@@ -454,8 +515,10 @@ void Controller::optimizeBatchSizeStep(
                     blacklist.push_back(d.first);
                 }
             }
-            saving = estimated_infer_times[m.first] -
-                     (InferTimeEstimator(m.first, batch_sizes[m.first] * 2) * (nObjects / batch_sizes[m.first] * 2));
+            saving =
+                estimated_infer_times[m.first] -
+                (InferTimeEstimator(m.first, batch_sizes[m.first] * 2) *
+                 (nObjects / batch_sizes[m.first] * 2));
         }
         if (saving > max_saving) {
             max_saving = saving;
@@ -467,21 +530,26 @@ void Controller::optimizeBatchSizeStep(
 }
 
 std::map<ModelType, int> Controller::getInitialBatchSizes(
-        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
-        int nObjects) {
+    const std::vector<
+        std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
+        &models,
+    int slo, int nObjects){
     std::map<ModelType, int> batch_sizes = {};
     std::map<ModelType, int> estimated_infer_times = {};
 
     for (const auto &m: models) {
         batch_sizes[m.first] = 1;
         if (estimated_infer_times.size() == 0) {
-            estimated_infer_times[m.first] = (InferTimeEstimator(m.first, 1));
+            estimated_infer_times[m.first] = (
+                InferTimeEstimator(m.first, 1));
         } else {
-            estimated_infer_times[m.first] = (InferTimeEstimator(m.first, 1) * nObjects);
+            estimated_infer_times[m.first] = (
+                InferTimeEstimator(m.first, 1) * nObjects);
         }
     }
 
-    int sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
+    int sum = std::accumulate(estimated_infer_times.begin(),
+                                 estimated_infer_times.end(), 0,
                               [](int acc, const std::pair<ModelType, int> &p) {
                                   return acc + p.second;
                               });
@@ -510,12 +578,13 @@ Controller::getModelsByPipelineType(PipelineType type)
                 {ModelType::Yolov5_Plate, {{ModelType::Sink, -1}}},
                 {ModelType::Sink, {}}};
     case PipelineType::Video_Call:
-        return {{ModelType::Retinaface, {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}},
-                {ModelType::Gender,     {{ModelType::Sink, -1}}},
-                {ModelType::Age,        {{ModelType::Sink, -1}}},
-                {ModelType::Emotionnet, {{ModelType::Sink, -1}}},
-                {ModelType::Arcface,    {{ModelType::Sink, -1}}},
-                {ModelType::Sink, {}}};
+        return {
+            {ModelType::Retinaface, {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}},
+            {ModelType::Gender,     {{ModelType::Sink, -1}}},
+            {ModelType::Age,        {{ModelType::Sink, -1}}},
+            {ModelType::Emotionnet, {{ModelType::Sink, -1}}},
+            {ModelType::Arcface,    {{ModelType::Sink, -1}}},
+            {ModelType::Sink, {}}};
     case PipelineType::Building_Security:
         return {{ModelType::Yolov5,     {{ModelType::Retinaface, 0}}},
                 {ModelType::Retinaface, {{ModelType::Gender, -1}, {ModelType::Age, -1}}},
@@ -528,12 +597,14 @@ Controller::getModelsByPipelineType(PipelineType type)
     }
 }
 
-double Controller::LoadTimeEstimator(const char *model_path, double input_mem_size)
+double Controller::LoadTimeEstimator(const char *model_path,
+                                     double input_mem_size)
 {
     // Load the pre-trained model
     BoosterHandle booster;
     int num_iterations = 1;
-    int ret = LGBM_BoosterCreateFromModelfile(model_path, &num_iterations, &booster);
+    int ret =
+        LGBM_BoosterCreateFromModelfile(model_path, &num_iterations, &booster);
 
     // Prepare the input data
     std::vector<double> input_data = {input_mem_size};
@@ -541,18 +612,16 @@ double Controller::LoadTimeEstimator(const char *model_path, double input_mem_si
     // Perform inference
     int64_t out_len;
     std::vector<double> out_result(1);
-    ret = LGBM_BoosterPredictForMat(booster,
-                                    input_data.data(),
-                                    C_API_DTYPE_FLOAT64,
-                                    1,                    // Number of rows
-                                    1,                    // Number of columns
-                                    1,                    // Is row major
-                                    C_API_PREDICT_NORMAL, // Predict type
-                                    0,                    // Start iteration
-                                    -1,                   // Number of iterations, -1 means use all
-                                    "",                   // Parameter
-                                    &out_len,
-                                    out_result.data());
+    ret =
+        LGBM_BoosterPredictForMat(booster, input_data.data(), C_API_DTYPE_FLOAT64,
+                                  1,                    // Number of rows
+                                  1,                    // Number of columns
+                                  1,                    // Is row major
+                                  C_API_PREDICT_NORMAL, // Predict type
+                                  0,                    // Start iteration
+                                  -1,                   // Number of iterations, -1 means use all
+                                  "",                   // Parameter
+                                  &out_len, out_result.data());
     if (ret != 0)
     {
         std::cout << "Failed to perform inference!" << std::endl;
@@ -672,7 +741,8 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     return time_per_frame[batch_size] * batch_size;
 }
 
-// ============================================== added ===================================================
+// ============================================== added
+// ===================================================
 
 /**
  * @brief adjust the image shape of the client asynchronously
@@ -691,26 +761,28 @@ void Controller::AdjustImageSize(ContainerHandle *ds, int width, int height)
     request.set_width(width);
     request.set_height(height);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-        ds->device_agent->stub->AsyncUpdateImageShape(&context, request, ds->device_agent->cq));
+        ds->device_agent->stub->AsyncUpdateImageShape(&context, request,
+                                                      ds->device_agent->cq));
     rpc->Finish(&reply, &status, (void *)1);
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(ok);
 }
 
-ModelInfo::ModelInfo(int bs, float il,
-                     int w, int h, std::string n, float acc)
+ModelInfo::ModelInfo(int bs, float il, int w, int h, std::string n, float acc)
 {
     batch_size = bs;
     inferent_latency = il;
-    throughput = il / bs;
+    throughput = int(bs / (il / 1000.0));
     width = w;
     height = h;
     name = n;
     accuracy = acc;
 }
 
-bool ModelSetCompare::operator()(const std::tuple<std::string, float> &lhs, const std::tuple<std::string, float> &rhs) const
+bool ModelSetCompare::operator()(
+    const std::tuple<std::string, float> &lhs,
+    const std::tuple<std::string, float> &rhs) const
 {
     return std::get<1>(lhs) < std::get<1>(rhs);
 }
@@ -724,17 +796,68 @@ bool ModelSetCompare::operator()(const std::tuple<std::string, float> &lhs, cons
  * @param inference_latency
  * @param throughput
  */
-void ModelProfiles::add(std::string name, float accuracy, int batch_size, float inference_latency, int resolution, int throughput)
+void ModelProfiles::add(std::string name, float accuracy, int batch_size,
+                        float inference_latency, int resolution,
+                        int throughput)
 {
     auto key = std::tuple<std::string, float>{name, accuracy};
     ModelInfo value = {batch_size, inference_latency, throughput, resolution, name, accuracy};
     infos[key].push_back(value);
 }
 
+void ModelProfiles::add(const ModelInfo &model_info)
+{
+    auto key =
+        std::tuple<std::string, float>{model_info.name, model_info.accuracy};
+    infos[key].push_back(model_info);
+}
+
+/**
+ * @brief hardcode model profiles mapping
+ *
+ * @param model_name
+ * @return ModelInfo
+ */
+std::vector<ModelInfo> ModelProfiles::hardcode_mapping(std::string model_name,
+                                                       int width, int height)
+{
+    // (batch_size, inference_time(ms), width, height, model_name, accuracy)
+    std::vector<ModelInfo> hardcode = {
+        ModelInfo(1, 1.2, 320, 320, "yolov5n", 0.2),
+        ModelInfo(2, 2.1, 320, 320, "yolov5n", 0.2),
+        ModelInfo(4, 2.9, 320, 320, "yolov5n", 0.2),
+        ModelInfo(8, 5.1, 320, 320, "yolov5n", 0.2),
+        ModelInfo(16, 8.8, 320, 320, "yolov5n", 0.2),
+        ModelInfo(32, 18.5, 320, 320, "yolov5n", 0.2),
+        ModelInfo(64, 31.2, 320, 320, "yolov5n", 0.2),
+        ModelInfo(1, 1.8, 640, 640, "yolov5n", 0.4),
+        ModelInfo(2, 3.3, 640, 640, "yolov5n", 0.4),
+        ModelInfo(4, 5.7, 640, 640, "yolov5n", 0.4),
+        ModelInfo(8, 10.7, 640, 640, "yolov5n", 0.4),
+        ModelInfo(16, 20.8, 640, 640, "yolov5n", 0.4),
+        ModelInfo(32, 40.3, 640, 640, "yolov5n", 0.4),
+        ModelInfo(64, 80.3, 640, 640, "yolov5n", 0.4),
+    };
+
+    std::vector<ModelInfo> r;
+    for (auto &model_info : hardcode)
+    {
+        if (model_info.name == model_name && model_info.width == width &&
+            model_info.height == height)
+        {
+            r.push_back(model_info);
+        }
+    }
+    return r;
+}
+
 void ClientProfiles::sortBudgetDescending(std::vector<ClientInfo> &clients)
 {
-    std::sort(clients.begin(), clients.end(), [](const ClientInfo &a, const ClientInfo &b)
-    { return a.budget > b.budget; });
+    std::sort(clients.begin(), clients.end(),
+              [](const ClientInfo &a, const ClientInfo &b)
+    {
+                  return a.budget > b.budget;
+              });
 }
 
 void ClientProfiles::add(const std::string &ip, float budget, int req_rate)
@@ -742,15 +865,31 @@ void ClientProfiles::add(const std::string &ip, float budget, int req_rate)
     infos.push_back({ip, budget, req_rate});
 }
 
-std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models, std::vector<ClientInfo> &clients)
+std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models,
+                                           std::vector<ClientInfo> &clients)
 {
     // sort clients
     ClientProfiles::sortBudgetDescending(clients);
+    std::cout << "findOptimal start" << std::endl;
+    std::cout << "available sorted clients: " << std::endl;
+    for (auto &client : clients)
+    {
+        std::cout << client.ip << " " << client.budget << " " << client.req_rate
+                  << std::endl;
+    }
+    std::cout << "available models: " << std::endl;
+    for (auto &model : models)
+    {
+        std::cout << model.name << " " << model.accuracy << " " << model.batch_size << " " << model.throughput << " " << model.inferent_latency << std::endl;
+    }
     std::tuple<int, int> best_cell;
     int best_value = 0;
 
     // dp
     auto [max_batch_size, max_index] = findMaxBatchSize(models, clients[0]);
+
+    std::cout << "max batch size: " << max_batch_size
+              << " and index: " << max_index << std::endl;
 
     assert(max_batch_size > 0);
 
@@ -767,20 +906,28 @@ std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models,
         }
     }
     // init matrix
-    int cols = max_throughput % h + 1;
+    int cols = max_throughput / h + 1;
+    std::cout << "max_throughput: " << max_throughput << std::endl;
+    std::cout << "row: " << rows << " cols: " << cols << std::endl;
     std::vector<std::vector<int>> dp_mat(rows, std::vector<int>(cols, 0));
     // iterating
-    int client_index = 1;
-    for (auto &client : clients)
+    for (int client_index = 1; client_index < clients.size(); client_index++)
     {
-        auto [max_batch_size, max_index] = findMaxBatchSize(models, client);
+        auto &client = clients[client_index];
+        auto result = findMaxBatchSize(models, client, max_batch_size);
+        max_batch_size = std::get<0>(result);
+        max_index = std::get<1>(result);
+        std::cout << "client ip: " << client.ip << ", max_batch_size: " << max_batch_size << ", max_index: "
+                  << max_index << std::endl;
         if (max_batch_size <= 0)
         {
             break;
         }
-        int cols_upperbound = models[max_index].throughput % h;
+        int cols_upperbound = int(models[max_index].throughput / h);
         int lambda_i = client.req_rate;
         int v_i = client.req_rate;
+        std::cout << "cols_up " << cols_upperbound << ", req " << lambda_i
+                  << std::endl;
         for (int k = 1; k <= cols_upperbound; k++)
         {
 
@@ -804,30 +951,51 @@ std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models,
                 dp_mat[client_index][k] = dp_mat[client_index - 1][k];
             }
         }
-        client_index++;
     }
+
+    std::cout << "updated dp_mat" << std::endl;
+    for (auto &row : dp_mat)
+    {
+        for (auto &v : row)
+        {
+            std::cout << v << " ";
+        }
+        std::cout << std::endl;
+    }
+
     // perform backtracing from (row, col)
     // using dp_mat, best_cell, best_value
 
     std::vector<ClientInfo> selected_clients;
 
     auto [row, col] = best_cell;
+
+    std::cout << "best cell: " << row << " " << col << std::endl;
     int w = dp_mat[row][col];
     while (row > 0 && col > 0)
     {
+        std::cout << row << " " << col << std::endl;
         if (dp_mat[row][col] == dp_mat[row - 1][col])
         {
             row--;
         }
         else
         {
-            int w_i = clients[row - 1].req_rate;
+            auto c = clients[row - 1];
+            int w_i = c.req_rate;
             row = row - 1;
-            col = (w - w_i) / h;
+            col = int((w - w_i) / h);
             w = col * h;
             assert(w == dp_mat[row][col]);
-            selected_clients.push_back(clients[row - 1]);
+            selected_clients.push_back(c);
         }
+    }
+
+    std::cout << "findOptimal end" << std::endl;
+    std::cout << "selected clients" << std::endl;
+    for (auto &sc : selected_clients)
+    {
+        std::cout << sc.ip << " " << sc.budget << " " << sc.req_rate << std::endl;
     }
 
     return selected_clients;
@@ -840,29 +1008,69 @@ std::vector<ClientInfo> findOptimalClients(const std::vector<ModelInfo> &models,
  * @param model_profiles
  * @return a vector of [ (model_name, accuracy), vec[clients], batch_size ]
  */
-std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>>
+std::vector<
+    std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>>
 mapClient(ClientProfiles client_profile, ModelProfiles model_profiles)
 {
-    std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>> mappings;
+    std::vector<
+        std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>>
+        mappings;
     std::vector<ClientInfo> clients = client_profile.infos;
-    for (auto it = model_profiles.infos.begin(); it != model_profiles.infos.end(); ++it)
+
+    int map_size = model_profiles.infos.size();
+    int key_index = 0;
+    for (auto it = model_profiles.infos.begin(); it != model_profiles.infos.end();
+         ++it)
     {
+        key_index++;
+        std::cout << "before filtering" << std::endl;
+        for (auto &c : clients)
+        {
+            std::cout << c.ip << " " << c.budget << " " << c.req_rate << std::endl;
+        }
+
         auto selected_clients = findOptimalClients(it->second, clients);
+
+        // tradeoff:
+        // assign all left clients to the last available model
+        if (key_index == map_size)
+        {
+            std::cout << "assign all rest clients" << std::endl;
+            selected_clients = clients;
+            clients.clear();
+        }
+
         int batch_size = check_and_assign(it->second, selected_clients);
-        mappings.push_back(std::make_tuple(it->first, selected_clients, batch_size));
+        std::cout << "mapClient start" << std::endl;
+        std::cout << "model info: " << it->second[0].throughput << std::endl;
+        std::cout << "batch size: " << batch_size << std::endl;
+        std::cout << "mapClient end" << std::endl;
+        mappings.push_back(
+            std::make_tuple(it->first, selected_clients, batch_size));
         differenceClients(clients, selected_clients);
+        std::cout << "after filtering" << std::endl;
+        for (auto &c : clients)
+        {
+            std::cout << c.ip << " " << c.budget << " " << c.req_rate << std::endl;
+        }
+        if (clients.size() == 0)
+        {
+            break;
+        }
     }
     return mappings;
 }
 
 /**
- * @brief find the max available batch size for the associated clients of corresponding model
+ * @brief find the max available batch size for the associated clients of
+ * corresponding model
  *
  * @param model
  * @param selected_clients
  * @return int
  */
-int check_and_assign(std::vector<ModelInfo> &model, std::vector<ClientInfo> &selected_clients)
+int check_and_assign(std::vector<ModelInfo> &model,
+                     std::vector<ClientInfo> &selected_clients)
 {
     int total_req_rate = 0;
     // sum all selected req rate
@@ -870,11 +1078,12 @@ int check_and_assign(std::vector<ModelInfo> &model, std::vector<ClientInfo> &sel
     {
         total_req_rate += client.req_rate;
     }
-    int max_batch_size = 0;
+    int max_batch_size = 1;
 
     for (auto &model_info : model)
     {
-        if (model_info.throughput > total_req_rate && max_batch_size < model_info.batch_size)
+        if (model_info.throughput > total_req_rate &&
+            max_batch_size < model_info.batch_size)
         {
             max_batch_size = model_info.batch_size;
         }
@@ -882,16 +1091,17 @@ int check_and_assign(std::vector<ModelInfo> &model, std::vector<ClientInfo> &sel
     return max_batch_size;
 }
 
-// ====================== helper functions implementation ===========================
+// ====================== helper functions implementation ============================
 
 /**
- * @brief find the maximum batch size for the client
+ * @brief find the maximum batch size for the client, the model vector is the set of model only different in batch size
  *
  * @param models
  * @param budget
- * @return int
+ * @return max_batch_size, index
  */
-std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfo> &models, const ClientInfo &client)
+std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfo> &models,
+                                      const ClientInfo &client, int max_available_batch_size)
 {
     int max_batch_size = 0;
     float budget = client.budget;
@@ -899,7 +1109,8 @@ std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfo> &models, cons
     int max_index = 0;
     for (const auto &model : models)
     {
-        if (model.inferent_latency * 2.0 < client.budget && model.batch_size > max_batch_size)
+        if (model.inferent_latency * 2.0 < client.budget &&
+            model.batch_size > max_batch_size && model.batch_size <= max_available_batch_size)
         {
             max_batch_size = model.batch_size;
             max_index = index;
@@ -915,7 +1126,8 @@ std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfo> &models, cons
  * @param src
  * @param diff
  */
-void differenceClients(std::vector<ClientInfo> &src, const std::vector<ClientInfo> &diff)
+void differenceClients(std::vector<ClientInfo> &src,
+                       const std::vector<ClientInfo> &diff)
 {
     auto is_in_diff = [&diff](const ClientInfo &client)
     {
