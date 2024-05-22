@@ -569,6 +569,10 @@ public:
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false);
 
+    virtual ArrivalRecordType getArrivalRecords() {
+        return {};
+    }
+
     bool RELOADING = true;
 
     std::ofstream msvc_logFile;
