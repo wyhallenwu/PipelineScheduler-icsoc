@@ -82,6 +82,7 @@ json loadRunArgs(int argc, char **argv);
 
 void addProfileConfigs(json &msvcConfigs, const json &profileConfigs);
 
+
 class ContainerAgent {
 public:
     ContainerAgent(const json &configs);
@@ -237,6 +238,7 @@ protected:
     RUNMODE cont_RUNMODE;
     uint8_t cont_deviceIndex;
     MetricsServerConfigs cont_metricsServerConfigs;
+    std::unique_ptr<pqxx::connection> cont_metricsServerConn = nullptr;
 };
 
 #endif //CONTAINER_AGENT_H

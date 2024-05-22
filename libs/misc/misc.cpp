@@ -73,7 +73,7 @@ std::string removeSubstring(const std::string& str, const std::string& substring
 
 std::string timePointToEpochString(const std::chrono::system_clock::time_point& tp) {
     // Convert time_point to nanoseconds
-    std::chrono::nanoseconds ns = std::chrono::duration_cast<std::chrono::nanoseconds>(tp.time_since_epoch());
+    std::chrono::microseconds ns = std::chrono::duration_cast<std::chrono::microseconds>(tp.time_since_epoch());
 
     // Convert nanoseconds to string
     std::stringstream ss;
