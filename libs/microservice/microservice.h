@@ -398,9 +398,16 @@ public:
     ~arrivalReqRecords() = default;
 
 
-
-    void addRecord(RequestTimeType timestamps) {
-        records.push_back(std::make_tuple(timestamps[0], timestamps[1], timestamps[2]));
+    /**
+     * @brief Add a new arrival to the records. There are 3 timestamps to keep be kept.
+     * 1. The time the request is processed by the upstream postprocessor and placed onto the outqueue.
+     * 2. The time the request is sent out by upstream sender.
+     * 3. The time the request is placed onto the outqueue of receiver.
+     * 
+     * @param timestamps 
+     */
+    void addRecord(RequestTimeType timestamps, uint64_t reqNumber) {
+        records.push_back(std::make_tuple(timestamps[0], timestamps[1], timestamps[2], reqNumber));
         clearOldRecords();
     }
 
@@ -418,12 +425,15 @@ public:
         }
     }
 
-    std::vector<std::tuple<ClockType, ClockType, ClockType>> getRecords() {
+    std::vector<std::tuple<ClockType, ClockType, ClockType, uint64_t>> getRecords() {
         return records;
+    }
+    void setKeepLength(uint64_t keepLength) {
+        this->keepLength = std::chrono::milliseconds(keepLength);
     }
 
 private:
-    std::vector<std::tuple<ClockType, ClockType, ClockType>> records;
+    std::vector<std::tuple<ClockType, ClockType, ClockType, uint64_t>> records;
     std::chrono::milliseconds keepLength;
 };
 

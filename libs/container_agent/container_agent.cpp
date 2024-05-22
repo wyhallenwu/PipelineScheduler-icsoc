@@ -63,11 +63,22 @@ json loadRunArgs(int argc, char **argv) {
     containerConfigs["cont_RUNMODE"] = runmode;
     containerConfigs["cont_port"] = absl::GetFlag(FLAGS_port);
 
+    std::ifstream metricsServerCfgsFile = std::ifstream(containerConfigs.at("cont_metricServerConfigs"));
+    json metricsServerConfigs = json::parse(metricsServerCfgsFile);
+
+    containerConfigs["cont_metricsServerIP"] = metricsServerConfigs.at("metricsServer_ip");
+    containerConfigs["cont_metricsServerPort"] = metricsServerConfigs.at("metricsServer_port");
+    containerConfigs["cont_metricsServerDBName"] = metricsServerConfigs.at("metricsServer_DBName");
+    containerConfigs["cont_metricsServerUser"] = "container_agent";
+    containerConfigs["cont_metricsServerPwd"] = metricsServerConfigs.at("metricsServer_password");
+    containerConfigs["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs.at("metricsServer_scrapeIntervalMilliSec");
+
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
         containerConfigs.at("cont_pipeline")[i]["msvc_contName"] = name;
         containerConfigs.at("cont_pipeline")[i]["msvc_deviceIndex"] = device;
         containerConfigs.at("cont_pipeline")[i]["msvc_containerLogPath"] = logPath + "/" + name;
         containerConfigs.at("cont_pipeline")[i]["msvc_RUNMODE"] = runmode;
+        containerConfigs.at("cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = containerConfigs["cont_metricsScrapeIntervalMillisec"];
 
         /**
          * @brief     If this is profiling, set configurations to the first batch size that should be profiled
@@ -86,16 +97,6 @@ json loadRunArgs(int argc, char **argv) {
             }
         }
     }
-
-    std::ifstream metricsServerCfgsFile = std::ifstream(containerConfigs.at("cont_metricServerConfigs"));
-    json metricsServerConfigs = json::parse(metricsServerCfgsFile);
-
-    containerConfigs["cont_metricsServerIP"] = metricsServerConfigs.at("metricsServer_ip");
-    containerConfigs["cont_metricsServerPort"] = metricsServerConfigs.at("metricsServer_port");
-    containerConfigs["cont_metricsServerDBName"] = metricsServerConfigs.at("metricsServer_DBName");
-    containerConfigs["cont_metricsServerUser"] = "container_agent";
-    containerConfigs["cont_metricsServerPwd"] = metricsServerConfigs.at("metricsServer_password");
-    containerConfigs["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs.at("metricsServer_scrapeIntervalMilliSec");
 
 
     json finalConfigs;
@@ -314,8 +315,8 @@ ContainerAgent::ContainerAgent(const json &configs) {
     reportMetrics = true;
     std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
     receiver.detach();
-    std::thread metrics(&ContainerAgent::collectRuntimeMetrics, this);
-    metrics.detach();
+    // std::thread metrics(&ContainerAgent::collectRuntimeMetrics, this);
+    // metrics.detach();
 }
 
 void ContainerAgent::ReportStart() {

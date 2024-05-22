@@ -225,6 +225,7 @@ void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_imgNormScale = configs.msvc_imgNormScale;
     msvc_subVals = configs.msvc_subVals;
     msvc_divVals = configs.msvc_divVals;
+    msvc_arrivalRecords.setKeepLength(jsonConfigs.at("cont_metricsScrapeIntervalMillisec"));
 }
 
 /**
@@ -330,8 +331,11 @@ void BaseReqBatcher::batchRequests() {
                 continue;
             }
         }
-
+        
         msvc_inReqCount++;
+
+        // Keeping record of the arrival requests
+        msvc_arrivalRecords.addRecord(currReq.req_origGenTime[0], msvc_inReqCount);
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
