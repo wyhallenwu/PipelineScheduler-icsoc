@@ -225,7 +225,7 @@ void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_imgNormScale = configs.msvc_imgNormScale;
     msvc_subVals = configs.msvc_subVals;
     msvc_divVals = configs.msvc_divVals;
-    msvc_arrivalRecords.setKeepLength(jsonConfigs.at("cont_metricsScrapeIntervalMillisec"));
+    msvc_arrivalRecords.setKeepLength((uint64_t)jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
 }
 
 /**
