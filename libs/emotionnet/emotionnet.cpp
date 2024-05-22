@@ -54,19 +54,7 @@ int main(int argc, char **argv) {
     }
     agent->addMicroservice(msvcsList);
 
-    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
-        agent->profiling(pipeConfigs, configs["profiling"]);
-    } else {
-        agent->dispatchMicroservices();
-
-        agent->waitReady(); 
-        agent->START();
-        
-        while (agent->running()) {
-            std::this_thread::sleep_for(std::chrono::seconds(4));
-            agent->SendState();
-        }
-    }
+    agent->runService(pipeConfigs, configs);
     delete agent;
     return 0;
 }

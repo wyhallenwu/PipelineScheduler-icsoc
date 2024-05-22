@@ -336,6 +336,21 @@ void ContainerAgent::ReportStart() {
 }
 
 
+void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
+    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
+        this->profiling(pipeConfigs, configs["profiling"]);
+    } else {
+        this->dispatchMicroservices();
+
+        this->waitReady(); 
+        this->START();
+        
+        while (this->running()) {
+            std::this_thread::sleep_for(std::chrono::seconds(4));
+            this->SendState();
+        }
+    }
+}
 
 
 void ContainerAgent::collectRuntimeMetrics() {

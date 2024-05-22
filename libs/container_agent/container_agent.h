@@ -142,6 +142,8 @@ public:
 
     void connectToMetricsServer();
 
+    void runService(const json &pipeConfigs, const json &configs);
+
 protected:
     uint8_t deviceIndex = -1;
 
