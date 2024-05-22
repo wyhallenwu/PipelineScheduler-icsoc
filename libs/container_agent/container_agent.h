@@ -12,12 +12,14 @@
 #include <grpcpp/health_check_service_interface.h>
 #include <google/protobuf/empty.pb.h>
 #include <filesystem>
-#include "receiver.h"
 #include <pqxx/pqxx>
 
+#include "profiler.h"
 #include "microservice.h"
+#include "receiver.h"
 #include "sender.h"
 #include "indevicecommunication.grpc.pb.h"
+#include "controller.h"
 
 ABSL_DECLARE_FLAG(std::string, name);
 ABSL_DECLARE_FLAG(std::optional<std::string>, json);
@@ -40,7 +42,6 @@ using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using indevicecommunication::InDeviceCommunication;
-using indevicecommunication::State;
 using indevicecommunication::Signal;
 using indevicecommunication::Connection;
 using indevicecommunication::ProcessData;
@@ -99,8 +100,6 @@ public:
         return run;
     }
 
-    void SendState();
-
     void START() {
         for (auto msvc: cont_msvcsList) {
             msvc->unpauseThread();
@@ -148,6 +147,7 @@ protected:
     uint8_t deviceIndex = -1;
 
     void ReportStart();
+
     void collectRuntimeMetrics();
 
     class RequestHandler {
@@ -230,8 +230,11 @@ protected:
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     std::atomic<bool> run;
+
     bool reportMetrics;
-    int pid;
+    unsigned int pid;
+    Metrics metrics;
+    Profiler *profiler;
 
     std::string cont_logDir;
     RUNMODE cont_RUNMODE;

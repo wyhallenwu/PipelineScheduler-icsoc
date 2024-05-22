@@ -16,11 +16,6 @@ using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using controlcommunication::ControlCommunication;
-using controlcommunication::DeviceState;
-using controlcommunication::LightMetrics;
-using controlcommunication::LightMetricsList;
-using controlcommunication::FullMetrics;
-using controlcommunication::FullMetricsList;
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::Neighbor;
 using controlcommunication::ContainerConfig;
@@ -29,14 +24,14 @@ using controlcommunication::ContainerInt;
 using controlcommunication::ContainerSignal;
 using EmptyMessage = google::protobuf::Empty;
 
-enum DeviceType {
+enum SystemDeviceType {
     Server,
     Edge
 };
 
 enum ModelType {
     DataSource,
-    BaseSink,
+    Sink,
     Yolov5,
     Yolov5Datasource,
     Arcface,
@@ -49,20 +44,7 @@ enum ModelType {
     CarBrand
 };
 
-std::map<std::string, ModelType> MODEL_TYPES = {
-        {":datasource",       DataSource},
-        {":basesink",         BaseSink},
-        {":yolov5",           Yolov5},
-        {":yolov5datasource", Yolov5Datasource},
-        {":retinaface",       Retinaface},
-        {":arcface",          Arcface},
-        {":carbrand",         CarBrand},
-        {":plate",            Yolov5_Plate},
-        {":gender",           Gender},
-        {":age",              Age},
-        {":movenet",          Movenet},
-        {":emotion",          Emotionnet}
-};
+extern std::map<ModelType, std::vector<std::string>> MODEL_INFO;
 
 enum PipelineType {
     Traffic,
@@ -107,9 +89,9 @@ public:
     void Stop() { running = false; };
 
 private:
-    void UpdateLightMetrics(google::protobuf::RepeatedPtrField<LightMetrics> metrics);
+    void UpdateLightMetrics();
 
-    void UpdateFullMetrics(google::protobuf::RepeatedPtrField<FullMetrics> metrics);
+    void UpdateFullMetrics();
 
     double LoadTimeEstimator(const char *model_path, double input_mem_size);
     int InferTimeEstimator(ModelType model, int batch_size);
@@ -119,7 +101,7 @@ private:
         std::string ip;
         std::shared_ptr<ControlCommunication::Stub> stub;
         CompletionQueue *cq;
-        DeviceType type;
+        SystemDeviceType type;
         int num_processors; // number of processing units, 1 for Edge or # GPUs for server
         std::vector<double> processors_utilization; // utilization per pu
         std::vector<unsigned long> mem_size; // memory size in MB
@@ -140,7 +122,8 @@ private:
         NodeHandle *device_agent;
         TaskHandle *task;
         int batch_size;
-        int cuda_device;
+        int replicas;
+        std::vector<int> cuda_device;
         int class_of_interest;
         int recv_port;
         Metrics metrics;
@@ -171,34 +154,6 @@ private:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
-    class LightMetricsRequestHandler : public RequestHandler {
-    public:
-        LightMetricsRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                   Controller *c)
-                : RequestHandler(service, cq, c) {
-            Proceed();
-        }
-
-        void Proceed() final;
-
-    private:
-        LightMetricsList request;
-    };
-
-    class FullMetricsRequestHandler : public RequestHandler {
-    public:
-        FullMetricsRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                  Controller *c)
-                : RequestHandler(service, cq, c) {
-            Proceed();
-        }
-
-        void Proceed() final;
-
-    private:
-        FullMetricsList request;
-    };
-
     class DeviseAdvertisementHandler : public RequestHandler {
     public:
         DeviseAdvertisementHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
@@ -214,9 +169,9 @@ private:
     };
 
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
-                        std::string source = "");
+                        std::string source = "", int replica = 1);
 
-    void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge);
+    void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
 
@@ -225,14 +180,14 @@ private:
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 
     void optimizeBatchSizeStep(
-            const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models,
-            std::map<std::string, int> &batch_sizes, std::map<std::string, int> &estimated_infer_times, int nObjects);
+            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
+            std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
 
-    std::map<std::string, int> getInitialBatchSizes(
-            const std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>> &models, int slo,
+    std::map<ModelType, int> getInitialBatchSizes(
+            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
             int nObjects);
 
-    static std::vector<std::pair<std::string, std::vector<std::pair<std::string, int>>>>
+    std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
     getModelsByPipelineType(PipelineType type);
 
     bool running;

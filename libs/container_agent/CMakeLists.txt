@@ -7,12 +7,14 @@ set(
         HEADER_FILES
         ../json/json.h
         container_agent.h
+        profiler.h
 )
 
 # All source files and private header files go here.
 set(
         SOURCE_FILES
         container_agent.cpp
+        profiler.cpp
 )
 
 # Here we define the library.
@@ -41,6 +43,9 @@ find_package(microservice CONFIG REQUIRED)
 
 set(communicator_DIR "${CMAKE_CURRENT_BINARY_DIR}/../communicator")
 find_package(communicator CONFIG REQUIRED)
+
+set(controller_DIR "${CMAKE_CURRENT_BINARY_DIR}/../controller")
+find_package(controller CONFIG REQUIRED)
 
 set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
 find_package(misc CONFIG REQUIRED)
@@ -72,7 +77,10 @@ target_link_libraries(container_agent
         ${PostgreSQL_LIBRARIES}
         ${LIBPQXX_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
+        ${CUDA_LIBRARIES}
+        CUDA::nvml
         microservice
+        controller
         communicator
 )
 

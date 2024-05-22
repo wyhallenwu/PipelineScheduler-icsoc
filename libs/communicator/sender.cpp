@@ -105,7 +105,7 @@ std::string GPUSender::SendGpuPointer(
     CompletionQueue cq;
 
     ImageDataPayload request;
-    for (int i = 0; i < elements.size(); i++) {
+    for (unsigned int i = 0; i < elements.size(); i++) {
         cudaIpcMemHandle_t ipcHandle;
         char *serializedData[sizeof(cudaIpcMemHandle_t)];
         cudaError_t cudaStatus = cudaIpcGetMemHandle(&ipcHandle, elements[i][0].data.ptr<uchar>());
@@ -234,7 +234,7 @@ std::string LocalCPUSender::SendSharedMemory(
     CompletionQueue cq;
     ImageDataPayload request;
     char *name;
-    for (int i = 0; i < elements.size(); i++) {
+    for (unsigned int i = 0; i < elements.size(); i++) {
         auto ref = request.add_elements();
         sprintf(name, "shared %d", rand_int(0, 1000));
         boost::interprocess::shared_memory_object shm{create_only, name, read_write};
@@ -326,7 +326,7 @@ std::string RemoteCPUSender::SendSerializedData(
     CompletionQueue cq;
 
     ImageDataPayload request;
-    for (int i = 0; i < elements.size(); i++) {
+    for (unsigned int i = 0; i < elements.size(); i++) {
         auto ref = request.add_elements();
         ref->set_data(elements[i][0].data.data, elements[i][0].data.total() * elements[i][0].data.elemSize());
 

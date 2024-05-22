@@ -15,8 +15,6 @@
 DataSourceAgent::DataSourceAgent(
     const json &configs
 ) : ContainerAgent(configs) {
-
-    reportMetrics = false;
     json pipeConfigs = configs["container"]["cont_pipeline"];
     cont_msvcsList.push_back(new DataReader(pipeConfigs[0]));
     cont_msvcsList.push_back(new RemoteCPUSender(pipeConfigs[1]));
@@ -31,10 +29,7 @@ DataSourceAgent::DataSourceAgent(
 int main(int argc, char **argv) {
     json configs = loadRunArgs(argc, argv);
     ContainerAgent *agent = new DataSourceAgent(configs);
-    while (agent->running()) {
-        std::this_thread::sleep_for(std::chrono::seconds(10));
-        agent->SendState();
-    }
+    agent->runService("", configs);
     delete agent;
     return 0;
 }

@@ -68,11 +68,11 @@ void BaseSink::sink() {
             inferTimeReport.req_travelPath[batchSize - 1] = removeSubstring(inferTimeReport.req_travelPath[batchSize - 1], "BATCH_ENDS");
             keepProfiling = 0;
         }
-        auto numTimeStamps = (BatchSizeType)(inferTimeReport.req_origGenTime.size() / batchSize);
+
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
             for (BatchSizeType i = 0; i < batchSize; i++) {
                 msvc_logFile << inferTimeReport.req_travelPath[i] << "|";
-                for (auto j = 0; j < inferTimeReport.req_origGenTime[i].size() - 1; j++) {
+                for (unsigned int j = 0; j < inferTimeReport.req_origGenTime[i].size() - 1; j++) {
                     msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[i].at(j)) << ",";
                 }
                 msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[i].back()) << "|";
@@ -105,7 +105,7 @@ void BaseSink::sink() {
         } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
             std::cout << inferTimeReport.req_travelPath[0] << std::endl;
             msvc_logFile << inferTimeReport.req_travelPath[0] << "|";
-            for (auto j = 0; j < inferTimeReport.req_origGenTime[0].size() - 1; j++) {
+            for (unsigned int j = 0; j < inferTimeReport.req_origGenTime[0].size() - 1; j++) {
                 msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[0].at(j)) << ",";
             }
             msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[0].back()) << "|";

@@ -1,7 +1,7 @@
 {
     "container": {
         "cont_pipeName": "every",
-        "cont_taskName": "data_source",
+        "cont_taskName": "datasource",
         "cont_name": "data_source_0",
         "cont_pipeline": [
             {

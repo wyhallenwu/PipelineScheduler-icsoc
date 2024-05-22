@@ -28,7 +28,6 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES
         device_agent.h
-        profiler.h
         ../json/json.h
 )
 
@@ -36,7 +35,6 @@ set(
 set(
         SOURCE_FILES
         device_agent.cpp
-        profiler.cpp
 )
 
 # Here we define the library.
@@ -90,8 +88,6 @@ target_link_libraries(device_agent
         absl::flags
         absl::flags_parse
         ${CMAKE_THREAD_LIBS_INIT}
-        ${CUDA_LIBRARIES}
-        CUDA::nvml
         microservice
         misc
         container_agent

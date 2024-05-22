@@ -27,6 +27,26 @@ void msvcconfigs::from_json(const json &j, msvcconfigs::BaseMicroserviceConfigs 
     j.at("msvc_dnstreamMicroservices").get_to(val.msvc_dnstreamMicroservices);
 }
 
+void msvcconfigs::to_json(json &j, const msvcconfigs::NeighborMicroserviceConfigs &val) {
+    j["nb_name"] = val.name;
+    j["nb_commMethod"] = val.commMethod;
+    j["nb_link"] = val.link;
+    j["nb_maxQueueSize"] = val.maxQueueSize;
+    j["nb_classOfInterest"] = val.classOfInterest;
+    j["nb_expectedShape"] = val.expectedShape;
+}
+
+void msvcconfigs::to_json(json &j, const msvcconfigs::BaseMicroserviceConfigs &val) {
+    j["msvc_name"] = val.msvc_name;
+    j["msvc_type"] = val.msvc_type;
+    j["msvc_svcLevelObjLatency"] = val.msvc_svcLevelObjLatency;
+    j["msvc_idealBatchSize"] = val.msvc_idealBatchSize;
+    j["msvc_dataShape"] = val.msvc_dataShape;
+    j["msvc_maxQueueSize"] = val.msvc_maxQueueSize;
+    j["msvc_upstreamMicroservices"] = val.msvc_upstreamMicroservices;
+    j["msvc_dnstreamMicroservices"] = val.msvc_dnstreamMicroservices;
+}
+
 void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     BaseMicroserviceConfigs configs = jsonConfigs.get<BaseMicroserviceConfigs>();
 

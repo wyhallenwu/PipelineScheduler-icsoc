@@ -1,18 +1,18 @@
 #ifndef DEVICE_AGENT_H
 #define DEVICE_AGENT_H
 
-#include "profiler.h"
 #include <cstdlib>
 #include <misc.h>
 #include <sys/sysinfo.h>
 #include "container_agent.h"
+#include "profiler.h"
 #include "controller.h"
 #include "indevicecommunication.grpc.pb.h"
 #include "controlcommunication.grpc.pb.h"
 
 using trt::TRTConfigs;
 
-ABSL_DECLARE_FLAG(std::string, deviceType);
+ABSL_DECLARE_FLAG(std::string, device_type);
 ABSL_DECLARE_FLAG(std::string, controller_url);
 
 typedef std::tuple<
@@ -26,23 +26,14 @@ typedef std::tuple<
 > MsvcConfigTupleType;
 
 struct ContainerHandle {
-    google::protobuf::RepeatedField<int32_t> queuelengths;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
-    Metrics metrics;
     CompletionQueue *cq;
     unsigned int pid;
-    bool reportMetrics;
 };
-
-namespace msvcconfigs {
-    void to_json(json &j, const NeighborMicroserviceConfigs &val);
-
-    void to_json(json &j, const BaseMicroserviceConfigs &val);
-}
 
 class DeviceAgent {
 public:
-    DeviceAgent(const std::string &controller_url, const std::string n, DeviceType type);
+    DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type);
 
     ~DeviceAgent() {
         running = false;
@@ -56,12 +47,6 @@ public:
         for (std::thread &t: threads) {
             t.join();
         }
-    };
-
-    void UpdateState(const std::basic_string<char> &container_name, const float &requestrate,
-                     const google::protobuf::RepeatedField<int32_t> &queuelengths) {
-        containers[container_name].queuelengths = queuelengths;
-        containers[container_name].metrics.requestRate = requestrate;
     };
 
     bool isRunning() const {
@@ -101,17 +86,11 @@ private:
     void UpdateContainerSender(const std::string &name, const std::string &dwnstr, const std::string &ip,
                                const int &port);
 
-    void Ready(const std::string &name, const std::string &ip, DeviceType type);
-
-    void ReportLightMetrics();
-
-    void ReportFullMetrics();
+    void Ready(const std::string &name, const std::string &ip, SystemDeviceType type);
 
     void HandleDeviceRecvRpcs();
 
     void HandleControlRecvRpcs();
-
-    void MonitorDeviceStatus();
 
     class RequestHandler {
     public:
@@ -149,21 +128,6 @@ private:
         ControlCommunication::AsyncService *service;
     };
 
-    class StateUpdateRequestHandler : public DeviceRequestHandler {
-    public:
-        StateUpdateRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                  DeviceAgent *device)
-                : DeviceRequestHandler(service, cq, device), responder(&ctx) {
-            Proceed();
-        }
-
-        void Proceed() final;
-
-    private:
-        State request;
-        EmptyMessage reply;
-        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
-    };
 
     class ReportStartRequestHandler : public DeviceRequestHandler {
     public:
@@ -177,8 +141,8 @@ private:
 
     private:
         ProcessData request;
-        EmptyMessage reply;
-        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+        ProcessData reply;
+        grpc::ServerAsyncResponseWriter<ProcessData> responder;
     };
 
     class StartContainerRequestHandler : public ControlRequestHandler {
@@ -250,7 +214,6 @@ private:
     int processing_units;
     std::vector<double> utilization;
     std::vector<double> mem_utilization;
-    Profiler *profiler;
     std::map<std::string, ContainerHandle> containers;
     std::vector<std::thread> threads;
 
