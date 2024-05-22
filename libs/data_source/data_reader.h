@@ -17,6 +17,7 @@ public:
 
     void dispatchThread() override {
         std::thread handler(&DataReader::Process, this);
+        READY = true;
         handler.detach();
     }
 
