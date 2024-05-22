@@ -2,10 +2,11 @@
     "container": {
         "cont_pipeName": "every",
         "cont_taskName": "data_source",
+        "cont_name": "data_source_0",
         "cont_pipeline": [
             {
                 "msvc_name": "::data_reader",
-                "msvc_idealBatchSize": 30,
+                "msvc_idealBatchSize": 15,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -32,7 +33,7 @@
                         0
                     ]
                 ],
-                "msvc_svcLevelObjLatency": 1,
+                "msvc_svcLevelObjLatency": 999999,
                 "msvc_type": 3,
                 "msvc_upstreamMicroservices": [
                     {
@@ -83,7 +84,7 @@
                         0
                     ]
                 ],
-                "msvc_svcLevelObjLatency": 1,
+                "msvc_svcLevelObjLatency": 999999,
                 "msvc_type": 4,
                 "msvc_upstreamMicroservices": [
                     {
@@ -106,8 +107,7 @@
                 "msvc_maxQueueSize": 100
             }
         ],
-        "cont_metricServerConfigs": "../jsons/metricsserver.json",
-        "cont_metricScrapeIntervalSecond": 60
+        "cont_metricServerConfigs": "../jsons/metricsserver.json"
     },
     "profiling": {
         "profile_minBatch": 0,
