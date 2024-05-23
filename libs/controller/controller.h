@@ -226,7 +226,6 @@ private:
     };
 
     struct Partitioner;
-    void scheduleBaseParPointLoop(Partitioner *partitioner);
     std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> categorizeNodes(const std::vector<NodeHandle> &nodes);
     int calculateTotalprocessedRate(const std::vector<NodeHandle>& nodes, bool is_edge);
     int calculateTotalQueue(const std::vector<NodeHandle>& nodes, bool is_edge);

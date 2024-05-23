@@ -709,7 +709,7 @@ double getMaxTP(std::vector<NodeHandle> nodes, bool is_edge)
     }
 }
 
-void scheduleBaseParPointLoop(Partitioner *partitioner, std::vector<NodeHandle> nodes, std::vector<MicroserviceHandle> Microservices)
+void scheduleBaseParPointLoop(Partitioner* partitioner,std::vector<NodeHandle> nodes, std::vector<ContainerHandle> Microservices)
 {
     float TPedgesAvg = 0.0f;
     float TPserverAvg = 0.0f;
@@ -846,43 +846,6 @@ void DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &p
     float minGPUUsage = std::numeric_limits<float>::max();
     MicroserviceHandle *leastUsedContainer = nullptr;
     NodeHandle *leastUsedCudaNode = nullptr;
-    NodeHandle *edgePointer = nullptr;
-    NodeHandle *serverPointer = nullptr;
-    unsigned long totalEdgeMemory = 0, totalServerMemory = 0;
-
-    for (NodeHandle &node : nodes)
-    {
-        if (node.type == DeviceType::Edge)
-        {
-            edgePointer = &node;
-            totalEdgeMemory += std::accumulate(node.mem_size.begin(), node.mem_size.end(), 0UL);
-        }
-        else
-        {
-            serverPointer = &node;
-            totalServerMemory += std::accumulate(node.mem_size.begin(), node.mem_size.end(), 0UL);
-        }
-    }
-
-    if (edgePointer == nullptr)
-    {
-        std::cout << "No edge device found.\n";
-        return 1;
-    }
-
-    // init Partitioner
-    Partitioner partitioner;
-    partitioner.edge = edgePointer;
-    partitioner.server = serverPointer;
-    if (totalServerMemory != 0)
-    {
-        partitioner.BaseParPoint = static_cast<float>(totalEdgeMemory) / totalServerMemory;
-    }
-    else
-    {
-        partitioner.BaseParPoint = 0;
-    }
-
     do
     {
         GPUratio = calculateTotalGPU(nodes);
@@ -925,4 +888,14 @@ void DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &p
             }
         }
     } while (decisionPoint < GPUratio - tolerance || decisionPoint > GPUratio + tolerance);
+}
+
+void periodicFunction(Partitioner *partitioner, std::vector<NodeHandle> nodes, std::vector<MicroserviceHandle> microservices) {
+    while (true) {
+        scheduleFineGrainedParPointLoop(partitioner, nodes);
+        scheduleBaseParPointLoop(partitioner, nodes, microservices);
+        DecideAndMoveContainer(nodes, *partitioner);
+
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
 }

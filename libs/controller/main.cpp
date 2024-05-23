@@ -7,6 +7,49 @@ int main() {
     std::ifstream file("../jsons/experiment.json");
     std::vector<TaskDescription::TaskStruct> tasks = json::parse(file);
     std::string command;
+    //////////////////////////////////////distream add////////////////////////////////////////////
+    //init partitioner
+    NodeHandle *edgePointer = nullptr;
+    NodeHandle *serverPointer = nullptr;
+    unsigned long totalEdgeMemory = 0, totalServerMemory = 0;
+
+    for (NodeHandle &node : nodes)
+    {
+        if (node.type == DeviceType::Edge)
+        {
+            edgePointer = &node;
+            totalEdgeMemory += std::accumulate(node.mem_size.begin(), node.mem_size.end(), 0UL);
+        }
+        else
+        {
+            serverPointer = &node;
+            totalServerMemory += std::accumulate(node.mem_size.begin(), node.mem_size.end(), 0UL);
+        }
+    }
+
+    if (edgePointer == nullptr)
+    {
+        std::cout << "No edge device found.\n";
+        return 1;
+    }
+
+    // init Partitioner
+    Partitioner partitioner;
+    partitioner.edge = edgePointer;
+    partitioner.server = serverPointer;
+    if (totalServerMemory != 0)
+    {
+        partitioner.BaseParPoint = static_cast<float>(totalEdgeMemory) / totalServerMemory;
+    }
+    else
+    {
+        partitioner.BaseParPoint = 0;
+    }
+
+    // std::thread periodicThread(periodicFunction, &partitioner, nodes, microservices);
+    // periodicThread.join();
+
+    ////////////////////////////////////////////////////end//////////////////////////////////////////////
 
     while (controller->isRunning()) {
         TaskDescription::TaskStruct task;
