@@ -89,6 +89,26 @@ void Controller::HandleRecvRpcs()
     }
 }
 
+/**
+ * @brief helper function for spliting the string
+ *
+ * @param str
+ * @param delimiter
+ * @return std::vector<std::string>
+ */
+std::vector<std::string> split_string(const std::string &str, char delimiter)
+{
+    std::vector<std::string> tokens;
+    std::stringstream ss(str);
+    std::string token;
+    while (std::getline(ss, token, delimiter))
+    {
+        tokens.push_back(std::move(token));
+    }
+
+    return tokens;
+}
+
 void Controller::AddTask(const TaskDescription::TaskStruct &t)
 {
     std::cout << "Adding task: " << t.name << std::endl;
@@ -153,7 +173,7 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
     // get the req of the first model(yolov5) of the pipeline
     clients_profiles.add(
         client_ip, width, height, t.slo,
-        task->subtasks[t.name + models[0].first]->metrics.requestRate);
+        task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->metrics.requestRate);
 
     auto available_model_configs =
         ModelProfiles::hardcode_mapping(model_name, width, height);
@@ -164,7 +184,7 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
     // record the data source and first container of each pipeline for further
     // update the upstream when switching mapping
     data_sources.push_back(task->subtasks[t.name + ":datasource"]);
-    first_containers.push_back(task->subtasks[t.name + models[0].first]);
+    first_containers.push_back(task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
 
     // =======================
     for (const auto &m : models)
@@ -832,11 +852,11 @@ bool ModelSetCompare::operator()(
  * @param throughput
  */
 void ModelProfiles::add(std::string name, float accuracy, int batch_size,
-                        float inference_latency, int resolution,
+                        float inference_latency, int width, int height,
                         int throughput)
 {
     auto key = std::tuple<std::string, float>{name, accuracy};
-    ModelInfo value = {batch_size, inference_latency, throughput, resolution, name, accuracy};
+    ModelInfo value(batch_size, inference_latency, width, height, name, accuracy);
     infos[key].push_back(value);
 }
 
@@ -859,20 +879,20 @@ std::vector<ModelInfo> ModelProfiles::hardcode_mapping(std::string model_name,
     // FIXME: need updated profiling result
     // (batch_size, inference_time(ms), width, height, model_name, accuracy)
     std::vector<ModelInfo> hardcode = {
-        ModelInfo(1, 1.2, 320, 320, "yolov5n", 0.2),
-        ModelInfo(2, 2.1, 320, 320, "yolov5n", 0.2),
-        ModelInfo(4, 2.9, 320, 320, "yolov5n", 0.2),
-        ModelInfo(8, 5.1, 320, 320, "yolov5n", 0.2),
-        ModelInfo(16, 8.8, 320, 320, "yolov5n", 0.2),
-        ModelInfo(32, 18.5, 320, 320, "yolov5n", 0.2),
-        ModelInfo(64, 31.2, 320, 320, "yolov5n", 0.2),
-        ModelInfo(1, 1.8, 640, 640, "yolov5n", 0.4),
-        ModelInfo(2, 3.3, 640, 640, "yolov5n", 0.4),
-        ModelInfo(4, 5.7, 640, 640, "yolov5n", 0.4),
-        ModelInfo(8, 10.7, 640, 640, "yolov5n", 0.4),
-        ModelInfo(16, 20.8, 640, 640, "yolov5n", 0.4),
-        ModelInfo(32, 40.3, 640, 640, "yolov5n", 0.4),
-        ModelInfo(64, 80.3, 640, 640, "yolov5n", 0.4),
+            ModelInfo(1, 1.2, 320, 320, "yolov5n", 0.2),
+            ModelInfo(2, 2.1, 320, 320, "yolov5n", 0.2),
+            ModelInfo(4, 2.9, 320, 320, "yolov5n", 0.2),
+            ModelInfo(8, 5.1, 320, 320, "yolov5n", 0.2),
+            ModelInfo(16, 8.8, 320, 320, "yolov5n", 0.2),
+            ModelInfo(32, 18.5, 320, 320, "yolov5n", 0.2),
+            ModelInfo(64, 31.2, 320, 320, "yolov5n", 0.2),
+            ModelInfo(1, 1.8, 640, 640, "yolov5n", 0.4),
+            ModelInfo(2, 3.3, 640, 640, "yolov5n", 0.4),
+            ModelInfo(4, 5.7, 640, 640, "yolov5n", 0.4),
+            ModelInfo(8, 10.7, 640, 640, "yolov5n", 0.4),
+            ModelInfo(16, 20.8, 640, 640, "yolov5n", 0.4),
+            ModelInfo(32, 40.3, 640, 640, "yolov5n", 0.4),
+            ModelInfo(64, 80.3, 640, 640, "yolov5n", 0.4),
     };
 
     std::vector<ModelInfo> r;

@@ -111,9 +111,13 @@ struct ModelInfo
     int batch_size;
     float inferent_latency;
     int throughput;
-    int resolution;
+    int width;
+    int height;
     std::string name;
     float accuracy;
+
+    ModelInfo(int bs, float il,
+              int w, int h, std::string n, float acc);
 };
 
 /**
@@ -130,7 +134,10 @@ public:
     // key: (model type, accuracy) value: (model_info)
     std::map<std::tuple<std::string, float>, std::vector<ModelInfo>, ModelSetCompare> infos;
 
-    void add(std::string name, float accuracy, int batch_size, float inference_latency, int resolution, int throughput);
+    void add(std::string name, float accuracy, int batch_size, float inference_latency, int width, int height, int throughput);
+    void add(const ModelInfo &model_info);
+
+    static std::vector<ModelInfo> hardcode_mapping(std::string model_name, int width, int height);
 };
 
 struct ClientInfo
