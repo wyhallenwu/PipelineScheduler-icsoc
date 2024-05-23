@@ -112,6 +112,11 @@ public:
     BaseReqBatcherConfigs loadConfigsFromJson(const json &jsonConfigs);
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
+
+    virtual ArrivalRecordType getArrivalRecords() override {
+        return msvc_arrivalRecords.getRecords();
+    }
+
 protected:
     // Record
     arrivalReqRecords msvc_arrivalRecords;

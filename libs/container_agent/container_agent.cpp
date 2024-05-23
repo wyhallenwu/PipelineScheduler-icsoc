@@ -115,10 +115,10 @@ void ContainerAgent::connectToMetricsServer() {
             cont_metricsServerConfigs.ip, cont_metricsServerConfigs.port,
             cont_metricsServerConfigs.user, cont_metricsServerConfigs.password, cont_metricsServerConfigs.DBName
         );
-        pqxx::connection conn(conn_statement);
+        cont_metricsServerConn = std::make_unique<pqxx::connection>(conn_statement);
 
-        if (conn.is_open()) {
-            spdlog::info("{0:s} connected to database successfully: {1:s}", this->cont_name, conn.dbname());
+        if (cont_metricsServerConn->is_open()) {
+            spdlog::info("{0:s} connected to database successfully: {1:s}", this->cont_name, cont_metricsServerConn->dbname());
         } else {
             spdlog::error("Metrics Server is not open.");
         }
@@ -316,8 +316,6 @@ ContainerAgent::ContainerAgent(const json &configs) {
     profiler = nullptr;
     std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
     receiver.detach();
-    // std::thread metrics(&ContainerAgent::collectRuntimeMetrics, this);
-    // metrics.detach();
 }
 
 void ContainerAgent::ReportStart() {
@@ -342,6 +340,9 @@ void ContainerAgent::ReportStart() {
 
 
 void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
+    std::thread metrics(&ContainerAgent::collectRuntimeMetrics, this);
+    metrics.detach();
+
     if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
         profiling(pipeConfigs, configs["profiling"]);
     } else {
@@ -358,12 +359,15 @@ void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
 void ContainerAgent::collectRuntimeMetrics() {
     // TODO: Implement a way to collect profile metrics (copy code from device Agent) and send to metrics server
     std::vector<int> queueSizes;
-    int i, lateCount;
+    int i, arrivalRate, lateCount;
+    ArrivalRecordType arrivalRecords;
+    std::string sql;
     while (run) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(cont_metricsServerConfigs.scrapeIntervalMilisec));
         for (auto msvc: cont_msvcsList) {
             queueSizes.push_back(msvc->GetOutQueueSize(0));
         }
-        arrivalRate = cont_msvcsList[1]->GetArrivalRate();
+        // arrivalRate = cont_msvcsList[1]->GetArrivalRate();
         lateCount = cont_msvcsList[1]->GetDroppedReqCount();
         if (i++ > 20) {
             i = 0;
@@ -384,12 +388,24 @@ void ContainerAgent::collectRuntimeMetrics() {
                 metrics.gpuMemUsage =
                         (1 - 1 / i) * metrics.memUsage + (1 / i) * stats.gpuMemoryUsage;
             }
-            // report partial metrics without hardware to metrics server (queue size and arrivalRate)
-//            server.sendMetrics.queueSizes = queueSizes;
-//            server.sendMetrics.arrivalRate = arrivalRate;
+            
+            arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
+            pqxx::work session(*cont_metricsServerConn);
+            for (auto record : arrivalRecords) {
+                sql = "INSERT INTO traffic_yolov5_arrival_table "
+                      "(last_postprocessor_timestamps, departure_timestamps, arrival_timestamps, request_num) "
+                      "VALUES (";
+                sql += timePointToEpochString(std::get<0>(record)) + ", "; 
+                sql += timePointToEpochString(std::get<1>(record)) + ", ";
+                sql += timePointToEpochString(std::get<2>(record)) + ", ";
+                sql += std::to_string(std::get<3>(record)) + ")";
+                session.exec(sql.c_str());
+            }
+            session.commit();
+
         }
+        arrivalRecords.clear();
         queueSizes.clear();
-        std::this_thread::sleep_for(std::chrono::milliseconds(cont_metricsServerConfigs.scrapeIntervalMilisec));
     }
 }
 

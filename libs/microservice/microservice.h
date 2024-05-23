@@ -411,8 +411,12 @@ public:
      * @param timestamps
      */
     void addRecord(RequestTimeType timestamps, uint64_t reqNumber) {
+        std::unique_lock<std::mutex> lock(mutex);
         records.push_back(std::make_tuple(timestamps[0], timestamps[1], timestamps[2], reqNumber));
+        currNumEntries++;
+        totalNumEntries++;
         clearOldRecords();
+        mutex.unlock();
     }
 
     void clearOldRecords() {
@@ -423,22 +427,30 @@ public:
             timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - std::get<2>(*it));
             if (timePassed > keepLength) {
                 it = records.erase(it);
+                currNumEntries--;
             } else {
                 break;
             }
         }
     }
 
-    std::vector<std::tuple<ClockType, ClockType, ClockType, uint64_t>> getRecords() {
-        return records;
+    ArrivalRecordType getRecords() {
+        std::unique_lock<std::mutex> lock(mutex);
+        ArrivalRecordType temp = records;
+        records.clear();
+        currNumEntries = 0;
+        mutex.unlock();
+        return temp;
     }
     void setKeepLength(uint64_t keepLength) {
         this->keepLength = std::chrono::milliseconds(keepLength);
     }
 
 private:
-    std::vector<std::tuple<ClockType, ClockType, ClockType, uint64_t>> records;
+    std::mutex mutex;
+    ArrivalRecordType records;
     std::chrono::milliseconds keepLength;
+    uint64_t totalNumEntries = 0, currNumEntries = 0;
 };
 
 /**
@@ -560,6 +572,10 @@ public:
     virtual void dispatchThread() {};
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false);
+
+    virtual ArrivalRecordType getArrivalRecords() {
+        return {};
+    }
 
     bool RELOADING = true;
 

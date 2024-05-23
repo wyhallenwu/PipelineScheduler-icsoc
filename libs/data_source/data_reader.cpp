@@ -12,7 +12,8 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     link = jsonConfigs.at("msvc_upstreamMicroservices")[0].at("nb_link")[0];
     source = cv::VideoCapture(link);
     wait_time_ms = 1000 / jsonConfigs.at("msvc_idealBatchSize").get<int>();
-    frame_count = 30 / (30 - jsonConfigs.at("msvc_idealBatchSize").get<int>());
+    frame_count = (jsonConfigs.at("msvc_idealBatchSize").get<int>() == 30) ? 1 :
+            30 / (30 - jsonConfigs.at("msvc_idealBatchSize").get<int>());
     link = link.substr(link.find_last_of('/') + 1);
 };
 
@@ -28,12 +29,14 @@ void DataReader::Process() {
         }
         if (frame_count > 1 && i++ >= frame_count) {
             i = 1;
-            continue;
+        } else {
+            Request<LocalCPUReqDataType> req = {{{time}}, {msvc_svcLevelObjLatency},
+                                                {"[" + link + "_" +
+                                                 std::to_string((int) source.get(cv::CAP_PROP_POS_FRAMES)) + "]"}, 1,
+                                                {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols},
+                                                                                  frame}}};
+            msvc_OutQueue[0]->emplace(req);
         }
-        Request<LocalCPUReqDataType> req = {{{time}}, {msvc_svcLevelObjLatency},
-                                            {"[" + link + "_" + std::to_string((int) source.get(cv::CAP_PROP_POS_FRAMES)) + "]"},
-                                            1, {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols}, frame}}};
-        msvc_OutQueue[0]->emplace(req);
         std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
     }
 };

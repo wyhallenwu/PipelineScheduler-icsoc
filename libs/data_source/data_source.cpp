@@ -19,11 +19,6 @@ DataSourceAgent::DataSourceAgent(
     cont_msvcsList.push_back(new DataReader(pipeConfigs[0]));
     cont_msvcsList.push_back(new RemoteCPUSender(pipeConfigs[1]));
     cont_msvcsList[1]->SetInQueue(cont_msvcsList[0]->GetOutQueue());
-
-    for (auto &msvc : cont_msvcsList) {
-        msvc->dispatchThread();
-        msvc->PAUSE_THREADS = false;
-    }
 }
 
 int main(int argc, char **argv) {
