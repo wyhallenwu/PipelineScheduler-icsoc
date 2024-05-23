@@ -119,7 +119,7 @@ public:
 
 protected:
     // Record
-    arrivalReqRecords msvc_arrivalRecords;
+    ArrivalReqRecords msvc_arrivalRecords;
 
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
@@ -196,7 +196,27 @@ inline void cropOneBox(
     cv::cuda::GpuMat &croppedBBoxes
 );
 
-class BaseBBoxCropper : public Microservice {
+class BasePostprocessor : public Microservice {
+public:
+    BasePostprocessor(const json &jsonConfigs) : Microservice(jsonConfigs) {
+        loadConfigs(jsonConfigs, true);
+    };
+    ~BasePostprocessor() = default;
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override {
+        if (!isConstructing) {
+            Microservice::loadConfigs(jsonConfigs, isConstructing);
+        }
+        msvc_processRecords.setKeepLength((uint64_t)jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
+    };
+    virtual ProcessRecordType getProcessRecords() override {
+        return msvc_processRecords.getRecords();
+    }
+protected:
+    ProcessReqRecords msvc_processRecords;
+};
+
+class BaseBBoxCropper : public BasePostprocessor {
 public:
     BaseBBoxCropper(const json &jsonConfigs);
     ~BaseBBoxCropper() = default;
@@ -228,7 +248,7 @@ public:
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
-class BaseBBoxCropperAugmentation : public Microservice {
+class BaseBBoxCropperAugmentation : public BasePostprocessor {
 public:
     BaseBBoxCropperAugmentation(const json &jsonConfigs);
     ~BaseBBoxCropperAugmentation() = default;
@@ -260,7 +280,7 @@ public:
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
-class BaseBBoxCropperVerifier : public Microservice {
+class BaseBBoxCropperVerifier : public BasePostprocessor {
 public:
     BaseBBoxCropperVerifier(const json& jsonConfigs);
     ~BaseBBoxCropperVerifier() = default;
@@ -285,7 +305,7 @@ public:
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
-class BaseClassifier : public Microservice {
+class BaseClassifier : public BasePostprocessor {
 public:
     BaseClassifier(const json &jsonConfigs);
     ~BaseClassifier() = default;
@@ -323,7 +343,7 @@ public:
     virtual void classifyProfiling() override;
 };
 
-class BaseKPointExtractor : public Microservice{
+class BaseKPointExtractor : public BasePostprocessor {
 public:
     BaseKPointExtractor(const json &jsonConfigs);
     ~BaseKPointExtractor() = default;

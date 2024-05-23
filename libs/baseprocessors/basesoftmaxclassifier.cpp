@@ -145,6 +145,8 @@ void BaseSoftmaxClassifier::classify() {
              */
             timeNow = std::chrono::high_resolution_clock::now();
             currReq.req_origGenTime[i].emplace_back(timeNow);
+            // TODO: Add the request number
+            msvc_processRecords.addRecord(currReq.req_origGenTime[i], 0);
             if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(currReq.upstreamReq_data[i].data.size(), currReq.upstreamReq_data[i].data.type());
                 checkCudaErrorCode(cudaMemcpyAsync(

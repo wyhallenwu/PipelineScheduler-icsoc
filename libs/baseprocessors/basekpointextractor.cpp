@@ -10,13 +10,13 @@ BaseKPointExtractorConfigs BaseKPointExtractor::loadConfigsFromJson(const json &
 
 void BaseKPointExtractor::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     if (!isConstructing) { // If the microservice is being reloaded
-        Microservice::loadConfigs(jsonConfigs, isConstructing);
+        BasePostprocessor::loadConfigs(jsonConfigs, isConstructing);
     }
     BaseKPointExtractorConfigs configs = loadConfigsFromJson(jsonConfigs);
 }
 
 
-BaseKPointExtractor::BaseKPointExtractor(const json &jsonConfigs) : Microservice(jsonConfigs) {
+BaseKPointExtractor::BaseKPointExtractor(const json &jsonConfigs) : BasePostprocessor(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
     info("{0:s} is created.", msvc_name); 
 }
@@ -142,6 +142,8 @@ void BaseKPointExtractor::extractor() {
         for (BatchSizeType i = 0; i < currReq.req_batchSize; i++) {
             timeNow = std::chrono::high_resolution_clock::now();
             currReq.req_origGenTime[i].emplace_back(timeNow);
+            // TODO: Add the request number
+            msvc_processRecords.addRecord(currReq.req_origGenTime[i], 0);
 
             /**
              * @brief There are six important timestamps to be recorded:

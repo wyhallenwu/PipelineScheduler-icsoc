@@ -9,13 +9,13 @@ BaseClassifierConfigs BaseClassifier::loadConfigsFromJson(const json &jsonConfig
 
 void BaseClassifier::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     if (!isConstructing) { // If the microservice is being reloaded
-        Microservice::loadConfigs(jsonConfigs, isConstructing);
+        BasePostprocessor::loadConfigs(jsonConfigs, isConstructing);
     }
     BaseClassifierConfigs configs = loadConfigsFromJson(jsonConfigs);
     msvc_numClasses = msvc_dataShape[0][0];
 }
 
-BaseClassifier::BaseClassifier(const json &jsonConfigs) : Microservice(jsonConfigs) {
+BaseClassifier::BaseClassifier(const json &jsonConfigs) : BasePostprocessor(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
     info("{0:s} is created.", msvc_name); 
 }
@@ -139,6 +139,8 @@ void BaseClassifier::classify() {
              */
             timeNow = std::chrono::high_resolution_clock::now();
             currReq.req_origGenTime[i].emplace_back(timeNow);
+            // TODO: Add the request number
+            msvc_processRecords.addRecord(currReq.req_origGenTime[i], 0);
             if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(currReq.upstreamReq_data[i].data.size(), currReq.upstreamReq_data[i].data.type());
                 checkCudaErrorCode(cudaMemcpyAsync(

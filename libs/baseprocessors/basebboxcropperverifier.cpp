@@ -10,13 +10,13 @@ BaseBBoxCropperVerifierConfigs BaseBBoxCropperVerifier::loadConfigsFromJson(cons
 void BaseBBoxCropperVerifier::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     spdlog::trace("{0:s} is LOANDING configs...", __func__);
     if (!isConstructing) { // If the microservice is being reloaded
-        Microservice::loadConfigs(jsonConfigs, isConstructing);
+        BasePostprocessor::loadConfigs(jsonConfigs, isConstructing);
     }
     BaseBBoxCropperVerifierConfigs configs = loadConfigsFromJson(jsonConfigs);
     spdlog::trace("{0:s} FINISHED loading configs...", __func__);
 }
 
-BaseBBoxCropperVerifier::BaseBBoxCropperVerifier(const json &jsonConfigs) : Microservice(jsonConfigs) {
+BaseBBoxCropperVerifier::BaseBBoxCropperVerifier(const json &jsonConfigs) : BasePostprocessor(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
     info("{0:s} is created.", msvc_name); 
 }
@@ -209,6 +209,8 @@ void BaseBBoxCropperVerifier::cropping() {
             timeNow = std::chrono::high_resolution_clock::now();
 
             currReq.req_origGenTime[i].emplace_back(timeNow);
+            // TODO: Add the request number
+            msvc_processRecords.addRecord(currReq.req_origGenTime[i], 0);
 
             if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(orig_h, orig_w, imageList[i].data.type());

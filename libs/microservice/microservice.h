@@ -394,12 +394,12 @@ using msvcconfigs::NeighborMicroserviceConfigs;
 using msvcconfigs::BaseMicroserviceConfigs;
 using msvcconfigs::MicroserviceType;
 
-class arrivalReqRecords {
+class ArrivalReqRecords {
 public:
-    arrivalReqRecords(uint64_t keepLength = 60000) {
+    ArrivalReqRecords(uint64_t keepLength = 60000) {
         this->keepLength = std::chrono::milliseconds(keepLength);
     }
-    ~arrivalReqRecords() = default;
+    ~ArrivalReqRecords() = default;
 
 
     /**
@@ -412,7 +412,7 @@ public:
      */
     void addRecord(RequestTimeType timestamps, uint64_t reqNumber) {
         std::unique_lock<std::mutex> lock(mutex);
-        records.push_back(std::make_tuple(timestamps[0], timestamps[1], timestamps[2], reqNumber));
+        records.push_back(std::make_tuple(timestamps[1], timestamps[2], timestamps[3], reqNumber));
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();
@@ -449,6 +449,65 @@ public:
 private:
     std::mutex mutex;
     ArrivalRecordType records;
+    std::chrono::milliseconds keepLength;
+    uint64_t totalNumEntries = 0, currNumEntries = 0;
+};
+
+class ProcessReqRecords {
+public:
+    ProcessReqRecords(uint64_t keepLength = 60000) {
+        this->keepLength = std::chrono::milliseconds(keepLength);
+    }
+    ~ProcessReqRecords() = default;
+
+
+    /**
+     * @brief Add a new arrival to the records. There are 3 timestamps to keep be kept.
+     * 1. The time the request is processed by the upstream postprocessor and placed onto the outqueue.
+     * 2. The time the request is sent out by upstream sender.
+     * 3. The time the request is placed onto the outqueue of receiver.
+     *
+     * @param timestamps
+     */
+    void addRecord(RequestTimeType timestamps, uint64_t reqNumber) {
+        std::unique_lock<std::mutex> lock(mutex);
+        records.push_back(std::make_tuple(timestamps[1], timestamps[2], timestamps[5], timestamps[4], timestamps[5], reqNumber));
+        currNumEntries++;
+        totalNumEntries++;
+        clearOldRecords();
+        mutex.unlock();
+    }
+
+    void clearOldRecords() {
+        std::chrono::milliseconds timePassed;
+        auto timeNow = std::chrono::high_resolution_clock::now();
+        auto it = records.begin();
+        while (it != records.end()) {
+            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - std::get<2>(*it));
+            if (timePassed > keepLength) {
+                it = records.erase(it);
+                currNumEntries--;
+            } else {
+                break;
+            }
+        }
+    }
+
+    ProcessRecordType getRecords() {
+        std::unique_lock<std::mutex> lock(mutex);
+        ProcessRecordType temp = records;
+        records.clear();
+        currNumEntries = 0;
+        mutex.unlock();
+        return temp;
+    }
+    void setKeepLength(uint64_t keepLength) {
+        this->keepLength = std::chrono::milliseconds(keepLength);
+    }
+
+private:
+    std::mutex mutex;
+    ProcessRecordType records;
     std::chrono::milliseconds keepLength;
     uint64_t totalNumEntries = 0, currNumEntries = 0;
 };
@@ -574,6 +633,10 @@ public:
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false);
 
     virtual ArrivalRecordType getArrivalRecords() {
+        return {};
+    }
+
+    virtual ProcessRecordType getProcessRecords() {
         return {};
     }
 

@@ -124,12 +124,12 @@ inline void cropOneBox(
 void BaseBBoxCropper::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     spdlog::trace("{0:s} is LOANDING configs...", __func__);
     if (!isConstructing) { // If this is not called from the constructor
-        Microservice::loadConfigs(jsonConfigs, isConstructing);
+        BasePostprocessor::loadConfigs(jsonConfigs, isConstructing);
     }
     spdlog::trace("{0:s} FINISHED loading configs...", __func__);
 }
 
-BaseBBoxCropper::BaseBBoxCropper(const json &jsonConfigs) : Microservice(jsonConfigs) {
+BaseBBoxCropper::BaseBBoxCropper(const json &jsonConfigs) : BasePostprocessor(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
     info("{0:s} is created.", msvc_name); 
 }
@@ -366,6 +366,8 @@ void BaseBBoxCropper::cropping() {
                  */
                 timeNow = std::chrono::high_resolution_clock::now();
                 currReq.req_origGenTime[i].emplace_back(timeNow);
+                // TODO: Add the request number
+                msvc_processRecords.addRecord(currReq.req_origGenTime[i], 0);
                 for (auto qIndex : queueIndex) {
                     // Put the correct type of outreq for the downstream, a sender, which expects either LocalGPU or localCPU
                     if (this->msvc_activeOutQueueIndex.at(qIndex) == 1) { //Local CPU
