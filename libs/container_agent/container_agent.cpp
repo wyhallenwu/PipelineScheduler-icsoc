@@ -340,9 +340,6 @@ void ContainerAgent::ReportStart() {
 
 
 void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
-    std::thread metrics(&ContainerAgent::collectRuntimeMetrics, this);
-    metrics.detach();
-
     if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
         profiling(pipeConfigs, configs["profiling"]);
     } else {
@@ -361,6 +358,7 @@ void ContainerAgent::collectRuntimeMetrics() {
     std::vector<int> queueSizes;
     int i, arrivalRate, lateCount;
     ArrivalRecordType arrivalRecords;
+    ProcessRecordType processRecords;
     std::string sql;
     while (run) {
         std::this_thread::sleep_for(std::chrono::milliseconds(cont_metricsServerConfigs.scrapeIntervalMilisec));
@@ -388,22 +386,42 @@ void ContainerAgent::collectRuntimeMetrics() {
                 metrics.gpuMemUsage =
                         (1 - 1 / i) * metrics.memUsage + (1 / i) * stats.gpuMemoryUsage;
             }
-            
-            arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
-            pqxx::work session(*cont_metricsServerConn);
-            for (auto record : arrivalRecords) {
-                sql = "INSERT INTO traffic_yolov5_arrival_table "
-                      "(last_postprocessor_timestamps, departure_timestamps, arrival_timestamps, request_num) "
-                      "VALUES (";
-                sql += timePointToEpochString(std::get<0>(record)) + ", "; 
-                sql += timePointToEpochString(std::get<1>(record)) + ", ";
-                sql += timePointToEpochString(std::get<2>(record)) + ", ";
-                sql += std::to_string(std::get<3>(record)) + ")";
-                session.exec(sql.c_str());
+            // Report metrics except for the data source
+            // TODO: find a better way to idenfiy the datasource rather than using taskName
+            std::string table_prefix = cont_pipeName + "_" + cont_taskName;
+            if (cont_taskName != "datasource") {
+                // Report Arrival metrics
+                arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
+                pqxx::work session(*cont_metricsServerConn);
+                for (auto record : arrivalRecords) {
+                    sql = "INSERT INTO " + table_prefix + "_arrival_table "
+                        "(last_postprocessor_timestamps, departure_timestamps, arrival_timestamps, request_num) "
+                        "VALUES (";
+                    sql += timePointToEpochString(std::get<0>(record)) + ", "; 
+                    sql += timePointToEpochString(std::get<1>(record)) + ", ";
+                    sql += timePointToEpochString(std::get<2>(record)) + ", ";
+                    sql += std::to_string(std::get<3>(record)) + ")";
+                    session.exec(sql.c_str());
+                }
+
+                processRecords = cont_msvcsList[3]->getProcessRecords();
+                for (auto record : processRecords) {
+                    sql = "INSERT INTO " + table_prefix + "_process_table "
+                        "(prep_arrival_timestamps, prep_process_timestamps, prep_batch_timestamps, infer_process_timestamps, post_process_timestamps, request_num) "
+                        "VALUES (";
+                    sql += timePointToEpochString(std::get<0>(record)) + ", "; 
+                    sql += timePointToEpochString(std::get<1>(record)) + ", ";
+                    sql += timePointToEpochString(std::get<2>(record)) + ", ";
+                    sql += timePointToEpochString(std::get<3>(record)) + ", ";
+                    sql += timePointToEpochString(std::get<4>(record)) + ", ";
+                    sql += std::to_string(std::get<5>(record)) + ")";
+                    session.exec(sql.c_str());
+                }
+                session.commit();
             }
-            session.commit();
 
         }
+        processRecords.clear();
         arrivalRecords.clear();
         queueSizes.clear();
     }
