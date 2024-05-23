@@ -30,7 +30,8 @@ void DataReader::Process() {
         if (frame_count > 1 && i++ >= frame_count) {
             i = 1;
         } else {
-            Request<LocalCPUReqDataType> req = {{{time}}, {msvc_svcLevelObjLatency},
+            // two `time`s is not necessary, but it follows the format set for the downstreams.
+            Request<LocalCPUReqDataType> req = {{{time, time}}, {msvc_svcLevelObjLatency},
                                                 {"[" + link + "_" +
                                                  std::to_string((int) source.get(cv::CAP_PROP_POS_FRAMES)) + "]"}, 1,
                                                 {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols},

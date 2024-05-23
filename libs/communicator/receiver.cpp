@@ -223,6 +223,14 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
                     1,
                     elements
             };
+            /**
+             * @brief Request now should carry 4 timestamps
+             * 1. The very moment request is originally generated at the beggining of the pipeline.
+             * 2. The moment request is put into outqueue of last immediate upstream processor.
+             * 3. The moment request is sent by immediate upstream sender.
+             * 4. The moment request is received by the receiver.
+             * 
+             */
             OutQueue->emplace(req);
         }
 
