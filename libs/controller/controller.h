@@ -228,6 +228,13 @@ private:
     struct Partitioner;
     void scheduleBaseParPointLoop(Partitioner *partitioner);
     std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> categorizeNodes(const std::vector<NodeHandle> &nodes);
+    int calculateTotalprocessedRate(const std::vector<NodeHandle>& nodes, bool is_edge);
+    int calculateTotalQueue(const std::vector<NodeHandle>& nodes, bool is_edge);
+    double getMaxTP(std::vector<NodeHandle> nodes, bool is_edge);
+    void scheduleBaseParPointLoop(Partitioner* partitioner,std::vector<NodeHandle> nodes, std::vector<ContainerHandle> Microservices);
+    float ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle>& nodes, bool is_edge);
+    void scheduleFineGrainedParPointLoop(Partitioner* partitioner,const std::vector<NodeHandle>& nodes);
+    void DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &partitioner, int cuda_device);
 };
 
 #endif // PIPEPLUSPLUS_CONTROLLER_H

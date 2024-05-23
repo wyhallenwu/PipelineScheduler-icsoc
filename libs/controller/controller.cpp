@@ -293,7 +293,7 @@ void Controller::optimizeBatchSizeStep(
         std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
     ModelType candidate;
     int max_saving = 0;
-    std::vector<std::string> blacklist;
+    std::vector<ModelType> blacklist;
     for (const auto &m: models) {
         int saving;
         if (max_saving == 0) {
@@ -533,8 +533,8 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     return time_per_frame[batch_size] * batch_size;
 }
 
-/// below part is the part for diatream
-std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> categorizeNodes(const std::vector<NodeHandle>& nodes) {
+/// below part is the part for distream
+std::pair<std::vector<Controller::NodeHandle>, std::vector<Controller::NodeHandle>> Controller::categorizeNodes(const std::vector<NodeHandle>& nodes) {
     std::vector<NodeHandle> edges;
     std::vector<NodeHandle> servers;
 
@@ -549,7 +549,7 @@ std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> categorizeNodes(cons
     return {edges, servers};
 }
 
-int calculateTotalprocessedRate(const std::vector<NodeHandle>& nodes, bool is_edge) {
+int Controller::calculateTotalprocessedRate(const std::vector<NodeHandle>& nodes, bool is_edge) {
     auto [edges, servers] = categorizeNodes(nodes);
     double totalEdgeRequestRate = 0;
     double totalServerRequestRate = 0;
@@ -557,8 +557,8 @@ int calculateTotalprocessedRate(const std::vector<NodeHandle>& nodes, bool is_ed
     if (is_edge){
             for (const NodeHandle& edge : edges) {
                 totalLastRequestRate += edge.lastRequestRate;
-                for (const auto& microservicePair : edge.microservices) {
-                        const MicroserviceHandle* microservice = microservicePair.second;
+                for (const auto& microservicePair : edge.containers) {
+                        const ContainerHandle* microservice = microservicePair.second;
                         if (microservice) {
                             totalEdgeRequestRate += microservice->metrics.requestRate;
                         }
@@ -570,8 +570,8 @@ int calculateTotalprocessedRate(const std::vector<NodeHandle>& nodes, bool is_ed
     else{
         for (const NodeHandle& server : servers) {
             totalLastRequestRate += server.lastRequestRate;
-        for (const auto& microservicePair : server.microservices) {
-            const MicroserviceHandle* microservice = microservicePair.second;
+        for (const auto& microservicePair : server.containers) {
+            const ContainerHandle* microservice = microservicePair.second;
             if (microservice) {
                 totalServerRequestRate += microservice->metrics.requestRate;
             }
@@ -585,15 +585,15 @@ int calculateTotalprocessedRate(const std::vector<NodeHandle>& nodes, bool is_ed
 
 }
 
-int calculateTotalQueue(const std::vector<NodeHandle>& nodes, bool is_edge) {
+int Controller::calculateTotalQueue(const std::vector<NodeHandle>& nodes, bool is_edge) {
     auto [edges, servers] = categorizeNodes(nodes);
     double totalEdgeQueue = 0;
     double totalServerQueue = 0;
     if (is_edge){
 
         for (const NodeHandle& edge : edges) {
-        for (const auto& microservicePair : edge.microservices) {
-                const MicroserviceHandle* microservice = microservicePair.second;
+        for (const auto& microservicePair : edge.containers) {
+                const ContainerHandle* microservice = microservicePair.second;
                 if (microservice) {
                     totalEdgeQueue += std::accumulate(microservice->queue_lengths.begin(), microservice->queue_lengths.end(), 0);
                 }
@@ -603,8 +603,8 @@ int calculateTotalQueue(const std::vector<NodeHandle>& nodes, bool is_edge) {
         return totalEdgeQueue;
     }else{
         for (const NodeHandle& server : servers) {
-        for (const auto& microservicePair : server.microservices) {
-                const MicroserviceHandle* microservice = microservicePair.second;
+        for (const auto& microservicePair : server.containers) {
+                const ContainerHandle* microservice = microservicePair.second;
                 if (microservice) {
                     totalServerQueue += std::accumulate(microservice->queue_lengths.begin(), microservice->queue_lengths.end(), 0);
                 }
@@ -617,7 +617,7 @@ int calculateTotalQueue(const std::vector<NodeHandle>& nodes, bool is_edge) {
 }
 
 // need to be change by TP is wrong
-double getMaxTP(std::vector<NodeHandle> nodes, bool is_edge)
+double Controller::getMaxTP(std::vector<NodeHandle> nodes, bool is_edge)
 {
     int processedRate = calculateTotalprocessedRate(nodes, is_edge);
     if (calculateTotalQueue(nodes, is_edge) == 0.0)
@@ -635,7 +635,7 @@ double getMaxTP(std::vector<NodeHandle> nodes, bool is_edge)
 }
 
 
-void scheduleBaseParPointLoop(Partitioner* partitioner,std::vector<NodeHandle> nodes, std::vector<MicroserviceHandle> Microservices) {
+void Controller::scheduleBaseParPointLoop(Partitioner* partitioner,std::vector<NodeHandle> nodes, std::vector<ContainerHandle> Microservices) {
     float TPedgesAvg = 0.0f;
     float TPserverAvg = 0.0f;
     const float smooth = 0.4f;
@@ -685,7 +685,7 @@ void scheduleBaseParPointLoop(Partitioner* partitioner,std::vector<NodeHandle> n
     }
 }
 
-float ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle>& nodes, bool is_edge) {
+float Controller::ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle>& nodes, bool is_edge) {
     float sum = 0.0;
     int N = nodes.size();
     float edgeQueueCapacity = 200.0; //need to know the  real Capacity
@@ -700,7 +700,7 @@ float ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle>& nodes, bo
     return norm;
 }
 
-void scheduleFineGrainedParPointLoop(Partitioner* partitioner,const std::vector<NodeHandle>& nodes) {
+void Controller::scheduleFineGrainedParPointLoop(Partitioner* partitioner,const std::vector<NodeHandle>& nodes) {
     float w;
     int totalEdgeQueue;
     float edgeQueueCapacity = 400.0;
@@ -716,8 +716,8 @@ void scheduleFineGrainedParPointLoop(Partitioner* partitioner,const std::vector<
 
         float wbar = ComputeAveragedNormalizedWorkload(edges,true);
         for (NodeHandle& edge : edges) {
-            for (const auto& microservicePair : edge.microservices) {
-                        const MicroserviceHandle* microservice = microservicePair.second;
+            for (const auto& microservicePair : edge.containers) {
+                        const ContainerHandle* microservice = microservicePair.second;
                         if (microservice) {
                             totalEdgeQueue += std::accumulate(microservice->queue_lengths.begin(), microservice->queue_lengths.end(), 0);
                             w = static_cast<float>(totalEdgeQueue) / edgeQueueCapacity;
@@ -738,27 +738,28 @@ void scheduleFineGrainedParPointLoop(Partitioner* partitioner,const std::vector<
 
 // didn't debug for DecideAndMoveContainer but the calculate of the parpoint is correct
 
-void DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &partitioner)
+void Controller::DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &partitioner, int cuda_device)
 {
     float decisionPoint = partitioner.BaseParPoint + partitioner.FineGrainedOffset;
-    float GPUratio = calculateTotalGPU(nodes);
+    float GPUratio = 0.0; // TODO: calculateTotalGPU(nodes);
     float tolerance = 0.1;
     auto [edges, servers] = categorizeNodes(nodes);
     float minGPUUsage = std::numeric_limits<float>::max();
-    MicroserviceHandle *leastUsedContainer = nullptr;
+    ContainerHandle *leastUsedContainer = nullptr;
     NodeHandle *leastUsedCudaNode = nullptr;
 
     do
     {
-        GPUratio = calculateTotalGPU(nodes);
+        GPUratio = 0.0; // TODO: calculateTotalGPU(nodes);
         // decided based on parpoint
         if (decisionPoint > GPUratio + tolerance)
         {
             // Iterate through all the edge nodes to select the container with the smallest currently used GPU to the emptiest cuda_device, and give the smallest nodes to msvc
             for (NodeHandle &edge : edges)
             {
-                for (const auto &microservicePair : edge.microservices)
+                for (const auto &microservicePair : edge.containers)
                 {
+                    ContainerHandle* microservice = microservicePair.second;
                     // Select the smallest edge node in microservice->metrics.gpuUsage as the msvc for the move
                     if (microservice && microservice->metrics.gpuUsage < minGPUUsage)
                     {
@@ -767,7 +768,7 @@ void DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &p
                         leastUsedCudaNode = microservice->device_agent;
                     }
 
-                    MoveContainer(leastUsedCudaNode, cuda_device, false);
+                    MoveContainer(leastUsedContainer, cuda_device, false);
                 }
             }
         }
@@ -776,8 +777,9 @@ void DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &p
         {
             for (NodeHandle &server : servers)
             {
-                for (const auto &microservicePair : server.microservices)
+                for (const auto &microservicePair : server.containers)
                 {
+                    ContainerHandle* microservice = microservicePair.second;
                     if (microservice && microservice->metrics.gpuUsage < minGPUUsage)
                     {
                         minGPUUsage = microservice->metrics.gpuUsage;
@@ -785,7 +787,7 @@ void DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &p
                         leastUsedCudaNode = microservice->device_agent;
                     }
 
-                    MoveContainer(leastUsedCudaNode, cuda_device, false);
+                    MoveContainer(leastUsedContainer, cuda_device, false);
                 }
             }
         }
