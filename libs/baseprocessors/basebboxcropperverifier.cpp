@@ -208,6 +208,8 @@ void BaseBBoxCropperVerifier::cropping() {
 
             timeNow = std::chrono::high_resolution_clock::now();
 
+            currReq.req_origGenTime[i].emplace_back(timeNow);
+
             if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(orig_h, orig_w, imageList[i].data.type());
                 checkCudaErrorCode(cudaMemcpyAsync(
@@ -220,7 +222,7 @@ void BaseBBoxCropperVerifier::cropping() {
                 checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalCPUReqDataType>{
-                        {{currReq.req_origGenTime[i][0], timeNow}},
+                        {currReq.req_origGenTime[i]},
                         {currReq.req_e2eSLOLatency[i]},
                         {currReq_path},
                         1,
@@ -233,7 +235,7 @@ void BaseBBoxCropperVerifier::cropping() {
             } else {
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalGPUReqDataType>{
-                        {{currReq.req_origGenTime[i][0], timeNow}},
+                        {currReq.req_origGenTime[i]},
                         {currReq.req_e2eSLOLatency[i]},
                         {currReq_path},
                         1,

@@ -167,7 +167,7 @@ void BaseBatchInferencer::inference() {
 
         timeNow = std::chrono::high_resolution_clock::now();
         /**
-         * @brief During profiling mode, there are six important timestamps to be recorded:
+         * @brief There are six important timestamps to be recorded:
          * 1. When the request was generated
          * 2. When the request was received by the batcher
          * 3. When the request was done preprocessing by the batcher

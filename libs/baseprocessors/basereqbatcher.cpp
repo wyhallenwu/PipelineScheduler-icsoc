@@ -249,8 +249,11 @@ void BaseReqBatcher::batchRequests() {
     // Batch reqs' gen time
     BatchTimeType outBatch_genTime;
 
+    // out request's gen time
+    RequestTimeType outReq_genTime;
+
     // Batch reqs' slos
-    RequestSLOType outReq_slo;
+    RequestSLOType outBatch_slo;
 
     // Batch reqs' paths
     RequestPathType outBatch_path;
@@ -300,7 +303,7 @@ void BaseReqBatcher::batchRequests() {
 
                 outBatch_genTime.clear();
                 outBatch_path.clear();
-                outReq_slo.clear();
+                outBatch_slo.clear();
                 bufferData.clear();
                 prevData.clear();
 
@@ -344,9 +347,13 @@ void BaseReqBatcher::batchRequests() {
             this->updateReqRate(currReq_genTime);
         }
 
+        // After the communication-related timestamps have been kept in the arrival record, all except the very first one (genTime) are removed.
+        // The first timestamp will be carried till the end of the pipeline to determine the total latency and if the request is late, along the way.
+        outReq_genTime = {currReq_genTime, std::chrono::high_resolution_clock::now()};
+
         currReq_batchSize = currReq.req_batchSize;
 
-        outReq_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
+        outBatch_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
         outBatch_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_containerName + "_" + std::to_string(msvc_inReqCount) + "]");
         trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
@@ -388,8 +395,8 @@ void BaseReqBatcher::batchRequests() {
         timeNow = std::chrono::high_resolution_clock::now();
 
         // Add the whole time vector of currReq to outReq
-        currReq.req_origGenTime[0].emplace_back(timeNow);
-        outBatch_genTime.emplace_back(currReq.req_origGenTime[0]);
+        outReq_genTime.emplace_back(timeNow);
+        outBatch_genTime.emplace_back(outReq_genTime);
 
         // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
         // cudaFree(currReq.req_data[0].data.cudaPtr());
@@ -405,7 +412,7 @@ void BaseReqBatcher::batchRequests() {
 
             outReq = {
                 outBatch_genTime,
-                outReq_slo,
+                outBatch_slo,
                 outBatch_path,
                 msvc_onBufferBatchSize,
                 bufferData,
@@ -416,7 +423,7 @@ void BaseReqBatcher::batchRequests() {
             msvc_onBufferBatchSize = 0;
             outBatch_genTime.clear();
             outBatch_path.clear();
-            outReq_slo.clear();
+            outBatch_slo.clear();
             bufferData.clear();
             prevData.clear();
         }

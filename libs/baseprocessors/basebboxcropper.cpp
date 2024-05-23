@@ -356,13 +356,16 @@ void BaseBBoxCropper::cropping() {
                 bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
 
                 /**
-                 * @brief Each out going request heading to a downstream container should contain 2 timestamps only
-                 * 1. The original gen time at the very beginning of the pipeline
-                 * 2. The time this request is completed here, which is now.
+                 * @brief There are six important timestamps to be recorded:
+                 * 1. When the request was generated
+                 * 2. When the request was received by the batcher
+                 * 3. When the request was done preprocessing by the batcher
+                 * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
+                 * 5. When the batch inferencer was completed by the inferencer 
+                 * 6. When each request was completed by the postprocessor
                  */
-                // TODO: Put all timestamps into a structure to be scraped by Container Agent
                 timeNow = std::chrono::high_resolution_clock::now();
-
+                currReq.req_origGenTime[i].emplace_back(timeNow);
                 for (auto qIndex : queueIndex) {
                     // Put the correct type of outreq for the downstream, a sender, which expects either LocalGPU or localCPU
                     if (this->msvc_activeOutQueueIndex.at(qIndex) == 1) { //Local CPU
@@ -384,7 +387,7 @@ void BaseBBoxCropper::cropping() {
 
                         msvc_OutQueue.at(qIndex)->emplace(
                             Request<LocalCPUReqDataType>{
-                                {{currReq_genTime, timeNow}},
+                                {currReq.req_origGenTime[i]},
                                 {currReq.req_e2eSLOLatency[i]},
                                 {currReq_path},
                                 1,
@@ -401,7 +404,7 @@ void BaseBBoxCropper::cropping() {
                         };
                         msvc_OutQueue.at(qIndex)->emplace(
                             Request<LocalGPUReqDataType>{
-                                {{currReq_genTime, timeNow}},
+                                {currReq.req_origGenTime[i]},
                                 {currReq.req_e2eSLOLatency[i]},
                                 {currReq_path},
                                 1,
