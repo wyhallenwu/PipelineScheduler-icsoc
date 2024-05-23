@@ -709,6 +709,63 @@ double getMaxTP(std::vector<NodeHandle> nodes, bool is_edge)
     }
 }
 
+float ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle> &nodes, bool is_edge)
+{
+    float sum = 0.0;
+    int N = nodes.size();
+    float edgeQueueCapacity = 200.0; // need to know the  real Capacity
+
+    if (N == 0)
+        return 0; // incase N=0
+
+    for (const auto &node : nodes)
+    {
+        float tmp = calculateTotalQueue(nodes, is_edge) / edgeQueueCapacity;
+        sum += tmp;
+    }
+    float norm = sum / static_cast<float>(N);
+    return norm;
+}
+
+
+void scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle> &nodes)
+{
+    float w;
+    int totalServerQueue;
+    float edgeQueueCapacity = 400.0;
+    while (true)
+    {
+        // std::this_thread::sleep_for(std::chrono::milliseconds(250));  // every 250 weakup
+        auto [edges, servers] = categorizeNodes(nodes);
+
+        float wbar = ComputeAveragedNormalizedWorkload(edges, true);
+        for (NodeHandle &edge : edges)
+        {
+            for (const auto &microservicePair : edge.microservices)
+            {
+                const MicroserviceHandle *microservice = microservicePair.second;
+                if (microservice)
+                {
+                    totalServerQueue += std::accumulate(microservice->queue_lengths.begin(), microservice->queue_lengths.end(), 0);
+                    w = static_cast<float>(totalServerQueue) / edgeQueueCapacity;
+                    float tmp = 0.0f;
+                    if (w == 0)
+                    {
+                        tmp = 1.0f;
+                    }
+                    else
+                    {
+                        tmp = (wbar - w) / std::max(wbar, w);
+                    }
+                    partitioner->FineGrainedOffset = tmp * partitioner->BaseParPoint;
+                    break;
+                }
+            }
+        }
+        break;
+    }
+}
+
 void scheduleBaseParPointLoop(Partitioner* partitioner,std::vector<NodeHandle> nodes, std::vector<ContainerHandle> Microservices)
 {
     float TPedgesAvg = 0.0f;
@@ -779,62 +836,6 @@ void scheduleBaseParPointLoop(Partitioner* partitioner,std::vector<NodeHandle> n
     }
 }
 
-float ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle> &nodes, bool is_edge)
-{
-    float sum = 0.0;
-    int N = nodes.size();
-    float edgeQueueCapacity = 200.0; // need to know the  real Capacity
-
-    if (N == 0)
-        return 0; // incase N=0
-
-    for (const auto &node : nodes)
-    {
-        float tmp = calculateTotalQueue(nodes, is_edge) / edgeQueueCapacity;
-        sum += tmp;
-    }
-    float norm = sum / static_cast<float>(N);
-    return norm;
-}
-
-void scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle> &nodes)
-{
-    float w;
-    int totalServerQueue;
-    float edgeQueueCapacity = 400.0;
-    while (true)
-    {
-        // std::this_thread::sleep_for(std::chrono::milliseconds(250));  // every 250 weakup
-        auto [edges, servers] = categorizeNodes(nodes);
-
-        float wbar = ComputeAveragedNormalizedWorkload(edges, true);
-        for (NodeHandle &edge : edges)
-        {
-            for (const auto &microservicePair : edge.microservices)
-            {
-                const MicroserviceHandle *microservice = microservicePair.second;
-                if (microservice)
-                {
-                    totalServerQueue += std::accumulate(microservice->queue_lengths.begin(), microservice->queue_lengths.end(), 0);
-                    w = static_cast<float>(totalServerQueue) / edgeQueueCapacity;
-                    float tmp = 0.0f;
-                    if (w == 0)
-                    {
-                        tmp = 1.0f;
-                    }
-                    else
-                    {
-                        tmp = (wbar - w) / std::max(wbar, w);
-                    }
-                    partitioner->FineGrainedOffset = tmp * partitioner->BaseParPoint;
-                    break;
-                }
-            }
-        }
-        break;
-    }
-}
-
 // didn't debug for DecideAndMoveContainer but the calculate of the parpoint is correct
 
 void DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &partitioner)
@@ -890,12 +891,12 @@ void DecideAndMoveContainer(const std::vector<NodeHandle> &nodes, Partitioner &p
     } while (decisionPoint < GPUratio - tolerance || decisionPoint > GPUratio + tolerance);
 }
 
-void periodicFunction(Partitioner *partitioner, std::vector<NodeHandle> nodes, std::vector<MicroserviceHandle> microservices) {
-    while (true) {
-        scheduleFineGrainedParPointLoop(partitioner, nodes);
-        scheduleBaseParPointLoop(partitioner, nodes, microservices);
-        DecideAndMoveContainer(nodes, *partitioner);
+// void periodicFunction(Partitioner *partitioner, std::vector<NodeHandle> nodes, std::vector<MicroserviceHandle> microservices) {
+//     while (true) {
+//         scheduleFineGrainedParPointLoop(partitioner, nodes);
+//         scheduleBaseParPointLoop(partitioner, nodes, microservices);
+//         DecideAndMoveContainer(nodes, *partitioner);
 
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-    }
-}
+//         std::this_thread::sleep_for(std::chrono::seconds(5));
+//     }
+// }
