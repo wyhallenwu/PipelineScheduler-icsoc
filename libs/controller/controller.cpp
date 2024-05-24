@@ -38,8 +38,19 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
  * @param time_period 
  * @return uint64_t 
  */
-uint64_t Controller::queryRequestRateInPeriod(const std::string &name, const std::string &time_period) {
+float Controller::queryRequestRateInPeriod(const std::string &name, const uint32_t &period) {
+    std::string query = absl::StrFormat("SELECT COUNT (*) FROM %s WHERE to_timestamp(arrival_timestamps / 1000000.0) >= NOW() - INTERVAL '", name);
+    query += std::to_string(period) + " seconds';";
 
+    pqxx::nontransaction session(*ctl_metricsServerConn);
+    pqxx::result res = session.exec(query);
+
+    int count = 0;
+    for (const auto& row : res) {
+        count = row[0].as<int>();
+    }
+
+    return (float) count / period;
 }
 
 Controller::Controller() {

@@ -8,6 +8,9 @@
 #include "controlcommunication.grpc.pb.h"
 #include <LightGBM/c_api.h>
 #include <pqxx/pqxx>
+#include "absl/strings/str_format.h"
+#include "absl/flags/parse.h"
+#include "absl/flags/flag.h"
 
 using grpc::Status;
 using grpc::CompletionQueue;
@@ -90,7 +93,7 @@ public:
     void Stop() { running = false; };
 
 private:
-    uint64_t queryRequestRateInPeriod(const std::string &name, const std::string &time_period);
+    float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
 
     void UpdateLightMetrics();
 
