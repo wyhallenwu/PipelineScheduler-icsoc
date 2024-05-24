@@ -9,6 +9,11 @@
 #include "spdlog/spdlog.h"
 #include "opencv2/opencv.hpp"
 #include <unordered_set>
+#include <pqxx/pqxx>
+#include "absl/strings/str_format.h"
+#include "absl/flags/parse.h"
+#include "absl/flags/flag.h"
+#include <fstream>
 
 
 typedef uint16_t NumQueuesType;
@@ -48,6 +53,34 @@ const std::vector<std::string> cocoClassNames = {
         "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
         "hair drier", "toothbrush"
 };
+
+struct MetricsServerConfigs {
+    std::string ip = "localhost";
+    uint64_t port = 60004;
+    std::string DBName = "pipeline";
+    std::string user = "container_agent";
+    std::string password = "pipe";
+    uint64_t scrapeIntervalMillisec = 60000;
+
+    MetricsServerConfigs(const std::string &path) {
+        std::ifstream file(path);
+        nlohmann::json j = nlohmann::json::parse(file);
+        from_json(j);
+    }
+
+    MetricsServerConfigs() = default;
+
+    void from_json(const nlohmann::json &j) {
+        j.at("metricsServer_ip").get_to(ip);
+        j.at("metricsServer_port").get_to(port);
+        j.at("metricsServer_DBName").get_to(DBName);
+        j.at("metricsServer_user").get_to(user);
+        j.at("metricsServer_password").get_to(password);
+        j.at("metricsServer_scrapeIntervalMillisec").get_to(scrapeIntervalMillisec);
+    }
+};
+
+std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &metricsServerConfigs, const std::string &name);
 
 enum MODEL_DATA_TYPE {
     int8 = sizeof(uint8_t),

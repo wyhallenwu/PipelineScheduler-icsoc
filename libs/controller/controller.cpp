@@ -31,11 +31,32 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
     j.at("device").get_to(val.device);
 }
 
+/**
+ * @brief Query the request rate in a given time period (1 minute, 2 minutes...)
+ * 
+ * @param name 
+ * @param time_period 
+ * @return uint64_t 
+ */
+uint64_t Controller::queryRequestRateInPeriod(const std::string &name, const std::string &time_period) {
+
+}
+
 Controller::Controller() {
+    json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
+    ctl_metricsServerConfigs.from_json(metricsCfgs);
+    ctl_metricsServerConfigs.user = "controller";
+    ctl_metricsServerConfigs.password = "agent";
+
+    ctl_metricsServerConn = connectToMetricsServer(ctl_metricsServerConfigs, "controller");
+
+
     running = true;
     devices = std::map<std::string, NodeHandle>();
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
+
+
 
     std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60001);
     ServerBuilder builder;

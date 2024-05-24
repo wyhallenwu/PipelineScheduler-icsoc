@@ -47,15 +47,6 @@ using indevicecommunication::Connection;
 using indevicecommunication::ProcessData;
 using EmptyMessage = google::protobuf::Empty;
 
-struct MetricsServerConfigs {
-    std::string ip = "localhost";
-    uint64_t port = 60004;
-    std::string DBName = "pipeline";
-    std::string user = "container_agent";
-    std::string password = "pipe";
-    uint64_t scrapeIntervalMilisec = 60000;
-};
-
 enum TransferMethod {
     LocalCPU,
     RemoteCPU,
@@ -139,8 +130,6 @@ public:
     void profiling(const json &pipeConfigs, const json &profileConfigs);
 
     void loadProfilingConfigs();
-
-    void connectToMetricsServer();
 
     void runService(const json &pipeConfigs, const json &configs);
 

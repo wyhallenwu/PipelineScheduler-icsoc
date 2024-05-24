@@ -10,6 +10,12 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     processing_units = 0;
     utilization = {};
     mem_utilization = {};
+
+    dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
+    dev_metricsServerConfigs.user = "device_agent";
+    dev_metricsServerConfigs.password = "agent";
+    dev_metricsServerConn = connectToMetricsServer(dev_metricsServerConfigs, "Device_agent");
+
     std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60003);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();

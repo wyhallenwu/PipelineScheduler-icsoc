@@ -7,6 +7,7 @@
 #include <thread>
 #include "controlcommunication.grpc.pb.h"
 #include <LightGBM/c_api.h>
+#include <pqxx/pqxx>
 
 using grpc::Status;
 using grpc::CompletionQueue;
@@ -89,6 +90,8 @@ public:
     void Stop() { running = false; };
 
 private:
+    uint64_t queryRequestRateInPeriod(const std::string &name, const std::string &time_period);
+
     void UpdateLightMetrics();
 
     void UpdateFullMetrics();
@@ -198,6 +201,9 @@ private:
     ControlCommunication::AsyncService service;
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<ServerCompletionQueue> cq;
+
+    std::unique_ptr<pqxx::connection> ctl_metricsServerConn = nullptr;
+    MetricsServerConfigs ctl_metricsServerConfigs;
 };
 
 

@@ -228,6 +228,8 @@ private:
 
     // This will be mounted into the container to easily collect all logs.
     std::string dev_logPath = "../logs";
+    MetricsServerConfigs dev_metricsServerConfigs;
+    std::unique_ptr<pqxx::connection> dev_metricsServerConn = nullptr;
 };
 
 #endif //DEVICE_AGENT_H

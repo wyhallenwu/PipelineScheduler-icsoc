@@ -66,19 +66,14 @@ json loadRunArgs(int argc, char **argv) {
     std::ifstream metricsServerCfgsFile = std::ifstream(containerConfigs.at("cont_metricServerConfigs"));
     json metricsServerConfigs = json::parse(metricsServerCfgsFile);
 
-    containerConfigs["cont_metricsServerIP"] = metricsServerConfigs.at("metricsServer_ip");
-    containerConfigs["cont_metricsServerPort"] = metricsServerConfigs.at("metricsServer_port");
-    containerConfigs["cont_metricsServerDBName"] = metricsServerConfigs.at("metricsServer_DBName");
-    containerConfigs["cont_metricsServerUser"] = "container_agent";
-    containerConfigs["cont_metricsServerPwd"] = metricsServerConfigs.at("metricsServer_password");
-    containerConfigs["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs.at("metricsServer_scrapeIntervalMilliSec");
+    containerConfigs["cont_metricsServerConfigs"] = metricsServerConfigs;
 
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
         containerConfigs.at("cont_pipeline")[i]["msvc_contName"] = name;
         containerConfigs.at("cont_pipeline")[i]["msvc_deviceIndex"] = device;
         containerConfigs.at("cont_pipeline")[i]["msvc_containerLogPath"] = logPath + "/" + name;
         containerConfigs.at("cont_pipeline")[i]["msvc_RUNMODE"] = runmode;
-        containerConfigs.at("cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = containerConfigs["cont_metricsScrapeIntervalMillisec"];
+        containerConfigs.at("cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] =  metricsServerConfigs["metricsServer_scrapeIntervalMillisec"];
 
         /**
          * @brief     If this is profiling, set configurations to the first batch size that should be profiled
@@ -107,25 +102,6 @@ json loadRunArgs(int argc, char **argv) {
 
     return finalConfigs;
 };
-
-void ContainerAgent::connectToMetricsServer() {
-    try {
-        std::string conn_statement = absl::StrFormat(
-            "host=%s port=%d user=%s password=%s dbname=%s",
-            cont_metricsServerConfigs.ip, cont_metricsServerConfigs.port,
-            cont_metricsServerConfigs.user, cont_metricsServerConfigs.password, cont_metricsServerConfigs.DBName
-        );
-        cont_metricsServerConn = std::make_unique<pqxx::connection>(conn_statement);
-
-        if (cont_metricsServerConn->is_open()) {
-            spdlog::info("{0:s} connected to database successfully: {1:s}", this->cont_name, cont_metricsServerConn->dbname());
-        } else {
-            spdlog::error("Metrics Server is not open.");
-        }
-    } catch (const std::exception &e) {
-        std::cerr << e.what() << std::endl;
-    }
-}
 
 std::vector<BaseMicroserviceConfigs> msvcconfigs::LoadFromJson() {
     if (!absl::GetFlag(FLAGS_json).has_value()) {
@@ -288,14 +264,37 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
     arrivalRate = 0;
 
-    cont_metricsServerConfigs.ip = containerConfigs["cont_metricsServerIP"];
-    cont_metricsServerConfigs.port = containerConfigs["cont_metricsServerPort"];
-    cont_metricsServerConfigs.DBName = containerConfigs["cont_metricsServerDBName"];
-    cont_metricsServerConfigs.user = containerConfigs["cont_metricsServerUser"];
-    cont_metricsServerConfigs.password = containerConfigs["cont_metricsServerPwd"];
-    cont_metricsServerConfigs.scrapeIntervalMilisec = containerConfigs["cont_metricsScrapeIntervalMillisec"];
+    cont_metricsServerConfigs.from_json(containerConfigs["cont_metricsServerConfigs"]);
+    cont_metricsServerConfigs.user = "container_agent";
+    cont_metricsServerConfigs.password = "agent";
 
-    connectToMetricsServer();
+    cont_metricsServerConn = connectToMetricsServer(cont_metricsServerConfigs, cont_name);
+    pqxx::result res;
+    // Create arrival table
+    pqxx::work session(*cont_metricsServerConn);
+    std::string sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_pipeName + "_" + cont_taskName + "_arrival_table ("
+        "last_postprocessor_timestamps BIGINT, "
+        "departure_timestamps BIGINT, "
+        "arrival_timestamps BIGINT, "
+        "request_num BIGINT)";
+    
+    res = session.exec(sql_statement.c_str());
+
+    spdlog::info("{0:s} created arrival table and process table.", cont_name);
+
+    // Create process table
+    sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_pipeName + "_" + cont_taskName + "_process_table ("
+        "prep_arrival_timestamps BIGINT, "
+        "prep_process_timestamps BIGINT, "
+        "prep_batch_timestamps BIGINT, "
+        "infer_process_timestamps BIGINT, "
+        "post_process_timestamps BIGINT, "
+        "request_num BIGINT)";
+
+    session.exec(sql_statement.c_str());
+    session.commit();
+
+
 
     int own_port = containerConfigs.at("cont_port");
 
@@ -361,7 +360,7 @@ void ContainerAgent::collectRuntimeMetrics() {
     ProcessRecordType processRecords;
     std::string sql;
     while (run) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(cont_metricsServerConfigs.scrapeIntervalMilisec));
+        std::this_thread::sleep_for(std::chrono::milliseconds(cont_metricsServerConfigs.scrapeIntervalMillisec));
         for (auto msvc: cont_msvcsList) {
             queueSizes.push_back(msvc->GetOutQueueSize(0));
         }
