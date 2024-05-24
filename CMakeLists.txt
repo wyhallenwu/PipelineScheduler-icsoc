@@ -176,7 +176,10 @@ target_link_libraries(Communicator communicator)
 add_executable(DeviceAgent libs/device_agent/main.cpp)
 target_link_libraries(DeviceAgent device_agent)
 
-add_executable(Controller libs/controller/main.cpp)
+# add_executable(Controller libs/controller/main.cpp)
+# target_link_libraries(Controller controller)
+
+add_executable(Controller libs/controller/controller.cpp)
 target_link_libraries(Controller controller)
 
 add_executable(Container_DataSource libs/data_source/data_source.cpp)

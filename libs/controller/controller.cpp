@@ -522,3 +522,104 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     }
     return time_per_frame[batch_size] * batch_size;
 }
+
+
+// ========================================================== added ================================================================
+
+
+int RIM_Master::setupSession(const std::string& mdagName, int targetFps, int targetLatency) {
+        auto it = mdagProfiles.find(mdagName);
+        if (it == mdagProfiles.end()) {
+            std::cerr << "mDAG profile not found.\n";
+            return -1;
+        }
+        std::vector<std::shared_ptr<Module>> modules = it->second;
+        int sessionId = nextSessionId++;
+        auto session = std::make_shared<Session>(sessionId, modules, targetFps, targetLatency);
+        bool success = placeSession(session);
+        return success ? sessionId : -1;
+}
+
+bool RIM_Master::placeSession(const std::shared_ptr<Session>& session) {
+        // Attempt single-worker placement
+        for (const auto& worker : workers) {
+            if (canPlaceOnSingleWorker(worker, session)) {
+                placeOnSingleWorker(worker, session);
+                return true;
+            }
+        }
+
+        // Attempt cross-worker placement
+        return placeAcrossWorkers(session);
+}
+
+bool RIM_Master::canPlaceOnSingleWorker(const std::shared_ptr<Worker>& worker, const std::shared_ptr<Session>& session) {
+        int totalRequiredCapacity = 0;
+        for (const auto& module : session->getModules()) {
+            int requiredCapacity = (session->getTargetFps() * module->getResourceUsage()) / module->getMaxFps();
+            totalRequiredCapacity += requiredCapacity;
+        }
+        return worker->canAccommodate(totalRequiredCapacity);
+}
+
+void RIM_Master::placeOnSingleWorker(const std::shared_ptr<Worker>& worker, const std::shared_ptr<Session>& session) {
+        for (const auto& module : session->getModules()) {
+            worker->assignModule(module, session->getTargetFps());
+        }
+        std::cout << "Session " << session->getId() << " placed on Worker " << worker->getId() << "\n";
+}
+
+bool RIM_Master::placeAcrossWorkers(const std::shared_ptr<Session>& session) {
+        for (const auto& module : session->getModules()) {
+            bool placed = false;
+            for (const auto& worker : workers) {
+                int requiredCapacity = (session->getTargetFps() * module->getResourceUsage()) / module->getMaxFps();
+                if (worker->canAccommodate(requiredCapacity)) {
+                    worker->assignModule(module, session->getTargetFps());
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) {
+                std::cerr << "Failed to place module " << module->getName() << " for session " << session->getId() << "\n";
+                return false;
+            }
+        }
+        std::cout << "Session " << session->getId() << " placed across multiple workers\n";
+        return true;
+}
+
+
+int main() {
+    auto client = std::make_shared<RIM_Client>();
+    auto master = std::make_shared<RIM_Master>();
+
+    // Define workers
+    auto worker1 = std::make_shared<RIM_Worker>("Worker-1", 100);
+    auto worker2 = std::make_shared<RIM_Worker>("Worker-2", 100);
+    master->registerWorker(worker1);
+    master->registerWorker(worker2);
+
+    // Add mDAG profiles
+    std::vector<std::shared_ptr<RIM_Module>> trafficMDAG = {
+        std::make_shared<RIM_Module>("Object Detection", 30, 67),
+        std::make_shared<RIM_Module>("Car Detection", 25, 80),
+        std::make_shared<RIM_Module>("Pedestrian Detection", 20, 100),
+        std::make_shared<RIM_Module>("Traffic Summary", 15, 50)
+    };
+    master->addMDAGProfile("traffic_mDAG", trafficMDAG);
+
+    client->connectToMaster(master);
+
+    // Client sets up a session
+    int sessionId = client->setupSession("traffic_mDAG", 20, 200);
+    if (sessionId == -1) {
+        std::cerr << "Failed to setup session\n";
+    } else {
+        std::cout << "Session setup successful. Session ID: " << sessionId << "\n";
+    }
+
+    return 0;
+}
+
+
