@@ -26,8 +26,8 @@
 
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::ContainerConfig;
-using controlcommunication::ContainerLink;
 using controlcommunication::ContainerInt;
+using controlcommunication::ContainerLink;
 using controlcommunication::ContainerSignal;
 using controlcommunication::ControlCommunication;
 using controlcommunication::ImageShape;
@@ -203,7 +203,7 @@ public:
 
     // ======================== added =========================
 
-    void update_and_adjust();
+    void update_and_adjust(int mills = 500);
 
     // ========================================================
 
@@ -220,10 +220,10 @@ public:
         std::shared_ptr<ControlCommunication::Stub> stub;
         CompletionQueue *cq;
         SystemDeviceType type;
-        int num_processors;                        // number of processing units, 1 for Edge or # GPUs for server
+        int num_processors;                         // number of processing units, 1 for Edge or # GPUs for server
         std::vector<double> processors_utilization; // utilization per pu
-        std::vector<unsigned long> mem_size;       // memory size in MB
-        std::vector<double> mem_utilization;       // memory utilization per pu
+        std::vector<unsigned long> mem_size;        // memory size in MB
+        std::vector<double> mem_utilization;        // memory utilization per pu
         int next_free_port;
         std::map<std::string, ContainerHandle *> containers;
     };
@@ -278,8 +278,6 @@ public:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
-
-
     class DeviseAdvertisementHandler : public RequestHandler
     {
     public:
@@ -308,12 +306,12 @@ public:
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 
     void optimizeBatchSizeStep(
-            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
-            std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
+        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
+        std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
 
     std::map<ModelType, int> getInitialBatchSizes(
-            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
-            int nObjects);
+        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
+        int nObjects);
 
     std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
     getModelsByPipelineType(PipelineType type);

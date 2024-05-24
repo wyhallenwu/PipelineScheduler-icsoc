@@ -5,26 +5,16 @@ int main()
     auto controller = new Controller();
     std::thread receiver_thread(&Controller::HandleRecvRpcs, controller);
     receiver_thread.detach();
+
     // =============================== added ============================
 
-    // // periodically update the scheduling
-    // // according to jellyfish paper, time interval is set to be 0.5s
-    // std::thread update_thread(&Controller::update_and_adjust, controller);
-    // update_thread.detach();
-
-    // test dynamic programming: mapClient(ClientProfiles client_profile,
-    // ModelProfiles model_profiles)
-    // TODO: (1) figure out what is the inference time(ms or ns), fix the
-    // computation of throughput (2) fix the update_and_adjust thread (3) correct
-    // the scheduling algorithm (4) test with the adjust function and rpc call
-
-    ClientProfiles client_profile;
+    ClientProfiles client_profiles;
     ModelProfiles model_profiles;
-//    client_profile.add(std::string("1"), 1500, 10);
-//    client_profile.add(std::string("2"), 1700, 30);
-//    client_profile.add(std::string("3"), 1600, 20);
-//    client_profile.add(std::string("4"), 2000, 30);
-//    client_profile.add(std::string("5"), 1800, 20);
+    client_profiles.add(std::string("1"), 320, 320, 1500, 10);
+    client_profiles.add(std::string("2"), 320, 320, 1700, 30);
+    client_profiles.add(std::string("3"), 320, 320, 1600, 20);
+    client_profiles.add(std::string("4"), 320, 320, 2000, 30);
+    client_profiles.add(std::string("5"), 640, 640, 1800, 20);
 
     // model_profiles.add(ModelInfo(1, 0.39, 320, 320, "yolov5n", 0.2));
     // model_profiles.add(ModelInfo(2, 2.89, 320, 320, "yolov5n", 0.2));
@@ -45,21 +35,12 @@ int main()
     model_profiles.add(ModelInfo(3, 37.5, 320, 320, "yolov5n", 0.2));
     model_profiles.add(ModelInfo(2, 33.3, 640, 640, "yolov5n", 0.4));
     model_profiles.add(ModelInfo(4, 40.0, 640, 640, "yolov5n", 0.4));
-    auto mapping = mapClient(client_profile, model_profiles);
-    std::cout << "mapping relation" << std::endl;
-    for (auto &t : mapping)
-    {
-        std::cout << "======================" << std::endl;
-        auto [model_info, clients, batch_size] = t;
-        std::cout << std::get<0>(model_info) << " " << std::get<1>(model_info)
-                  << " " << batch_size << std::endl;
-        for (auto &client : clients)
-        {
-            std::cout << client.ip << " " << client.req_rate << " " << client.budget
-                      << std::endl;
-        }
-        std::cout << "======================" << std::endl;
-    }
+    model_profiles.add(ModelInfo(10, 125.0, 640, 640, "yolov5n", 0.4));
+
+    auto mapping = mapClient(client_profiles, model_profiles);
+
+    controller->clients_profiles = client_profiles;
+    controller->models_profiles = model_profiles;
 
     // ==================================================================
 
@@ -112,6 +93,12 @@ int main()
         std::cin >> task.device;
         controller->AddTask(task);
     }
+
+    // periodically update the scheduling
+    // according to jellyfish paper, time interval is set to be 0.5s
+    std::thread update_thread(&Controller::update_and_adjust, controller, 5000);
+    update_thread.join();
+
     delete controller;
     return 0;
 }

@@ -1,18 +1,18 @@
 #include "controller.h"
 
 std::map<ModelType, std::vector<std::string>> MODEL_INFO = {
-        {DataSource,        {":datasource",         "./Container_DataSource"}},
-        {Sink,              {":basesink",           "./runSink"}},
-        {Yolov5,            {":yolov5",             "./Container_Yolov5"}},
-        {Yolov5Datasource,  {":yolov5datasource",   "./Container_Yolov5"}},
-        {Retinaface,        {":retinaface",         "./Container_RetinaFace"}},
-        {Yolov5_Plate,      {":platedetection",     "./Container_Yolov5-plate"}},
-        {Movenet,           {":movenet",            "./Container_MoveNet"}},
-        {Emotionnet,        {":emotionnet",         "./Container_EmotionNet"}},
-        {Arcface,           {":arcface",            "./Container_ArcFace"}},
-        {Age,               {":age",                "./Container_Age"}},
-        {Gender,            {":gender",             "./Container_Gender"}},
-        {CarBrand,          {":carbrand",           "./Container_CarBrand"}},
+    {DataSource, {":datasource", "./Container_DataSource"}},
+    {Sink, {":basesink", "./runSink"}},
+    {Yolov5, {":yolov5", "./Container_Yolov5"}},
+    {Yolov5Datasource, {":yolov5datasource", "./Container_Yolov5"}},
+    {Retinaface, {":retinaface", "./Container_RetinaFace"}},
+    {Yolov5_Plate, {":platedetection", "./Container_Yolov5-plate"}},
+    {Movenet, {":movenet", "./Container_MoveNet"}},
+    {Emotionnet, {":emotionnet", "./Container_EmotionNet"}},
+    {Arcface, {":arcface", "./Container_ArcFace"}},
+    {Age, {":age", "./Container_Age"}},
+    {Gender, {":gender", "./Container_Gender"}},
+    {CarBrand, {":carbrand", "./Container_CarBrand"}},
 };
 
 void TaskDescription::to_json(nlohmann::json &j,
@@ -144,7 +144,8 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
                             device,
                             task,
                             batch_sizes[m.first],
-                            1, {cuda_device},
+                            1,
+                            {cuda_device},
                             -1,
                             device->next_free_port++,
                             {},
@@ -186,7 +187,8 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
     data_sources.push_back(task->subtasks[t.name + ":datasource"]);
     first_containers.push_back(task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
 
-    // =======================
+    // =====================================================================================
+
     for (const auto &m : models)
     {
         for (const auto &d : m.second)
@@ -213,9 +215,8 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
  * model, set the input size of clients. Run this function in another thread.
  *
  */
-void Controller::update_and_adjust()
+void Controller::update_and_adjust(int mills)
 {
-    int mills = 500;
     std::chrono::milliseconds interval(mills);
     while (true)
     {
@@ -232,6 +233,8 @@ void Controller::update_and_adjust()
             auto selected_clients = std::get<1>(mapping);
             int batch_size = std::get<2>(mapping);
 
+            std::cout << "[mapping] model: " << std::get<0>(model_info) << ", batch size: " << batch_size << std::endl;
+
             // match model with corresponding ContainerHandle
             Controller::ContainerHandle *p;
             for (auto &first_container : first_containers)
@@ -242,6 +245,7 @@ void Controller::update_and_adjust()
                     break;
                 }
             }
+            std::cout << "very first container: " << p->name << std::endl;
             // clear the upstream of this p, later adding new upstreams
             p->upstreams.clear();
 
@@ -256,6 +260,8 @@ void Controller::update_and_adjust()
                     if (data_source->device_agent->ip == client.ip)
                     {
                         ds = data_source;
+                        auto [width, height] = client.image_shape;
+                        std::cout << "client width: " << width << " height: " << height << std::endl;
                         break;
                     }
                 }
@@ -267,6 +273,8 @@ void Controller::update_and_adjust()
                 // match the model with its profiling
                 int width = models_profiles.infos[model_info][0].width;
                 int height = models_profiles.infos[model_info][0].height;
+
+                std::cout << "new width: " << width << " height: " << height << std::endl;
                 AdjustImageSize(ds, width, height);
             }
         }
@@ -277,26 +285,27 @@ void Controller::update_and_adjust()
 
 // =================================================================
 
-void Controller::UpdateLightMetrics(
-    ) {
+void Controller::UpdateLightMetrics()
+{
     // TODO: Replace with Database Scraping
-//    for (auto metric: metrics) {
-//        containers[metric.name()].queue_lengths = metric.queue_size();
-//        containers[metric.name()].metrics.requestRate = metric.request_rate();
-//    }
+    //    for (auto metric: metrics) {
+    //        containers[metric.name()].queue_lengths = metric.queue_size();
+    //        containers[metric.name()].metrics.requestRate = metric.request_rate();
+    //    }
 }
 
-void Controller::UpdateFullMetrics() {
-    //TODO: Replace with Database Scraping
-//    for (auto metric: metrics) {
-//        containers[metric.name()].queue_lengths = metric.queue_size();
-//        Metrics *m = &containers[metric.name()].metrics;
-//        m->requestRate = metric.request_rate();
-//        m->cpuUsage = metric.cpu_usage();
-//        m->memUsage = metric.mem_usage();
-//        m->gpuUsage = metric.gpu_usage();
-//        m->gpuMemUsage = metric.gpu_mem_usage();
-//    }
+void Controller::UpdateFullMetrics()
+{
+    // TODO: Replace with Database Scraping
+    //    for (auto metric: metrics) {
+    //        containers[metric.name()].queue_lengths = metric.queue_size();
+    //        Metrics *m = &containers[metric.name()].metrics;
+    //        m->requestRate = metric.request_rate();
+    //        m->cpuUsage = metric.cpu_usage();
+    //        m->memUsage = metric.mem_usage();
+    //        m->gpuUsage = metric.gpu_usage();
+    //        m->gpuMemUsage = metric.gpu_mem_usage();
+    //    }
 }
 
 void Controller::DeviseAdvertisementHandler::Proceed()
@@ -339,7 +348,7 @@ void Controller::DeviseAdvertisementHandler::Proceed()
 void Controller::StartContainer(
     std::pair<std::string, ContainerHandle *> &container, int slo,
     std::string source,
-                                int replica)
+    int replica)
 {
     std::cout << "Starting container: " << container.first << std::endl;
     ContainerConfig request;
@@ -424,7 +433,7 @@ void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device,
     msvc->device_agent = device;
     msvc->recv_port = device->next_free_port++;
     device->containers.insert({msvc->name, msvc});
-    msvc->cuda_device[replica -1] = cuda_device;
+    msvc->cuda_device[replica - 1] = cuda_device;
     std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
     StartContainer(pair, msvc->task->slo, "");
     for (auto upstr : msvc->upstreams)
@@ -467,7 +476,8 @@ void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr,
 }
 
 void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc,
-                                 int new_bs) {
+                                 int new_bs)
+{
     msvc->batch_size = new_bs;
     ContainerInt request;
     ClientContext context;
@@ -476,9 +486,9 @@ void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc,
     request.set_name(msvc->name);
     request.set_value(new_bs);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request,
+        msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request,
                                                        msvc->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
+    rpc->Finish(&reply, &status, (void *)1);
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
@@ -505,28 +515,35 @@ void Controller::StopContainer(std::string name, NodeHandle *device,
 }
 
 void Controller::optimizeBatchSizeStep(
-        const std::vector<
+    const std::vector<
         std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
         &models,
-        std::map<ModelType, int> &batch_sizes,
-    std::map<ModelType, int> &estimated_infer_times, int nObjects) {
+    std::map<ModelType, int> &batch_sizes,
+    std::map<ModelType, int> &estimated_infer_times, int nObjects)
+{
     ModelType candidate;
     int max_saving = 0;
     std::vector<ModelType> blacklist;
-    for (const auto &m: models) {
+    for (const auto &m : models)
+    {
         int saving;
         if (max_saving == 0)
         {
             saving =
                 estimated_infer_times[m.first] -
                 InferTimeEstimator(m.first, batch_sizes[m.first] * 2);
-        } else {
+        }
+        else
+        {
             if (batch_sizes[m.first] == 64 ||
-                std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
+                std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end())
+            {
                 continue;
             }
-            for (const auto &d: m.second) {
-                if (batch_sizes[d.first] > batch_sizes[m.first]) {
+            for (const auto &d : m.second)
+            {
+                if (batch_sizes[d.first] > batch_sizes[m.first])
+                {
                     blacklist.push_back(d.first);
                 }
             }
@@ -535,7 +552,8 @@ void Controller::optimizeBatchSizeStep(
                 (InferTimeEstimator(m.first, batch_sizes[m.first] * 2) *
                  (nObjects / batch_sizes[m.first] * 2));
         }
-        if (saving > max_saving) {
+        if (saving > max_saving)
+        {
             max_saving = saving;
             candidate = m.first;
         }
@@ -548,31 +566,37 @@ std::map<ModelType, int> Controller::getInitialBatchSizes(
     const std::vector<
         std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
         &models,
-    int slo, int nObjects){
+    int slo, int nObjects)
+{
     std::map<ModelType, int> batch_sizes = {};
     std::map<ModelType, int> estimated_infer_times = {};
 
-    for (const auto &m: models) {
+    for (const auto &m : models)
+    {
         batch_sizes[m.first] = 1;
-        if (estimated_infer_times.size() == 0) {
-            estimated_infer_times[m.first] = (
-                InferTimeEstimator(m.first, 1));
-        } else {
-            estimated_infer_times[m.first] = (
-                InferTimeEstimator(m.first, 1) * nObjects);
+        if (estimated_infer_times.size() == 0)
+        {
+            estimated_infer_times[m.first] = (InferTimeEstimator(m.first, 1));
+        }
+        else
+        {
+            estimated_infer_times[m.first] = (InferTimeEstimator(m.first, 1) * nObjects);
         }
     }
 
     int sum = std::accumulate(estimated_infer_times.begin(),
-                                 estimated_infer_times.end(), 0,
-                              [](int acc, const std::pair<ModelType, int> &p) {
+                              estimated_infer_times.end(), 0,
+                              [](int acc, const std::pair<ModelType, int> &p)
+                              {
                                   return acc + p.second;
                               });
 
-    while (slo < sum) {
+    while (slo < sum)
+    {
         optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
         sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
-                              [](int acc, const std::pair<ModelType, int> &p) {
+                              [](int acc, const std::pair<ModelType, int> &p)
+                              {
                                   return acc + p.second;
                               });
     }
@@ -586,26 +610,26 @@ Controller::getModelsByPipelineType(PipelineType type)
     switch (type)
     {
     case PipelineType::Traffic:
-        return {{ModelType::Yolov5,       {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::Yolov5_Plate, 2}}},
-                {ModelType::Retinaface,   {{ModelType::Arcface, -1}}},
-                {ModelType::Arcface,      {{ModelType::Sink, -1}}},
-                {ModelType::CarBrand,     {{ModelType::Sink, -1}}},
+        return {{ModelType::Yolov5, {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::Yolov5_Plate, 2}}},
+                {ModelType::Retinaface, {{ModelType::Arcface, -1}}},
+                {ModelType::Arcface, {{ModelType::Sink, -1}}},
+                {ModelType::CarBrand, {{ModelType::Sink, -1}}},
                 {ModelType::Yolov5_Plate, {{ModelType::Sink, -1}}},
                 {ModelType::Sink, {}}};
     case PipelineType::Video_Call:
         return {
             {ModelType::Retinaface, {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}},
-            {ModelType::Gender,     {{ModelType::Sink, -1}}},
-            {ModelType::Age,        {{ModelType::Sink, -1}}},
+            {ModelType::Gender, {{ModelType::Sink, -1}}},
+            {ModelType::Age, {{ModelType::Sink, -1}}},
             {ModelType::Emotionnet, {{ModelType::Sink, -1}}},
-            {ModelType::Arcface,    {{ModelType::Sink, -1}}},
+            {ModelType::Arcface, {{ModelType::Sink, -1}}},
             {ModelType::Sink, {}}};
     case PipelineType::Building_Security:
-        return {{ModelType::Yolov5,     {{ModelType::Retinaface, 0}}},
+        return {{ModelType::Yolov5, {{ModelType::Retinaface, 0}}},
                 {ModelType::Retinaface, {{ModelType::Gender, -1}, {ModelType::Age, -1}}},
-                {ModelType::Movenet,    {{ModelType::Sink,   -1}}},
-                {ModelType::Gender,     {{ModelType::Sink, -1}}},
-                {ModelType::Age,        {{ModelType::Sink, -1}}},
+                {ModelType::Movenet, {{ModelType::Sink, -1}}},
+                {ModelType::Gender, {{ModelType::Sink, -1}}},
+                {ModelType::Age, {{ModelType::Sink, -1}}},
                 {ModelType::Sink, {}}};
     default:
         return {};
@@ -653,104 +677,107 @@ double Controller::LoadTimeEstimator(const char *model_path,
 }
 
 // returns the profiling results for inference time per frame in a full batch in nanoseconds
-int Controller::InferTimeEstimator(ModelType model, int batch_size) {
+int Controller::InferTimeEstimator(ModelType model, int batch_size)
+{
     std::map<int, int> time_per_frame;
-    switch (model) {
-        case ModelType::Yolov5:
-            time_per_frame = {{1,  3602348},
-                              {2,  2726377},
-                              {4,  2467065},
-                              {8,  2575456},
-                              {16, 3220761},
-                              {32, 4680154},
-                              {64, 7773959}};
-            break;
-        case ModelType::Yolov5Datasource:
-            time_per_frame = {{1,  3602348},
-                              {2,  2726377},
-                              {4,  2467065},
-                              {8,  2575456},
-                              {16, 3220761},
-                              {32, 4680154},
-                              {64, 7773959}};
-            break;
-        case ModelType::Retinaface:
-            time_per_frame = {{1,  1780280},
-                              {2,  1527410},
-                              {4,  1357906},
-                              {8,  1164929},
-                              {16, 2177011},
-                              {32, 3399701},
-                              {64, 8146690}};
-            break;
-        case ModelType::CarBrand:
-            time_per_frame = {{1,  4998407},
-                              {2,  3335101},
-                              {4,  2344440},
-                              {8,  2176385},
-                              {16, 2483317},
-                              {32, 2357686},
-                              {64, 1155050}};
-            break;
-        case ModelType::Yolov5_Plate:
-            time_per_frame = {{1,  7304176},
-                              {2,  4909581},
-                              {4,  3225549},
-                              {8,  2883803},
-                              {16, 2871236},
-                              {32, 2004165},
-                              {64, 3094331}};
-            break;
-        case ModelType::Movenet:
-            time_per_frame = {{1,  1644526},
-                              {2,  3459537},
-                              {4,  2703916},
-                              {8,  2377614},
-                              {16, 2647643},
-                              {32, 2900894},
-                              {64, 2197719}};
-            break;
-        case ModelType::Arcface:
-            time_per_frame = {{1,  18120029},
-                              {2,  11226197},
-                              {4,  7883673},
-                              {8,  6364369},
-                              {16, 5620677},
-                              {32, 3370018},
-                              {64, 3206726}};
-            break;
-        case ModelType::Emotionnet:
-            time_per_frame = {{1,  3394144},
-                              {2,  1365037},
-                              {4,  1615653},
-                              {8,  1967143},
-                              {16, 1500867},
-                              {32, 1665680},
-                              {64, 1957914}};
-            break;
-        case ModelType::Age:
-            time_per_frame = {{1,  14729041},
-                              {2,  9050828},
-                              {4,  6112501},
-                              {8,  5015442},
-                              {16, 3927934},
-                              {32, 3523500},
-                              {64, 2899034}};
-            break;
-        case ModelType::Gender:
-            time_per_frame = {{1,  1357500},
-                              {2,  831649},
-                              {4,  687484},
-                              {8,  749792},
-                              {16, 1021500},
-                              {32, 1800263},
-                              {64, 4002824}};
-            break;
-        default:
-            return 0;
+    switch (model)
+    {
+    case ModelType::Yolov5:
+        time_per_frame = {{1, 3602348},
+                          {2, 2726377},
+                          {4, 2467065},
+                          {8, 2575456},
+                          {16, 3220761},
+                          {32, 4680154},
+                          {64, 7773959}};
+        break;
+    case ModelType::Yolov5Datasource:
+        time_per_frame = {{1, 3602348},
+                          {2, 2726377},
+                          {4, 2467065},
+                          {8, 2575456},
+                          {16, 3220761},
+                          {32, 4680154},
+                          {64, 7773959}};
+        break;
+    case ModelType::Retinaface:
+        time_per_frame = {{1, 1780280},
+                          {2, 1527410},
+                          {4, 1357906},
+                          {8, 1164929},
+                          {16, 2177011},
+                          {32, 3399701},
+                          {64, 8146690}};
+        break;
+    case ModelType::CarBrand:
+        time_per_frame = {{1, 4998407},
+                          {2, 3335101},
+                          {4, 2344440},
+                          {8, 2176385},
+                          {16, 2483317},
+                          {32, 2357686},
+                          {64, 1155050}};
+        break;
+    case ModelType::Yolov5_Plate:
+        time_per_frame = {{1, 7304176},
+                          {2, 4909581},
+                          {4, 3225549},
+                          {8, 2883803},
+                          {16, 2871236},
+                          {32, 2004165},
+                          {64, 3094331}};
+        break;
+    case ModelType::Movenet:
+        time_per_frame = {{1, 1644526},
+                          {2, 3459537},
+                          {4, 2703916},
+                          {8, 2377614},
+                          {16, 2647643},
+                          {32, 2900894},
+                          {64, 2197719}};
+        break;
+    case ModelType::Arcface:
+        time_per_frame = {{1, 18120029},
+                          {2, 11226197},
+                          {4, 7883673},
+                          {8, 6364369},
+                          {16, 5620677},
+                          {32, 3370018},
+                          {64, 3206726}};
+        break;
+    case ModelType::Emotionnet:
+        time_per_frame = {{1, 3394144},
+                          {2, 1365037},
+                          {4, 1615653},
+                          {8, 1967143},
+                          {16, 1500867},
+                          {32, 1665680},
+                          {64, 1957914}};
+        break;
+    case ModelType::Age:
+        time_per_frame = {{1, 14729041},
+                          {2, 9050828},
+                          {4, 6112501},
+                          {8, 5015442},
+                          {16, 3927934},
+                          {32, 3523500},
+                          {64, 2899034}};
+        break;
+    case ModelType::Gender:
+        time_per_frame = {{1, 1357500},
+                          {2, 831649},
+                          {4, 687484},
+                          {8, 749792},
+                          {16, 1021500},
+                          {32, 1800263},
+                          {64, 4002824}};
+        break;
+    default:
+        return 0;
     }
     int i = 1;
-    while (i < batch_size) {
+    while (i < batch_size)
+    {
         i *= 2;
     }
     return time_per_frame[batch_size] * batch_size;
@@ -879,20 +906,20 @@ std::vector<ModelInfo> ModelProfiles::hardcode_mapping(std::string model_name,
     // FIXME: need updated profiling result
     // (batch_size, inference_time(ms), width, height, model_name, accuracy)
     std::vector<ModelInfo> hardcode = {
-            ModelInfo(1, 1.2, 320, 320, "yolov5n", 0.2),
-            ModelInfo(2, 2.1, 320, 320, "yolov5n", 0.2),
-            ModelInfo(4, 2.9, 320, 320, "yolov5n", 0.2),
-            ModelInfo(8, 5.1, 320, 320, "yolov5n", 0.2),
-            ModelInfo(16, 8.8, 320, 320, "yolov5n", 0.2),
-            ModelInfo(32, 18.5, 320, 320, "yolov5n", 0.2),
-            ModelInfo(64, 31.2, 320, 320, "yolov5n", 0.2),
-            ModelInfo(1, 1.8, 640, 640, "yolov5n", 0.4),
-            ModelInfo(2, 3.3, 640, 640, "yolov5n", 0.4),
-            ModelInfo(4, 5.7, 640, 640, "yolov5n", 0.4),
-            ModelInfo(8, 10.7, 640, 640, "yolov5n", 0.4),
-            ModelInfo(16, 20.8, 640, 640, "yolov5n", 0.4),
-            ModelInfo(32, 40.3, 640, 640, "yolov5n", 0.4),
-            ModelInfo(64, 80.3, 640, 640, "yolov5n", 0.4),
+        ModelInfo(1, 1.2, 320, 320, "yolov5n", 0.2),
+        ModelInfo(2, 2.1, 320, 320, "yolov5n", 0.2),
+        ModelInfo(4, 2.9, 320, 320, "yolov5n", 0.2),
+        ModelInfo(8, 5.1, 320, 320, "yolov5n", 0.2),
+        ModelInfo(16, 8.8, 320, 320, "yolov5n", 0.2),
+        ModelInfo(32, 18.5, 320, 320, "yolov5n", 0.2),
+        ModelInfo(64, 31.2, 320, 320, "yolov5n", 0.2),
+        ModelInfo(1, 1.8, 640, 640, "yolov5n", 0.4),
+        ModelInfo(2, 3.3, 640, 640, "yolov5n", 0.4),
+        ModelInfo(4, 5.7, 640, 640, "yolov5n", 0.4),
+        ModelInfo(8, 10.7, 640, 640, "yolov5n", 0.4),
+        ModelInfo(16, 20.8, 640, 640, "yolov5n", 0.4),
+        ModelInfo(32, 40.3, 640, 640, "yolov5n", 0.4),
+        ModelInfo(64, 80.3, 640, 640, "yolov5n", 0.4),
     };
 
     std::vector<ModelInfo> r;
@@ -911,7 +938,7 @@ void ClientProfiles::sortBudgetDescending(std::vector<ClientInfo> &clients)
 {
     std::sort(clients.begin(), clients.end(),
               [](const ClientInfo &a, const ClientInfo &b)
-    {
+              {
                   return a.budget - a.get_transmission_time() > b.budget - b.get_transmission_time();
               });
 }
@@ -1068,6 +1095,7 @@ std::vector<
     std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>>
 mapClient(ClientProfiles client_profile, ModelProfiles model_profiles)
 {
+    std::cout << " ======================= mapClient ==========================" << std::endl;
 
     std::vector<
         std::tuple<std::tuple<std::string, float>, std::vector<ClientInfo>, int>>
@@ -1095,15 +1123,22 @@ mapClient(ClientProfiles client_profile, ModelProfiles model_profiles)
             std::cout << "assign all rest clients" << std::endl;
             selected_clients = clients;
             clients.clear();
+            std::cout << "selected clients assgined" << std::endl;
+            for (auto &c : selected_clients)
+            {
+                std::cout << c.ip << " " << c.budget << " " << c.req_rate << std::endl;
+            }
+            assert(clients.size() == 0);
         }
 
         int batch_size = check_and_assign(it->second, selected_clients);
-        std::cout << "mapClient start" << std::endl;
-        std::cout << "model info: " << it->second[0].throughput << std::endl;
+
+        std::cout << "model throughput: " << it->second[0].throughput << std::endl;
         std::cout << "batch size: " << batch_size << std::endl;
-        std::cout << "mapClient end" << std::endl;
+
         mappings.push_back(
             std::make_tuple(it->first, selected_clients, batch_size));
+        std::cout << "start removing collected clients" << std::endl;
         differenceClients(clients, selected_clients);
         std::cout << "after filtering" << std::endl;
         for (auto &c : clients)
@@ -1115,6 +1150,22 @@ mapClient(ClientProfiles client_profile, ModelProfiles model_profiles)
             break;
         }
     }
+
+    std::cout << "mapping relation" << std::endl;
+    for (auto &t : mappings)
+    {
+        std::cout << "======================" << std::endl;
+        auto [model_info, clients, batch_size] = t;
+        std::cout << std::get<0>(model_info) << " " << std::get<1>(model_info)
+                  << " " << batch_size << std::endl;
+        for (auto &client : clients)
+        {
+            std::cout << client.ip << " " << client.req_rate << " " << client.budget - client.get_transmission_time()
+                      << std::endl;
+        }
+        std::cout << "======================" << std::endl;
+    }
+    std::cout << "======================= End mapClient =======================" << std::endl;
     return mappings;
 }
 
