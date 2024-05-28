@@ -134,6 +134,7 @@ private:
         google::protobuf::RepeatedField<int32_t> queue_lengths;
         std::vector<ContainerHandle *> upstreams;
         std::vector<ContainerHandle *> downstreams;
+        std::unordered_map<std::string, std::pair<int, int>> workerProfile;
     };
 
     class RequestHandler {
@@ -194,6 +195,10 @@ private:
     std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
     getModelsByPipelineType(PipelineType type);
 
+    bool placeMDAGOnSingleWorker(const std::shared_ptr<TaskHandle>& task);
+    void placeModulesOnWorkers(const std::shared_ptr<TaskHandle>& task);
+    void performPlacement(const std::shared_ptr<TaskHandle>& task);
+
     bool running;
     std::map<std::string, NodeHandle> devices;
     std::map<std::string, TaskHandle> tasks;
@@ -206,99 +211,5 @@ private:
 
 // ========================================================== added ================================================================
 
-class RIM_Module{
-public:
-    RIM_Module(const std::string& name, int max_fps, int resource_usage) 
-        : name(name), max_fps(max_fps), resource_usage(resource_usage) {}
-    virtual ~RIM_Module() {}
-    virtual void execute(const void* input_data, void* output_data) = 0;
-    std::string getName() const { return name; }
-    int getMaxFPS() const { return max_fps; }
-    int getResourceUsage() const { return resource_usage; }
-
-private:
-    std::string name;
-    int max_fps;
-    int resource_usage;
-};
-
-class RIM_Worker {
-public:
-    Worker(const std::string& id, int maxCapacity)
-        : id(id), maxCapacity(maxCapacity), usedCapacity(0) {}
-
-    std::string getId() const { return id; }
-
-    bool canAccommodate(int required_capacity) const {
-        return (used_capacity + required_capacity < max_capacity);
-    }
-
-    bool assignModule(const std::shared_ptr<RIM_Module>& module, int fps) {
-        int required_capacity = (fps * module)
-    }
-
-private:
-    std::string id;
-    int max_capacity;
-    int used_capacity;
-};
-
-class RIM_Session {
-public:
-    RIM_Session(int id, const std::vector<std::shared_ptr<RIM_Module>>& modules, int targetFps, int targetLatency)
-        : id(id), modules(modules), targetFps(targetFps), targetLatency(targetLatency) {}
-
-    int getId() const { return id; }
-
-    const std::vector<std::shared_ptr<RIM_Module>>& getModules() const { return modules; }
-
-    int getTargetFps() const { return targetFps; }
-
-    int getTargetLatency() const { return targetLatency; }
-
-private:
-    int id;
-    std::vector<std::shared_ptr<RIM_Module>> modules;
-    int targetFps;
-    int targetLatency;
-};
-
-class RIM_Client {
-public:
-    void connectToMaster(std::shared_ptr<RIM_Master> master) {
-        this->master = master;
-    }
-    int setupSession(const std::string& mdagName, int targetFps, int targetLatency) {
-        return master->setupSession(mdagName, targetFps, targetLatency);
-    }
-
-private:
-    std::shared_ptr<RIM_Master> master;
-};
-
-class RIM_Master {
-public:
-    RIM_Master() : nextSessionId(1) {}
-    void registerWorker(std::shared_ptr<RIM_Worker> worker) {
-        workers.push_back(worker);
-    }
-    void addMDAGProfile(const std::string& mdagName, const std::vector<std::shared_ptr<RIM_Module>>& modules) {
-        mdagProfiles[mdagName] = modules;
-    }
-    int setupSession(const std::string& mdagName, int targetFps, int targetLatency);
-
-private:
-    bool placeSession(const std::shared_ptr<RIM_Session>& session);
-
-    bool canPlaceOnSingleWorker(const std::shared_ptr<Worker>& worker, const std::shared_ptr<RIM_Session>& session);
-
-    void placeOnSingleWorker(const std::shared_ptr<Worker>& worker, const std::shared_ptr<RIM_Session>& session);
-
-    bool placeAcrossWorkers(const std::shared_ptr<RIM_Session>& session);
-
-    std::vector<std::shared_ptr<Worker>> workers;
-    std::unordered_map<std::string, std::vector<std::shared_ptr<Module>>> mdagProfiles;
-    int nextSessionId;
-};
 
 #endif //PIPEPLUSPLUS_CONTROLLER_H

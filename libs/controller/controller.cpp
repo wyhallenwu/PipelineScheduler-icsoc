@@ -108,6 +108,10 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
         }
     }
 
+    // Perform placement for the task
+    auto taskPtr = std::make_shared<TaskHandle>(*task);
+    performPlacement(taskPtr);
+
     for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
         StartContainer(msvc, task->slo, t.source);
     }
@@ -526,100 +530,110 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
 
 // ========================================================== added ================================================================
 
+bool Controller::placeMDAGOnSingleWorker(const std::shared_ptr<TaskHandle>& task) {
+    const NodeHandle* bestFitWorker = nullptr;
+    float minRemainingGpuCapacity = std::numeric_limits<float>::max();
+    float minRemainingCpuCapacity = std::numeric_limits<float>::max();
+    int totalProfiledLatency = 0;
 
-int RIM_Master::setupSession(const std::string& mdagName, int targetFps, int targetLatency) {
-        auto it = mdagProfiles.find(mdagName);
-        if (it == mdagProfiles.end()) {
-            std::cerr << "mDAG profile not found.\n";
-            return -1;
+    for (const auto& worker : devices) {
+        float totalRequiredGpuCapacity = 0;
+        float totalRequiredCpuCapacity = 0;
+        int workerProfiledLatency = 0;
+
+        for (const auto& container : task->subtasks) {
+            float requiredGpuCapacity = static_cast<float>(task->slo) / InferTimeEstimator(container.second->model, container.second->batch_size);
+            float requiredCpuCapacity = static_cast<float>(task->slo) / InferTimeEstimator(container.second->model, container.second->batch_size);
+            totalRequiredGpuCapacity += requiredGpuCapacity;
+            totalRequiredCpuCapacity += requiredCpuCapacity;
+            workerProfiledLatency += 0; // TODO: Implement profiled latency for containers
         }
-        std::vector<std::shared_ptr<Module>> modules = it->second;
-        int sessionId = nextSessionId++;
-        auto session = std::make_shared<Session>(sessionId, modules, targetFps, targetLatency);
-        bool success = placeSession(session);
-        return success ? sessionId : -1;
-}
 
-bool RIM_Master::placeSession(const std::shared_ptr<Session>& session) {
-        // Attempt single-worker placement
-        for (const auto& worker : workers) {
-            if (canPlaceOnSingleWorker(worker, session)) {
-                placeOnSingleWorker(worker, session);
-                return true;
+        if (worker.second.processors_utilization[0] + totalRequiredGpuCapacity <= 1.0 &&
+            worker.second.mem_utilization[0] + totalRequiredCpuCapacity <= 1.0) {
+            float remainingGpuCapacity = 1.0 - worker.second.processors_utilization[0] - totalRequiredGpuCapacity;
+            float remainingCpuCapacity = 1.0 - worker.second.mem_utilization[0] - totalRequiredCpuCapacity;
+
+            if (remainingGpuCapacity < minRemainingGpuCapacity && remainingCpuCapacity < minRemainingCpuCapacity) {
+                minRemainingGpuCapacity = remainingGpuCapacity;
+                minRemainingCpuCapacity = remainingCpuCapacity;
+                bestFitWorker = &worker.second;
+                totalProfiledLatency = workerProfiledLatency;
             }
         }
-
-        // Attempt cross-worker placement
-        return placeAcrossWorkers(session);
-}
-
-bool RIM_Master::canPlaceOnSingleWorker(const std::shared_ptr<Worker>& worker, const std::shared_ptr<Session>& session) {
-        int totalRequiredCapacity = 0;
-        for (const auto& module : session->getModules()) {
-            int requiredCapacity = (session->getTargetFps() * module->getResourceUsage()) / module->getMaxFps();
-            totalRequiredCapacity += requiredCapacity;
-        }
-        return worker->canAccommodate(totalRequiredCapacity);
-}
-
-void RIM_Master::placeOnSingleWorker(const std::shared_ptr<Worker>& worker, const std::shared_ptr<Session>& session) {
-        for (const auto& module : session->getModules()) {
-            worker->assignModule(module, session->getTargetFps());
-        }
-        std::cout << "Session " << session->getId() << " placed on Worker " << worker->getId() << "\n";
-}
-
-bool RIM_Master::placeAcrossWorkers(const std::shared_ptr<Session>& session) {
-        for (const auto& module : session->getModules()) {
-            bool placed = false;
-            for (const auto& worker : workers) {
-                int requiredCapacity = (session->getTargetFps() * module->getResourceUsage()) / module->getMaxFps();
-                if (worker->canAccommodate(requiredCapacity)) {
-                    worker->assignModule(module, session->getTargetFps());
-                    placed = true;
-                    break;
-                }
-            }
-            if (!placed) {
-                std::cerr << "Failed to place module " << module->getName() << " for session " << session->getId() << "\n";
-                return false;
-            }
-        }
-        std::cout << "Session " << session->getId() << " placed across multiple workers\n";
-        return true;
-}
-
-
-int main() {
-    auto client = std::make_shared<RIM_Client>();
-    auto master = std::make_shared<RIM_Master>();
-
-    // Define workers
-    auto worker1 = std::make_shared<RIM_Worker>("Worker-1", 100);
-    auto worker2 = std::make_shared<RIM_Worker>("Worker-2", 100);
-    master->registerWorker(worker1);
-    master->registerWorker(worker2);
-
-    // Add mDAG profiles
-    std::vector<std::shared_ptr<RIM_Module>> trafficMDAG = {
-        std::make_shared<RIM_Module>("Object Detection", 30, 67),
-        std::make_shared<RIM_Module>("Car Detection", 25, 80),
-        std::make_shared<RIM_Module>("Pedestrian Detection", 20, 100),
-        std::make_shared<RIM_Module>("Traffic Summary", 15, 50)
-    };
-    master->addMDAGProfile("traffic_mDAG", trafficMDAG);
-
-    client->connectToMaster(master);
-
-    // Client sets up a session
-    int sessionId = client->setupSession("traffic_mDAG", 20, 200);
-    if (sessionId == -1) {
-        std::cerr << "Failed to setup session\n";
-    } else {
-        std::cout << "Session setup successful. Session ID: " << sessionId << "\n";
     }
 
-    return 0;
+    if (bestFitWorker && totalProfiledLatency <= task->slo) {
+        for (const auto& container : task->subtasks) {
+            std::pair<std::string, ContainerHandle*> containerPair = std::make_pair(container.first, container.second);
+            StartContainer(containerPair, task->slo, "", 1);
+        }
+        std::cout << "mDAG placed on a single worker: " << bestFitWorker->ip << std::endl;
+        return true;
+    }
+
+    return false;
 }
 
+void Controller::placeModulesOnWorkers(const std::shared_ptr<TaskHandle>& task) {
+    std::unordered_map<std::string, std::vector<ContainerHandle*>> workerToContainersMap;
 
+    for (const auto& container : task->subtasks) {
+        const NodeHandle* bestFitWorker = nullptr;
+        float minRemainingGpuCapacity = std::numeric_limits<float>::max();
+        float minRemainingCpuCapacity = std::numeric_limits<float>::max();
+
+        for (const auto& worker : devices) {
+            float requiredGpuCapacity = static_cast<float>(task->slo) / InferTimeEstimator(container.second->model, container.second->batch_size);
+            float requiredCpuCapacity = static_cast<float>(task->slo) / InferTimeEstimator(container.second->model, container.second->batch_size);
+
+            if (worker.second.processors_utilization[0] + requiredGpuCapacity <= 1.0 &&
+                worker.second.mem_utilization[0] + requiredCpuCapacity <= 1.0) {
+                float remainingGpuCapacity = 1.0 - worker.second.processors_utilization[0] - requiredGpuCapacity;
+                float remainingCpuCapacity = 1.0 - worker.second.mem_utilization[0] - requiredCpuCapacity;
+
+                if (remainingGpuCapacity < minRemainingGpuCapacity && remainingCpuCapacity < minRemainingCpuCapacity) {
+                    minRemainingGpuCapacity = remainingGpuCapacity;
+                    minRemainingCpuCapacity = remainingCpuCapacity;
+                    bestFitWorker = &worker.second;
+                }
+            }
+        }
+
+        if (bestFitWorker) {
+            workerToContainersMap[bestFitWorker->ip].push_back(container.second);
+        } else {
+            std::cerr << "No available worker found for container: " << container.second->name << std::endl;
+        }
+    }
+
+    int totalProfiledLatency = 0;
+    for (const auto& workerContainersPair : workerToContainersMap) {
+        const std::string& workerId = workerContainersPair.first;
+        const auto& containers = workerContainersPair.second;
+
+        for (const auto& container : containers) {
+            totalProfiledLatency += 0; // TODO: Implement profiled latency for containers
+        }
+    }
+
+    if (totalProfiledLatency <= task->slo) {
+        for (const auto& workerContainersPair : workerToContainersMap) {
+            const std::string& workerId = workerContainersPair.first;
+            const auto& containers = workerContainersPair.second;
+
+            for (const auto& container : containers) {
+                std::pair<std::string, ContainerHandle*> containerPair = std::make_pair(container->name, container);
+                StartContainer(containerPair, task->slo);
+            }
+        }
+    } else {
+        std::cerr << "Cannot place mDAG containers on workers due to latency constraints." << std::endl;
+    }
+}
+
+void Controller::performPlacement(const std::shared_ptr<TaskHandle>& task) {
+    if (!placeMDAGOnSingleWorker(task)) {
+        placeModulesOnWorkers(task);
+    }
+}
