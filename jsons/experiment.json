@@ -1,16 +1,9 @@
 [
   {
-    "name": "traffic1",
+    "name": "test",
     "slo": 500000000,
     "type": 0,
-    "source": "/src/preview/traffic/traffic1.mp4",
-    "device": "server"
-  },
-  {
-    "name": "traffic2",
-    "slo": 500000000,
-    "type": 0,
-    "source": "/src/preview/traffic/traffic2.mp4",
-    "device": "server"
+    "source": "../data/batch_test.mp4",
+    "device": "agx"
   }
 ]

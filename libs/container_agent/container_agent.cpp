@@ -38,7 +38,7 @@ json loadRunArgs(int argc, char **argv) {
     json containerConfigs = std::get<0>(configs);
     json profilingConfigs = std::get<1>(configs);
 
-    BatchSizeType minBatch =  profilingConfigs.at("profile_minBatch");
+    BatchSizeType minBatch = profilingConfigs.at("profile_minBatch");
     std::string templateModelPath = profilingConfigs.at("profile_templateModelPath");
 
     /**
@@ -49,7 +49,7 @@ json loadRunArgs(int argc, char **argv) {
      * 
      */
     if (profiling_mode) {
-    
+
         name = removeSubstring(templateModelPath, ".engine");
         name = replaceSubstring(name, "[batch]", std::to_string(minBatch));
         name = splitString(name, '/').back();
@@ -59,7 +59,7 @@ json loadRunArgs(int argc, char **argv) {
     containerConfigs["cont_device"] = device;
     containerConfigs["cont_name"] = name;
     containerConfigs["cont_logLevel"] = logLevel;
-    containerConfigs["cont_logPath"]  =  logPath + "/" + name;
+    containerConfigs["cont_logPath"] = logPath + "/" + name;
     containerConfigs["cont_RUNMODE"] = runmode;
     containerConfigs["cont_port"] = absl::GetFlag(FLAGS_port);
 
@@ -73,7 +73,8 @@ json loadRunArgs(int argc, char **argv) {
         containerConfigs.at("cont_pipeline")[i]["msvc_deviceIndex"] = device;
         containerConfigs.at("cont_pipeline")[i]["msvc_containerLogPath"] = logPath + "/" + name;
         containerConfigs.at("cont_pipeline")[i]["msvc_RUNMODE"] = runmode;
-        containerConfigs.at("cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] =  metricsServerConfigs["metricsServer_scrapeIntervalMillisec"];
+        containerConfigs.at(
+                "cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs["metricsServer_scrapeIntervalMillisec"];
 
         /**
          * @brief     If this is profiling, set configurations to the first batch size that should be profiled
@@ -88,7 +89,8 @@ json loadRunArgs(int argc, char **argv) {
                 addProfileConfigs(containerConfigs.at("cont_pipeline")[i], profilingConfigs);
             } else if (i == 2) {
                 // Set the path to the engine
-                containerConfigs.at("cont_pipeline")[i].at("path") = replaceSubstring(templateModelPath, "[batch]", std::to_string(minBatch));
+                containerConfigs.at("cont_pipeline")[i].at("path") = replaceSubstring(templateModelPath, "[batch]",
+                                                                                      std::to_string(minBatch));
             }
         }
     }
@@ -170,8 +172,8 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
 
     json pipelineConfigs = pipeConfigs;
 
-    BatchSizeType minBatch =  profileConfigs.at("profile_minBatch");
-    BatchSizeType maxBatch =  profileConfigs.at("profile_maxBatch");
+    BatchSizeType minBatch = profileConfigs.at("profile_minBatch");
+    BatchSizeType maxBatch = profileConfigs.at("profile_maxBatch");
     uint8_t stepMode = profileConfigs.at("profile_stepMode");
     uint8_t step = profileConfigs.at("profile_step");
     std::string templateModelPath = profileConfigs.at("profile_templateModelPath");
@@ -192,9 +194,9 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
 
             profileDirPath = cont_logDir + "/" + cont_name;
             std::filesystem::create_directory(
-                std::filesystem::path(profileDirPath)
+                    std::filesystem::path(profileDirPath)
             );
-            
+
             // Making sure all the microservices are paused before reloading and reallocating resources
             // this is essential to avoiding runtime memory errors
             for (uint8_t i = 0; i < cont_msvcsList.size(); i++) {
@@ -210,7 +212,8 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
                 pipelineConfigs[i].at("msvc_contName") = cont_name;
                 // Set the path to the engine
                 if (i == 2) {
-                    pipelineConfigs[i].at("path") = replaceSubstring(templateModelPath, "[batch]", std::to_string(batch));
+                    pipelineConfigs[i].at("path") = replaceSubstring(templateModelPath, "[batch]",
+                                                                     std::to_string(batch));
                 }
                 cont_msvcsList[i]->loadConfigs(pipelineConfigs[i], false);
                 cont_msvcsList[i]->setRELOAD();
@@ -231,7 +234,8 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
         }
 
         // spdlog::info("========================= Batch {0:d}/{1:d} =====================", );
-        spdlog::info("====================================================================================================");
+        spdlog::info(
+                "====================================================================================================");
         if (stepMode == 0) {
             batch += step;
         } else {
@@ -254,12 +258,12 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
     if (cont_RUNMODE == RUNMODE::PROFILING) {
         // Create the logDir for this container
-        cont_logDir = (std::string)containerConfigs.at("cont_logPath");
+        cont_logDir = (std::string) containerConfigs.at("cont_logPath");
         std::filesystem::create_directory(
-            std::filesystem::path(cont_logDir)
+                std::filesystem::path(cont_logDir)
         );
     } else {
-        cont_logDir = (std::string)containerConfigs["cont_logPath"];
+        cont_logDir = (std::string) containerConfigs["cont_logPath"];
     }
 
     arrivalRate = 0;
@@ -273,27 +277,26 @@ ContainerAgent::ContainerAgent(const json &configs) {
     // Create arrival table
     pqxx::work session(*cont_metricsServerConn);
     std::string sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_pipeName + "_" + cont_taskName + "_arrival_table ("
-        "last_postprocessor_timestamps BIGINT, "
-        "departure_timestamps BIGINT, "
-        "arrival_timestamps BIGINT, "
-        "request_num BIGINT)";
-    
+                                                                                                      "last_postprocessor_timestamps BIGINT, "
+                                                                                                      "departure_timestamps BIGINT, "
+                                                                                                      "arrival_timestamps BIGINT, "
+                                                                                                      "request_num BIGINT)";
+
     res = session.exec(sql_statement.c_str());
 
     spdlog::info("{0:s} created arrival table and process table.", cont_name);
 
     // Create process table
     sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_pipeName + "_" + cont_taskName + "_process_table ("
-        "prep_arrival_timestamps BIGINT, "
-        "prep_process_timestamps BIGINT, "
-        "prep_batch_timestamps BIGINT, "
-        "infer_process_timestamps BIGINT, "
-        "post_process_timestamps BIGINT, "
-        "request_num BIGINT)";
+                                                                                          "prep_arrival_timestamps BIGINT, "
+                                                                                          "prep_process_timestamps BIGINT, "
+                                                                                          "prep_batch_timestamps BIGINT, "
+                                                                                          "infer_process_timestamps BIGINT, "
+                                                                                          "post_process_timestamps BIGINT, "
+                                                                                          "request_num BIGINT)";
 
     session.exec(sql_statement.c_str());
     session.commit();
-
 
 
     int own_port = containerConfigs.at("cont_port");
@@ -392,11 +395,11 @@ void ContainerAgent::collectRuntimeMetrics() {
                 // Report Arrival metrics
                 arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
                 pqxx::work session(*cont_metricsServerConn);
-                for (auto record : arrivalRecords) {
+                for (auto record: arrivalRecords) {
                     sql = "INSERT INTO " + table_prefix + "_arrival_table "
-                        "(last_postprocessor_timestamps, departure_timestamps, arrival_timestamps, request_num) "
-                        "VALUES (";
-                    sql += timePointToEpochString(std::get<0>(record)) + ", "; 
+                                                          "(last_postprocessor_timestamps, departure_timestamps, arrival_timestamps, request_num) "
+                                                          "VALUES (";
+                    sql += timePointToEpochString(std::get<0>(record)) + ", ";
                     sql += timePointToEpochString(std::get<1>(record)) + ", ";
                     sql += timePointToEpochString(std::get<2>(record)) + ", ";
                     sql += std::to_string(std::get<3>(record)) + ")";
@@ -404,11 +407,11 @@ void ContainerAgent::collectRuntimeMetrics() {
                 }
 
                 processRecords = cont_msvcsList[3]->getProcessRecords();
-                for (auto record : processRecords) {
+                for (auto record: processRecords) {
                     sql = "INSERT INTO " + table_prefix + "_process_table "
-                        "(prep_arrival_timestamps, prep_process_timestamps, prep_batch_timestamps, infer_process_timestamps, post_process_timestamps, request_num) "
-                        "VALUES (";
-                    sql += timePointToEpochString(std::get<0>(record)) + ", "; 
+                                                          "(prep_arrival_timestamps, prep_process_timestamps, prep_batch_timestamps, infer_process_timestamps, post_process_timestamps, request_num) "
+                                                          "VALUES (";
+                    sql += timePointToEpochString(std::get<0>(record)) + ", ";
                     sql += timePointToEpochString(std::get<1>(record)) + ", ";
                     sql += timePointToEpochString(std::get<2>(record)) + ", ";
                     sql += timePointToEpochString(std::get<3>(record)) + ", ";
@@ -461,32 +464,45 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
         new UpdateSenderRequestHandler(service, cq, msvcs);
         // TODO: Handle reconfiguration by restarting sender
         // pause processing except senders to clear out the queues
-
-        // adjust json for configuration
-//        json config = this->request;
-        // stop the old sender
-//        for (auto msvc : *msvcs) {
-//            if (msvc->downstream[0].name == request.name()) {
-//                msvc->stopThread();
-//                msvcs->erase(std::remove(msvcs->begin(), msvcs->end(), msvc), msvcs->end());
-//                break;
-//            }
-//        }
-        if (request.ip() == "localhost") {
-            // change postprocessing to keep the data on gpu
-
-            // start new GPU sender
+        for (auto msvc: *msvcs) {
+            if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
+                continue;
+            }
+            msvc->pauseThread();
+        }
+        json config;
+        std::vector<ThreadSafeFixSizedDoubleQueue *> inqueue;
+        for (auto msvc: *msvcs) {
+            if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
+                config = msvc->msvc_configs;
+                config["msvc_dnstreamMicroservices"][0]["nb_link"][0] = absl::StrFormat("%s:%d", request.ip(), request.port());
+                inqueue = msvc->GetInQueue();
+                msvc->stopThread();
+                msvcs->erase(std::remove(msvcs->begin(), msvcs->end(), msvc), msvcs->end());
+                break;
+            }
+        }
+//        if (request.ip() == "localhost") {
+//            // change postprocessing to keep the data on gpu
+//
+//            // start new GPU sender
 //            msvcs->push_back(new GPUSender(config));
-        } else {
+//        } else {
             // change postprocessing to offload data from gpu
 
             // start new serialized sender
-//            msvcs->push_back(new RemoteCPUSender(config));
-        }
+            msvcs->push_back(new RemoteCPUSender(config));
+//        }
         // align the data queue from postprocessor to new sender
-//        msvcs->back()->SetInQueue(msvcs[3]->GetOutQueue());
+        msvcs->back()->SetInQueue(inqueue);
         //start the new sender
-//        msvcs->back()->startThread();
+        msvcs->back()->dispatchThread();
+        for (auto msvc: *msvcs) {
+            if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
+                continue;
+            }
+            msvc->unpauseThread();
+        }
 
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
@@ -521,7 +537,7 @@ void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
  * @return false 
  */
 bool ContainerAgent::checkPause() {
-    for (auto msvc : cont_msvcsList) {
+    for (auto msvc: cont_msvcsList) {
         if (msvc->checkPause()) {
             return false;
         }
@@ -538,7 +554,7 @@ void ContainerAgent::waitPause() {
     while (true) {
         paused = true;
         spdlog::trace("{0:s} waiting for all microservices to be paused.", __func__);
-        for (auto msvc : cont_msvcsList) {
+        for (auto msvc: cont_msvcsList) {
             if (!msvc->checkPause()) {
                 paused = false;
                 break;
@@ -559,7 +575,7 @@ void ContainerAgent::waitPause() {
  * @return false 
  */
 bool ContainerAgent::checkReady() {
-    for (auto msvc : cont_msvcsList) {
+    for (auto msvc: cont_msvcsList) {
         if (!msvc->checkReady()) {
             return true;
         }
@@ -577,9 +593,9 @@ void ContainerAgent::waitReady() {
     bool ready = false;
     while (!ready) {
         ready = true;
-        
+
         spdlog::info("{0:s} waiting for all microservices to be ready.", __func__);
-        for (auto msvc : cont_msvcsList) {
+        for (auto msvc: cont_msvcsList) {
             if (!msvc->checkReady()) {
                 ready = false;
                 break;

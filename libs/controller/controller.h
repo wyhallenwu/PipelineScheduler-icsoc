@@ -92,16 +92,7 @@ public:
 
     void Stop() { running = false; };
 
-private:
-    float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
-
-    void UpdateLightMetrics();
-
-    void UpdateFullMetrics();
-
-    double LoadTimeEstimator(const char *model_path, double input_mem_size);
-    int InferTimeEstimator(ModelType model, int batch_size);
-
+    // TODO: remove temporary Code
     struct ContainerHandle;
     struct NodeHandle {
         std::string ip;
@@ -137,6 +128,20 @@ private:
         std::vector<ContainerHandle *> upstreams;
         std::vector<ContainerHandle *> downstreams;
     };
+
+    void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
+    ContainerHandle* GetContainer() {return &containers["test:yolov5"];}
+
+private:
+    float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
+
+    void UpdateLightMetrics();
+
+    void UpdateFullMetrics();
+
+    double LoadTimeEstimator(const char *model_path, double input_mem_size);
+    int InferTimeEstimator(ModelType model, int batch_size);
+
 
     class RequestHandler {
     public:
@@ -177,7 +182,8 @@ private:
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
                         std::string source = "", int replica = 1);
 
-    void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
+    // TODO: remove temporary comment
+    // void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
 

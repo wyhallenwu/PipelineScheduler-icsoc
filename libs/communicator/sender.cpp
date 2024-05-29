@@ -167,10 +167,6 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Empt
     GPR_ASSERT(ok);
     if (status.ok()) {
         if (got_tag == tag) {
-//            for (RequestData<LocalGPUReqDataType> el: *tagToGpuPointer[tag]) {
-//                el.data.release();
-//            }
-//            delete tagToGpuPointer[tag];
             tagToGpuPointer.erase(tag);
         } else {
             return "Complete but Wrong Tag Received";

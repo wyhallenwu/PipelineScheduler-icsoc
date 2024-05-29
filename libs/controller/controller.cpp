@@ -111,7 +111,7 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     auto models = getModelsByPipelineType(t.type);
 
     std::string tmp = t.name;
-    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {-1}}});
+    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {0}}});
     task->subtasks.insert({tmp, &containers[tmp]});
     task->subtasks[tmp]->recv_port = device->next_free_port++;
     device->containers.insert({tmp, task->subtasks[tmp]});
@@ -208,8 +208,12 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
         dwn->set_name(dwnstr->name);
         dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
-        dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
-                                (container.second->cuda_device == dwnstr->cuda_device));
+        if (dwnstr->model == Sink) {
+            dwn->set_gpu_connection(false);
+        } else {
+            dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
+                                    (container.second->cuda_device == dwnstr->cuda_device));
+        }
     }
     if (request.downstream_size() == 0) {
         Neighbor *dwn = request.add_downstream();
@@ -228,7 +232,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
         for (auto upstr: container.second->upstreams) {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
-            up->set_ip(absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
+            up->set_ip(absl::StrFormat("0.0.0.0:%d", upstr->recv_port));
             up->set_class_of_interest(-2);
             up->set_gpu_connection((container.second->device_agent == upstr->device_agent) &&
                                    (container.second->cuda_device == upstr->cuda_device));
@@ -386,6 +390,9 @@ std::map<ModelType, int> Controller::getInitialBatchSizes(
 
 std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
 Controller::getModelsByPipelineType(PipelineType type) {
+    // TODO: Remove test code
+    return {{ModelType::Yolov5, {{ModelType::Sink,   -1}}},
+            {ModelType::Sink,     {}}};
     switch (type) {
         case PipelineType::Traffic:
             return {{ModelType::Yolov5,       {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::Yolov5_Plate, 2}}},
