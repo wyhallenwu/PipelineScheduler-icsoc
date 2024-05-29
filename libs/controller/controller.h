@@ -92,7 +92,7 @@ public:
 
     void Stop() { running = false; };
 
-    // TODO: remove temporary Code
+private:
     struct ContainerHandle;
     struct NodeHandle {
         std::string ip;
@@ -129,10 +129,6 @@ public:
         std::vector<ContainerHandle *> downstreams;
     };
 
-    void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
-    ContainerHandle* GetContainer() {return &containers["test:yolov5"];}
-
-private:
     float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
 
     void UpdateLightMetrics();
@@ -182,8 +178,7 @@ private:
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
                         std::string source = "", int replica = 1);
 
-    // TODO: remove temporary comment
-    // void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
+    void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
 

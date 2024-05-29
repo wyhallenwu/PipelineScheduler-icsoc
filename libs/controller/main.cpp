@@ -26,14 +26,6 @@ int main() {
             task.type = PipelineType::Video_Call;
         } else if (command == "people") {
             task.type = PipelineType::Building_Security;
-        } else if (command == "edge") {
-            auto container = controller->GetContainer();
-            controller->MoveContainer(container, 0, true);
-            continue;
-        } else if (command == "server") {
-            auto container = controller->GetContainer();
-            controller->MoveContainer(container, 0, false);
-            continue;
         } else {
             std::cout << "Invalid command" << std::endl;
             continue;

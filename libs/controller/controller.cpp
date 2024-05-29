@@ -390,9 +390,6 @@ std::map<ModelType, int> Controller::getInitialBatchSizes(
 
 std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
 Controller::getModelsByPipelineType(PipelineType type) {
-    // TODO: Remove test code
-    return {{ModelType::Yolov5, {{ModelType::Sink,   -1}}},
-            {ModelType::Sink,     {}}};
     switch (type) {
         case PipelineType::Traffic:
             return {{ModelType::Yolov5,       {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::Yolov5_Plate, 2}}},
