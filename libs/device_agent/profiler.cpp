@@ -184,20 +184,20 @@ long Profiler::getMemoryUsageForPID(unsigned int pid) {
     return std::atol(value.c_str());
 }
 
-uint64_t Profiler::getGpuMemory(int device_count) {
-    uint64_t totalMemory = 0;
-    PyObject* pStats = PyObject_GetAttrString(pValue, "stats");
-    if (pStats && PyDict_Check(pStats)) {
-        PyObject* pRAM = PyDict_GetItemString(pStats, "RAM");
-        if (pRAM && PyDict_Check(pRAM)) {
-            PyObject* pRAMTotal = PyDict_GetItemString(pRAM, "total");
-            if (pRAMTotal && PyLong_Check(pRAMTotal)) {
-                totalMemory += PyLong_AsUnsignedLongLong(pRAMTotal);
-            }
-        }
-    }
-    return totalMemory;
-}
+//uint64_t Profiler::getGpuMemory(int device_count) {
+//    uint64_t totalMemory = 0;
+//    PyObject* pStats = PyObject_GetAttrString(pValue, "stats");
+//    if (pStats && PyDict_Check(pStats)) {
+//        PyObject* pRAM = PyDict_GetItemString(pStats, "RAM");
+//        if (pRAM && PyDict_Check(pRAM)) {
+//            PyObject* pRAMTotal = PyDict_GetItemString(pRAM, "total");
+//            if (pRAMTotal && PyLong_Check(pRAMTotal)) {
+//                totalMemory += PyLong_AsUnsignedLongLong(pRAMTotal);
+//            }
+//        }
+//    }
+//    return totalMemory;
+//}
 
 
 

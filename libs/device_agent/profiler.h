@@ -36,6 +36,8 @@ public:
 
     static int getGpuCount();
     std::vector<unsigned int> getGpuMemory(int processing_units);
+    //uint64_t getGpuMemory(int device_count);
+    long getMemoryUsageForPID(unsigned int pid);
     sysStats reportAtRuntime(unsigned int pid);
 
 private:

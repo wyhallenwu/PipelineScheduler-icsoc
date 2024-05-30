@@ -5,6 +5,32 @@ ABSL_FLAG(std::string, controllerUrl, "", "string that identifies the controller
 
 const unsigned long CONTAINER_BASE_PORT = 50001;
 
+std::string getHostIP() {
+    struct ifaddrs *ifAddrStruct = nullptr;
+    struct ifaddrs *ifa = nullptr;
+    void *tmpAddrPtr = nullptr;
+
+    getifaddrs(&ifAddrStruct);
+
+    for (ifa = ifAddrStruct; ifa != nullptr; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr) {
+            continue;
+        }
+        // check it is IP4
+        if (ifa->ifa_addr->sa_family == AF_INET) {
+            tmpAddrPtr = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+            char addressBuffer[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, tmpAddrPtr, addressBuffer, INET_ADDRSTRLEN);
+            if (std::strcmp(ifa->ifa_name, "lo") != 0) { // exclude loopback
+                freeifaddrs(ifAddrStruct);
+                return std::string(addressBuffer);
+            }
+        }
+    }
+    if (ifAddrStruct != nullptr) freeifaddrs(ifAddrStruct);
+    return "";
+}
+
 void msvcconfigs::to_json(json &j, const msvcconfigs::NeighborMicroserviceConfigs &val) {
     j["nb_name"] = val.name;
     j["nb_commMethod"] = val.commMethod;
@@ -51,7 +77,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     controller_sending_cq = new CompletionQueue();
 
     running = true;
-    profiler = new Profiler({});
+//    profiler = new Profiler({});
     containers = std::map<std::string, ContainerHandle>();
     threads = std::vector<std::thread>();
     threads.emplace_back(&DeviceAgent::HandleDeviceRecvRpcs, this);
@@ -61,7 +87,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
         thread.detach();
     }
 
-    Ready(name, controller_url, type);
+    Ready(name, getHostIP(), type);
 }
 
 bool DeviceAgent::CreateContainer(
@@ -339,29 +365,29 @@ void DeviceAgent::HandleControlRecvRpcs() {
 }
 
 void DeviceAgent::MonitorDeviceStatus() {
-    profiler->run();
+//    profiler->run();
     int i = 0;
     while (running) {
         if (i++ > 20) {
             i = 0;
-            ReportFullMetrics();
+//            ReportFullMetrics();
         } else {
             for (auto &container: containers) {
                 if (container.second.reportMetrics && container.second.pid != 0) {
-                    Profiler::sysStats stats = profiler->reportAtRuntime(container.second.pid);
-                    container.second.metrics.cpuUsage =
-                            (1 - 1 / i) * container.second.metrics.cpuUsage + (1 / i) * stats.cpuUtilization;
-                    container.second.metrics.memUsage =
-                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.processMemoryUsage;
-                    container.second.metrics.gpuUsage =
-                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuUtilization;
-                    container.second.metrics.gpuMemUsage =
-                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.processGpuMemoryUsage;
+//                    Profiler::sysStats stats = profiler->reportAtRuntime(container.second.pid);
+//                    container.second.metrics.cpuUsage =
+//                            (1 - 1 / i) * container.second.metrics.cpuUsage + (1 / i) * stats.cpuUtilization;
+//                    container.second.metrics.memUsage =
+//                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.processMemoryUsage;
+//                    container.second.metrics.gpuUsage =
+//                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.gpuUtilization;
+//                    container.second.metrics.gpuMemUsage =
+//                            (1 - 1 / i) * container.second.metrics.memUsage + (1 / i) * stats.processGpuMemoryUsage;
                 }
             }
-            ReportLightMetrics();
+//            ReportLightMetrics();
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     }
 }
 
@@ -380,29 +406,20 @@ void DeviceAgent::StateUpdateRequestHandler::Proceed() {
     }
 }
 
-// Function to execute a shell command and capture its output
-std::string exec(const char* cmd) {
+// Function to get the container PID of a process inside the container
+int getContainerProcessPid(std::string container_name_or_id) {
+    std::replace(container_name_or_id.begin(), container_name_or_id.end(), ':', '-');
+    std::string cmd = "docker inspect --format '{{.State.Pid}}' " + container_name_or_id;
     std::array<char, 128> buffer;
     std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
     if (!pipe) {
         throw std::runtime_error("popen() failed!");
     }
     while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
         result += buffer.data();
     }
-    return result;
-}
-
-// Function to get the container PID of a process inside the container
-int getContainerProcessPid(const std::string& container_name_or_id, const std::string& process_name) {
-    std::string cmd = "docker inspect --format '{{.State.Pid}}' " + container_name_or_id;
-    std::string container_pid = exec(cmd.c_str());
-
-    cmd = "nsenter --target " + container_pid + " --pid pgrep -f " + process_name;
-    std::string process_pid_str = exec(cmd.c_str());
-
-    return std::stoi(process_pid_str);
+    return std::stoi(result);
 }
 
 void DeviceAgent::ReportStartRequestHandler::Proceed() {
@@ -416,7 +433,7 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
         // Get the correct PID of the process running inside the container
         std::string container_name_or_id = request.msvc_name();
         std::string process_name = "your_process_name"; // Replace with the actual process name inside the container
-        int container_pid = getContainerProcessPid(container_name_or_id, process_name);
+        int container_pid = getContainerProcessPid(container_name_or_id);
 
         device_agent->containers[request.msvc_name()].pid = container_pid;
         device_agent->profiler->addPid(container_pid);

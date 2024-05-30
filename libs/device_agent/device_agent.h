@@ -9,6 +9,10 @@
 #include "controller.h"
 #include "indevicecommunication.grpc.pb.h"
 #include "controlcommunication.grpc.pb.h"
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <ifaddrs.h>
 
 using trt::TRTConfigs;
 
@@ -84,12 +88,11 @@ private:
         std::string command;
         std::string container_name = name;
         std::replace(container_name.begin(), container_name.end(), ':', '-');
-        command = "docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/app/data/  "
-                  "-v /ssd0/tung/PipePlusPlus/logs/:/app/logs/ -v /ssd0/tung/PipePlusPlus/models/:/app/models/ "
-                  "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
+        command = "docker run --network=host -u 0:0 --privileged "
+                  "-v /home/cdsn:/home/soulsaver -v /run/jtop.sock:/run/jtop.sock  -v /usr/bin/tegrastats:/usr/bin/tegrastats "
                   "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
-                R"(%s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs')",
+                R"(%s pipeline-scheduler-agx %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs')",
                 container_name, executable, name, start_string, device, port);
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));

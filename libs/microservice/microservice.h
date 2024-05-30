@@ -395,6 +395,7 @@ using msvcconfigs::MicroserviceType;
  * 
  */
 class Microservice {
+friend class ContainerAgent;
 public:
     // Constructor that loads a struct args
     explicit Microservice(const json &jsonConfigs);
@@ -412,6 +413,10 @@ public:
 
     void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue *> queue) {
         msvc_InQueue = std::move(queue);
+    };
+
+    std::vector<ThreadSafeFixSizedDoubleQueue *> GetInQueue() {
+        return msvc_InQueue;
     };
 
     std::vector<ThreadSafeFixSizedDoubleQueue *> GetOutQueue() {
@@ -521,6 +526,7 @@ protected:
     bool STOP_THREADS = false;
     bool READY = false;
 
+    json msvc_configs;
     /**
      * @brief Running mode of the container, globally set for all microservices inside the container
      * Default to be deployment.
