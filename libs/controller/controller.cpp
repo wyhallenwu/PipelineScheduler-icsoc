@@ -4,6 +4,9 @@ std::map<ModelType, std::vector<std::string>> MODEL_INFO = {
         {DataSource,        {":datasource",         "./Container_DataSource"}},
         {Sink,              {":basesink",           "./runSink"}},
         {Yolov5,            {":yolov5",             "./Container_Yolov5"}},
+        {Yolov5n320,        {":yolov5",             "./Container_Yolov5"}},
+        {Yolov5s,           {":yolov5",             "./Container_Yolov5"}},
+        {Yolov5m,           {":yolov5",             "./Container_Yolov5"}},
         {Yolov5Datasource,  {":yolov5datasource",   "./Container_Yolov5"}},
         {Retinaface,        {":retinaface",         "./Container_RetinaFace"}},
         {Yolov5_Plate,      {":platedetection",     "./Container_Yolov5-plate"}},
@@ -64,6 +67,39 @@ Controller::Controller() {
 
     running = true;
     devices = std::map<std::string, NodeHandle>();
+    // TODO: Remove Test Code
+    devices.insert({"server",
+                    {"server",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Server,
+                     4, std::vector<double>(4, 0.0),
+                     {8000, 8000, 8000, 8000},
+                     std::vector<double>(4, 0.0), 55001, {}}});
+    devices.insert({"edge1",
+                    {"edge1",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
+    devices.insert({"edge2",
+                    {"edge2",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
+    devices.insert({"edge3",
+                    {"edge3",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
 
@@ -103,6 +139,15 @@ void Controller::HandleRecvRpcs() {
     }
 }
 
+void Controller::Scheduling() {
+    // TODO: @Jinghang, @Quang, @Yuheng please out your scheduling loop inside of here
+    while (running) {
+        // use list of devices, tasks and containers to schedule depending on your algorithm
+        // put helper functions as a private member function of the controller and write them at the bottom of this file.
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
+    }
+}
+
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     tasks.insert({t.name, {t.slo, t.type, {}}});
@@ -117,11 +162,15 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     device->containers.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
 
-    auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
+    // TODO: @Jinghang, @Quang, @Yuheng get correct initial batch size, cuda devices, and number of replicas
+    // based on TaskDescription and System State if one of them does not apply to your algorithm just leave it at 1
+    // all of you should use different cuda devices at the server!
+    auto batch_sizes = std::map<ModelType, int>();
+    int cuda_device = 1;
+    int replicas = 1;
     for (const auto &m: models) {
         tmp = t.name;
-        // TODO: get correct initial cuda devices based on TaskDescription and System State
-        int cuda_device = 1;
+
         containers.insert(
                 {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {cuda_device},
                                                       -1, device->next_free_port++, {}, {}, {}, {}}});
@@ -141,8 +190,37 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     }
 
     for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
-        StartContainer(msvc, task->slo, t.source);
+        // StartContainer(msvc, task->slo, t.source, replicas);
+        FakeStartContainer(msvc, task->slo, replicas);
     }
+}
+
+void Controller::FakeContainer(ContainerHandle *cont, int slo) {
+    // @Jinghang, @Quang, @Yuheng this is a fake container that updates metrics every 1.2 seconds you can adjust the values etc. to have different scheduling results
+    while (true) {
+        cont->metrics.cpuUsage = (rand() % 100) / 100.0;
+        cont->metrics.memUsage = (rand() % 1500 + 500) / 1000.0;
+        cont->metrics.gpuUsage = (rand() % 100) / 100.0;
+        cont->metrics.gpuMemUsage = (rand() % 100) / 100.0;
+        cont->metrics.requestRate = (rand() % 70 + 30) / 100.0;
+        cont->queue_lengths = {};
+        for (int i = 0; i < 5; i++) {
+            cont->queue_lengths.Add((rand() % 10));
+        }
+
+        // @Jinghang, @Quang, @Yuheng change this logging to help you verify your algorithm probably add the batch size or something else
+        spdlog::info("Container {} is running on device {} and metrics are updated", cont->name, cont->device_agent->ip);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+    }
+}
+
+void Controller::FakeStartContainer(std::pair<std::string, ContainerHandle *> &cont, int slo, int replica) {
+    for (int i=0; i<replica; i++) {
+        std::cout << "Starting container: " << cont.first << std::endl;
+        std::thread t(&Controller::FakeContainer, this, cont.second, slo);
+        t.detach();
+    }
+
 }
 
 void Controller::UpdateLightMetrics() {
@@ -455,7 +533,14 @@ double Controller::LoadTimeEstimator(const char *model_path, double input_mem_si
     return out_result[0];
 }
 
-// returns the profiling results for inference time per frame in a full batch in nanoseconds
+
+/**
+ * @brief
+ *
+ * @param model to specify model
+ * @param batch_size for targeted batch size (binary)
+ * @return int for inference time per full batch in nanoseconds
+ */
 int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     std::map<int, int> time_per_frame;
     switch (model) {
@@ -467,6 +552,33 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
                               {16, 3220761},
                               {32, 4680154},
                               {64, 7773959}};
+            break;
+        case ModelType::Yolov5n320:
+            time_per_frame = {{1,  2649396},
+                              {2,  2157968},
+                              {4,  1897505},
+                              {8,  2076971},
+                              {16, 2716276},
+                              {32, 4172530},
+                              {64, 7252059}};
+            break;
+        case ModelType::Yolov5s:
+            time_per_frame = {{1,  4515118},
+                              {2,  3399807},
+                              {4,  3044100},
+                              {8,  3008503},
+                              {16, 3672566},
+                              {32, 5116321},
+                              {64, 8237824}};
+            break;
+        case ModelType::Yolov5m:
+            time_per_frame = {{1,  7263238},
+                              {2,  5905167},
+                              {4,  4446144},
+                              {8,  4449675},
+                              {16, 4991818},
+                              {32, 6543270},
+                              {64, 9579015}};
             break;
         case ModelType::Yolov5Datasource:
             time_per_frame = {{1,  3602348},

@@ -36,7 +36,10 @@ enum SystemDeviceType {
 enum ModelType {
     DataSource,
     Sink,
-    Yolov5,
+    Yolov5, // = Yolov5n
+    Yolov5n320,
+    Yolov5s,
+    Yolov5m,
     Yolov5Datasource,
     Arcface,
     Retinaface,
@@ -85,6 +88,8 @@ public:
     ~Controller();
 
     void HandleRecvRpcs();
+
+    void Scheduling();
 
     void AddTask(const TaskDescription::TaskStruct &task);
 
@@ -177,6 +182,9 @@ private:
 
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
                         std::string source = "", int replica = 1);
+
+    void FakeContainer(ContainerHandle* cont, int slo);
+    void FakeStartContainer(std::pair<std::string, ContainerHandle *> &cont, int slo, int replica = 1);
 
     void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
 
