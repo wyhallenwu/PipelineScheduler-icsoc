@@ -113,6 +113,7 @@ private:
     };
 
     struct TaskHandle {
+        int last_latency;
         int slo;
         PipelineType type;
         std::map<std::string, ContainerHandle *> subtasks;
@@ -132,6 +133,8 @@ private:
         google::protobuf::RepeatedField<int32_t> queue_lengths;
         std::vector<ContainerHandle *> upstreams;
         std::vector<ContainerHandle *> downstreams;
+        // TODO: remove test code
+        bool running;
     };
 
     float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
