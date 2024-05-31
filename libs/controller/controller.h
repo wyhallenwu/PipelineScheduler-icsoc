@@ -7,10 +7,17 @@
 #include <thread>
 #include "controlcommunication.grpc.pb.h"
 #include <LightGBM/c_api.h>
+<<<<<<< HEAD
 #include <vector>
 #include <unordered_map>
 #include <memory>
 #include <algorithm>
+=======
+#include <pqxx/pqxx>
+#include "absl/strings/str_format.h"
+#include "absl/flags/parse.h"
+#include "absl/flags/flag.h"
+>>>>>>> e8bb4cd2ec2053369afd31933adfe5a0011a2939
 
 using grpc::Status;
 using grpc::CompletionQueue;
@@ -36,7 +43,10 @@ enum SystemDeviceType {
 enum ModelType {
     DataSource,
     Sink,
-    Yolov5,
+    Yolov5, // = Yolov5n
+    Yolov5n320,
+    Yolov5s,
+    Yolov5m,
     Yolov5Datasource,
     Arcface,
     Retinaface,
@@ -86,6 +96,8 @@ public:
 
     void HandleRecvRpcs();
 
+    void Scheduling();
+
     void AddTask(const TaskDescription::TaskStruct &task);
 
     [[nodiscard]] bool isRunning() const { return running; };
@@ -93,13 +105,6 @@ public:
     void Stop() { running = false; };
 
 private:
-    void UpdateLightMetrics();
-
-    void UpdateFullMetrics();
-
-    double LoadTimeEstimator(const char *model_path, double input_mem_size);
-    int InferTimeEstimator(ModelType model, int batch_size);
-
     struct ContainerHandle;
     struct NodeHandle {
         std::string ip;
@@ -115,6 +120,7 @@ private:
     };
 
     struct TaskHandle {
+        int last_latency;
         int slo;
         PipelineType type;
         std::map<std::string, ContainerHandle *> subtasks;
@@ -134,8 +140,23 @@ private:
         google::protobuf::RepeatedField<int32_t> queue_lengths;
         std::vector<ContainerHandle *> upstreams;
         std::vector<ContainerHandle *> downstreams;
+<<<<<<< HEAD
         std::unordered_map<std::string, std::pair<int, int>> workerProfile;
+=======
+        // TODO: remove test code
+        bool running;
+>>>>>>> e8bb4cd2ec2053369afd31933adfe5a0011a2939
     };
+
+    float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
+
+    void UpdateLightMetrics();
+
+    void UpdateFullMetrics();
+
+    double LoadTimeEstimator(const char *model_path, double input_mem_size);
+    int InferTimeEstimator(ModelType model, int batch_size);
+
 
     class RequestHandler {
     public:
@@ -176,6 +197,9 @@ private:
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
                         std::string source = "", int replica = 1);
 
+    void FakeContainer(ContainerHandle* cont, int slo);
+    void FakeStartContainer(std::pair<std::string, ContainerHandle *> &cont, int slo, int replica = 1);
+
     void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
@@ -207,6 +231,9 @@ private:
     ControlCommunication::AsyncService service;
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<ServerCompletionQueue> cq;
+
+    std::unique_ptr<pqxx::connection> ctl_metricsServerConn = nullptr;
+    MetricsServerConfigs ctl_metricsServerConfigs;
 };
 
 // ========================================================== added ================================================================

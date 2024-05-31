@@ -4,6 +4,9 @@ std::map<ModelType, std::vector<std::string>> MODEL_INFO = {
         {DataSource,        {":datasource",         "./Container_DataSource"}},
         {Sink,              {":basesink",           "./runSink"}},
         {Yolov5,            {":yolov5",             "./Container_Yolov5"}},
+        {Yolov5n320,        {":yolov5",             "./Container_Yolov5"}},
+        {Yolov5s,           {":yolov5",             "./Container_Yolov5"}},
+        {Yolov5m,           {":yolov5",             "./Container_Yolov5"}},
         {Yolov5Datasource,  {":yolov5datasource",   "./Container_Yolov5"}},
         {Retinaface,        {":retinaface",         "./Container_RetinaFace"}},
         {Yolov5_Plate,      {":platedetection",     "./Container_Yolov5-plate"}},
@@ -31,11 +34,76 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
     j.at("device").get_to(val.device);
 }
 
+/**
+ * @brief Query the request rate in a given time period (1 minute, 2 minutes...)
+ * 
+ * @param name 
+ * @param time_period 
+ * @return uint64_t 
+ */
+float Controller::queryRequestRateInPeriod(const std::string &name, const uint32_t &period) {
+    std::string query = absl::StrFormat("SELECT COUNT (*) FROM %s WHERE to_timestamp(arrival_timestamps / 1000000.0) >= NOW() - INTERVAL '", name);
+    query += std::to_string(period) + " seconds';";
+
+    pqxx::nontransaction session(*ctl_metricsServerConn);
+    pqxx::result res = session.exec(query);
+
+    int count = 0;
+    for (const auto& row : res) {
+        count = row[0].as<int>();
+    }
+
+    return (float) count / period;
+}
+
 Controller::Controller() {
+    json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
+    ctl_metricsServerConfigs.from_json(metricsCfgs);
+    ctl_metricsServerConfigs.user = "controller";
+    ctl_metricsServerConfigs.password = "agent";
+
+    ctl_metricsServerConn = connectToMetricsServer(ctl_metricsServerConfigs, "controller");
+
+
     running = true;
     devices = std::map<std::string, NodeHandle>();
+    // TODO: Remove Test Code
+    devices.insert({"server",
+                    {"server",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Server,
+                     4, std::vector<double>(4, 0.0),
+                     {8000, 8000, 8000, 8000},
+                     std::vector<double>(4, 0.0), 55001, {}}});
+    devices.insert({"edge1",
+                    {"edge1",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
+    devices.insert({"edge2",
+                    {"edge2",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
+    devices.insert({"edge3",
+                    {"edge3",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
+
+
 
     std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60001);
     ServerBuilder builder;
@@ -71,6 +139,15 @@ void Controller::HandleRecvRpcs() {
     }
 }
 
+void Controller::Scheduling() {
+    // TODO: @Jinghang, @Quang, @Yuheng please out your scheduling loop inside of here
+    while (running) {
+        // use list of devices, tasks and containers to schedule depending on your algorithm
+        // put helper functions as a private member function of the controller and write them at the bottom of this file.
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
+    }
+}
+
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     tasks.insert({t.name, {t.slo, t.type, {}}});
@@ -79,17 +156,21 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     auto models = getModelsByPipelineType(t.type);
 
     std::string tmp = t.name;
-    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {-1}}});
+    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {0}}});
     task->subtasks.insert({tmp, &containers[tmp]});
     task->subtasks[tmp]->recv_port = device->next_free_port++;
     device->containers.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
 
-    auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
+    // TODO: @Jinghang, @Quang, @Yuheng get correct initial batch size, cuda devices, and number of replicas
+    // based on TaskDescription and System State if one of them does not apply to your algorithm just leave it at 1
+    // all of you should use different cuda devices at the server!
+    auto batch_sizes = std::map<ModelType, int>();
+    int cuda_device = 1;
+    int replicas = 1;
     for (const auto &m: models) {
         tmp = t.name;
-        // TODO: get correct initial cuda devices based on TaskDescription and System State
-        int cuda_device = 1;
+
         containers.insert(
                 {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {cuda_device},
                                                       -1, device->next_free_port++, {}, {}, {}, {}}});
@@ -113,8 +194,41 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     performPlacement(taskPtr);
 
     for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
-        StartContainer(msvc, task->slo, t.source);
+        // StartContainer(msvc, task->slo, t.source, replicas);
+        FakeStartContainer(msvc, task->slo, replicas);
     }
+}
+
+void Controller::FakeContainer(ContainerHandle *cont, int slo) {
+    // @Jinghang, @Quang, @Yuheng this is a fake container that updates metrics every 1.2 seconds you can adjust the values etc. to have different scheduling results
+    while (cont->running) {
+        cont->metrics.cpuUsage = (rand() % 100) / 100.0;
+        cont->metrics.memUsage = (rand() % 1500 + 500) / 1000.0;
+        cont->metrics.gpuUsage = (rand() % 100) / 100.0;
+        cont->metrics.gpuMemUsage = (rand() % 100) / 100.0;
+        cont->metrics.requestRate = (rand() % 70 + 30) / 100.0;
+        cont->queue_lengths = {};
+        for (int i = 0; i < 5; i++) {
+            cont->queue_lengths.Add((rand() % 10));
+        }
+        cont->task->last_latency = (cont->task->last_latency + slo * 0.8 + (rand() % (int) (slo * 0.4))) / 2;
+        cont->device_agent->processors_utilization[cont->cuda_device[0]] += (rand() % 100) / 100.0;
+        cont->device_agent->processors_utilization[cont->cuda_device[0]] /= 2;
+
+        // @Jinghang, @Quang, @Yuheng change this logging to help you verify your algorithm probably add the batch size or something else
+        spdlog::info("Container {} is running on device {} and metrics are updated", cont->name, cont->device_agent->ip);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+    }
+}
+
+void Controller::FakeStartContainer(std::pair<std::string, ContainerHandle *> &cont, int slo, int replica) {
+    cont.second->running = true;
+    for (int i=0; i<replica; i++) {
+        std::cout << "Starting container: " << cont.first << std::endl;
+        std::thread t(&Controller::FakeContainer, this, cont.second, slo);
+        t.detach();
+    }
+
 }
 
 void Controller::UpdateLightMetrics() {
@@ -180,8 +294,12 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
         dwn->set_name(dwnstr->name);
         dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
-        dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
-                                (container.second->cuda_device == dwnstr->cuda_device));
+        if (dwnstr->model == Sink) {
+            dwn->set_gpu_connection(false);
+        } else {
+            dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
+                                    (container.second->cuda_device == dwnstr->cuda_device));
+        }
     }
     if (request.downstream_size() == 0) {
         Neighbor *dwn = request.add_downstream();
@@ -200,7 +318,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
         for (auto upstr: container.second->upstreams) {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
-            up->set_ip(absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
+            up->set_ip(absl::StrFormat("0.0.0.0:%d", upstr->recv_port));
             up->set_class_of_interest(-2);
             up->set_gpu_connection((container.second->device_agent == upstr->device_agent) &&
                                    (container.second->cuda_device == upstr->cuda_device));
@@ -232,11 +350,12 @@ void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_e
     device->containers.insert({msvc->name, msvc});
     msvc->cuda_device[replica -1] = cuda_device;
     std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
-    StartContainer(pair, msvc->task->slo, "");
+    // removed for test environ
+/*    StartContainer(pair, msvc->task->slo, "");
     for (auto upstr: msvc->upstreams) {
         AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
     }
-    StopContainer(msvc->name, old_device);
+    StopContainer(msvc->name, old_device);*/
     old_device->containers.erase(msvc->name);
 }
 
@@ -267,13 +386,13 @@ void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs) 
     Status status;
     request.set_name(msvc->name);
     request.set_value(new_bs);
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    /*std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    GPR_ASSERT(ok);*/
 }
 
 void Controller::StopContainer(std::string name, NodeHandle *device, bool forced) {
@@ -283,13 +402,14 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     Status status;
     request.set_name(name);
     request.set_forced(forced);
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    containers[name].running = false;
+    /*std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(device->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    GPR_ASSERT(ok);*/
 }
 
 void Controller::optimizeBatchSizeStep(
@@ -423,7 +543,14 @@ double Controller::LoadTimeEstimator(const char *model_path, double input_mem_si
     return out_result[0];
 }
 
-// returns the profiling results for inference time per frame in a full batch in nanoseconds
+
+/**
+ * @brief
+ *
+ * @param model to specify model
+ * @param batch_size for targeted batch size (binary)
+ * @return int for inference time per full batch in nanoseconds
+ */
 int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     std::map<int, int> time_per_frame;
     switch (model) {
@@ -435,6 +562,33 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
                               {16, 3220761},
                               {32, 4680154},
                               {64, 7773959}};
+            break;
+        case ModelType::Yolov5n320:
+            time_per_frame = {{1,  2649396},
+                              {2,  2157968},
+                              {4,  1897505},
+                              {8,  2076971},
+                              {16, 2716276},
+                              {32, 4172530},
+                              {64, 7252059}};
+            break;
+        case ModelType::Yolov5s:
+            time_per_frame = {{1,  4515118},
+                              {2,  3399807},
+                              {4,  3044100},
+                              {8,  3008503},
+                              {16, 3672566},
+                              {32, 5116321},
+                              {64, 8237824}};
+            break;
+        case ModelType::Yolov5m:
+            time_per_frame = {{1,  7263238},
+                              {2,  5905167},
+                              {4,  4446144},
+                              {8,  4449675},
+                              {16, 4991818},
+                              {32, 6543270},
+                              {64, 9579015}};
             break;
         case ModelType::Yolov5Datasource:
             time_per_frame = {{1,  3602348},

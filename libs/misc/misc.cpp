@@ -125,3 +125,25 @@ uint64_t getTimestamp() {
     return std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 }
 
+
+std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &metricsServerConfigs, const std::string &name) {
+    try {
+        std::string conn_statement = absl::StrFormat(
+            "host=%s port=%d user=%s password=%s dbname=%s",
+            metricsServerConfigs.ip, metricsServerConfigs.port,
+            metricsServerConfigs.user, metricsServerConfigs.password, metricsServerConfigs.DBName
+        );
+        std::unique_ptr<pqxx::connection> metricsServerConn = std::make_unique<pqxx::connection>(conn_statement);
+
+        if (metricsServerConn->is_open()) {
+            spdlog::info("{0:s} connected to database successfully: {1:s}", name, metricsServerConn->dbname());
+        } else {
+            spdlog::error("Metrics Server is not open.");
+        }
+
+        return metricsServerConn;
+    } catch (const std::exception &e) {
+        std::cerr << e.what() << std::endl;
+    }
+}
+

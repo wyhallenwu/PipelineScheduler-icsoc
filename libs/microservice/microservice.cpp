@@ -110,6 +110,7 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
  */
 Microservice::Microservice(const json &jsonConfigs) {
     Microservice::loadConfigs(jsonConfigs, true);
+    msvc_configs = jsonConfigs;
 }
 
 /**
