@@ -15,8 +15,7 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing)
     link = jsonConfigs.at("msvc_upstreamMicroservices")[0].at("nb_link")[0];
     source = cv::VideoCapture(link);
     wait_time_ms = 1000 / jsonConfigs.at("msvc_idealBatchSize").get<int>();
-    frame_count = (jsonConfigs.at("msvc_idealBatchSize").get<int>() == 30) ? 1 :
-            30 / (30 - jsonConfigs.at("msvc_idealBatchSize").get<int>());
+    frame_count = (jsonConfigs.at("msvc_idealBatchSize").get<int>() == 30) ? 1 : 30 / (30 - jsonConfigs.at("msvc_idealBatchSize").get<int>());
     link = link.substr(link.find_last_of('/') + 1);
 
     // init resolution for image
@@ -42,16 +41,14 @@ void DataReader::Process()
             std::cout << "No more frames to read" << std::endl;
             return;
         }
-        if (frame_count > 1 && i++ >= frame_count) {
+        if (frame_count > 1 && i++ >= frame_count)
+        {
             i = 1;
-        } else {
-            // ============================= added ==============================
-            // resize the image
-            cv::Mat resized_frame;
-            cv::resize(frame, resized_frame, cv::Size(width, height));
-            Request<LocalCPUReqDataType>
-                req = {{{time}}, {msvc_svcLevelObjLatency}, {"[" + link + "_" + std::to_string((int)source.get(cv::CAP_PROP_POS_FRAMES)) + "]"}, 1, {RequestData<LocalCPUReqDataType>{{resized_frame.dims, resized_frame.rows, resized_frame.cols},
-                                                                                  resized_frame}}};
+        }
+        else
+        {
+            // two `time`s is not necessary, but it follows the format set for the downstreams.
+            Request<LocalCPUReqDataType> req = {{{time, time}}, {msvc_svcLevelObjLatency}, {"[" + link + "_" + std::to_string((int)source.get(cv::CAP_PROP_POS_FRAMES)) + "]"}, 1, {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols}, frame}}};
             msvc_OutQueue[0]->emplace(req);
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));

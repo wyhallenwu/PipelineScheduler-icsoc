@@ -4,6 +4,9 @@ std::map<ModelType, std::vector<std::string>> MODEL_INFO = {
     {DataSource, {":datasource", "./Container_DataSource"}},
     {Sink, {":basesink", "./runSink"}},
     {Yolov5, {":yolov5", "./Container_Yolov5"}},
+    {Yolov5n320, {":yolov5", "./Container_Yolov5"}},
+    {Yolov5s, {":yolov5", "./Container_Yolov5"}},
+    {Yolov5m, {":yolov5", "./Container_Yolov5"}},
     {Yolov5Datasource, {":yolov5datasource", "./Container_Yolov5"}},
     {Retinaface, {":retinaface", "./Container_RetinaFace"}},
     {Yolov5_Plate, {":platedetection", "./Container_Yolov5-plate"}},
@@ -14,6 +17,20 @@ std::map<ModelType, std::vector<std::string>> MODEL_INFO = {
     {Gender, {":gender", "./Container_Gender"}},
     {CarBrand, {":carbrand", "./Container_CarBrand"}},
 };
+
+// =========================== added hardcode value ==================================
+std::unordered_map<ModelType, std::tuple<std::string, float, int, int>> hardcode_acc = {
+    {Yolov5, std::make_tuple("yolov5n", 0.3, 640, 640)},
+    {Yolov5s, std::make_tuple("yolov5s", 0.4, 640, 640)},
+    {Yolov5m, std::make_tuple("yolov5m", 0.5, 640, 640)},
+    {Yolov5n320, std::make_tuple("yolov5n320", 0.2, 320, 320)}};
+
+std::unordered_map<std::string, ModelType> model_mapping = {
+    {"yolov5n", Yolov5},
+    {"yolov5n320", Yolov5n320},
+    {"yolov5m", Yolov5m},
+    {"yolov5s", Yolov5s}};
+// ===================================================================================
 
 void TaskDescription::to_json(nlohmann::json &j,
                               const TaskDescription::TaskStruct &val)
@@ -35,10 +52,86 @@ void TaskDescription::from_json(const nlohmann::json &j,
     j.at("device").get_to(val.device);
 }
 
+/**
+ * @brief Query the request rate in a given time period (1 minute, 2 minutes...)
+ *
+ * @param name
+ * @param time_period
+ * @return uint64_t
+ */
+float Controller::queryRequestRateInPeriod(const std::string &name, const uint32_t &period)
+{
+    std::string query = absl::StrFormat("SELECT COUNT (*) FROM %s WHERE to_timestamp(arrival_timestamps / 1000000.0) >= NOW() - INTERVAL '", name);
+    query += std::to_string(period) + " seconds';";
+
+    pqxx::nontransaction session(*ctl_metricsServerConn);
+    pqxx::result res = session.exec(query);
+
+    int count = 0;
+    for (const auto &row : res)
+    {
+        count = row[0].as<int>();
+    }
+
+    return (float)count / period;
+}
+
 Controller::Controller()
 {
+    json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
+    ctl_metricsServerConfigs.from_json(metricsCfgs);
+    ctl_metricsServerConfigs.user = "controller";
+    ctl_metricsServerConfigs.password = "agent";
+
+    ctl_metricsServerConn = connectToMetricsServer(ctl_metricsServerConfigs, "controller");
+
     running = true;
     devices = std::map<std::string, NodeHandle>();
+    // TODO: Remove Test Code
+    devices.insert({"server",
+                    {"server",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Server,
+                     4,
+                     std::vector<double>(4, 0.0),
+                     {8000, 8000, 8000, 8000},
+                     std::vector<double>(4, 0.0),
+                     55001,
+                     {}}});
+    devices.insert({"edge1",
+                    {"edge1",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1,
+                     std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0),
+                     55001,
+                     {}}});
+    devices.insert({"edge2",
+                    {"edge2",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1,
+                     std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0),
+                     55001,
+                     {}}});
+    devices.insert({"edge3",
+                    {"edge3",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1,
+                     std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0),
+                     55001,
+                     {}}});
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
 
@@ -89,24 +182,80 @@ void Controller::HandleRecvRpcs()
     }
 }
 
-/**
- * @brief helper function for spliting the string
- *
- * @param str
- * @param delimiter
- * @return std::vector<std::string>
- */
-std::vector<std::string> split_string(const std::string &str, char delimiter)
+void Controller::Scheduling()
 {
-    std::vector<std::string> tokens;
-    std::stringstream ss(str);
-    std::string token;
-    while (std::getline(ss, token, delimiter))
+    // TODO: @Jinghang, @Quang, @Yuheng please out your scheduling loop inside of here
+    while (running)
     {
-        tokens.push_back(std::move(token));
-    }
+        // use list of devices, tasks and containers to schedule depending on your algorithm
+        // put helper functions as a private member function of the controller and write them at the bottom of this file.
+        std::this_thread::sleep_for(std::chrono::milliseconds(3000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
 
-    return tokens;
+        auto mappings = mapClient(this->clients_profiles, this->models_profiles);
+
+        // adjust the upstream of first container in the pipeline
+
+        // find the new downstream of data_source
+        for (auto &mapping : mappings)
+        {
+
+            auto model_info = std::get<0>(mapping);
+            auto selected_clients = std::get<1>(mapping);
+            int batch_size = std::get<2>(mapping);
+
+            // std::cout << "[mapping] model: " << std::get<0>(model_info) << ", batch size: " << batch_size << std::endl;
+
+            // match model with corresponding ContainerHandle
+            Controller::ContainerHandle *p;
+            for (auto &first_container : first_containers)
+            {
+                std::cout << "[test] container name: " << first_container->model << ", model: " << model_mapping[std::get<0>(model_info)] << std::endl;
+                if (first_container->model == model_mapping[std::get<0>(model_info)])
+                {
+                    p = first_container;
+                    break;
+                }
+            }
+            std::cout << "very first container: " << p->name << std::endl;
+            // clear the upstream of this p, later adding new upstreams
+            p->upstreams.clear();
+
+            // adjust downstream
+            // FIXME: client ip and device agent ip
+            for (auto &client : selected_clients)
+            {
+                // match with corresponding ContainerHandle
+
+                Controller::ContainerHandle *ds;
+                for (auto &data_source : data_sources)
+                {
+                    std::cout << "[test] data source: " << data_source->name << ", client name: " << client.ip << std::endl;
+                    if (data_source->name == client.ip)
+                    {
+                        ds = data_source;
+                        auto [width, height] = client.image_shape;
+                        std::cout << "client width: " << width << " height: " << height << std::endl;
+                        break;
+                    }
+                }
+
+                // // adjust the upstream and downstream
+                // std::cout << "test position 1" << std::endl;
+                // // FIXME: cause AdjustUpstream this function
+                // AdjustUpstream(p->recv_port, ds, p->device_agent, p->name);
+                // std::cout << "test position 2" << std::endl;
+                // AdjustBatchSize(p, batch_size);
+                // std::cout << "test position 3" << std::endl;
+                // match the model with its profiling
+                int width = models_profiles.infos[model_info][0].width;
+                int height = models_profiles.infos[model_info][0].height;
+
+                std::cout << "new width: " << width << " height: " << height << std::endl;
+                // FIXME: rpc call for adjust client image size, commented for testing
+                // AdjustImageSize(ds, width, height);
+            }
+        }
+    }
 }
 
 void Controller::AddTask(const TaskDescription::TaskStruct &t)
@@ -118,40 +267,24 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
     auto models = getModelsByPipelineType(t.type);
 
     std::string tmp = t.name;
-    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {-1}}});
-
-    // ================== added ===============
-
-    std::string client_ip = device->ip;
-
-    // ========================================
+    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {0}}});
     task->subtasks.insert({tmp, &containers[tmp]});
     task->subtasks[tmp]->recv_port = device->next_free_port++;
     device->containers.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
 
-    auto batch_sizes =
-        getInitialBatchSizes(models, t.slo, 10);
+    // TODO: @Jinghang, @Quang, @Yuheng get correct initial batch size, cuda devices, and number of replicas
+    // based on TaskDescription and System State if one of them does not apply to your algorithm just leave it at 1
+    // all of you should use different cuda devices at the server!
+    auto batch_sizes = std::map<ModelType, int>();
+    int cuda_device = 1;
+    int replicas = 1;
     for (const auto &m : models)
     {
         tmp = t.name;
-        // TODO: get correct initial cuda devices based on
-        // TaskDescription and System State
-        int cuda_device = 1;
-        containers.insert({tmp.append(MODEL_INFO[m.first][0]),
-                           {tmp,
-                            m.first,
-                            device,
-                            task,
-                            batch_sizes[m.first],
-                            1,
-                            {cuda_device},
-                            -1,
-                            device->next_free_port++,
-                            {},
-                            {},
-                            {},
-                            {}}});
+
+        containers.insert(
+            {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, 1, 1, {cuda_device}, -1, device->next_free_port++, {}, {}, {}, {}}});
         task->subtasks.insert({tmp, &containers[tmp]});
         device->containers.insert({tmp, task->subtasks[tmp]});
     }
@@ -165,23 +298,45 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
 
     // required to config (model_size, width, height, batch_size) in the t.name
     // for convenience eg. yolov5n_320_640_32_.
-    std::vector<std::string> model_info = split_string(t.name, '_');
-    std::string model_name = model_info[0];
-    int width = std::stoi(model_info[1]);
-    int height = std::stoi(model_info[2]);
-    int batch_size = std::stoi(model_info[3]);
 
+    // std::vector<std::string> model_info = split_string(t.name, '_');
+    // std::string model_name = model_info[0];
+    // int width = std::stoi(model_info[1]);
+    // int height = std::stoi(model_info[2]);
+    // int batch_size = std::stoi(model_info[3]);
+
+    // TODO: (yuheng) update after stable
+    std::string ds_name = t.name + ":datasource";
+    ModelType mt = models[0].first;
+    int width = std::get<2>(hardcode_acc[mt]);
+    int height = std::get<3>(hardcode_acc[mt]);
     // get the req of the first model(yolov5) of the pipeline
     clients_profiles.add(
-        client_ip, width, height, t.slo,
+        ds_name, width, height, float(t.slo) * float(1e-6), // convert ns to ms
         task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->metrics.requestRate);
 
-    auto available_model_configs =
-        ModelProfiles::hardcode_mapping(model_name, width, height);
+    // // testing
+    // for (auto &client : clients_profiles.infos)
+    // {
+    //     std::cout << "[test] client info: " << client.budget << std::endl;
+    // }
+
+    auto available_model_configs = get_available_models(mt);
     for (auto &config : available_model_configs)
     {
         models_profiles.add(config);
     }
+
+    // // testing
+    // for (auto &model : models_profiles.infos)
+    // {
+    //     std::cout << "[test] model info: " << std::get<0>(model.first) << ", accuracy: " << std::get<1>(model.first) << std::endl;
+    //     for (auto &info : model.second)
+    //     {
+    //         std::cout << "batch_size: " << info.batch_size << ", throughput: " << info.throughput << ", latency: " << info.inferent_latency << std::endl;
+    //     }
+    // }
+
     // record the data source and first container of each pipeline for further
     // update the upstream when switching mapping
     data_sources.push_back(task->subtasks[t.name + ":datasource"]);
@@ -204,86 +359,49 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
 
     for (std::pair<std::string, ContainerHandle *> msvc : task->subtasks)
     {
-        StartContainer(msvc, task->slo, t.source);
+        // StartContainer(msvc, task->slo, t.source, replicas);
+        FakeStartContainer(msvc, task->slo, replicas);
     }
 }
 
-// ========================== added ================================
-
-/**
- * @brief update client-dnn mapping every 0.5s, and adjust the upstream of each
- * model, set the input size of clients. Run this function in another thread.
- *
- */
-void Controller::update_and_adjust(int mills)
+void Controller::FakeContainer(ContainerHandle *cont, int slo)
 {
-    std::chrono::milliseconds interval(mills);
-    while (true)
+    // @Jinghang, @Quang, @Yuheng this is a fake container that updates metrics every 1.2 seconds you can adjust the values etc. to have different scheduling results
+    while (cont->running)
     {
-        auto start = std::chrono::system_clock::now();
-        auto mappings = mapClient(this->clients_profiles, this->models_profiles);
-
-        // adjust the upstream of first container in the pipeline
-
-        // find the new downstream of data_source
-        for (auto &mapping : mappings)
+        // std::cout << "[test] fake container b: " << slo << std::endl;
+        cont->metrics.cpuUsage = 0.1;
+        cont->metrics.memUsage = 20;
+        cont->metrics.gpuUsage = 1;
+        cont->metrics.gpuMemUsage = 1;
+        cont->metrics.requestRate = 30;
+        cont->queue_lengths = {};
+        for (int i = 0; i < 5; i++)
         {
-
-            auto model_info = std::get<0>(mapping);
-            auto selected_clients = std::get<1>(mapping);
-            int batch_size = std::get<2>(mapping);
-
-            std::cout << "[mapping] model: " << std::get<0>(model_info) << ", batch size: " << batch_size << std::endl;
-
-            // match model with corresponding ContainerHandle
-            Controller::ContainerHandle *p;
-            for (auto &first_container : first_containers)
-            {
-                if (first_container->name == std::get<0>(model_info))
-                {
-                    p = first_container;
-                    break;
-                }
-            }
-            std::cout << "very first container: " << p->name << std::endl;
-            // clear the upstream of this p, later adding new upstreams
-            p->upstreams.clear();
-
-            // adjust downstream
-            for (auto &client : selected_clients)
-            {
-                // match with corresponding ContainerHandle
-
-                Controller::ContainerHandle *ds;
-                for (auto &data_source : data_sources)
-                {
-                    if (data_source->device_agent->ip == client.ip)
-                    {
-                        ds = data_source;
-                        auto [width, height] = client.image_shape;
-                        std::cout << "client width: " << width << " height: " << height << std::endl;
-                        break;
-                    }
-                }
-
-                // adjust the upstream and downstream
-                AdjustUpstream(p->recv_port, ds, p->device_agent, p->name);
-                AdjustBatchSize(p, batch_size);
-
-                // match the model with its profiling
-                int width = models_profiles.infos[model_info][0].width;
-                int height = models_profiles.infos[model_info][0].height;
-
-                std::cout << "new width: " << width << " height: " << height << std::endl;
-                AdjustImageSize(ds, width, height);
-            }
+            cont->queue_lengths.Add((rand() % 10));
         }
+        // cont->task->last_latency = (cont->task->last_latency + slo * 0.8 + (rand() % (int)(slo * 0.4))) / 2;
+        // cont->device_agent->processors_utilization[cont->cuda_device[0]] += (rand() % 100) / 100.0;
+        // cont->device_agent->processors_utilization[cont->cuda_device[0]] /= 2;
 
-        std::this_thread::sleep_until(start + interval);
+        // std::cout << "[test] fake container: " << cont->device_agent->processors_utilization[cont->cuda_device[0]] << std::endl;
+
+        // @Jinghang, @Quang, @Yuheng change this logging to help you verify your algorithm probably add the batch size or something else
+        spdlog::info("Container {} is running on device {} and metrics are updated", cont->name, cont->device_agent->ip);
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 }
 
-// =================================================================
+void Controller::FakeStartContainer(std::pair<std::string, ContainerHandle *> &cont, int slo, int replica)
+{
+    cont.second->running = true;
+    for (int i = 0; i < replica; i++)
+    {
+        std::cout << "Starting container: " << cont.first << std::endl;
+        std::thread t(&Controller::FakeContainer, this, cont.second, slo);
+        t.detach();
+    }
+}
 
 void Controller::UpdateLightMetrics()
 {
@@ -368,9 +486,15 @@ void Controller::StartContainer(
         dwn->set_ip(
             absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
-        dwn->set_gpu_connection(
-            (container.second->device_agent == dwnstr->device_agent) &&
-            (container.second->cuda_device == dwnstr->cuda_device));
+        if (dwnstr->model == Sink)
+        {
+            dwn->set_gpu_connection(false);
+        }
+        else
+        {
+            dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
+                                    (container.second->cuda_device == dwnstr->cuda_device));
+        }
     }
     if (request.downstream_size() == 0)
     {
@@ -394,8 +518,7 @@ void Controller::StartContainer(
         {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
-            up->set_ip(
-                absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
+            up->set_ip(absl::StrFormat("0.0.0.0:%d", upstr->recv_port));
             up->set_class_of_interest(-2);
             up->set_gpu_connection(
                 (container.second->device_agent == upstr->device_agent) &&
@@ -435,12 +558,12 @@ void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device,
     device->containers.insert({msvc->name, msvc});
     msvc->cuda_device[replica - 1] = cuda_device;
     std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
-    StartContainer(pair, msvc->task->slo, "");
-    for (auto upstr : msvc->upstreams)
-    {
-        AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
-    }
-    StopContainer(msvc->name, old_device);
+    // removed for test environ
+    /*    StartContainer(pair, msvc->task->slo, "");
+        for (auto upstr: msvc->upstreams) {
+            AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
+        }
+        StopContainer(msvc->name, old_device);*/
     old_device->containers.erase(msvc->name);
 }
 
@@ -485,14 +608,13 @@ void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc,
     Status status;
     request.set_name(msvc->name);
     request.set_value(new_bs);
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-        msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request,
-                                                       msvc->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *)1);
+    /*std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
+    rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    GPR_ASSERT(ok);*/
 }
 
 void Controller::StopContainer(std::string name, NodeHandle *device,
@@ -504,14 +626,14 @@ void Controller::StopContainer(std::string name, NodeHandle *device,
     Status status;
     request.set_name(name);
     request.set_forced(forced);
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-        device->stub->AsyncStopContainer(&context, request,
-                                         containers[name].device_agent->cq));
-    rpc->Finish(&reply, &status, (void *)1);
+    containers[name].running = false;
+    /*std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
+    rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(device->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    GPR_ASSERT(ok);*/
 }
 
 void Controller::optimizeBatchSizeStep(
@@ -676,7 +798,13 @@ double Controller::LoadTimeEstimator(const char *model_path,
     return out_result[0];
 }
 
-// returns the profiling results for inference time per frame in a full batch in nanoseconds
+/**
+ * @brief
+ *
+ * @param model to specify model
+ * @param batch_size for targeted batch size (binary)
+ * @return int for inference time per full batch in nanoseconds
+ */
 int Controller::InferTimeEstimator(ModelType model, int batch_size)
 {
     std::map<int, int> time_per_frame;
@@ -690,6 +818,33 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size)
                           {16, 3220761},
                           {32, 4680154},
                           {64, 7773959}};
+        break;
+    case ModelType::Yolov5n320:
+        time_per_frame = {{1, 2649396},
+                          {2, 2157968},
+                          {4, 1897505},
+                          {8, 2076971},
+                          {16, 2716276},
+                          {32, 4172530},
+                          {64, 7252059}};
+        break;
+    case ModelType::Yolov5s:
+        time_per_frame = {{1, 4515118},
+                          {2, 3399807},
+                          {4, 3044100},
+                          {8, 3008503},
+                          {16, 3672566},
+                          {32, 5116321},
+                          {64, 8237824}};
+        break;
+    case ModelType::Yolov5m:
+        time_per_frame = {{1, 7263238},
+                          {2, 5905167},
+                          {4, 4446144},
+                          {8, 4449675},
+                          {16, 4991818},
+                          {32, 6543270},
+                          {64, 9579015}};
         break;
     case ModelType::Yolov5Datasource:
         time_per_frame = {{1, 3602348},
@@ -824,7 +979,7 @@ ModelInfo::ModelInfo(int bs, float il, int w, int h, std::string n, float acc)
 {
     batch_size = bs;
     inferent_latency = il;
-    throughput = int(bs / (il / 1000.0));
+    throughput = (int(bs / (il / 1000.0)) / 10) * 10;
     width = w;
     height = h;
     name = n;
@@ -1244,4 +1399,30 @@ void differenceClients(std::vector<ClientInfo> &src,
     src.erase(std::remove_if(src.begin(), src.end(), is_in_diff), src.end());
 }
 
+// add after stable version
+
+/**
+ * @brief get all profilings of the model type
+ *
+ * @param mt
+ * @return std::vector<ModelInfo>
+ */
+std::vector<ModelInfo> Controller::get_available_models(ModelType mt)
+{
+    int batch_size = 1;
+    std::vector<ModelInfo> available_models;
+    // hardcode [name, accuracy, width, height]
+    // note: in jellyfish, the scheduling algorithm try to choose the most accurate model
+    // so in this implementation, the accuracy is dummy and the goal is just for sorting the models capacity
+
+    while (batch_size <= 64)
+    {
+        int inference_time = InferTimeEstimator(mt, batch_size);
+        auto [name, acc, width, height] = hardcode_acc[mt];
+        float latency = inference_time * float(1e-6);
+        available_models.push_back(ModelInfo(batch_size, latency, width, height, name, acc));
+        batch_size = batch_size * 2;
+    }
+    return available_models;
+}
 // ====================================================================================

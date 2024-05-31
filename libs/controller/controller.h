@@ -20,9 +20,10 @@
 #include <thread>
 #include "controlcommunication.grpc.pb.h"
 #include <LightGBM/c_api.h>
-#include <vector>
-#include <algorithm>
-#include <chrono>
+#include <pqxx/pqxx>
+#include "absl/strings/str_format.h"
+#include "absl/flags/parse.h"
+#include "absl/flags/flag.h"
 
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::ContainerConfig;
@@ -51,7 +52,10 @@ enum ModelType
 {
     DataSource,
     Sink,
-    Yolov5,
+    Yolov5, // = Yolov5n
+    Yolov5n320,
+    Yolov5s,
+    Yolov5m,
     Yolov5Datasource,
     Arcface,
     Retinaface,
@@ -195,24 +199,15 @@ public:
 
     void HandleRecvRpcs();
 
+    void Scheduling();
+
     void AddTask(const TaskDescription::TaskStruct &task);
 
     [[nodiscard]] bool isRunning() const { return running; };
 
     void Stop() { running = false; };
 
-    // ======================== added =========================
-
-    void update_and_adjust(int mills = 500);
-
-    // ========================================================
-
-    void UpdateLightMetrics();
-
-    void UpdateFullMetrics();
-    double LoadTimeEstimator(const char *model_path, double input_mem_size);
-    int InferTimeEstimator(ModelType model, int batch_size);
-
+private:
     struct ContainerHandle;
     struct NodeHandle
     {
@@ -230,6 +225,7 @@ public:
 
     struct TaskHandle
     {
+        int last_latency;
         int slo;
         PipelineType type;
         std::map<std::string, ContainerHandle *> subtasks;
@@ -250,7 +246,18 @@ public:
         google::protobuf::RepeatedField<int32_t> queue_lengths;
         std::vector<ContainerHandle *> upstreams;
         std::vector<ContainerHandle *> downstreams;
+        // TODO: remove test code
+        bool running;
     };
+
+    float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
+
+    void UpdateLightMetrics();
+
+    void UpdateFullMetrics();
+
+    double LoadTimeEstimator(const char *model_path, double input_mem_size);
+    int InferTimeEstimator(ModelType model, int batch_size);
 
     class RequestHandler
     {
@@ -297,6 +304,9 @@ public:
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
                         std::string source = "", int replica = 1);
 
+    void FakeContainer(ContainerHandle *cont, int slo);
+    void FakeStartContainer(std::pair<std::string, ContainerHandle *> &cont, int slo, int replica = 1);
+
     void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
@@ -325,6 +335,9 @@ public:
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<ServerCompletionQueue> cq;
 
+    std::unique_ptr<pqxx::connection> ctl_metricsServerConn = nullptr;
+    MetricsServerConfigs ctl_metricsServerConfigs;
+
     // ======================== added =========================
 
     ClientProfiles clients_profiles;
@@ -332,7 +345,9 @@ public:
     std::vector<ContainerHandle *> first_containers; // the very first containers of the inference pipeline
     std::vector<ContainerHandle *> data_sources;     // all data source containers
 
+    // =========== helper function ============
     void AdjustImageSize(ContainerHandle *ds, int width, int height);
+    std::vector<ModelInfo> get_available_models(ModelType mt);
     // ========================================================
 };
 
