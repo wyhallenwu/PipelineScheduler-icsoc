@@ -30,7 +30,8 @@ using EmptyMessage = google::protobuf::Empty;
 
 enum SystemDeviceType {
     Server,
-    Edge
+    XavierNX,
+    OrinNano
 };
 
 enum ModelType {
@@ -48,13 +49,113 @@ enum ModelType {
     CarBrand
 };
 
+struct ContainerHandle;
+
+struct TaskHandle {
+    int slo;
+    PipelineType type;
+    std::map<std::string, ContainerHandle *> subtasks;
+};
+
+struct NodeHandle {
+    std::string name;
+    std::string ip;
+    std::shared_ptr<ControlCommunication::Stub> stub;
+    CompletionQueue *cq;
+    SystemDeviceType type;
+    BandwidthType bandwidth;
+    int num_processors; // number of processing units, 1 for Edge or # GPUs for server
+    std::vector<double> processors_utilization; // utilization per pu
+    std::vector<unsigned long> mem_size; // memory size in MB
+    std::vector<double> mem_utilization; // memory utilization per pu
+    int next_free_port;
+    std::map<std::string, ContainerHandle *> containers;
+};
+
+struct ContainerHandle {
+    std::string name;
+    ModelType model;
+    NodeHandle *device_agent;
+    TaskHandle *task;
+    int batch_size;
+    // The deadline for the inference to be completed.
+    // The amount of time from start of each cycle, in milliseconds.
+    uint32_t inference_deadline;
+    // Arrival rate of requests
+    float arrival_rate;
+    int replicas;
+    std::vector<int> cuda_device;
+    int class_of_interest;
+    int recv_port;
+    Metrics metrics;
+    google::protobuf::RepeatedField<int32_t> queue_lengths;
+    std::vector<ContainerHandle *> upstreams;
+    std::vector<ContainerHandle *> downstreams;
+};
+
+struct ModelProfile {
+    uint64_t preprocessorLatency;
+    BatchLatencyProfileType inferenceLatency;
+    uint64_t postprocessorLatency;
+    // Average size of incoming queries
+    int avgInputSize = 1; // bytes
+    // Average total size of outgoing queries
+    int avgOutputSize = 1; // bytes
+};
+
+struct PipelineModel {
+    std::string device;
+    // Whether the upstream is on another device
+    bool isSplitPoint;
+    // Max arrival rate of queries to this model over different periods (e.g., last 1 second, last 3 seconds, etc.)
+    float arrivalRate;
+    // Scale factors for different periods
+    ScaleFactorType scaleFactors;
+    // Latency profile of preprocessor, batch inferencer and postprocessor
+    ModelProfile modelProfile;
+    // The downstream models and their classes of interest
+    std::vector<std::pair<ModelType, int>> downstreams;
+    std::vector<std::pair<ModelType, int>> upstreams;
+    // The batch size of the model
+    BatchSizeType batchSize;
+    // The number of replicas of the model
+    uint8_t numReplicas;
+    // Average latency to query to reach from the upstream
+    uint64_t expectedTransmitLatency;
+    // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
+    uint64_t expectedQueueingLatency;
+    // Average latency to process each query
+    uint64_t expectedAvgPerQueryLatency;
+    // Maximum latency to process each query as ones that come later have to wait to be processed in batch
+    uint64_t expectedMaxProcessLatency;
+    // Latency from the start of the pipeline until the end of this model
+    uint64_t expectedStart2HereLatency = -1;
+    // The estimated cost per query processed by this model
+    uint64_t estimatedPerQueryCost = 0;
+    // The estimated latency of the model
+    uint64_t estimatedStart2HereCost = 0;
+};
+
+// Arrival rates during different periods (e.g., last 1 second, last 3 seconds, etc.)
+typedef std::map<int, float> ArrivalRateType;
+// Scale factors for different periods
+typedef std::map<int, float> ScaleFactorType;
+
+typedef std::map<BatchSizeType, uint64_t> BatchLatencyProfileType;
+
+typedef int BandwidthType;
+
 extern std::map<ModelType, std::vector<std::string>> MODEL_INFO;
+extern std::map<SystemDeviceType, std::vector<std::string>> DEVICE_INFO;
 
 enum PipelineType {
     Traffic,
     Video_Call,
     Building_Security
 };
+
+// Structure that whole information about the pipeline used for scheduling
+typedef std::map<ModelType, PipelineModel> PipelineModelListType;
 
 struct Metrics {
     float requestRate = 0;
@@ -78,6 +179,8 @@ namespace TaskDescription {
     void from_json(const nlohmann::json &j, TaskStruct &val);
 }
 
+
+
 class Controller {
 public:
     Controller();
@@ -93,7 +196,20 @@ public:
     void Stop() { running = false; };
 
 private:
-    float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
+    void queryRequestRateInPeriod(const std::string &name, ArrivalRateType &periods);
+    void queryScaleFactorInPeriod(const std::string &name, ScaleFactorType &periods);
+    ModelProfile queryModelProfile(const std::string &name, const std::string &deviceName); 
+    uint64_t queryTransmitLatency(const int packageSize, const std::string &sourceName, const std::string &destName);
+    void incNumReplicas(PipelineModel &model);
+    void decNumReplicas(PipelineModel &model);
+
+    void estimateModelLatency(PipelineModel &model, const ModelType modelType);
+    void estimatePipelineLatency(PipelineModelListType &pipeline, const ModelType &currModel, const uint64_t start2HereLatency);
+
+    void getInitialBatchSizes(PipelineModelListType &models, uint64_t slo, int nObjects);
+    void shiftModelToEdge(PipelineModelListType &models, const ModelType &currModel, uint64_t slo);
+
+    PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice);
 
     void UpdateLightMetrics();
 
@@ -101,42 +217,6 @@ private:
 
     double LoadTimeEstimator(const char *model_path, double input_mem_size);
     int InferTimeEstimator(ModelType model, int batch_size);
-
-    struct ContainerHandle;
-    struct NodeHandle {
-        std::string ip;
-        std::shared_ptr<ControlCommunication::Stub> stub;
-        CompletionQueue *cq;
-        SystemDeviceType type;
-        int num_processors; // number of processing units, 1 for Edge or # GPUs for server
-        std::vector<double> processors_utilization; // utilization per pu
-        std::vector<unsigned long> mem_size; // memory size in MB
-        std::vector<double> mem_utilization; // memory utilization per pu
-        int next_free_port;
-        std::map<std::string, ContainerHandle *> containers;
-    };
-
-    struct TaskHandle {
-        int slo;
-        PipelineType type;
-        std::map<std::string, ContainerHandle *> subtasks;
-    };
-
-    struct ContainerHandle {
-        std::string name;
-        ModelType model;
-        NodeHandle *device_agent;
-        TaskHandle *task;
-        int batch_size;
-        int replicas;
-        std::vector<int> cuda_device;
-        int class_of_interest;
-        int recv_port;
-        Metrics metrics;
-        google::protobuf::RepeatedField<int32_t> queue_lengths;
-        std::vector<ContainerHandle *> upstreams;
-        std::vector<ContainerHandle *> downstreams;
-    };
 
     class RequestHandler {
     public:
@@ -188,13 +268,6 @@ private:
     void optimizeBatchSizeStep(
             const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
             std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
-
-    std::map<ModelType, int> getInitialBatchSizes(
-            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
-            int nObjects);
-
-    std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
-    getModelsByPipelineType(PipelineType type);
 
     bool running;
     std::map<std::string, NodeHandle> devices;

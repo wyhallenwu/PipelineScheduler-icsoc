@@ -469,9 +469,9 @@ public:
      *
      * @param timestamps
      */
-    void addRecord(RequestTimeType timestamps, uint64_t reqNumber) {
+    void addRecord(RequestTimeType timestamps, int inputSize, int outputSize, uint64_t reqNumber) {
         std::unique_lock<std::mutex> lock(mutex);
-        records.push_back(std::make_tuple(timestamps[1], timestamps[2], timestamps[5], timestamps[4], timestamps[5], reqNumber));
+        records.push_back(std::make_tuple(timestamps[1], timestamps[2], timestamps[5], timestamps[4], timestamps[5], inputSize, outputSize, reqNumber));
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();

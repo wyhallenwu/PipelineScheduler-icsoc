@@ -33,7 +33,9 @@ typedef cv::cuda::GpuMat LocalGPUReqDataType;
 typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
 typedef std::vector<std::tuple<ClockType, ClockType, ClockType, uint64_t>> ArrivalRecordType;
-typedef std::vector<std::tuple<ClockType, ClockType, ClockType, ClockType, ClockType, uint64_t>> ProcessRecordType;
+// Timestamps of important processing steps
+// <preprocessor_arrival_timestamps, preprocessor_end_timestamps, preprocessor_batching_timestamps, batch_inference_timestamps, postprocessor_timestamps, input_size, output_size, request_num>
+typedef std::vector<std::tuple<ClockType, ClockType, ClockType, ClockType, ClockType, int, int, uint64_t>> ProcessRecordType;
 
 const std::unordered_set<uint16_t> GRAYSCALE_CONVERSION_CODES = {6, 7, 10, 11};
 
