@@ -195,6 +195,15 @@ void Controller::Scheduling()
 
         // adjust the upstream of first container in the pipeline
 
+        // for testing
+        for (auto &client : clients_profiles.infos)
+        {
+            client.set_bandwidth(rand() % 10 + 1);
+            client.req_rate = rand() % 100 + 500;
+            client.budget = rand() % 50 + 10;
+            std::cout << "scheduling req rate: " << client.req_rate << std::endl;
+        }
+
         // find the new downstream of data_source
         for (auto &mapping : mappings)
         {
@@ -301,7 +310,9 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
     ModelType mt = models[0].first;
     int width = std::get<2>(hardcode_acc[mt]);
     int height = std::get<3>(hardcode_acc[mt]);
+    std::cout << "req rate: " << task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->metrics.requestRate << std::endl;
     // get the req of the first model(yolov5) of the pipeline
+    // FIXME: make sure the req rate here is correct
     clients_profiles.add(
         ds_name, width, height, float(t.slo) * float(1e-6), // convert ns to ms
         task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->metrics.requestRate);
@@ -1308,7 +1319,7 @@ mapClient(ClientProfiles client_profile, ModelProfiles model_profiles)
                   << " " << batch_size << std::endl;
         for (auto &client : clients)
         {
-            std::cout << client.ip << " " << client.req_rate << " " << client.budget - client.get_transmission_time()
+            std::cout << "client name: " << client.ip << ", req rate: " << client.req_rate << ", budget-lat: " << client.budget - client.get_transmission_time()
                       << std::endl;
         }
         std::cout << "======================" << std::endl;
