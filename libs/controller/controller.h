@@ -141,7 +141,7 @@ public:
     void add(std::string name, float accuracy, int batch_size, float inference_latency, int width, int height, int throughput);
     void add(const ModelInfo &model_info);
 
-    static std::vector<ModelInfo> hardcode_mapping(std::string model_name, int width, int height);
+    // static std::vector<ModelInfo> hardcode_mapping(std::string model_name, int width, int height);
 };
 
 struct ClientInfo

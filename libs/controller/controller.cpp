@@ -19,6 +19,7 @@ std::map<ModelType, std::vector<std::string>> MODEL_INFO = {
 };
 
 // =========================== added hardcode value ==================================
+// help for collecting and retrieving needed value
 std::unordered_map<ModelType, std::tuple<std::string, float, int, int>> hardcode_acc = {
     {Yolov5, std::make_tuple("yolov5n", 0.3, 640, 640)},
     {Yolov5s, std::make_tuple("yolov5s", 0.4, 640, 640)},
@@ -184,7 +185,6 @@ void Controller::HandleRecvRpcs()
 
 void Controller::Scheduling()
 {
-    // TODO: @Jinghang, @Quang, @Yuheng please out your scheduling loop inside of here
     while (running)
     {
         // use list of devices, tasks and containers to schedule depending on your algorithm
@@ -221,7 +221,6 @@ void Controller::Scheduling()
             p->upstreams.clear();
 
             // adjust downstream
-            // FIXME: client ip and device agent ip
             for (auto &client : selected_clients)
             {
                 // match with corresponding ContainerHandle
@@ -239,19 +238,20 @@ void Controller::Scheduling()
                     }
                 }
 
-                // // adjust the upstream and downstream
-                // std::cout << "test position 1" << std::endl;
-                // // FIXME: cause AdjustUpstream this function
+                // adjust the upstream and downstream
+
+                // // FIXME: @lucas, commented for testing, a grpc call, ds is the datasource mapped with model container p
+                // // AdjustUpstream pushes the assigned datasource to this model container p
                 // AdjustUpstream(p->recv_port, ds, p->device_agent, p->name);
-                // std::cout << "test position 2" << std::endl;
+                // // adjust the batch size of the model
                 // AdjustBatchSize(p, batch_size);
-                // std::cout << "test position 3" << std::endl;
+
                 // match the model with its profiling
                 int width = models_profiles.infos[model_info][0].width;
                 int height = models_profiles.infos[model_info][0].height;
 
                 std::cout << "new width: " << width << " height: " << height << std::endl;
-                // FIXME: rpc call for adjust client image size, commented for testing
+                // FIXME: @lucas, comment for testing, this is rpc call that change the client's image size
                 // AdjustImageSize(ds, width, height);
             }
         }
@@ -273,7 +273,7 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
     device->containers.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
 
-    // TODO: @Jinghang, @Quang, @Yuheng get correct initial batch size, cuda devices, and number of replicas
+    // get correct initial batch size, cuda devices, and number of replicas
     // based on TaskDescription and System State if one of them does not apply to your algorithm just leave it at 1
     // all of you should use different cuda devices at the server!
     auto batch_sizes = std::map<ModelType, int>();
@@ -296,16 +296,7 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t)
 
     // ================================= added ==========================================
 
-    // required to config (model_size, width, height, batch_size) in the t.name
-    // for convenience eg. yolov5n_320_640_32_.
-
-    // std::vector<std::string> model_info = split_string(t.name, '_');
-    // std::string model_name = model_info[0];
-    // int width = std::stoi(model_info[1]);
-    // int height = std::stoi(model_info[2]);
-    // int batch_size = std::stoi(model_info[3]);
-
-    // TODO: (yuheng) update after stable
+    // collect the needed information for scheduling algorithm
     std::string ds_name = t.name + ":datasource";
     ModelType mt = models[0].first;
     int width = std::get<2>(hardcode_acc[mt]);
@@ -380,6 +371,8 @@ void Controller::FakeContainer(ContainerHandle *cont, int slo)
         {
             cont->queue_lengths.Add((rand() % 10));
         }
+
+        // FIXME: @lucas, this part leads a to Floating Pointer Error, possibly caused by the overflow or division by zero
         // cont->task->last_latency = (cont->task->last_latency + slo * 0.8 + (rand() % (int)(slo * 0.4))) / 2;
         // cont->device_agent->processors_utilization[cont->cuda_device[0]] += (rand() % 100) / 100.0;
         // cont->device_agent->processors_utilization[cont->cuda_device[0]] /= 2;
@@ -1049,45 +1042,45 @@ void ModelProfiles::add(const ModelInfo &model_info)
     infos[key].push_back(model_info);
 }
 
-/**
- * @brief hardcode model profiles mapping
- *
- * @param model_name
- * @return ModelInfo
- */
-std::vector<ModelInfo> ModelProfiles::hardcode_mapping(std::string model_name,
-                                                       int width, int height)
-{
-    // FIXME: need updated profiling result
-    // (batch_size, inference_time(ms), width, height, model_name, accuracy)
-    std::vector<ModelInfo> hardcode = {
-        ModelInfo(1, 1.2, 320, 320, "yolov5n", 0.2),
-        ModelInfo(2, 2.1, 320, 320, "yolov5n", 0.2),
-        ModelInfo(4, 2.9, 320, 320, "yolov5n", 0.2),
-        ModelInfo(8, 5.1, 320, 320, "yolov5n", 0.2),
-        ModelInfo(16, 8.8, 320, 320, "yolov5n", 0.2),
-        ModelInfo(32, 18.5, 320, 320, "yolov5n", 0.2),
-        ModelInfo(64, 31.2, 320, 320, "yolov5n", 0.2),
-        ModelInfo(1, 1.8, 640, 640, "yolov5n", 0.4),
-        ModelInfo(2, 3.3, 640, 640, "yolov5n", 0.4),
-        ModelInfo(4, 5.7, 640, 640, "yolov5n", 0.4),
-        ModelInfo(8, 10.7, 640, 640, "yolov5n", 0.4),
-        ModelInfo(16, 20.8, 640, 640, "yolov5n", 0.4),
-        ModelInfo(32, 40.3, 640, 640, "yolov5n", 0.4),
-        ModelInfo(64, 80.3, 640, 640, "yolov5n", 0.4),
-    };
+// /**
+//  * @brief hardcode model profiles mapping
+//  *
+//  * @param model_name
+//  * @return ModelInfo
+//  */
+// std::vector<ModelInfo> ModelProfiles::hardcode_mapping(std::string model_name,
+//                                                        int width, int height)
+// {
+//     // FIXME: need updated profiling result
+//     // (batch_size, inference_time(ms), width, height, model_name, accuracy)
+//     std::vector<ModelInfo> hardcode = {
+//         ModelInfo(1, 1.2, 320, 320, "yolov5n", 0.2),
+//         ModelInfo(2, 2.1, 320, 320, "yolov5n", 0.2),
+//         ModelInfo(4, 2.9, 320, 320, "yolov5n", 0.2),
+//         ModelInfo(8, 5.1, 320, 320, "yolov5n", 0.2),
+//         ModelInfo(16, 8.8, 320, 320, "yolov5n", 0.2),
+//         ModelInfo(32, 18.5, 320, 320, "yolov5n", 0.2),
+//         ModelInfo(64, 31.2, 320, 320, "yolov5n", 0.2),
+//         ModelInfo(1, 1.8, 640, 640, "yolov5n", 0.4),
+//         ModelInfo(2, 3.3, 640, 640, "yolov5n", 0.4),
+//         ModelInfo(4, 5.7, 640, 640, "yolov5n", 0.4),
+//         ModelInfo(8, 10.7, 640, 640, "yolov5n", 0.4),
+//         ModelInfo(16, 20.8, 640, 640, "yolov5n", 0.4),
+//         ModelInfo(32, 40.3, 640, 640, "yolov5n", 0.4),
+//         ModelInfo(64, 80.3, 640, 640, "yolov5n", 0.4),
+//     };
 
-    std::vector<ModelInfo> r;
-    for (auto &model_info : hardcode)
-    {
-        if (model_info.name == model_name && model_info.width == width &&
-            model_info.height == height)
-        {
-            r.push_back(model_info);
-        }
-    }
-    return r;
-}
+//     std::vector<ModelInfo> r;
+//     for (auto &model_info : hardcode)
+//     {
+//         if (model_info.name == model_name && model_info.width == width &&
+//             model_info.height == height)
+//         {
+//             r.push_back(model_info);
+//         }
+//     }
+//     return r;
+// }
 
 void ClientProfiles::sortBudgetDescending(std::vector<ClientInfo> &clients)
 {
