@@ -406,8 +406,8 @@ void ContainerAgent::collectRuntimeMetrics() {
                                                           "rpc_batch_size, request_size, request_num) "
                                                           "VALUES (";
                     sql += timePointToEpochString(std::get<2>(record)) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
                     sql += std::to_string(std::get<4>(record)) + ", ";
                     sql += std::to_string(std::get<4>(record)) + ", ";
                     sql += std::to_string(std::get<5>(record)) + ")";
@@ -422,10 +422,10 @@ void ContainerAgent::collectRuntimeMetrics() {
                                                           "output_size, request_num) "
                                                           "VALUES (";
                     sql += timePointToEpochString(std::get<4>(record)) + ", "; 
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<3>(record) - std::get<2>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<5>(record) - std::get<4>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<3>(record) - std::get<2>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<5>(record) - std::get<4>(record)).count()) + ", ";
                     sql += std::to_string(std::get<6>(record)) + ", ";
                     sql += std::to_string(std::get<7>(record)) + ", ";
                     sql += std::to_string(std::get<8>(record)) + ", ";

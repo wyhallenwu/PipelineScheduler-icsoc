@@ -20,7 +20,7 @@ using json = nlohmann::ordered_json;
 
 inline uint64_t getNumberAtIndex(const std::string& str, int index);
 inline std::string getTimeDifString(const ClockType &start, const ClockType &end) {
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    auto duration = std::chrono::duration_cast<TimePrecisionType>(end - start);
     return std::to_string(duration.count());
 }
 

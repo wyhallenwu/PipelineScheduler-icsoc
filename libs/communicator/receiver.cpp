@@ -60,9 +60,9 @@ void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
         msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + numTimeStamps - 1]) << "|";
 
         for (BatchSizeType j = 1; j < numTimeStamps - 1; j++) {
-            msvc_logFile << std::chrono::duration_cast<std::chrono::nanoseconds>(timeReport.req_origGenTime[i * numTimeStamps + j] - timeReport.req_origGenTime[i * numTimeStamps + j - 1]).count() << ",";
+            msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(timeReport.req_origGenTime[i * numTimeStamps + j] - timeReport.req_origGenTime[i * numTimeStamps + j - 1]).count() << ",";
         }
-        msvc_logFile << std::chrono::duration_cast<std::chrono::nanoseconds>(timeReport.req_origGenTime[(i + 1) * numTimeStamps - 1] - timeReport.req_origGenTime[(i + 1) * numTimeStamps - 2]).count() << std::endl;
+        msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(timeReport.req_origGenTime[(i + 1) * numTimeStamps - 1] - timeReport.req_origGenTime[(i + 1) * numTimeStamps - 2]).count() << std::endl;
     } 
     if (isProfileEnd) {
         this->pauseThread();
@@ -110,7 +110,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
 
             auto timestamps = std::vector<ClockType>();
             for (auto ts: el.timestamp()) {
-                timestamps.push_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
+                timestamps.push_back(std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(ts)));
             }
             timestamps.push_back(std::chrono::system_clock::now());
 
@@ -161,7 +161,7 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
 
             auto timestamps = std::vector<ClockType>();
             for (auto ts: el.timestamp()) {
-                timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
+                timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(ts)));
             }
             timestamps.push_back(std::chrono::system_clock::now());
 
@@ -212,7 +212,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 
             auto timestamps = std::vector<ClockType>();
             for (auto ts: el.timestamp()) {
-                timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(std::chrono::nanoseconds(ts)));
+                timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(ts)));
             }
             timestamps.push_back(std::chrono::system_clock::now());
 
