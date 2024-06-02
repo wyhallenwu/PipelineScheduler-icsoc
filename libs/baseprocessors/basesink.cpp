@@ -78,9 +78,9 @@ void BaseSink::sink() {
                 msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[i].back()) << "|";
 
                 for (BatchSizeType j = 1; j < inferTimeReport.req_origGenTime[i].size(); j++) {
-                    msvc_logFile << std::chrono::duration_cast<std::chrono::nanoseconds>(inferTimeReport.req_origGenTime[i].at(j) - inferTimeReport.req_origGenTime[i].at(j-1)).count() << ",";
+                    msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(inferTimeReport.req_origGenTime[i].at(j) - inferTimeReport.req_origGenTime[i].at(j-1)).count() << ",";
                 }
-                msvc_logFile << std::chrono::duration_cast<std::chrono::nanoseconds>(inferTimeReport.req_origGenTime[i].back() - inferTimeReport.req_origGenTime[i].front()).count() << std::endl;
+                msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(inferTimeReport.req_origGenTime[i].back() - inferTimeReport.req_origGenTime[i].front()).count() << std::endl;
             }
 
             // it transfers a dummy request back to the data generator to keep the profiling mode running
@@ -111,9 +111,9 @@ void BaseSink::sink() {
             msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[0].back()) << "|";
 
             for (BatchSizeType j = 1; j < inferTimeReport.req_origGenTime[0].size(); j++) {
-                msvc_logFile << std::chrono::duration_cast<std::chrono::nanoseconds>(inferTimeReport.req_origGenTime[0].at(j) - inferTimeReport.req_origGenTime[0].at(j-1)).count() << ",";
+                msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(inferTimeReport.req_origGenTime[0].at(j) - inferTimeReport.req_origGenTime[0].at(j-1)).count() << ",";
             }
-            msvc_logFile << std::chrono::duration_cast<std::chrono::nanoseconds>(inferTimeReport.req_origGenTime[0].back() - inferTimeReport.req_origGenTime[0].front()).count() << std::endl;
+            msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(inferTimeReport.req_origGenTime[0].back() - inferTimeReport.req_origGenTime[0].front()).count() << std::endl;
         }
     }
     msvc_logFile.close();

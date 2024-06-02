@@ -442,7 +442,7 @@ void BaseBBoxCropperAugmentation::cropping() {
             timeNow = std::chrono::high_resolution_clock::now();
             currReq.req_origGenTime[i].emplace_back(timeNow);
             // TODO: Add the request number
-            msvc_processRecords.addRecord(currReq.req_origGenTime[i], totalInMem, totalOutMem, 0);
+            msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0);
             
             // Clearing out data of the vector
             singleImageBBoxList.clear();

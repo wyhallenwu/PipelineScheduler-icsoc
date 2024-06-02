@@ -280,6 +280,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                                       "arrival_timestamps BIGINT, "
                                                                                                       "transfer_duration INTEGER, "
                                                                                                       "full_transfer_duration INTEGER, "
+                                                                                                      "rpc_batch_size INTEGER, "
                                                                                                       "request_size INTEGER, "
                                                                                                       "request_num INTEGER)";
 
@@ -294,6 +295,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                           "batch_duration INTEGER, "
                                                                                           "infer_duration INTEGER, "
                                                                                           "post_duration INTEGER, "
+                                                                                          "infer_batch_size INTEGER, "
                                                                                           "input_size INTEGER, "
                                                                                           "output_size INTEGER, "
                                                                                           "request_num INTEGER)";
@@ -400,29 +402,34 @@ void ContainerAgent::collectRuntimeMetrics() {
                 pqxx::work session(*cont_metricsServerConn);
                 for (auto record: arrivalRecords) {
                     sql = "INSERT INTO " + table_prefix + "_arrival_table "
-                                                          "(arrival_timestamps, transfer_duration, full_transfer_duration, request_size, request_num) "
+                                                          "(arrival_timestamps, transfer_duration, full_transfer_duration, "
+                                                          "rpc_batch_size, request_size, request_num) "
                                                           "VALUES (";
                     sql += timePointToEpochString(std::get<2>(record)) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
-                    sql += std::to_string(std::get<3>(record)) + ", ";
-                    sql += std::to_string(std::get<4>(record)) + ")";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
+                    sql += std::to_string(std::get<4>(record)) + ", ";
+                    sql += std::to_string(std::get<4>(record)) + ", ";
+                    sql += std::to_string(std::get<5>(record)) + ")";
                     session.exec(sql.c_str());
                 }
 
                 processRecords = cont_msvcsList[3]->getProcessRecords();
                 for (auto record : processRecords) {
                     sql = "INSERT INTO " + table_prefix + "_process_table "
-                                                          "(postprocess_timestamps, prep_duration, batch_duration, infer_duration, post_duration, input_size, output_size, request_num) "
+                                                          "(postprocess_timestamps, prep_duration, batch_duration, "
+                                                          "infer_duration, post_duration, infer_batch_size, input_size, "
+                                                          "output_size, request_num) "
                                                           "VALUES (";
                     sql += timePointToEpochString(std::get<4>(record)) + ", "; 
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<3>(record) - std::get<2>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<5>(record) - std::get<4>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<3>(record) - std::get<2>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<5>(record) - std::get<4>(record)).count()) + ", ";
                     sql += std::to_string(std::get<6>(record)) + ", ";
                     sql += std::to_string(std::get<7>(record)) + ", ";
-                    sql += std::to_string(std::get<8>(record)) + ")";
+                    sql += std::to_string(std::get<8>(record)) + ", ";
+                    sql += std::to_string(std::get<9>(record)) + ")";
                     session.exec(sql.c_str());
                 }
                 session.commit();

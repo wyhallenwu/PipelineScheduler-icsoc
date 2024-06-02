@@ -128,7 +128,7 @@ std::string GPUSender::SendGpuPointer(
         ref->set_height(elements[i][0].shape[1]);
         ref->set_width(elements[i][0].shape[2]);
         for (auto ts: timestamp[0]) {
-            ref->add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
+            ref->add_timestamp(std::chrono::duration_cast<TimePrecisionType>(ts.time_since_epoch()).count());
         }
         ref->set_path(path[i]);
         ref->set_slo(slo[i]);
@@ -258,7 +258,7 @@ std::string LocalCPUSender::SendSharedMemory(
         ref->set_height(elements[i][0].shape[1]);
         ref->set_width(elements[i][0].shape[2]);
         for (auto ts: timestamp[0]) {
-            ref->add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
+            ref->add_timestamp(std::chrono::duration_cast<TimePrecisionType>(ts.time_since_epoch()).count());
         }
         ref->set_path(path[i]);
         ref->set_slo(slo[i]);
@@ -356,7 +356,7 @@ std::string RemoteCPUSender::SendSerializedData(
         ref->set_height(elements[i][0].shape[1]);
         ref->set_width(elements[i][0].shape[2]);
         for (auto ts: timestamp[0]) {
-            ref->add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
+            ref->add_timestamp(std::chrono::duration_cast<TimePrecisionType>(ts.time_since_epoch()).count());
         }
         ref->set_path(path[i]);
         ref->set_slo(slo[i]);
