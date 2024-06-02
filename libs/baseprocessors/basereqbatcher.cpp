@@ -340,7 +340,8 @@ void BaseReqBatcher::batchRequests() {
         uint32_t requestSize = currReq.req_data[0].data.channels() * currReq.req_data[0].data.rows * currReq.req_data[0].data.cols * CV_ELEM_SIZE1(currReq.req_data[0].data.type());
 
         // Keeping record of the arrival requests
-        msvc_arrivalRecords.addRecord(currReq.req_origGenTime[0], requestSize, msvc_inReqCount);
+        // TODO: Add rpc batch size instead of hardcoding
+        msvc_arrivalRecords.addRecord(currReq.req_origGenTime[0], 10, requestSize, msvc_inReqCount);
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
