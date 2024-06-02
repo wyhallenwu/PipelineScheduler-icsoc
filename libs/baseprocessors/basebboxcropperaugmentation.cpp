@@ -309,6 +309,9 @@ void BaseBBoxCropperAugmentation::cropping() {
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
 
+            // We consider this when the request was received by the postprocessor
+            currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
+
             // There could be multiple timestamps in the request, but the first one always represent
             // the moment this request was generated at the very beginning of the pipeline
             currReq_genTime = currReq.req_origGenTime[i][0];
@@ -347,6 +350,8 @@ void BaseBBoxCropperAugmentation::cropping() {
                 info("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
             }
 
+            uint32_t totalInMem = imageList[i].data.channels() * imageList[i].data.rows * imageList[i].data.cols * CV_ELEM_SIZE1(imageList[i].data.type());
+            uint32_t totalOutMem = 0;
 
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {
@@ -370,19 +375,6 @@ void BaseBBoxCropperAugmentation::cropping() {
                 // Putting the bounding box into an `outReq` to be sent out
                 bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
 
-                /**
-                 * @brief There are six important timestamps to be recorded:
-                 * 1. When the request was generated
-                 * 2. When the request was received by the batcher
-                 * 3. When the request was done preprocessing by the batcher
-                 * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
-                 * 5. When the batch inferencer was completed by the inferencer 
-                 * 6. When each request was completed by the postprocessor
-                 */
-                timeNow = std::chrono::high_resolution_clock::now();
-                currReq.req_origGenTime[i].emplace_back(timeNow);
-                // TODO: Add the request number
-                msvc_processRecords.addRecord(currReq.req_origGenTime[i], 0);
                 for (auto qIndex : queueIndex) {
                     // Put the correct type of outreq for the downstream, a sender, which expects either LocalGPU or localCPU
                     if (this->msvc_activeOutQueueIndex.at(qIndex) == 1) { //Local CPU
@@ -404,7 +396,7 @@ void BaseBBoxCropperAugmentation::cropping() {
 
                         msvc_OutQueue.at(qIndex)->emplace(
                             Request<LocalCPUReqDataType>{
-                                {currReq.req_origGenTime[i]},
+                                {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
                                 {currReq.req_e2eSLOLatency[i]},
                                 {currReq_path},
                                 1,
@@ -422,7 +414,7 @@ void BaseBBoxCropperAugmentation::cropping() {
                         };
                         msvc_OutQueue.at(qIndex)->emplace(
                             Request<LocalGPUReqDataType>{
-                                {currReq.req_origGenTime[i]},
+                                {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
                                 {currReq.req_e2eSLOLatency[i]},
                                 {currReq_path},
                                 1,
@@ -432,13 +424,27 @@ void BaseBBoxCropperAugmentation::cropping() {
                         );
                         trace("{0:s} emplaced a bbox of class {1:d} to GPU queue {2:d}.", msvc_name, bboxClass, qIndex);
                     }
+                    totalOutMem += imageList[i].data.channels() * imageList[i].data.rows * imageList[i].data.cols * CV_ELEM_SIZE1(imageList[i].data.type());
                 }
                 queueIndex.clear();
             }
-            // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
-            // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
-            // Clearing out data of the vector
 
+            /**
+             * @brief There are 7 important timestamps to be recorded:
+             * 1. When the request was generated
+             * 2. When the request was received by the batcher
+             * 3. When the request was done preprocessing by the batcher
+             * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
+             * 5. When the batch inferencer was completed by the inferencer 
+             * 6. When the request was received by the postprocessor
+             * 7. When each request was completed by the postprocessor
+             */
+            timeNow = std::chrono::high_resolution_clock::now();
+            currReq.req_origGenTime[i].emplace_back(timeNow);
+            // TODO: Add the request number
+            msvc_processRecords.addRecord(currReq.req_origGenTime[i], totalInMem, totalOutMem, 0);
+            
+            // Clearing out data of the vector
             singleImageBBoxList.clear();
         }
         // // Free all the output buffers of trtengine after cropping is done.

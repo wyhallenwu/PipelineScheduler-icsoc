@@ -140,20 +140,11 @@ void BaseKPointExtractor::extractor() {
         cudaStreamSynchronize(postProcStream);
 
         for (BatchSizeType i = 0; i < currReq.req_batchSize; i++) {
-            timeNow = std::chrono::high_resolution_clock::now();
-            currReq.req_origGenTime[i].emplace_back(timeNow);
-            // TODO: Add the request number
-            msvc_processRecords.addRecord(currReq.req_origGenTime[i], 0);
+            // We consider this when the request was received by the postprocessor
+            currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
 
-            /**
-             * @brief There are six important timestamps to be recorded:
-             * 1. When the request was generated
-             * 2. When the request was received by the batcher
-             * 3. When the request was done preprocessing by the batcher
-             * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
-             * 5. When the batch inferencer was completed by the inferencer 
-             * 6. When each request was completed by the postprocessor
-             */
+            uint32_t totalInMem = currReq.upstreamReq_data[i].data.rows * currReq.upstreamReq_data[i].data.cols * currReq.upstreamReq_data[i].data.channels() * CV_ELEM_SIZE1(currReq.upstreamReq_data[i].data.type());
+
             if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(currReq.upstreamReq_data[i].data.size(), currReq.upstreamReq_data[i].data.type());
                 checkCudaErrorCode(cudaMemcpyAsync(
@@ -166,7 +157,7 @@ void BaseKPointExtractor::extractor() {
                 checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalCPUReqDataType>{
-                        {currReq.req_origGenTime[i]},
+                        {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
                         {currReq.req_e2eSLOLatency[i]},
                         {currReq.req_travelPath[i]},
                         1,
@@ -179,7 +170,7 @@ void BaseKPointExtractor::extractor() {
             } else {
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalGPUReqDataType>{
-                        {currReq.req_origGenTime[i]},
+                        {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
                         {currReq.req_e2eSLOLatency[i]},
                         {currReq.req_travelPath[i]},
                         1,
@@ -190,6 +181,23 @@ void BaseKPointExtractor::extractor() {
                 );
                 trace("{0:s} emplaced an image to GPU queue.", msvc_name);
             }
+
+            uint32_t totalOutMem = totalInMem;
+
+            /**
+             * @brief There are 7 important timestamps to be recorded:
+             * 1. When the request was generated
+             * 2. When the request was received by the batcher
+             * 3. When the request was done preprocessing by the batcher
+             * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
+             * 5. When the batch inferencer was completed by the inferencer 
+             * 6. When the request was received by the postprocessor
+             * 7. When each request was completed by the postprocessor
+             */
+            timeNow = std::chrono::high_resolution_clock::now();
+            currReq.req_origGenTime[i].emplace_back(timeNow);
+            // TODO: Add the request number
+            msvc_processRecords.addRecord(currReq.req_origGenTime[i], totalInMem, totalOutMem, 0);
         }
 
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);

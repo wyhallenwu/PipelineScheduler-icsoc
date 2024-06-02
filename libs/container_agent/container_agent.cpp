@@ -277,10 +277,11 @@ ContainerAgent::ContainerAgent(const json &configs) {
     // Create arrival table
     pqxx::work session(*cont_metricsServerConn);
     std::string sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_pipeName + "_" + cont_taskName + "_arrival_table ("
-                                                                                                      "last_postprocessor_timestamps BIGINT, "
-                                                                                                      "departure_timestamps BIGINT, "
                                                                                                       "arrival_timestamps BIGINT, "
-                                                                                                      "request_num BIGINT)";
+                                                                                                      "transfer_duration INTEGER, "
+                                                                                                      "full_transfer_duration INTEGER, "
+                                                                                                      "request_size INTEGER, "
+                                                                                                      "request_num INTEGER)";
 
     res = session.exec(sql_statement.c_str());
 
@@ -288,12 +289,14 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
     // Create process table
     sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_pipeName + "_" + cont_taskName + "_process_table ("
-                                                                                          "prep_arrival_timestamps BIGINT, "
-                                                                                          "prep_process_timestamps BIGINT, "
-                                                                                          "prep_batch_timestamps BIGINT, "
-                                                                                          "infer_process_timestamps BIGINT, "
-                                                                                          "post_process_timestamps BIGINT, "
-                                                                                          "request_num BIGINT)";
+                                                                                          "postprocess_timestamps BIGINT, "
+                                                                                          "prep_duration INTEGER, "
+                                                                                          "batch_duration INTEGER, "
+                                                                                          "infer_duration INTEGER, "
+                                                                                          "post_duration INTEGER, "
+                                                                                          "input_size INTEGER, "
+                                                                                          "output_size INTEGER, "
+                                                                                          "request_num INTEGER)";
 
     session.exec(sql_statement.c_str());
     session.commit();
@@ -397,26 +400,29 @@ void ContainerAgent::collectRuntimeMetrics() {
                 pqxx::work session(*cont_metricsServerConn);
                 for (auto record: arrivalRecords) {
                     sql = "INSERT INTO " + table_prefix + "_arrival_table "
-                                                          "(last_postprocessor_timestamps, departure_timestamps, arrival_timestamps, request_num) "
+                                                          "(arrival_timestamps, transfer_duration, full_transfer_duration, request_size, request_num) "
                                                           "VALUES (";
-                    sql += timePointToEpochString(std::get<0>(record)) + ", ";
-                    sql += timePointToEpochString(std::get<1>(record)) + ", ";
                     sql += timePointToEpochString(std::get<2>(record)) + ", ";
-                    sql += std::to_string(std::get<3>(record)) + ")";
+                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
+                    sql += std::to_string(std::get<3>(record)) + ", ";
+                    sql += std::to_string(std::get<4>(record)) + ")";
                     session.exec(sql.c_str());
                 }
 
                 processRecords = cont_msvcsList[3]->getProcessRecords();
-                for (auto record: processRecords) {
+                for (auto record : processRecords) {
                     sql = "INSERT INTO " + table_prefix + "_process_table "
-                                                          "(prep_arrival_timestamps, prep_process_timestamps, prep_batch_timestamps, infer_process_timestamps, post_process_timestamps, request_num) "
+                                                          "(postprocess_timestamps, prep_duration, batch_duration, infer_duration, post_duration, input_size, output_size, request_num) "
                                                           "VALUES (";
-                    sql += timePointToEpochString(std::get<0>(record)) + ", ";
-                    sql += timePointToEpochString(std::get<1>(record)) + ", ";
-                    sql += timePointToEpochString(std::get<2>(record)) + ", ";
-                    sql += timePointToEpochString(std::get<3>(record)) + ", ";
-                    sql += timePointToEpochString(std::get<4>(record)) + ", ";
-                    sql += std::to_string(std::get<5>(record)) + ")";
+                    sql += timePointToEpochString(std::get<4>(record)) + ", "; 
+                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<3>(record) - std::get<2>(record)).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::get<5>(record) - std::get<4>(record)).count()) + ", ";
+                    sql += std::to_string(std::get<6>(record)) + ", ";
+                    sql += std::to_string(std::get<7>(record)) + ", ";
+                    sql += std::to_string(std::get<8>(record)) + ")";
                     session.exec(sql.c_str());
                 }
                 session.commit();
