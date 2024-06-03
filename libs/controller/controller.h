@@ -7,17 +7,11 @@
 #include <thread>
 #include "controlcommunication.grpc.pb.h"
 #include <LightGBM/c_api.h>
-<<<<<<< HEAD
-#include <vector>
-#include <unordered_map>
-#include <memory>
-#include <algorithm>
-=======
 #include <pqxx/pqxx>
 #include "absl/strings/str_format.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/flag.h"
->>>>>>> e8bb4cd2ec2053369afd31933adfe5a0011a2939
+#include <condition_variable>
 
 using grpc::Status;
 using grpc::CompletionQueue;
@@ -90,6 +84,7 @@ namespace TaskDescription {
 
 class Controller {
 public:
+    std::mutex mutex_;
     Controller();
 
     ~Controller();
@@ -140,12 +135,8 @@ private:
         google::protobuf::RepeatedField<int32_t> queue_lengths;
         std::vector<ContainerHandle *> upstreams;
         std::vector<ContainerHandle *> downstreams;
-<<<<<<< HEAD
-        std::unordered_map<std::string, std::pair<int, int>> workerProfile;
-=======
         // TODO: remove test code
         bool running;
->>>>>>> e8bb4cd2ec2053369afd31933adfe5a0011a2939
     };
 
     float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
@@ -155,8 +146,7 @@ private:
     void UpdateFullMetrics();
 
     double LoadTimeEstimator(const char *model_path, double input_mem_size);
-    int InferTimeEstimator(ModelType model, int batch_size);
-
+    int InferTimeEstimator(ModelType model, int batch_size,std::string device_type);
 
     class RequestHandler {
     public:
@@ -208,20 +198,13 @@ private:
 
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 
-    void optimizeBatchSizeStep(
-            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
-            std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
-
-    std::map<ModelType, int> getInitialBatchSizes(
-            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
-            int nObjects);
-
     std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
     getModelsByPipelineType(PipelineType type);
 
-    bool placeMDAGOnSingleWorker(const std::shared_ptr<TaskHandle>& task);
-    void placeModulesOnWorkers(const std::shared_ptr<TaskHandle>& task);
-    void performPlacement(const std::shared_ptr<TaskHandle>& task);
+    // Helper functions for the RIM algorithm
+    bool placeMDAGOnSingleWorker(const TaskHandle& task);
+    void placeModulesOnWorkers(const TaskHandle& task);
+    void performPlacement(const TaskHandle& task);
 
     bool running;
     std::map<std::string, NodeHandle> devices;

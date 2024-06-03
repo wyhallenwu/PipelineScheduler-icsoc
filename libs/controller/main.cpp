@@ -6,7 +6,7 @@ int main() {
     receiver_thread.detach();
     std::thread scheduling_thread(&Controller::Scheduling, controller);
     scheduling_thread.detach();
-    std::ifstream file("../jsons/experiment.json");
+    std::ifstream file("/home/quang/PipelineScheduler/jsons/experiment.json");
     std::vector<TaskDescription::TaskStruct> tasks = json::parse(file);
     std::string command;
 

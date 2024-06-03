@@ -77,7 +77,7 @@ Controller::Controller() {
                      {8000, 8000, 8000, 8000},
                      std::vector<double>(4, 0.0), 55001, {}}});
     devices.insert({"edge1",
-                    {"edge1",
+                    {"AGX",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
@@ -85,7 +85,7 @@ Controller::Controller() {
                      {4000},
                      std::vector<double>(1, 0.0), 55001, {}}});
     devices.insert({"edge2",
-                    {"edge2",
+                    {"Nano",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
@@ -93,13 +93,62 @@ Controller::Controller() {
                      {4000},
                      std::vector<double>(1, 0.0), 55001, {}}});
     devices.insert({"edge3",
-                    {"edge3",
+                    {"Nano",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
                      1, std::vector<double>(1, 0.0),
                      {4000},
                      std::vector<double>(1, 0.0), 55001, {}}});
+    devices.insert({"edge4",
+                    {"Nano",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Server,
+                     4, std::vector<double>(4, 0.0),
+                     {8000, 8000, 8000, 8000},
+                     std::vector<double>(4, 0.0), 55001, {}}});
+    devices.insert({"edge5",
+                    {"NX",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
+    devices.insert({"edge6",
+                    {"NX",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
+    devices.insert({"edge7",
+                    {"NX",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
+    devices.insert({"edge8",
+                    {"NX",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
+    devices.insert({"edge9",
+                    {"NX",
+                     {},
+                     new CompletionQueue(),
+                     SystemDeviceType::Edge,
+                     1, std::vector<double>(1, 0.0),
+                     {4000},
+                     std::vector<double>(1, 0.0), 55001, {}}});
+                     
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
 
@@ -144,42 +193,51 @@ void Controller::Scheduling() {
     while (running) {
         // use list of devices, tasks and containers to schedule depending on your algorithm
         // put helper functions as a private member function of the controller and write them at the bottom of this file.
+        // Perform placement for the task
+        // Iterate over all tasks
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            std::cout << "Tasks map size: " << this->tasks.size() << std::endl; // Debug output for map size
+            if (tasks.size() != 0){
+                for (const auto& task : tasks) {
+                    // performPlacement(task.second);
+                }
+            }
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
     }
 }
 
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
+    std::cout << t.slo << "----";
     tasks.insert({t.name, {t.slo, t.type, {}}});
     TaskHandle *task = &tasks[t.name];
     NodeHandle *device = &devices[t.device];
     auto models = getModelsByPipelineType(t.type);
+    std::cout << tasks["test"].slo; //why not 5000000 but 0 ?
 
     std::string tmp = t.name;
     containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {0}}});
     task->subtasks.insert({tmp, &containers[tmp]});
     task->subtasks[tmp]->recv_port = device->next_free_port++;
-    device->containers.insert({tmp, task->subtasks[tmp]});
-    device = &devices["server"];
 
     // TODO: @Jinghang, @Quang, @Yuheng get correct initial batch size, cuda devices, and number of replicas
     // based on TaskDescription and System State if one of them does not apply to your algorithm just leave it at 1
     // all of you should use different cuda devices at the server!
     auto batch_sizes = std::map<ModelType, int>();
-    int cuda_device = 1;
-    int replicas = 1;
     for (const auto &m: models) {
         tmp = t.name;
 
         containers.insert(
-                {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {cuda_device},
+                {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {},
                                                       -1, device->next_free_port++, {}, {}, {}, {}}});
         task->subtasks.insert({tmp, &containers[tmp]});
-        device->containers.insert({tmp, task->subtasks[tmp]});
     }
 
     task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
     task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
+
     for (const auto &m: models) {
         for (const auto &d: m.second) {
             tmp = t.name;
@@ -188,16 +246,8 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
             task->subtasks[t.name + MODEL_INFO[m.first][0]]->downstreams.push_back(task->subtasks[tmp]);
         }
     }
-
-    // Perform placement for the task
-    auto taskPtr = std::make_shared<TaskHandle>(*task);
-    performPlacement(taskPtr);
-
-    for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
-        // StartContainer(msvc, task->slo, t.source, replicas);
-        FakeStartContainer(msvc, task->slo, replicas);
-    }
 }
+
 
 void Controller::FakeContainer(ContainerHandle *cont, int slo) {
     // @Jinghang, @Quang, @Yuheng this is a fake container that updates metrics every 1.2 seconds you can adjust the values etc. to have different scheduling results
@@ -211,12 +261,21 @@ void Controller::FakeContainer(ContainerHandle *cont, int slo) {
         for (int i = 0; i < 5; i++) {
             cont->queue_lengths.Add((rand() % 10));
         }
-        cont->task->last_latency = (cont->task->last_latency + slo * 0.8 + (rand() % (int) (slo * 0.4))) / 2;
+        // cont->task->last_latency = (cont->task->last_latency + slo * 0.8 + (rand() % (int) (slo * 0.4))) / 2;
         cont->device_agent->processors_utilization[cont->cuda_device[0]] += (rand() % 100) / 100.0;
         cont->device_agent->processors_utilization[cont->cuda_device[0]] /= 2;
 
         // @Jinghang, @Quang, @Yuheng change this logging to help you verify your algorithm probably add the batch size or something else
-        spdlog::info("Container {} is running on device {} and metrics are updated", cont->name, cont->device_agent->ip);
+        if (cont->device_agent->ip == "server") {
+            std::cout << "------------------------------------------------------\n";
+            for (int i = 0; i < cont->device_agent->num_processors; ++i){
+                spdlog::info("Container {} is running on device {} and metrics are updated", cont->name, cont->device_agent->ip, cont->device_agent->processors_utilization[i], cont->device_agent->mem_utilization[i]);
+            }
+            std::cout << "------------------------------------------------------\n";
+        }
+        else{
+            spdlog::info("Container {} is running on device {} and metrics are updated", cont->name, cont->device_agent->ip, cont->device_agent->processors_utilization[0], cont->device_agent->mem_utilization[0]);
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(1200));
     }
 }
@@ -412,69 +471,6 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     GPR_ASSERT(ok);*/
 }
 
-void Controller::optimizeBatchSizeStep(
-        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
-        std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
-    ModelType candidate;
-    int max_saving = 0;
-    std::vector<ModelType> blacklist;
-    for (const auto &m: models) {
-        int saving;
-        if (max_saving == 0) {
-            saving =
-                    estimated_infer_times[m.first] - InferTimeEstimator(m.first, batch_sizes[m.first] * 2);
-        } else {
-            if (batch_sizes[m.first] == 64 ||
-                std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
-                continue;
-            }
-            for (const auto &d: m.second) {
-                if (batch_sizes[d.first] > batch_sizes[m.first]) {
-                    blacklist.push_back(d.first);
-                }
-            }
-            saving = estimated_infer_times[m.first] -
-                     (InferTimeEstimator(m.first, batch_sizes[m.first] * 2) * (nObjects / batch_sizes[m.first] * 2));
-        }
-        if (saving > max_saving) {
-            max_saving = saving;
-            candidate = m.first;
-        }
-    }
-    batch_sizes[candidate] *= 2;
-    estimated_infer_times[candidate] -= max_saving;
-}
-
-std::map<ModelType, int> Controller::getInitialBatchSizes(
-        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
-        int nObjects) {
-    std::map<ModelType, int> batch_sizes = {};
-    std::map<ModelType, int> estimated_infer_times = {};
-
-    for (const auto &m: models) {
-        batch_sizes[m.first] = 1;
-        if (estimated_infer_times.size() == 0) {
-            estimated_infer_times[m.first] = (InferTimeEstimator(m.first, 1));
-        } else {
-            estimated_infer_times[m.first] = (InferTimeEstimator(m.first, 1) * nObjects);
-        }
-    }
-
-    int sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
-                              [](int acc, const std::pair<ModelType, int> &p) {
-                                  return acc + p.second;
-                              });
-
-    while (slo < sum) {
-        optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
-        sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
-                              [](int acc, const std::pair<ModelType, int> &p) {
-                                  return acc + p.second;
-                              });
-    }
-    optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
-    return batch_sizes;
-}
 
 std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
 Controller::getModelsByPipelineType(PipelineType type) {
@@ -551,7 +547,7 @@ double Controller::LoadTimeEstimator(const char *model_path, double input_mem_si
  * @param batch_size for targeted batch size (binary)
  * @return int for inference time per full batch in nanoseconds
  */
-int Controller::InferTimeEstimator(ModelType model, int batch_size) {
+int Controller::InferTimeEstimator(ModelType model, int batch_size,std::string device_type) {
     std::map<int, int> time_per_frame;
     switch (model) {
         case ModelType::Yolov5:
@@ -678,116 +674,122 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     while (i < batch_size) {
         i *= 2;
     }
-    return time_per_frame[batch_size] * batch_size;
+    // Apply device-specific performance factors
+    double performance_factor = 1.0;
+    if (device_type == "AGX") {
+        performance_factor = 2.0;
+    } else if (device_type == "Nano") {
+        performance_factor = 2.0 * 1.3;
+    } else if (device_type == "NX") {
+        performance_factor = 2.0 * 1.3 * 1.2;
+    }
+    return static_cast<int>(time_per_frame[batch_size] * batch_size * performance_factor);
 }
 
 
 // ========================================================== added ================================================================
 
-bool Controller::placeMDAGOnSingleWorker(const std::shared_ptr<TaskHandle>& task) {
-    const NodeHandle* bestFitWorker = nullptr;
-    float minRemainingGpuCapacity = std::numeric_limits<float>::max();
-    float minRemainingCpuCapacity = std::numeric_limits<float>::max();
-    int totalProfiledLatency = 0;
-
-    for (const auto& worker : devices) {
-        float totalRequiredGpuCapacity = 0;
-        float totalRequiredCpuCapacity = 0;
-        int workerProfiledLatency = 0;
-
-        for (const auto& container : task->subtasks) {
-            float requiredGpuCapacity = static_cast<float>(task->slo) / InferTimeEstimator(container.second->model, container.second->batch_size);
-            float requiredCpuCapacity = static_cast<float>(task->slo) / InferTimeEstimator(container.second->model, container.second->batch_size);
-            totalRequiredGpuCapacity += requiredGpuCapacity;
-            totalRequiredCpuCapacity += requiredCpuCapacity;
-            workerProfiledLatency += 0; // TODO: Implement profiled latency for containers
+bool Controller::placeMDAGOnSingleWorker(const TaskHandle& task) {
+    NodeHandle* bestFitWorker = nullptr;
+    float minRemainingProcCapacity = std::numeric_limits<float>::max();
+    float minRemainingMemCapacity = std::numeric_limits<float>::max();
+    int cuda_device = 1;
+    for (auto& worker : devices) {
+        float totalRequiredCapacity = 0;
+        for (const auto& container : task.subtasks) {
+            float targetFps = 1 / task.slo;
+            float maxFps = container.second->batch_size / InferTimeEstimator(container.second->model, container.second->batch_size,worker.second.ip);
+            float requiredCapacity = targetFps / maxFps;
+            totalRequiredCapacity += requiredCapacity;
         }
 
-        if (worker.second.processors_utilization[0] + totalRequiredGpuCapacity <= 1.0 &&
-            worker.second.mem_utilization[0] + totalRequiredCpuCapacity <= 1.0) {
-            float remainingGpuCapacity = 1.0 - worker.second.processors_utilization[0] - totalRequiredGpuCapacity;
-            float remainingCpuCapacity = 1.0 - worker.second.mem_utilization[0] - totalRequiredCpuCapacity;
+        for (int i = 0; i < worker.second.num_processors; i++) {
+            if (worker.second.processors_utilization[i] + totalRequiredCapacity <= 1.0 &&
+                worker.second.mem_utilization[i] + totalRequiredCapacity <= 1.0) {
+                float remainingProcCapacity = 1.0 - worker.second.processors_utilization[i] - totalRequiredCapacity;
+                float remainingMemCapacity = 1.0 - worker.second.mem_utilization[i] - totalRequiredCapacity;
 
-            if (remainingGpuCapacity < minRemainingGpuCapacity && remainingCpuCapacity < minRemainingCpuCapacity) {
-                minRemainingGpuCapacity = remainingGpuCapacity;
-                minRemainingCpuCapacity = remainingCpuCapacity;
-                bestFitWorker = &worker.second;
-                totalProfiledLatency = workerProfiledLatency;
+                if (remainingProcCapacity < minRemainingProcCapacity 
+                    && remainingMemCapacity < minRemainingMemCapacity
+                    && remainingProcCapacity > 0
+                    && remainingMemCapacity > 0) 
+                {
+                    minRemainingProcCapacity = remainingProcCapacity;
+                    minRemainingMemCapacity = remainingMemCapacity;
+                    bestFitWorker = &worker.second;
+                    cuda_device = i + 1;
+                }
             }
         }
     }
-
-    if (bestFitWorker && totalProfiledLatency <= task->slo) {
-        for (const auto& container : task->subtasks) {
-            std::pair<std::string, ContainerHandle*> containerPair = std::make_pair(container.first, container.second);
-            StartContainer(containerPair, task->slo, "", 1);
+    if (bestFitWorker) {
+        if (bestFitWorker->type == SystemDeviceType::Server) {
+            cuda_device = bestFitWorker->num_processors;
+        }
+        for (const auto& container : task.subtasks) {
+            container.second->device_agent = bestFitWorker;
+            container.second->cuda_device = {cuda_device};
+            container.second->recv_port = bestFitWorker->next_free_port++;
+            bestFitWorker->containers.insert({container.second->name, container.second});
         }
         std::cout << "mDAG placed on a single worker: " << bestFitWorker->ip << std::endl;
         return true;
     }
-
     return false;
 }
 
-void Controller::placeModulesOnWorkers(const std::shared_ptr<TaskHandle>& task) {
-    std::unordered_map<std::string, std::vector<ContainerHandle*>> workerToContainersMap;
+void Controller::placeModulesOnWorkers(const TaskHandle& task) {
 
-    for (const auto& container : task->subtasks) {
-        const NodeHandle* bestFitWorker = nullptr;
-        float minRemainingGpuCapacity = std::numeric_limits<float>::max();
-        float minRemainingCpuCapacity = std::numeric_limits<float>::max();
+    for (const auto& container : task.subtasks) {
+        NodeHandle* bestFitWorker = nullptr;
+        float minRemainingProcCapacity = std::numeric_limits<float>::max();
+        float minRemainingMemCapacity = std::numeric_limits<float>::max();
+        int cuda_device = 1;
+        for (auto& worker : devices) {
+            float targetFps = 1 / task.slo;
+            float maxFps = container.second->batch_size / InferTimeEstimator(container.second->model, container.second->batch_size,worker.second.ip);
+            float totalRequiredCapacity = targetFps / maxFps;
+            for (int i = 0; i < worker.second.num_processors; i++) {
+                if (worker.second.processors_utilization[i] + totalRequiredCapacity <= 1.0 &&
+                worker.second.mem_utilization[i] + totalRequiredCapacity <= 1.0) {
+                float remainingProcCapacity = 1.0 - worker.second.processors_utilization[i] - totalRequiredCapacity;
+                float remainingMemCapacity = 1.0 - worker.second.mem_utilization[i] - totalRequiredCapacity;
 
-        for (const auto& worker : devices) {
-            float requiredGpuCapacity = static_cast<float>(task->slo) / InferTimeEstimator(container.second->model, container.second->batch_size);
-            float requiredCpuCapacity = static_cast<float>(task->slo) / InferTimeEstimator(container.second->model, container.second->batch_size);
-
-            if (worker.second.processors_utilization[0] + requiredGpuCapacity <= 1.0 &&
-                worker.second.mem_utilization[0] + requiredCpuCapacity <= 1.0) {
-                float remainingGpuCapacity = 1.0 - worker.second.processors_utilization[0] - requiredGpuCapacity;
-                float remainingCpuCapacity = 1.0 - worker.second.mem_utilization[0] - requiredCpuCapacity;
-
-                if (remainingGpuCapacity < minRemainingGpuCapacity && remainingCpuCapacity < minRemainingCpuCapacity) {
-                    minRemainingGpuCapacity = remainingGpuCapacity;
-                    minRemainingCpuCapacity = remainingCpuCapacity;
+                if (remainingProcCapacity < minRemainingProcCapacity 
+                    && remainingMemCapacity < minRemainingMemCapacity
+                    && remainingProcCapacity > 0
+                    && remainingMemCapacity > 0) 
+                {
+                    minRemainingProcCapacity = remainingProcCapacity;
+                    minRemainingMemCapacity = remainingMemCapacity;
                     bestFitWorker = &worker.second;
+                    cuda_device = i + 1;
                 }
+            }
             }
         }
 
         if (bestFitWorker) {
-            workerToContainersMap[bestFitWorker->ip].push_back(container.second);
+                if (bestFitWorker->type == SystemDeviceType::Server) {
+                    cuda_device = bestFitWorker->num_processors;
+                }
+                container.second->device_agent = bestFitWorker;
+                container.second->cuda_device = {cuda_device};
+                container.second->recv_port = bestFitWorker->next_free_port++;
+                bestFitWorker->containers.insert({container.second->name, container.second});
+
         } else {
             std::cerr << "No available worker found for container: " << container.second->name << std::endl;
         }
     }
-
-    int totalProfiledLatency = 0;
-    for (const auto& workerContainersPair : workerToContainersMap) {
-        const std::string& workerId = workerContainersPair.first;
-        const auto& containers = workerContainersPair.second;
-
-        for (const auto& container : containers) {
-            totalProfiledLatency += 0; // TODO: Implement profiled latency for containers
-        }
-    }
-
-    if (totalProfiledLatency <= task->slo) {
-        for (const auto& workerContainersPair : workerToContainersMap) {
-            const std::string& workerId = workerContainersPair.first;
-            const auto& containers = workerContainersPair.second;
-
-            for (const auto& container : containers) {
-                std::pair<std::string, ContainerHandle*> containerPair = std::make_pair(container->name, container);
-                StartContainer(containerPair, task->slo);
-            }
-        }
-    } else {
-        std::cerr << "Cannot place mDAG containers on workers due to latency constraints." << std::endl;
-    }
 }
 
-void Controller::performPlacement(const std::shared_ptr<TaskHandle>& task) {
+void Controller::performPlacement(const TaskHandle& task) {
     if (!placeMDAGOnSingleWorker(task)) {
         placeModulesOnWorkers(task);
+    }
+    int replicas = 1;
+    for (std::pair<std::string, ContainerHandle *> msvc: task.subtasks) {
+        FakeStartContainer(msvc, task.slo, replicas);
     }
 }
