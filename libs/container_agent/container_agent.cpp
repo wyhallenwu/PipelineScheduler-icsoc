@@ -325,7 +325,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
                     "   PRIMARY KEY (timestamps)"
                     ");";
     res = session.exec(sql_statement.c_str());
-    
+
 
     session.commit();
 
@@ -365,7 +365,7 @@ void ContainerAgent::ReportStart() {
     GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
     pid = reply.pid();
-    if (cont_taskName != "datasource") {
+    if (cont_taskName != "datasource" && cont_taskName != "sink") {
         profiler = new Profiler({pid});
         reportMetrics = true;
     }
@@ -389,7 +389,7 @@ void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
 void ContainerAgent::collectRuntimeMetrics() {
     // TODO: Implement a way to collect profile metrics (copy code from device Agent) and send to metrics server
     std::vector<int> queueSizes;
-    int i, arrivalRate, lateCount;
+    int i, lateCount;
     ArrivalRecordType arrivalRecords;
     ProcessRecordType processRecords;
     std::string sql;
@@ -398,7 +398,6 @@ void ContainerAgent::collectRuntimeMetrics() {
         for (auto msvc: cont_msvcsList) {
             queueSizes.push_back(msvc->GetOutQueueSize(0));
         }
-        // arrivalRate = cont_msvcsList[1]->GetArrivalRate();
         lateCount = cont_msvcsList[1]->GetDroppedReqCount();
         if (i++ > 20) {
             i = 0;
@@ -409,7 +408,7 @@ void ContainerAgent::collectRuntimeMetrics() {
 //            server.sendMetrics.hardware = metrics;
         } else { // aggregate hardware
             if (reportMetrics && pid != 0) {
-                Profiler::sysStats stats = profiler->reportAtRuntime(pid);
+                Profiler::sysStats stats = profiler->reportAtRuntime(1, pid);
                 cont_hwMetrics.cpuUsage =
                         (1 - 1 / i) * cont_hwMetrics.cpuUsage + (1 / i) * stats.cpuUsage; // uint
                 cont_hwMetrics.memUsage =
@@ -418,11 +417,8 @@ void ContainerAgent::collectRuntimeMetrics() {
                         (1 - 1 / i) * cont_hwMetrics.memUsage + (1 / i) * stats.gpuUtilization; // uint
                 cont_hwMetrics.gpuMemUsage =
                         (1 - 1 / i) * cont_hwMetrics.memUsage + (1 / i) * stats.gpuMemoryUsage; // uint
-            }
-            // Report metrics except for the data source
-            // TODO: find a better way to idenfiy the datasource rather than using taskName
-            std::string table_prefix = cont_pipeName + "_" + cont_taskName;
-            if (cont_taskName != "datasource") {
+
+                std::string table_prefix = cont_pipeName + "_" + cont_taskName;
                 // Report Arrival metrics
                 arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
                 pqxx::work session(*cont_metricsServerConn);
@@ -448,7 +444,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                                                           "infer_duration, post_duration, infer_batch_size, input_size, "
                                                           "output_size, request_num) "
                                                           "VALUES (";
-                    sql += timePointToEpochString(record.postEndTime) + ", "; 
+                    sql += timePointToEpochString(record.postEndTime) + ", ";
                     sql += "'" + record.reqOrigin + "'" + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.preEndTime - record.preStartTime).count()) + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.batchingEndTime - record.preEndTime).count()) + ", ";
