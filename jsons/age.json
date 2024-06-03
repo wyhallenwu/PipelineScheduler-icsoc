@@ -2,6 +2,8 @@
     "container": {
         "cont_pipeName": "pedestrian_security",
         "cont_taskName": "age",
+        "cont_hostDevice": "server",
+        "cont_name": "age_0",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",

@@ -3,6 +3,8 @@
     "container" : {
         "cont_pipeName": "traffic_pipeline",
         "cont_taskName": "retinaface",
+        "cont_hostDevice": "server",
+        "cont_name": "retinaface_0",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",

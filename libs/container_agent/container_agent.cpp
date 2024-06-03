@@ -253,6 +253,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
     cont_name = containerConfigs["cont_name"];
     cont_pipeName = containerConfigs["cont_pipeName"];
     cont_taskName = containerConfigs["cont_taskName"];
+    cont_hostDevice = containerConfigs["cont_hostDevice"];
 
     cont_RUNMODE = containerConfigs["cont_RUNMODE"];
 

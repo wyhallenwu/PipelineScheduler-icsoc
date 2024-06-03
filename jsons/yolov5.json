@@ -2,6 +2,7 @@
     "container": {
         "cont_pipeName": "traffic",
         "cont_taskName": "yolov5",
+        "cont_hostDevice": "server",
         "cont_name": "yolov5_0",
         "cont_pipeline": [
             {
