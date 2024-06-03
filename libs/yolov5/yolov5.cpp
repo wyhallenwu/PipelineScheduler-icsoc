@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
     }
 
     std::vector<Microservice*> msvcsList;
-    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
+    if (configs["container"]["cont_RUNMODE"] == RUNMODE::EMPTY_PROFILING) {
         msvcsList.push_back(new ProfileGenerator(pipeConfigs[0]));
     } else {    
         if (pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
     msvcsList.push_back(new BaseBBoxCropper(pipeConfigs[3]));
     msvcsList[3]->SetInQueue(msvcsList[2]->GetOutQueue());
     // dynamic_cast<BaseBBoxCropper*>(msvcsList[3])->setInferenceShape(dynamic_cast<BaseBatchInferencer*>(msvcsList[2])->getInputShapeVector());
-    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
+    if (configs["container"]["cont_RUNMODE"] == RUNMODE::EMPTY_PROFILING) {
         msvcsList.push_back(new BaseSink(pipeConfigs[4]));
         msvcsList[4]->SetInQueue(msvcsList[3]->GetOutQueue());
         msvcsList[0]->SetInQueue(msvcsList[4]->GetOutQueue());

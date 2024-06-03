@@ -279,7 +279,8 @@ enum class NeighborType {
 
 enum RUNMODE {
     DEPLOYMENT,
-    PROFILING
+    PROFILING,
+    EMPTY_PROFILING
 };
 
 namespace msvcconfigs {

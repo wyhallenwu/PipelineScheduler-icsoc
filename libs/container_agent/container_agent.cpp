@@ -29,7 +29,7 @@ json loadRunArgs(int argc, char **argv) {
     std::string logPath = absl::GetFlag(FLAGS_log_dir);
     bool profiling_mode = absl::GetFlag(FLAGS_profiling_mode);
 
-    RUNMODE runmode = profiling_mode ? RUNMODE::PROFILING : RUNMODE::DEPLOYMENT;
+    RUNMODE runmode = profiling_mode ? RUNMODE::EMPTY_PROFILING : RUNMODE::DEPLOYMENT;
 
     spdlog::set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
     spdlog::set_level(spdlog::level::level_enum(logLevel));
@@ -257,7 +257,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
     cont_RUNMODE = containerConfigs["cont_RUNMODE"];
 
-    if (cont_RUNMODE == RUNMODE::PROFILING) {
+    if (cont_RUNMODE == RUNMODE::EMPTY_PROFILING) {
         // Create the logDir for this container
         cont_logDir = (std::string) containerConfigs.at("cont_logPath");
         std::filesystem::create_directory(
@@ -283,7 +283,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
         cont_processTableName = cont_pipeName + "_" + cont_taskName + "_process_table";
         cont_hwMetricsTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_hwmetrics_table";
     }
-    else if (cont_RUNMODE == RUNMODE::PROFILING) {
+    else if (cont_RUNMODE == RUNMODE::EMPTY_PROFILING) {
         cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_profile_arrival_table";
         cont_processTableName = cont_pipeName + "_" + cont_taskName + "_profile_process_table";
         cont_hwMetricsTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_profile_hwmetrics_table";
@@ -373,7 +373,7 @@ void ContainerAgent::ReportStart() {
 
 
 void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
-    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
+    if (configs["container"]["cont_RUNMODE"] == RUNMODE::EMPTY_PROFILING) {
         profiling(pipeConfigs, configs["profiling"]);
     } else {
         this->dispatchMicroservices();
