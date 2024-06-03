@@ -98,7 +98,7 @@ public:
     virtual void batchRequestsProfiling();
 
     void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread batcher(&BaseReqBatcher::batchRequestsProfiling, this);
             batcher.detach();
@@ -147,7 +147,7 @@ public:
     RequestShapeType getOutputShapeVector();
 
     void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread inferencer(&BaseBatchInferencer::inferenceProfiling, this);
             inferencer.detach();
@@ -234,7 +234,7 @@ public:
     void cropProfiling();
 
     void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread postprocessor(&BaseBBoxCropper::cropProfiling, this);
             postprocessor.detach();
@@ -266,7 +266,7 @@ public:
     void cropProfiling();
 
     void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread postprocessor(&BaseBBoxCropperAugmentation::cropProfiling, this);
             postprocessor.detach();
@@ -290,7 +290,7 @@ public:
     void cropProfiling();
 
     virtual void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread postprocessor(&BaseBBoxCropperVerifier::cropProfiling, this);
             postprocessor.detach();
@@ -313,7 +313,7 @@ public:
     virtual void classify() ;
 
     virtual void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread classifier(&BaseClassifier::classifyProfiling, this);
             classifier.detach();
@@ -351,7 +351,7 @@ public:
     virtual void extractor();
 
     virtual void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread extractor(&BaseKPointExtractor::extractorProfiling, this);
             extractor.detach();
@@ -376,7 +376,7 @@ public:
     virtual void sink();
 
     virtual void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread sinker(&BaseSink::sink, this);
             sinker.detach();

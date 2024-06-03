@@ -2,6 +2,8 @@
     "container": {
         "cont_pipeName": "traffic_pipeline",
         "cont_taskName": "carbrand",
+        "cont_hostDevice": "server",
+        "cont_name": "carbrand_0",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",

@@ -61,7 +61,7 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_deviceIndex = configs.msvc_deviceIndex;
     msvc_RUNMODE = configs.msvc_RUNMODE;
 
-    if (msvc_RUNMODE == RUNMODE::PROFILING) {
+    if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
         msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + ".txt";
     } else {
         msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + "_" + getTimestampString() + ".txt";

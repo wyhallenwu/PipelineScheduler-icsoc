@@ -2,6 +2,8 @@
     "container": {
         "cont_pipeName": "videocall_pipeline",
         "cont_taskName": "emotionnet",
+        "cont_hostDevice": "server",
+        "cont_name": "emotionnet_0",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",

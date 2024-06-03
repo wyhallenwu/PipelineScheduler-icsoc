@@ -2,6 +2,8 @@
     "container": {
         "cont_pipeName": "traffic_pipeline",
         "cont_taskName": "arcface",
+        "cont_hostDevice": "server",
+        "cont_name": "arcface_0",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",

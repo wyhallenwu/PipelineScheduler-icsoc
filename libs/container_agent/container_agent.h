@@ -213,6 +213,8 @@ protected:
     std::vector<Microservice *> cont_msvcsList;
     std::string cont_pipeName;
     std::string cont_taskName;
+    // Name of the host where the container is running
+    std::string cont_hostDevice;
     float arrivalRate;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
@@ -223,7 +225,10 @@ protected:
 
     bool reportMetrics;
     unsigned int pid;
-    Metrics metrics;
+    std::string cont_hwMetricsTableName;
+    HardwareMetrics cont_hwMetrics;
+    std::string cont_arrivalTableName;
+    std::string cont_processTableName;
     Profiler *profiler;
 
     std::string cont_logDir;

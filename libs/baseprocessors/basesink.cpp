@@ -69,7 +69,7 @@ void BaseSink::sink() {
             keepProfiling = 0;
         }
 
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             for (BatchSizeType i = 0; i < batchSize; i++) {
                 msvc_logFile << inferTimeReport.req_travelPath[i] << "|";
                 for (unsigned int j = 0; j < inferTimeReport.req_origGenTime[i].size() - 1; j++) {

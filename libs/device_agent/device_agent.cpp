@@ -270,10 +270,10 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
         service->RequestReportMsvcStart(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new ReportStartRequestHandler(service, cq, device_agent);
-        std::cout << "Received start report from " << request.msvc_name() << " with pid: " << request.pid() << std::endl;
 
         int pid = getContainerProcessPid(request.msvc_name());
         device_agent->containers[request.msvc_name()].pid = pid;
+        std::cout << "Received start report from " << request.msvc_name() << " with pid: " << pid << std::endl;
 
 
         reply.set_pid(pid);

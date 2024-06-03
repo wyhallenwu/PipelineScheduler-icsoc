@@ -2,6 +2,8 @@
     "container": {
         "cont_pipeName": "traffic_pipeline",
         "cont_taskName": "yolov5-plate",
+        "cont_hostDevice": "server",
+        "cont_name": "yolov5-plate_0",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",

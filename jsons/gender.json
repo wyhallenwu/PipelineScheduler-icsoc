@@ -2,6 +2,8 @@
     "container": {
         "cont_pipeName": "pedestrian_security",
         "cont_taskName": "gender",
+        "cont_hostDevice": "server",
+        "cont_name": "gender_0",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",

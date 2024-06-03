@@ -60,11 +60,11 @@ enum PipelineType {
     Building_Security
 };
 
-struct Metrics {
+struct HardwareMetrics {
     float requestRate = 0;
-    double cpuUsage = 0;
-    long memUsage = 0;
-    unsigned int gpuUsage = 0;
+    float cpuUsage = 0;
+    unsigned int memUsage = 0;
+    float gpuUsage = 0;
     unsigned int gpuMemUsage = 0;
 };
 
@@ -131,7 +131,7 @@ private:
         std::vector<int> cuda_device;
         int class_of_interest;
         int recv_port;
-        Metrics metrics;
+        HardwareMetrics metrics;
         google::protobuf::RepeatedField<int32_t> queue_lengths;
         std::vector<ContainerHandle *> upstreams;
         std::vector<ContainerHandle *> downstreams;

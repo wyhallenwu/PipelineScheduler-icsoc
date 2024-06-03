@@ -32,8 +32,32 @@ typedef std::vector<std::vector<int32_t>> RequestShapeType;
 typedef cv::cuda::GpuMat LocalGPUReqDataType;
 typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
-typedef std::vector<std::tuple<ClockType, ClockType, ClockType, uint32_t, uint32_t, uint32_t>> ArrivalRecordType;
-typedef std::vector<std::tuple<ClockType, ClockType, ClockType, ClockType, ClockType, ClockType, uint32_t, uint32_t, uint32_t, uint32_t>> ProcessRecordType;
+
+struct ArrivalRecord {
+    ClockType prevPostProcTime;
+    ClockType prevSenderTime;
+    ClockType arrivalTime;
+    uint32_t rpcBatchSize;
+    uint32_t reqSize;
+    uint32_t reqNum;
+    std::string reqOrigin;
+};
+typedef std::vector<ArrivalRecord> ArrivalRecordType;
+
+struct ProcessRecord {
+    ClockType preStartTime;
+    ClockType preEndTime;
+    ClockType batchingEndTime;
+    ClockType batchInferenceTime;
+    ClockType postStartTime;
+    ClockType postEndTime;
+    uint32_t inferBatchSize;
+    uint32_t inputSize;
+    uint32_t outputSize;
+    uint32_t reqNum;
+    std::string reqOrigin;
+};
+typedef std::vector<ProcessRecord> ProcessRecordType;
 typedef std::chrono::microseconds TimePrecisionType;
 
 const std::unordered_set<uint16_t> GRAYSCALE_CONVERSION_CODES = {6, 7, 10, 11};
