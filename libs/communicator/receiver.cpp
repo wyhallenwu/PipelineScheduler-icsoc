@@ -15,7 +15,6 @@ void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     ReceiverConfigs configs = loadConfigsFromJson(jsonConfigs);
 
     if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-        // readConfigsFromJson(configs.msvc_appLvlConfigs);
         msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
     } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
         grpc::EnableDefaultHealthCheckService(true);

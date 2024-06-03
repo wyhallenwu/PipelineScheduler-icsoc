@@ -150,7 +150,7 @@ void Controller::Scheduling() {
 
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
-    tasks.insert({t.name, {t.slo, t.type, {}}});
+    tasks.insert({t.name, {0, t.slo, t.type, {}}});
     TaskHandle *task = &tasks[t.name];
     NodeHandle *device = &devices[t.device];
     auto models = getModelsByPipelineType(t.type);

@@ -3,7 +3,6 @@
 #include <misc.h>
 #include <chrono>
 #include "container_agent.h"
-#include "profilegenerator.h"
 #include "receiver.h"
 #include "spdlog/spdlog.h"
 
