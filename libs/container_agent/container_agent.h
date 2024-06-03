@@ -225,7 +225,10 @@ protected:
 
     bool reportMetrics;
     unsigned int pid;
-    Metrics metrics;
+    std::string cont_hwMetricsTableName;
+    HardwareMetrics cont_hwMetrics;
+    std::string cont_arrivalTableName;
+    std::string cont_processTableName;
     Profiler *profiler;
 
     std::string cont_logDir;

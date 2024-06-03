@@ -410,9 +410,15 @@ public:
      *
      * @param timestamps
      */
-    void addRecord(RequestTimeType timestamps, uint32_t rpcBatchSize, uint32_t requestSize, uint32_t reqNumber) {
+    void addRecord(
+        RequestTimeType timestamps,
+        uint32_t rpcBatchSize,
+        uint32_t requestSize,
+        uint32_t reqNumber,
+        std::string reqOrigin = "stream"
+    ) {
         std::unique_lock<std::mutex> lock(mutex);
-        records.push_back(std::make_tuple(timestamps[1], timestamps[2], timestamps[3], rpcBatchSize, requestSize, reqNumber));
+        records.push_back({timestamps[1], timestamps[2], timestamps[3], rpcBatchSize, requestSize, reqNumber, reqOrigin});
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();
@@ -424,7 +430,7 @@ public:
         auto timeNow = std::chrono::high_resolution_clock::now();
         auto it = records.begin();
         while (it != records.end()) {
-            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - std::get<2>(*it));
+            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - it->arrivalTime);
             if (timePassed > keepLength) {
                 it = records.erase(it);
                 currNumEntries--;
@@ -469,9 +475,30 @@ public:
      *
      * @param timestamps
      */
-    void addRecord(RequestTimeType timestamps, uint32_t inferBatchSize, uint32_t inputSize, uint32_t outputSize, uint32_t reqNumber) {
+    void addRecord(
+        RequestTimeType timestamps,
+        uint32_t inferBatchSize,
+        uint32_t inputSize,
+        uint32_t outputSize,
+        uint32_t reqNumber,
+        std::string reqOrigin = "stream"
+    ) {
         std::unique_lock<std::mutex> lock(mutex);
-        records.push_back(std::make_tuple(timestamps[1], timestamps[2], timestamps[3], timestamps[4], timestamps[5], timestamps[6], inferBatchSize, inputSize, outputSize, reqNumber));
+        records.push_back(
+            {
+                timestamps[1],
+                timestamps[2],
+                timestamps[3],
+                timestamps[4],
+                timestamps[5],
+                timestamps[6],
+                inferBatchSize,
+                inputSize,
+                outputSize,
+                reqNumber,
+                reqOrigin
+            }
+        );
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();
@@ -483,7 +510,7 @@ public:
         auto timeNow = std::chrono::high_resolution_clock::now();
         auto it = records.begin();
         while (it != records.end()) {
-            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - std::get<2>(*it));
+            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - it->postEndTime);
             if (timePassed > keepLength) {
                 it = records.erase(it);
                 currNumEntries--;

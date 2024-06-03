@@ -277,31 +277,56 @@ ContainerAgent::ContainerAgent(const json &configs) {
     pqxx::result res;
     // Create arrival table
     pqxx::work session(*cont_metricsServerConn);
-    std::string sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_pipeName + "_" + cont_taskName + "_arrival_table ("
-                                                                                                      "arrival_timestamps BIGINT, "
-                                                                                                      "transfer_duration INTEGER, "
-                                                                                                      "full_transfer_duration INTEGER, "
-                                                                                                      "rpc_batch_size INTEGER, "
-                                                                                                      "request_size INTEGER, "
-                                                                                                      "request_num INTEGER)";
+    std::string sql_statement;
+    if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
+        cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_arrival_table";
+        cont_processTableName = cont_pipeName + "_" + cont_taskName + "_process_table";
+        cont_hwMetricsTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_hwmetrics_table";
+    }
+    else if (cont_RUNMODE == RUNMODE::PROFILING) {
+        cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_profile_arrival_table";
+        cont_processTableName = cont_pipeName + "_" + cont_taskName + "_profile_process_table";
+        cont_hwMetricsTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_profile_hwmetrics_table";
+    }
+    sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_arrivalTableName + " ("
+                                                                            "arrival_timestamps BIGINT, "
+                                                                            "origin VARCHAR(50), "
+                                                                            "transfer_duration INTEGER, "
+                                                                            "full_transfer_duration INTEGER, "
+                                                                            "rpc_batch_size INTEGER, "
+                                                                            "request_size INTEGER, "
+                                                                            "request_num INTEGER)";
 
     res = session.exec(sql_statement.c_str());
 
     spdlog::info("{0:s} created arrival table and process table.", cont_name);
 
     // Create process table
-    sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_pipeName + "_" + cont_taskName + "_process_table ("
-                                                                                          "postprocess_timestamps BIGINT, "
-                                                                                          "prep_duration INTEGER, "
-                                                                                          "batch_duration INTEGER, "
-                                                                                          "infer_duration INTEGER, "
-                                                                                          "post_duration INTEGER, "
-                                                                                          "infer_batch_size INTEGER, "
-                                                                                          "input_size INTEGER, "
-                                                                                          "output_size INTEGER, "
-                                                                                          "request_num INTEGER)";
+    sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_processTableName + " ("
+                                                                            "postprocess_timestamps BIGINT, "
+                                                                            "origin VARCHAR(50), "
+                                                                            "prep_duration INTEGER, "
+                                                                            "batch_duration INTEGER, "
+                                                                            "infer_duration INTEGER, "
+                                                                            "post_duration INTEGER, "
+                                                                            "infer_batch_size INTEGER, "
+                                                                            "input_size INTEGER, "
+                                                                            "output_size INTEGER, "
+                                                                            "request_num INTEGER)";
 
     session.exec(sql_statement.c_str());
+    sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
+                    "   timestamps BIGINT NOT NULL,"
+                    "   batch_size INTEGER NOT NULL,"
+                    "   cpu_usage FLOAT NOT NULL,"
+                    "   mem_usage BIGINT NOT NULL,"
+                    "   gpu_usage FLOAT NOT NULL,"
+                    "   gpu_mem_usage BIGINT NOT NULL,"
+                    "   PRIMARY KEY (timestamps)"
+                    ");";
+    res = session.exec(sql_statement.c_str());
+    
+
     session.commit();
 
 
@@ -385,14 +410,14 @@ void ContainerAgent::collectRuntimeMetrics() {
         } else { // aggregate hardware
             if (reportMetrics && pid != 0) {
                 Profiler::sysStats stats = profiler->reportAtRuntime(pid);
-                metrics.cpuUsage =
-                        (1 - 1 / i) * metrics.cpuUsage + (1 / i) * stats.cpuUsage;
-                metrics.memUsage =
-                        (1 - 1 / i) * metrics.memUsage + (1 / i) * stats.memoryUsage;
-                metrics.gpuUsage =
-                        (1 - 1 / i) * metrics.memUsage + (1 / i) * stats.gpuUtilization;
-                metrics.gpuMemUsage =
-                        (1 - 1 / i) * metrics.memUsage + (1 / i) * stats.gpuMemoryUsage;
+                cont_hwMetrics.cpuUsage =
+                        (1 - 1 / i) * cont_hwMetrics.cpuUsage + (1 / i) * stats.cpuUsage; // uint
+                cont_hwMetrics.memUsage =
+                        (1 - 1 / i) * cont_hwMetrics.memUsage + (1 / i) * stats.memoryUsage; // uint
+                cont_hwMetrics.gpuUsage =
+                        (1 - 1 / i) * cont_hwMetrics.memUsage + (1 / i) * stats.gpuUtilization; // uint
+                cont_hwMetrics.gpuMemUsage =
+                        (1 - 1 / i) * cont_hwMetrics.memUsage + (1 / i) * stats.gpuMemoryUsage; // uint
             }
             // Report metrics except for the data source
             // TODO: find a better way to idenfiy the datasource rather than using taskName
@@ -403,34 +428,36 @@ void ContainerAgent::collectRuntimeMetrics() {
                 pqxx::work session(*cont_metricsServerConn);
                 for (auto record: arrivalRecords) {
                     sql = "INSERT INTO " + table_prefix + "_arrival_table "
-                                                          "(arrival_timestamps, transfer_duration, full_transfer_duration, "
+                                                          "(arrival_timestamps, origin, transfer_duration, full_transfer_duration, "
                                                           "rpc_batch_size, request_size, request_num) "
                                                           "VALUES (";
-                    sql += timePointToEpochString(std::get<2>(record)) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
-                    sql += std::to_string(std::get<4>(record)) + ", ";
-                    sql += std::to_string(std::get<4>(record)) + ", ";
-                    sql += std::to_string(std::get<5>(record)) + ")";
+                    sql += timePointToEpochString(record.arrivalTime) + ", ";
+                    sql += "'" + record.reqOrigin + "'" + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.arrivalTime - record.prevSenderTime).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.arrivalTime - record.prevPostProcTime).count()) + ", ";
+                    sql += std::to_string(record.rpcBatchSize) + ", ";
+                    sql += std::to_string(record.reqSize) + ", ";
+                    sql += std::to_string(record.reqNum) + ")";
                     session.exec(sql.c_str());
                 }
 
                 processRecords = cont_msvcsList[3]->getProcessRecords();
                 for (auto record : processRecords) {
                     sql = "INSERT INTO " + table_prefix + "_process_table "
-                                                          "(postprocess_timestamps, prep_duration, batch_duration, "
+                                                          "(postprocess_timestamps, origin, prep_duration, batch_duration, "
                                                           "infer_duration, post_duration, infer_batch_size, input_size, "
                                                           "output_size, request_num) "
                                                           "VALUES (";
-                    sql += timePointToEpochString(std::get<4>(record)) + ", "; 
-                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<1>(record) - std::get<0>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<2>(record) - std::get<1>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<3>(record) - std::get<2>(record)).count()) + ", ";
-                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(std::get<5>(record) - std::get<4>(record)).count()) + ", ";
-                    sql += std::to_string(std::get<6>(record)) + ", ";
-                    sql += std::to_string(std::get<7>(record)) + ", ";
-                    sql += std::to_string(std::get<8>(record)) + ", ";
-                    sql += std::to_string(std::get<9>(record)) + ")";
+                    sql += timePointToEpochString(record.postEndTime) + ", "; 
+                    sql += "'" + record.reqOrigin + "'" + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.preEndTime - record.preStartTime).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.batchingEndTime - record.preEndTime).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.batchInferenceTime - record.batchingEndTime).count()) + ", ";
+                    sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.postEndTime - record.postStartTime).count()) + ", ";
+                    sql += std::to_string(record.inferBatchSize) + ", ";
+                    sql += std::to_string(record.inputSize) + ", ";
+                    sql += std::to_string(record.outputSize) + ", ";
+                    sql += std::to_string(record.reqNum) + ")";
                     session.exec(sql.c_str());
                 }
                 session.commit();
