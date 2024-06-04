@@ -18,6 +18,7 @@ void addProfileConfigs(json &msvcConfigs, const json &profileConfigs) {
     msvcConfigs["profile_inputRandomizeScheme"] = profileConfigs.at("profile_inputRandomizeScheme");
     msvcConfigs["profile_stepMode"] = profileConfigs.at("profile_stepMode");
     msvcConfigs["profile_step"] = profileConfigs.at("profile_step");
+    msvcConfigs["profile_numProfileReqs"] = profileConfigs.at("profile_numProfileReqs");
 }
 
 json loadRunArgs(int argc, char **argv) {
@@ -27,7 +28,7 @@ json loadRunArgs(int argc, char **argv) {
     int8_t device = absl::GetFlag(FLAGS_device);
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     std::string logPath = absl::GetFlag(FLAGS_log_dir);
-    uint8_t profiling_mode = absl::GetFlag(FLAGS_profiling_mode);
+    uint16_t profiling_mode = absl::GetFlag(FLAGS_profiling_mode);
 
     RUNMODE runmode = static_cast<RUNMODE>(profiling_mode);
 
@@ -75,6 +76,7 @@ json loadRunArgs(int argc, char **argv) {
         containerConfigs.at("cont_pipeline")[i]["msvc_RUNMODE"] = runmode;
         containerConfigs.at(
                 "cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs["metricsServer_metricsReportIntervalMillisec"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_numWarmUpBatches"] = containerConfigs.at("cont_numWarmUpBatches");
 
         /**
          * @brief     If this is profiling, set configurations to the first batch size that should be profiled
@@ -83,7 +85,11 @@ json loadRunArgs(int argc, char **argv) {
          * 2. Setting the batch size to the smallest profile batch size
          * 
          */
-        if (profiling_mode) {
+        if (profiling_mode == 1) {
+            addProfileConfigs(containerConfigs.at("cont_pipeline")[i], profilingConfigs);
+            containerConfigs.at("cont_pipeline")[i].at("msvc_idealBatchSize") = minBatch;
+            containerConfigs.at("cont_pipeline")[i].at("profile_numWarmUpBatches") = profilingConfigs.at("profile_numWarmUpBatches");
+        } else if (profiling_mode == 2) {
             containerConfigs.at("cont_pipeline")[i].at("msvc_idealBatchSize") = minBatch;
             if (i == 0) {
                 addProfileConfigs(containerConfigs.at("cont_pipeline")[i], profilingConfigs);

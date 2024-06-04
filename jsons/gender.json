@@ -276,7 +276,7 @@
             }
         ],
         "cont_metricServerConfigs": "../jsons/metricsserver.json",
-        "cont_metricScrapeIntervalSecond": 60
+        "cont_numWarmUpBatches": 15
     },
     "profiling": {
         "profile_minBatch": 1,
@@ -286,6 +286,7 @@
         "profile_templateModelPath": "../models/gender_dynamic_3090_fp32_[batch]_1.engine",
         "profile_inputRandomizeScheme": 0,
         "profile_numWarmUpBatches": 10,
-        "profile_numProfileBatches": 100
+        "profile_numProfileBatches": 100,
+        "profile_numProfileReqs": 1800
     }
 }

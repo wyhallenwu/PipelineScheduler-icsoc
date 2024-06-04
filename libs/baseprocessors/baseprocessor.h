@@ -212,6 +212,9 @@ public:
     virtual ProcessRecordType getProcessRecords() override {
         return msvc_processRecords.getRecords();
     }
+    virtual void addToPath(RequestPathType &path, uint64_t reqNum) {
+        
+    }
 protected:
     ProcessReqRecords msvc_processRecords;
 };

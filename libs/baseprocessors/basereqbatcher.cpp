@@ -341,7 +341,10 @@ void BaseReqBatcher::batchRequests() {
 
         // Keeping record of the arrival requests
         // TODO: Add rpc batch size instead of hardcoding
-        msvc_arrivalRecords.addRecord(currReq.req_origGenTime[0], 10, requestSize, msvc_inReqCount);
+        if (msvc_batchCount >= msvc_numWarmupBatches) {
+            // Only start recording after the warmup period
+            msvc_arrivalRecords.addRecord(currReq.req_origGenTime[0], 10, requestSize, msvc_inReqCount);
+        }
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
@@ -421,6 +424,9 @@ void BaseReqBatcher::batchRequests() {
                 bufferData,
                 prevData
             };
+
+            msvc_batchCount++;
+
             trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
             msvc_OutQueue[0]->emplace(outReq);
             msvc_onBufferBatchSize = 0;
@@ -653,8 +659,15 @@ void BaseReqBatcher::batchRequestsProfiling() {
  * @return false if otherwise
  */
 bool BaseReqBatcher::isTimeToBatch() {
-    if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
-        return true;
+    if (msvc_RUNMODE != RUNMODE::DEPLOYMENT) {
+        // TODO: This is a temporary solution
+        if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
+            return true;
+        }
+    } else {
+        if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
+            return true;
+        }
     }
     return false;
 }

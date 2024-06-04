@@ -35,7 +35,7 @@
                     ]
                 ],
                 "msvc_svcLevelObjLatency": 999999,
-                "msvc_type": 3,
+                "msvc_type": 500,
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
@@ -86,7 +86,7 @@
                     ]
                 ],
                 "msvc_svcLevelObjLatency": 999999,
-                "msvc_type": 4,
+                "msvc_type": 4000,
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
@@ -108,7 +108,8 @@
                 "msvc_maxQueueSize": 100
             }
         ],
-        "cont_metricServerConfigs": "../jsons/metricsserver.json"
+        "cont_metricServerConfigs": "../jsons/metricsserver.json",
+        "cont_numWarmUpBatches": 15
     },
     "profiling": {
         "profile_minBatch": 0,

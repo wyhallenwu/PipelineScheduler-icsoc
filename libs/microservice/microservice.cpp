@@ -61,6 +61,17 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_deviceIndex = configs.msvc_deviceIndex;
     msvc_RUNMODE = configs.msvc_RUNMODE;
 
+    if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
+        msvc_numWarmupBatches = jsonConfigs.at("msvc_numWarmUpBatches");
+    } else if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        msvc_numWarmupBatches = jsonConfigs.at("profile_numWarmUpBatches");
+    }
+    // During profiling, we want to have at least 50 requests for warming ups
+    // Results before warming up are not reliable
+    if ((msvc_numWarmupBatches * msvc_idealBatchSize) < 50) {
+        msvc_numWarmupBatches = std::ceil(50 / msvc_idealBatchSize) + 1;
+    }
+
     if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
         msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + ".txt";
     } else {

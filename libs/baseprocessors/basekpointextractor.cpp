@@ -194,10 +194,13 @@ void BaseKPointExtractor::extractor() {
              * 6. When the request was received by the postprocessor
              * 7. When each request was completed by the postprocessor
              */
-            timeNow = std::chrono::high_resolution_clock::now();
-            currReq.req_origGenTime[i].emplace_back(timeNow);
-            // TODO: Add the request number
-            msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq.req_batchSize, totalInMem, totalOutMem, 0);
+            msvc_batchCount++;
+            // If the number of warmup batches has been passed, we start to record the latency
+            if (msvc_batchCount > msvc_numWarmupBatches) {
+                currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
+                // TODO: Add the request number
+                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0);
+            }
         }
 
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);

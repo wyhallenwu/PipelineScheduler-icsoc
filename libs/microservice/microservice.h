@@ -717,6 +717,8 @@ protected:
     uint64_t msvc_inReqCount = 0;
     //
     uint64_t msvc_outReqCount = 0;
+    //
+    uint64_t msvc_batchCount = 0;
 
     //
     NumMscvType nummsvc_upstreamMicroservices = 0;
@@ -732,6 +734,9 @@ protected:
 
     // Ideal batch size for this microservice, runtime batch size could be smaller though
     BatchSizeType msvc_idealBatchSize;
+
+    //
+    uint16_t msvc_numWarmupBatches = 15;
 
     //
     MODEL_DATA_TYPE msvc_modelDataType = MODEL_DATA_TYPE::fp32;
