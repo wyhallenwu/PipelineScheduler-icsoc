@@ -73,81 +73,81 @@ Controller::Controller() {
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Server,
-                     4, std::vector<double>(4, 0.0),
+                     4, std::vector<double>(4, 0.2),
                      {8000, 8000, 8000, 8000},
-                     std::vector<double>(4, 0.0), 55001, {}}});
+                     std::vector<double>(4, 0.2), 55001, {}}});
     devices.insert({"edge1",
                     {"AGX",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
+                     1, std::vector<double>(1, 0.3),
                      {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
+                     std::vector<double>(1, 0.3), 55001, {}}});
     devices.insert({"edge2",
                     {"Nano",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
+                     1, std::vector<double>(1, 0.4),
                      {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
+                     std::vector<double>(1, 0.4), 55001, {}}});
     devices.insert({"edge3",
                     {"Nano",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
+                     1, std::vector<double>(1, 0.4),
                      {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
+                     std::vector<double>(1, 0.4), 55001, {}}});
     devices.insert({"edge4",
                     {"Nano",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Server,
-                     4, std::vector<double>(4, 0.0),
-                     {8000, 8000, 8000, 8000},
-                     std::vector<double>(4, 0.0), 55001, {}}});
+                     1, std::vector<double>(1, 0.4),
+                     {4000},
+                     std::vector<double>(1, 0.4), 55001, {}}});
     devices.insert({"edge5",
                     {"NX",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
+                     1, std::vector<double>(1, 0.5),
                      {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
+                     std::vector<double>(1, 0.5), 55001, {}}});
     devices.insert({"edge6",
                     {"NX",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
+                     1, std::vector<double>(1, 0.5),
                      {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
+                     std::vector<double>(1, 0.5), 55001, {}}});
     devices.insert({"edge7",
                     {"NX",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
+                     1, std::vector<double>(1, 0.5),
                      {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
+                     std::vector<double>(1, 0.5), 55001, {}}});
     devices.insert({"edge8",
                     {"NX",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
+                     1, std::vector<double>(1, 0.5),
                      {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
+                     std::vector<double>(1, 0.5), 55001, {}}});
     devices.insert({"edge9",
                     {"NX",
                      {},
                      new CompletionQueue(),
                      SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
+                     1, std::vector<double>(1, 0.5),
                      {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
+                     std::vector<double>(1, 0.5), 55001, {}}});
                      
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
@@ -197,25 +197,25 @@ void Controller::Scheduling() {
         // Iterate over all tasks
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            std::cout << "Tasks map size: " << this->tasks.size() << std::endl; // Debug output for map size
-            if (tasks.size() != 0){
+
+            if (tasks.size() != 0) {
                 for (const auto& task : tasks) {
-                    // performPlacement(task.second);
+                    performPlacement(task.second);
                 }
+                tasks.clear();
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
+        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
     }
 }
 
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     std::cout << t.slo << "----";
-    tasks.insert({t.name, {t.slo, t.type, {}}});
+    tasks.insert({t.name, {0,t.slo, t.type, {}}});
     TaskHandle *task = &tasks[t.name];
     NodeHandle *device = &devices[t.device];
     auto models = getModelsByPipelineType(t.type);
-    std::cout << tasks["test"].slo; //why not 5000000 but 0 ?
 
     std::string tmp = t.name;
     containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {0}}});
@@ -225,7 +225,24 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     // TODO: @Jinghang, @Quang, @Yuheng get correct initial batch size, cuda devices, and number of replicas
     // based on TaskDescription and System State if one of them does not apply to your algorithm just leave it at 1
     // all of you should use different cuda devices at the server!
-    auto batch_sizes = std::map<ModelType, int>();
+    auto batch_sizes = std::map<ModelType, int>{
+        {ModelType::DataSource, 32},
+        {ModelType::Sink, 32},
+        {ModelType::Yolov5, 8},
+        {ModelType::Yolov5n320, 8},
+        {ModelType::Yolov5s, 8},
+        {ModelType::Yolov5m, 4},
+        {ModelType::Yolov5Datasource, 8},
+        {ModelType::Retinaface, 4},
+        {ModelType::Yolov5_Plate, 4},
+        {ModelType::Movenet, 16},
+        {ModelType::Emotionnet, 16},
+        {ModelType::Arcface, 8},
+        {ModelType::Age, 16},
+        {ModelType::Gender, 32},
+        {ModelType::CarBrand, 16}
+    };
+    
     for (const auto &m: models) {
         tmp = t.name;
 
@@ -252,31 +269,20 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
 void Controller::FakeContainer(ContainerHandle *cont, int slo) {
     // @Jinghang, @Quang, @Yuheng this is a fake container that updates metrics every 1.2 seconds you can adjust the values etc. to have different scheduling results
     while (cont->running) {
-        cont->metrics.cpuUsage = (rand() % 100) / 100.0;
-        cont->metrics.memUsage = (rand() % 1500 + 500) / 1000.0;
-        cont->metrics.gpuUsage = (rand() % 100) / 100.0;
-        cont->metrics.gpuMemUsage = (rand() % 100) / 100.0;
-        cont->metrics.requestRate = (rand() % 70 + 30) / 100.0;
-        cont->queue_lengths = {};
-        for (int i = 0; i < 5; i++) {
-            cont->queue_lengths.Add((rand() % 10));
-        }
-        // cont->task->last_latency = (cont->task->last_latency + slo * 0.8 + (rand() % (int) (slo * 0.4))) / 2;
-        cont->device_agent->processors_utilization[cont->cuda_device[0]] += (rand() % 100) / 100.0;
-        cont->device_agent->processors_utilization[cont->cuda_device[0]] /= 2;
-
         // @Jinghang, @Quang, @Yuheng change this logging to help you verify your algorithm probably add the batch size or something else
-        if (cont->device_agent->ip == "server") {
-            std::cout << "------------------------------------------------------\n";
-            for (int i = 0; i < cont->device_agent->num_processors; ++i){
-                spdlog::info("Container {} is running on device {} and metrics are updated", cont->name, cont->device_agent->ip, cont->device_agent->processors_utilization[i], cont->device_agent->mem_utilization[i]);
-            }
-            std::cout << "------------------------------------------------------\n";
+        {
+            // std::unique_lock<std::mutex> lock(mutex_);
+            spdlog::info("------------------------------------------------------");
+
+            spdlog::info("Container {} is running on device {} with the following metrics:", cont->name, cont->device_agent->ip);
+            spdlog::info("  Processor Utilization: {}", cont->device_agent->processors_utilization[cont->cuda_device[0]]);
+            spdlog::info("  Memory Utilization: {}", cont->device_agent->mem_utilization[cont->cuda_device[0]]);
         }
-        else{
-            spdlog::info("Container {} is running on device {} and metrics are updated", cont->name, cont->device_agent->ip, cont->device_agent->processors_utilization[0], cont->device_agent->mem_utilization[0]);
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+        // cont->device_agent->processors_utilization[cont->cuda_device[0]] = (rand() % 100) / 100.0;
+        // cont->device_agent->mem_utilization[cont->cuda_device[0]] = (rand() % 100) / 100.0;
+        // cont->device_agent->processors_utilization[cont->cuda_device[0]] /= 2;
+        // cont->device_agent->mem_utilization[cont->cuda_device[0]] /= 2;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 }
 
@@ -690,96 +696,91 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size,std::string d
 // ========================================================== added ================================================================
 
 bool Controller::placeMDAGOnSingleWorker(const TaskHandle& task) {
-    NodeHandle* bestFitWorker = nullptr;
-    float minRemainingProcCapacity = std::numeric_limits<float>::max();
-    float minRemainingMemCapacity = std::numeric_limits<float>::max();
-    int cuda_device = 1;
-    for (auto& worker : devices) {
-        float totalRequiredCapacity = 0;
-        for (const auto& container : task.subtasks) {
-            float targetFps = 1 / task.slo;
-            float maxFps = container.second->batch_size / InferTimeEstimator(container.second->model, container.second->batch_size,worker.second.ip);
-            float requiredCapacity = targetFps / maxFps;
-            totalRequiredCapacity += requiredCapacity;
-        }
+    {
+        // std::unique_lock<std::mutex> lock(mutex_);
+        NodeHandle* bestFitWorker = nullptr;
+        float minRemainingProcCapacity = 1.0;
+        float minRemainingMemCapacity = 1.0;
+        int cuda_device = 0;
+        for (auto& worker : devices) {
+            float totalRequiredCapacity = 0;
+            for (const auto& container : task.subtasks) {
+                float targetFps = 1 / (float(task.slo) * float(1e-9));
+                float maxFps = container.second->batch_size / (float(InferTimeEstimator(container.second->model, container.second->batch_size,worker.second.ip))* float(1e-9));
+                float requiredCapacity = targetFps / maxFps;
+                totalRequiredCapacity += requiredCapacity;
+            }
+            for (int i = 0; i < worker.second.num_processors; i++) {
+                if (worker.second.processors_utilization[i] + totalRequiredCapacity < 1.0 &&
+                    worker.second.mem_utilization[i] + totalRequiredCapacity < 1.0) {
+                    float remainingProcCapacity = 1.0 - worker.second.processors_utilization[i] - totalRequiredCapacity;
+                    float remainingMemCapacity = 1.0 - worker.second.mem_utilization[i] - totalRequiredCapacity;
 
-        for (int i = 0; i < worker.second.num_processors; i++) {
-            if (worker.second.processors_utilization[i] + totalRequiredCapacity <= 1.0 &&
-                worker.second.mem_utilization[i] + totalRequiredCapacity <= 1.0) {
-                float remainingProcCapacity = 1.0 - worker.second.processors_utilization[i] - totalRequiredCapacity;
-                float remainingMemCapacity = 1.0 - worker.second.mem_utilization[i] - totalRequiredCapacity;
-
-                if (remainingProcCapacity < minRemainingProcCapacity 
-                    && remainingMemCapacity < minRemainingMemCapacity
-                    && remainingProcCapacity > 0
-                    && remainingMemCapacity > 0) 
-                {
-                    minRemainingProcCapacity = remainingProcCapacity;
-                    minRemainingMemCapacity = remainingMemCapacity;
-                    bestFitWorker = &worker.second;
-                    cuda_device = i + 1;
+                    if (remainingProcCapacity < minRemainingProcCapacity 
+                        && remainingMemCapacity < minRemainingMemCapacity) 
+                    {
+                        minRemainingProcCapacity = remainingProcCapacity;
+                        minRemainingMemCapacity = remainingMemCapacity;
+                        bestFitWorker = &worker.second;
+                        bestFitWorker->processors_utilization[i] = 1.0 - minRemainingProcCapacity;
+                        bestFitWorker->mem_utilization[i] = 1.0 - minRemainingMemCapacity;
+                        cuda_device = i;
+                    }
                 }
             }
         }
-    }
-    if (bestFitWorker) {
-        if (bestFitWorker->type == SystemDeviceType::Server) {
-            cuda_device = bestFitWorker->num_processors;
+        if (bestFitWorker) {
+            for (const auto& container : task.subtasks) {
+                bestFitWorker->containers.insert({container.second->name, container.second});
+                container.second->device_agent = bestFitWorker;
+                container.second->cuda_device = {cuda_device};
+                container.second->recv_port = bestFitWorker->next_free_port++;
+            }
+            std::cout << "mDAG placed on a single worker: " << bestFitWorker->ip << std::endl;
+            return true;
         }
-        for (const auto& container : task.subtasks) {
-            container.second->device_agent = bestFitWorker;
-            container.second->cuda_device = {cuda_device};
-            container.second->recv_port = bestFitWorker->next_free_port++;
-            bestFitWorker->containers.insert({container.second->name, container.second});
-        }
-        std::cout << "mDAG placed on a single worker: " << bestFitWorker->ip << std::endl;
-        return true;
+        std::cout << "No suitable worker found for placing the mDAG." << std::endl;
+        return false;
     }
-    return false;
 }
 
 void Controller::placeModulesOnWorkers(const TaskHandle& task) {
 
-    for (const auto& container : task.subtasks) {
-        NodeHandle* bestFitWorker = nullptr;
-        float minRemainingProcCapacity = std::numeric_limits<float>::max();
-        float minRemainingMemCapacity = std::numeric_limits<float>::max();
-        int cuda_device = 1;
-        for (auto& worker : devices) {
-            float targetFps = 1 / task.slo;
-            float maxFps = container.second->batch_size / InferTimeEstimator(container.second->model, container.second->batch_size,worker.second.ip);
-            float totalRequiredCapacity = targetFps / maxFps;
-            for (int i = 0; i < worker.second.num_processors; i++) {
-                if (worker.second.processors_utilization[i] + totalRequiredCapacity <= 1.0 &&
-                worker.second.mem_utilization[i] + totalRequiredCapacity <= 1.0) {
-                float remainingProcCapacity = 1.0 - worker.second.processors_utilization[i] - totalRequiredCapacity;
-                float remainingMemCapacity = 1.0 - worker.second.mem_utilization[i] - totalRequiredCapacity;
+    {    
+        // std::unique_lock<std::mutex> lock(mutex_);
+        for (const auto& container : task.subtasks) {
+            NodeHandle* bestFitWorker = nullptr;
+            float minRemainingProcCapacity = 1.0;
+            float minRemainingMemCapacity = 1.0;
+            for (auto& worker : devices) {
+                float targetFps = 1 / (float(task.slo) * float(1e-9));
+                float maxFps = container.second->batch_size / (float(InferTimeEstimator(container.second->model, container.second->batch_size,worker.second.ip))* float(1e-9));
+                float totalRequiredCapacity = targetFps / maxFps;
+                for (int i = 0; i < worker.second.num_processors; i++) {
+                    if (worker.second.processors_utilization[i] + totalRequiredCapacity < 1.0 &&
+                    worker.second.mem_utilization[i] + totalRequiredCapacity < 1.0) {
+                        float remainingProcCapacity = 1.0 - worker.second.processors_utilization[i] - totalRequiredCapacity;
+                        float remainingMemCapacity = 1.0 - worker.second.mem_utilization[i] - totalRequiredCapacity;
 
-                if (remainingProcCapacity < minRemainingProcCapacity 
-                    && remainingMemCapacity < minRemainingMemCapacity
-                    && remainingProcCapacity > 0
-                    && remainingMemCapacity > 0) 
-                {
-                    minRemainingProcCapacity = remainingProcCapacity;
-                    minRemainingMemCapacity = remainingMemCapacity;
-                    bestFitWorker = &worker.second;
-                    cuda_device = i + 1;
+                        if (remainingProcCapacity < minRemainingProcCapacity 
+                            && remainingMemCapacity < minRemainingMemCapacity) 
+                        {
+                            minRemainingProcCapacity = remainingProcCapacity;
+                            minRemainingMemCapacity = remainingMemCapacity;
+                            bestFitWorker = &worker.second;
+                            bestFitWorker->processors_utilization[i] = 1.0 - minRemainingProcCapacity;
+                            bestFitWorker->mem_utilization[i] = 1.0 - minRemainingMemCapacity;
+                            bestFitWorker->containers.insert({container.second->name, container.second});
+                            container.second->device_agent = bestFitWorker;
+                            container.second->cuda_device = {i};
+                            container.second->recv_port = bestFitWorker->next_free_port++;
+                            spdlog::info("Placed container {} on worker {}", container.second->name, bestFitWorker->ip);
+                            return;
+                        }
+                    }
                 }
             }
-            }
-        }
-
-        if (bestFitWorker) {
-                if (bestFitWorker->type == SystemDeviceType::Server) {
-                    cuda_device = bestFitWorker->num_processors;
-                }
-                container.second->device_agent = bestFitWorker;
-                container.second->cuda_device = {cuda_device};
-                container.second->recv_port = bestFitWorker->next_free_port++;
-                bestFitWorker->containers.insert({container.second->name, container.second});
-
-        } else {
-            std::cerr << "No available worker found for container: " << container.second->name << std::endl;
+            std::cout << "No available worker found for container: " << container.second->name << std::endl;
         }
     }
 }
