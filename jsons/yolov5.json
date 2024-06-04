@@ -300,13 +300,12 @@
         "cont_metricServerConfigs": "../jsons/metricsserver.json"
     },
     "profiling": {
-        "profile_minBatch": 1,
+        "profile_minBatch": 16,
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,
         "profile_templateModelPath": "../models/yolov5n_dynamic_nms_3090_fp32_[batch]_1.engine",
         "profile_inputRandomizeScheme": 0,
-        "profile_numWarmUpBatches": 10,
-        "profile_numProfileBatches": 100
+        "profile_numProfileFrames": 1800
     }
 }
