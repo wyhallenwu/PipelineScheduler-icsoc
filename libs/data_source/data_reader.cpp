@@ -31,9 +31,11 @@ void DataReader::Process() {
             i = 1;
         } else {
             // two `time`s is not necessary, but it follows the format set for the downstreams.
+            int frameNum = (int) source.get(cv::CAP_PROP_POS_FRAMES);
             Request<LocalCPUReqDataType> req = {{{time, time}}, {msvc_svcLevelObjLatency},
                                                 {"[" + link + "_" +
-                                                 std::to_string((int) source.get(cv::CAP_PROP_POS_FRAMES)) + "]"}, 1,
+                                                 std::to_string(frameNum) + 
+                                                 "_" + std::to_string(frameNum) + "]"}, 1,
                                                 {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols},
                                                                                   frame}}};
             msvc_OutQueue[0]->emplace(req);

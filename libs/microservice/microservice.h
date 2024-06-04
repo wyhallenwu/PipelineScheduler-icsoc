@@ -52,9 +52,13 @@ struct Request {
     BatchTimeType req_origGenTime;
     // The end-to-end service level latency objective to which this request is subject
     RequestSLOType req_e2eSLOLatency;
-    // The path that this request and its ancestors have travelled through.
-    // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
-    // For instance, `[YOLOv5_01_05][retinaface_02_09]`
+    /**
+     * @brief The path that this request and its ancestors have travelled through.
+     * Template `[microserviceID_inReqNumber_outReqNumber]
+     * For instance, for a request from container with id of `YOLOv5_01` to container with id of `retinaface_02`
+     * we may have a path that looks like this `[YOLOv5_01_05_05][retinaface_02_09_09]`
+     */
+
     RequestPathType req_travelPath;
 
     // Batch size
