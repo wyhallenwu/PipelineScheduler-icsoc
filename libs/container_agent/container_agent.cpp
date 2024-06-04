@@ -13,18 +13,17 @@ ABSL_FLAG(uint16_t, profiling_mode, 0, "flag to make the model running in profil
 
 
 void addProfileConfigs(json &msvcConfigs, const json &profileConfigs) {
-    msvcConfigs["profile_numWarmUpBatches"] = profileConfigs.at("profile_numWarmUpBatches");
-    msvcConfigs["profile_numProfileBatches"] = profileConfigs.at("profile_numProfileBatches");
     msvcConfigs["profile_inputRandomizeScheme"] = profileConfigs.at("profile_inputRandomizeScheme");
     msvcConfigs["profile_stepMode"] = profileConfigs.at("profile_stepMode");
     msvcConfigs["profile_step"] = profileConfigs.at("profile_step");
+    msvcConfigs["profile_numProfileFrames"] = profileConfigs.at("profile_numProfileFrames");
 }
 
 json loadRunArgs(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
 
     std::string name = absl::GetFlag(FLAGS_name);
-    int8_t device = absl::GetFlag(FLAGS_device);
+    int8_t device = (int8_t) absl::GetFlag(FLAGS_device);
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     std::string logPath = absl::GetFlag(FLAGS_log_dir);
     uint8_t profiling_mode = absl::GetFlag(FLAGS_profiling_mode);
@@ -178,14 +177,14 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
     uint8_t step = profileConfigs.at("profile_step");
     std::string templateModelPath = profileConfigs.at("profile_templateModelPath");
 
+    std::thread metricsThread(&ContainerAgent::collectRuntimeMetrics, this);
+    metricsThread.detach();
+
     this->dispatchMicroservices();
 
     for (BatchSizeType batch = minBatch; batch <= maxBatch;) {
+        spdlog::trace("{0:s} model with a max batch of {1:d}.", __func__, batch);
         if (batch != minBatch) {
-            // cudaDeviceReset();
-            // checkCudaErrorCode(cudaSetDevice(cont_deviceIndex), __func__);
-            // cont_deviceIndex = ++cont_deviceIndex % 4;
-
             std::string profileDirPath, cont_name;
 
             cont_name = removeSubstring(templateModelPath, ".engine");
@@ -233,9 +232,8 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
 
-        // spdlog::info("========================= Batch {0:d}/{1:d} =====================", );
-        spdlog::info(
-                "====================================================================================================");
+
+        spdlog::info("===============================================================================================");
         if (stepMode == 0) {
             batch += step;
         } else {
@@ -274,7 +272,6 @@ ContainerAgent::ContainerAgent(const json &configs) {
     cont_metricsServerConfigs.password = "agent";
 
     cont_metricsServerConn = connectToMetricsServer(cont_metricsServerConfigs, cont_name);
-    pqxx::result res;
     // Create arrival table
     pqxx::work session(*cont_metricsServerConn);
     std::string sql_statement;
@@ -295,7 +292,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
         sql_statement = "DROP TABLE IF EXISTS " + cont_hwMetricsTableName + ";";
         session.exec(sql_statement.c_str());
     }
-    
+
     sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_arrivalTableName + " ("
                                                                             "arrival_timestamps BIGINT, "
                                                                             "origin VARCHAR(50), "
@@ -305,7 +302,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                             "request_size INTEGER, "
                                                                             "request_num INTEGER)";
 
-    res = session.exec(sql_statement.c_str());
+    session.exec(sql_statement.c_str());
 
     // Create process table
     sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_processTableName + " ("
@@ -321,22 +318,22 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                             "request_num INTEGER)";
 
     session.exec(sql_statement.c_str());
+
     if (cont_RUNMODE == RUNMODE::PROFILING) {
         sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
                 "   timestamps BIGINT NOT NULL,"
                 "   batch_size INTEGER NOT NULL,"
+                "   engine_size INTEGER NOT NULL,"
                 "   cpu_usage FLOAT NOT NULL,"
                 "   mem_usage BIGINT NOT NULL,"
                 "   gpu_usage FLOAT NOT NULL,"
                 "   gpu_mem_usage BIGINT NOT NULL,"
                 "   PRIMARY KEY (timestamps)"
                 ");";
-        res = session.exec(sql_statement.c_str());
+        session.exec(sql_statement.c_str());
     }
 
     spdlog::info("{0:s} created arrival table and process table.", cont_name);
-    
-
     session.commit();
 
 
@@ -375,6 +372,7 @@ void ContainerAgent::ReportStart() {
     GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
     pid = reply.pid();
+    std::cout << "Container Agent started with pid: " << pid << std::endl;
     if (cont_taskName != "datasource" && cont_taskName != "sink") {
         profiler = new Profiler({pid});
         reportHwMetrics = true;
@@ -383,7 +381,7 @@ void ContainerAgent::ReportStart() {
 
 
 void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
-    if (configs["container"]["cont_RUNMODE"] == RUNMODE::EMPTY_PROFILING) {
+    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
         profiling(pipeConfigs, configs["profiling"]);
     } else {
         this->dispatchMicroservices();
@@ -391,13 +389,12 @@ void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
         this->waitReady();
         this->START();
 
-        collectRuntimeMetrics(); 
+        collectRuntimeMetrics();
     }
 }
 
 
 void ContainerAgent::collectRuntimeMetrics() {
-    // TODO: Implement a way to collect profile metrics (copy code from device Agent) and send to metrics server
     std::vector<int> queueSizes;
     int i, lateCount;
     ArrivalRecordType arrivalRecords;
@@ -479,13 +476,13 @@ void ContainerAgent::collectRuntimeMetrics() {
 
             processRecords = cont_msvcsList[3]->getProcessRecords();
             if (!processRecords.empty()) {
-                
+
                 sql = "INSERT INTO " + cont_processTableName + "(postprocess_timestamps, origin, prep_duration, batch_duration, "
                                                                 "infer_duration, post_duration, infer_batch_size, input_size, "
                                                                 "output_size, request_num) "
                                                                 "VALUES";
                 for (auto &record : processRecords) {
-                    sql += "(" + timePointToEpochString(record.postEndTime) + ", "; 
+                    sql += "(" + timePointToEpochString(record.postEndTime) + ", ";
                     sql += "'" + record.reqOrigin + "'" + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.preEndTime - record.preStartTime).count()) + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.batchingEndTime - record.preEndTime).count()) + ", ";

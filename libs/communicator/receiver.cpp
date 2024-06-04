@@ -29,7 +29,6 @@ void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         cq = builder.AddCompletionQueue();
         server = builder.BuildAndStart();
         msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
-        // or so
     }
     spdlog::trace("{0:s} FINISHED loading configs...", __func__);
 }
@@ -44,34 +43,33 @@ void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
     BatchSizeType batchSize = timeReport.req_batchSize;
     bool isProfileEnd = false;
 
-    if (timeReport.req_travelPath[batchSize - 1].find("PROFILE_ENDS") != std::string::npos) {
-        timeReport.req_travelPath[batchSize - 1] = removeSubstring(timeReport.req_travelPath[batchSize - 1], "PROFILE_ENDS");
-        isProfileEnd = true;
-    } else if (timeReport.req_travelPath[batchSize - 1].find("BATCH_ENDS") != std::string::npos) {
-        timeReport.req_travelPath[batchSize - 1] = removeSubstring(timeReport.req_travelPath[batchSize - 1], "BATCH_ENDS");
-    }
-    BatchSizeType numTimeStamps = (BatchSizeType)(timeReport.req_origGenTime.size() / batchSize);
+    BatchSizeType numTimeStamps = (BatchSizeType) (timeReport.req_origGenTime.size() / batchSize);
     for (BatchSizeType i = 0; i < batchSize; i++) {
         msvc_logFile << timeReport.req_travelPath[i] << ",";
         for (BatchSizeType j = 0; j < numTimeStamps - 1; j++) {
             msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + j]) << ",";
         }
-        msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + numTimeStamps - 1]) << "|";
+        msvc_logFile << timePointToEpochString(timeReport.req_origGenTime[i * numTimeStamps + numTimeStamps - 1])
+                     << "|";
 
         for (BatchSizeType j = 1; j < numTimeStamps - 1; j++) {
-            msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(timeReport.req_origGenTime[i * numTimeStamps + j] - timeReport.req_origGenTime[i * numTimeStamps + j - 1]).count() << ",";
+            msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(
+                    timeReport.req_origGenTime[i * numTimeStamps + j] -
+                    timeReport.req_origGenTime[i * numTimeStamps + j - 1]).count() << ",";
         }
-        msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(timeReport.req_origGenTime[(i + 1) * numTimeStamps - 1] - timeReport.req_origGenTime[(i + 1) * numTimeStamps - 2]).count() << std::endl;
-    } 
+        msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(
+                timeReport.req_origGenTime[(i + 1) * numTimeStamps - 1] -
+                timeReport.req_origGenTime[(i + 1) * numTimeStamps - 2]).count() << std::endl;
+    }
     if (isProfileEnd) {
         this->pauseThread();
     }
 }
 
 Receiver::GpuPointerRequestHandler::GpuPointerRequestHandler(
-    DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-    ThreadSafeFixSizedDoubleQueue *out,
-    uint64_t &msvc_inReqCount
+        DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
+        ThreadSafeFixSizedDoubleQueue *out,
+        uint64_t &msvc_inReqCount
 ) : RequestHandler(service, cq, out, msvc_inReqCount), responder(&ctx) {
     Proceed();
 }
@@ -92,7 +90,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
 
         std::vector<RequestData<LocalGPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
-            void* data;
+            void *data;
             cudaIpcMemHandle_t ipcHandle;
             memcpy(&ipcHandle, el.data().c_str(), sizeof(cudaIpcMemHandle_t));
             cudaError_t cudaStatus = cudaIpcOpenMemHandle(&data, ipcHandle, cudaIpcMemLazyEnablePeerAccess);
@@ -132,9 +130,9 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
 }
 
 Receiver::SharedMemoryRequestHandler::SharedMemoryRequestHandler(
-    DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-    ThreadSafeFixSizedDoubleQueue *out,
-    uint64_t &msvc_inReqCount
+        DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
+        ThreadSafeFixSizedDoubleQueue *out,
+        uint64_t &msvc_inReqCount
 ) : RequestHandler(service, cq, out, msvc_inReqCount), responder(&ctx) {
     Proceed();
 }
@@ -183,9 +181,9 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
 }
 
 Receiver::SerializedDataRequestHandler::SerializedDataRequestHandler(
-    DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-    ThreadSafeFixSizedDoubleQueue *out,
-    uint64_t &msvc_inReqCount
+        DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
+        ThreadSafeFixSizedDoubleQueue *out,
+        uint64_t &msvc_inReqCount
 ) : RequestHandler(service, cq, out, msvc_inReqCount), responder(&ctx) {
     Proceed();
 }
@@ -254,8 +252,7 @@ void Receiver::HandleRpcs() {
         if (this->STOP_THREADS) {
             spdlog::info("{0:s} STOPS.", msvc_name);
             break;
-        }
-        else if (this->PAUSE_THREADS) {
+        } else if (this->PAUSE_THREADS) {
             if (RELOADING) {
                 spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
@@ -273,7 +270,7 @@ void Receiver::HandleRpcs() {
                 RELOADING = false;
                 spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
             }
-            ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            //spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
         GPR_ASSERT(cq->Next(&tag, &ok));

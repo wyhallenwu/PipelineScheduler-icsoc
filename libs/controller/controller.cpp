@@ -278,12 +278,11 @@ void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_e
     device->containers.insert({msvc->name, msvc});
     msvc->cuda_device[replica -1] = cuda_device;
     std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
-    // removed for test environ
-/*    StartContainer(pair, msvc->task->slo, "");
+    StartContainer(pair, msvc->task->slo, "");
     for (auto upstr: msvc->upstreams) {
         AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
     }
-    StopContainer(msvc->name, old_device);*/
+    StopContainer(msvc->name, old_device);
     old_device->containers.erase(msvc->name);
 }
 
@@ -314,13 +313,13 @@ void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs) 
     Status status;
     request.set_name(msvc->name);
     request.set_value(new_bs);
-    /*std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);*/
+    GPR_ASSERT(ok);
 }
 
 void Controller::StopContainer(std::string name, NodeHandle *device, bool forced) {
@@ -330,14 +329,13 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     Status status;
     request.set_name(name);
     request.set_forced(forced);
-    containers[name].running = false;
-    /*std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(device->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);*/
+    GPR_ASSERT(ok);
 }
 
 void Controller::optimizeBatchSizeStep(
