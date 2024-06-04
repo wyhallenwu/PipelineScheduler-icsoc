@@ -735,8 +735,14 @@ protected:
     // Ideal batch size for this microservice, runtime batch size could be smaller though
     BatchSizeType msvc_idealBatchSize;
 
+    // Maximum batch size, only used during profiling
+    BatchSizeType msvc_maxBatchSize;
+
     //
     uint16_t msvc_numWarmupBatches = 15;
+
+    // Frame ID, only used during profiling
+    int64_t msvc_currFrameID = -1;
 
     //
     MODEL_DATA_TYPE msvc_modelDataType = MODEL_DATA_TYPE::fp32;
@@ -756,6 +762,69 @@ protected:
 
     //
     virtual void updateReqRate(ClockType lastInterReqDuration);
+
+    // Get the frame ID from the path of travel of this request
+    uint64_t getFrameID(const std::string &path) {
+        std::string temp = splitString(path, "]")[0];
+        temp = splitString(temp, "_").back();
+        return std::stoull(temp);
+    }
+
+    /**
+     * @brief Try increasing the batch size by 1, if the batch size is already at the maximum:
+     * (1) if in deployment mode, then we keep the batch size at the maximum
+     * (2) if in profiling mode, then we stop the thread
+     * 
+     * @return true 
+     * @return false 
+     */
+    bool increaseBatchSize() {
+        msvc_idealBatchSize++;
+        
+        // If we already have the max batch size, then we can stop the thread
+        if (msvc_idealBatchSize > msvc_maxBatchSize) {
+            if (msvc_RUNMODE == RUNMODE::PROFILING) {
+                return true;
+            } else {
+                msvc_idealBatchSize = msvc_maxBatchSize;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @brief ONLY IN PROFILING MODE
+     * Check if the frame index of the incoming stream is reset, which is a signal to change the batch size.
+     * 
+     * @param req_currFrameID 
+     * @return true 
+     * @return false 
+     */
+    bool checkProfileFrameReset(const int64_t &req_currFrameID) {
+        bool reset = false;
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            // This case the video has been reset, which means the profiling for this current batch size is completed
+            if (msvc_currFrameID > req_currFrameID && req_currFrameID == 1) {
+                reset = true;
+            }
+            msvc_currFrameID = req_currFrameID;
+        }
+        return reset;
+    }
+
+    /**
+     * @brief ONLY IN PROFILING MODE
+     * Check if the frame index of the incoming stream is reset, which is a signal to change the batch size.
+     * If the batch size exceeds the value of maximum batch size, then the microservice should stop processing requests
+     * 
+     */
+    bool checkProfileEnd(const std::string &path) {
+        bool frameReset = checkProfileFrameReset(getFrameID(path));
+        if (frameReset) {
+            return !increaseBatchSize();
+        }
+        return false;
+    }
 
     // Logging file path, where each microservice is supposed to log in running metrics
     std::string msvc_microserviceLogPath;

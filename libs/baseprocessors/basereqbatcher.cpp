@@ -404,6 +404,36 @@ void BaseReqBatcher::batchRequests() {
         outReq_genTime.emplace_back(timeNow);
         outBatch_genTime.emplace_back(outReq_genTime);
 
+        /**
+         * @brief ONLY IN PROFILING MODE
+         * Check if the profiling is to be stopped, if true, then send a signal to the downstream microservice to stop profiling
+         */
+        if (checkProfileEnd(currReq.req_travelPath[0])) {
+            this->STOP_THREADS = true;
+            msvc_OutQueue[0]->emplace(
+                Request<LocalGPUReqDataType>{
+                    {},
+                    {},
+                    {"STOP_PROFILING"},
+                    0,
+                    {},
+                    {}
+                }
+            );
+            continue;
+        }
+        msvc_OutQueue[0]->emplace(
+                Request<LocalGPUReqDataType>{
+                    {},
+                    {},
+                    {"STOP_PROFILING"},
+                    0,
+                    {},
+                    {}
+                }
+            );
+        this->STOP_THREADS = true;
+
         // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
         // cudaFree(currReq.req_data[0].data.cudaPtr());
         // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.

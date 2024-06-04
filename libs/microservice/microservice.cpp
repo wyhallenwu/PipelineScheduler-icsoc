@@ -65,6 +65,7 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         msvc_numWarmupBatches = jsonConfigs.at("msvc_numWarmUpBatches");
     } else if (msvc_RUNMODE == RUNMODE::PROFILING) {
         msvc_numWarmupBatches = jsonConfigs.at("profile_numWarmUpBatches");
+        msvc_maxBatchSize = jsonConfigs.at("profile_maxBatch");
     }
     // During profiling, we want to have at least 50 requests for warming ups
     // Results before warming up are not reliable

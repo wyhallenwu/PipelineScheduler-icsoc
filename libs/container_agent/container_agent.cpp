@@ -19,6 +19,10 @@ void addProfileConfigs(json &msvcConfigs, const json &profileConfigs) {
     msvcConfigs["profile_stepMode"] = profileConfigs.at("profile_stepMode");
     msvcConfigs["profile_step"] = profileConfigs.at("profile_step");
     msvcConfigs["profile_numProfileReqs"] = profileConfigs.at("profile_numProfileReqs");
+    msvcConfigs["msvc_idealBatchSize"] = profileConfigs.at("profile_minBatch");
+    msvcConfigs["profile_numWarmUpBatches"] = profileConfigs.at("profile_numWarmUpBatches");
+    msvcConfigs["profile_maxBatch"] = profileConfigs.at("profile_maxBatch");
+    msvcConfigs["profile_minBatch"] = profileConfigs.at("profile_minBatch");
 }
 
 json loadRunArgs(int argc, char **argv) {
@@ -53,7 +57,7 @@ json loadRunArgs(int argc, char **argv) {
 
         name = removeSubstring(templateModelPath, ".engine");
         name = replaceSubstring(name, "[batch]", std::to_string(minBatch));
-        name = splitString(name, '/').back();
+        name = splitString(name, "/").back();
         logPath = "../model_profiles";
     }
 
@@ -87,8 +91,7 @@ json loadRunArgs(int argc, char **argv) {
          */
         if (profiling_mode == 1) {
             addProfileConfigs(containerConfigs.at("cont_pipeline")[i], profilingConfigs);
-            containerConfigs.at("cont_pipeline")[i].at("msvc_idealBatchSize") = minBatch;
-            containerConfigs.at("cont_pipeline")[i].at("profile_numWarmUpBatches") = profilingConfigs.at("profile_numWarmUpBatches");
+            
         } else if (profiling_mode == 2) {
             containerConfigs.at("cont_pipeline")[i].at("msvc_idealBatchSize") = minBatch;
             if (i == 0) {
@@ -196,7 +199,7 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
 
             cont_name = removeSubstring(templateModelPath, ".engine");
             cont_name = replaceSubstring(cont_name, "[batch]", std::to_string(batch));
-            cont_name = splitString(cont_name, '/').back();
+            cont_name = splitString(cont_name, "/").back();
 
             profileDirPath = cont_logDir + "/" + cont_name;
             std::filesystem::create_directory(

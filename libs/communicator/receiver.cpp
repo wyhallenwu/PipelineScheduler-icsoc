@@ -71,8 +71,8 @@ void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
 Receiver::GpuPointerRequestHandler::GpuPointerRequestHandler(
     DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
     ThreadSafeFixSizedDoubleQueue *out,
-    uint64_t &msvc_inReqCount
-) : RequestHandler(service, cq, out, msvc_inReqCount), responder(&ctx) {
+    uint64_t &msvc_inReqCount, Receiver *receiver
+) : RequestHandler(service, cq, out, msvc_inReqCount, receiver), responder(&ctx) {
     Proceed();
 }
 
@@ -83,7 +83,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
                                            this);
     } else if (status == PROCESS) {
         if (OutQueue->getActiveQueueIndex() != 2) OutQueue->setActiveQueueIndex(2);
-        new GpuPointerRequestHandler(service, cq, OutQueue, msvc_inReqCount);
+        new GpuPointerRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
         if (request.mutable_elements()->empty()) {
             responder.Finish(reply, Status(grpc::INVALID_ARGUMENT, "No valid data"), this);
@@ -92,6 +92,10 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
 
         std::vector<RequestData<LocalGPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
+            if (receiverInstance->checkProfileEnd(el.path())) {
+                receiverInstance->STOP_THREADS = true;
+                break;
+            };
             void* data;
             cudaIpcMemHandle_t ipcHandle;
             memcpy(&ipcHandle, el.data().c_str(), sizeof(cudaIpcMemHandle_t));
@@ -134,8 +138,9 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
 Receiver::SharedMemoryRequestHandler::SharedMemoryRequestHandler(
     DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
     ThreadSafeFixSizedDoubleQueue *out,
-    uint64_t &msvc_inReqCount
-) : RequestHandler(service, cq, out, msvc_inReqCount), responder(&ctx) {
+    uint64_t &msvc_inReqCount,
+    Receiver *receiver
+) : RequestHandler(service, cq, out, msvc_inReqCount, receiver), responder(&ctx) {
     Proceed();
 }
 
@@ -146,10 +151,14 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
                                           this);
     } else if (status == PROCESS) {
         if (OutQueue->getActiveQueueIndex() != 1) OutQueue->setActiveQueueIndex(1);
-        new SharedMemoryRequestHandler(service, cq, OutQueue, msvc_inReqCount);
+        new SharedMemoryRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
         std::vector<RequestData<LocalCPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
+            if (receiverInstance->checkProfileEnd(el.path())) {
+                receiverInstance->STOP_THREADS = true;
+                break;
+            };
             auto name = el.data().c_str();
             boost::interprocess::shared_memory_object shm{open_only, name, read_only};
             boost::interprocess::mapped_region region{shm, read_only};
@@ -185,8 +194,9 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
 Receiver::SerializedDataRequestHandler::SerializedDataRequestHandler(
     DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
     ThreadSafeFixSizedDoubleQueue *out,
-    uint64_t &msvc_inReqCount
-) : RequestHandler(service, cq, out, msvc_inReqCount), responder(&ctx) {
+    uint64_t &msvc_inReqCount,
+    Receiver *receiver
+) : RequestHandler(service, cq, out, msvc_inReqCount, receiver), responder(&ctx) {
     Proceed();
 }
 
@@ -197,7 +207,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
                                                this);
     } else if (status == PROCESS) {
         if (OutQueue->getActiveQueueIndex() != 1) OutQueue->setActiveQueueIndex(1);
-        new SerializedDataRequestHandler(service, cq, OutQueue, msvc_inReqCount);
+        new SerializedDataRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
         std::vector<RequestData<LocalCPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
@@ -231,6 +241,10 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
              * 
              */
             OutQueue->emplace(req);
+            if (receiverInstance->checkProfileEnd(el.path())) {
+                receiverInstance->STOP_THREADS = true;
+                break;
+            };
         }
 
         status = FINISH;
@@ -244,9 +258,9 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 // This can be run in multiple threads if needed.
 void Receiver::HandleRpcs() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount);
-    new SharedMemoryRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount);
-    new SerializedDataRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount);
+    new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount, this);
+    new SharedMemoryRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount, this);
+    new SerializedDataRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount, this);
     void *tag;  // uniquely identifies a request.
     bool ok;
     READY = true;

@@ -46,8 +46,8 @@ private:
     class RequestHandler {
     public:
         RequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount)
-                : service(service), msvc_inReqCount(msvc_inReqCount), cq(cq), OutQueue(out), status(CREATE) {};
+                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount, Receiver *receiver)
+                : service(service), msvc_inReqCount(msvc_inReqCount), cq(cq), OutQueue(out), status(CREATE), receiverInstance(receiver) {};
 
         virtual ~RequestHandler() = default;
 
@@ -65,12 +65,13 @@ private:
         ServerContext ctx;
         ThreadSafeFixSizedDoubleQueue *OutQueue;
         CallStatus status;
+        Receiver *receiverInstance;
     };
 
     class GpuPointerRequestHandler : public RequestHandler {
     public:
         GpuPointerRequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount);
+                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount, Receiver *receiver);
 
         void Proceed() final;
 
@@ -83,7 +84,7 @@ private:
     class SharedMemoryRequestHandler : public RequestHandler {
     public:
         SharedMemoryRequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount);
+                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount, Receiver *receiver);
 
         void Proceed() final;
 
@@ -100,7 +101,7 @@ private:
     class SerializedDataRequestHandler : public RequestHandler {
     public:
         SerializedDataRequestHandler(DataTransferService::AsyncService *service, ServerCompletionQueue *cq,
-                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount);
+                       ThreadSafeFixSizedDoubleQueue *out, uint64_t &msvc_inReqCount, Receiver *receiver);
 
         void Proceed() final;
 

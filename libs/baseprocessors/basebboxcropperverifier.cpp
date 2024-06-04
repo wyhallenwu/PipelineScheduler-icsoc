@@ -145,6 +145,9 @@ void BaseBBoxCropperVerifier::cropping() {
         // Meaning the the timeout in pop() has been reached and no request was actually popped
         if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
             continue;
+        } else if (strcmp(currReq.req_travelPath[0].c_str(), "STOP_PROFILING") == 0) {
+            STOP_THREADS = true;
+            continue;
         }
 
         msvc_inReqCount++;

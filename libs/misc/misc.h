@@ -212,7 +212,7 @@ std::string timePointToEpochString(const std::chrono::system_clock::time_point& 
 
 std::string replaceSubstring(const std::string& input, const std::string& toReplace, const std::string& replacement);
 
-std::vector<std::string> splitString(const std::string& str, char delimiter) ;
+std::vector<std::string> splitString(const std::string& str, const std::string& delimiter) ;
 
 std::string getTimestampString();
 
