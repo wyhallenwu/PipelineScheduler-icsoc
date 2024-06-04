@@ -61,16 +61,12 @@ Controller::Controller() {
     ctl_metricsServerConfigs.from_json(metricsCfgs);
     ctl_metricsServerConfigs.user = "controller";
     ctl_metricsServerConfigs.password = "agent";
-
     ctl_metricsServerConn = connectToMetricsServer(ctl_metricsServerConfigs, "controller");
-
 
     running = true;
     devices = std::map<std::string, NodeHandle>();
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
-
-
 
     std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60001);
     ServerBuilder builder;
@@ -278,12 +274,11 @@ void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_e
     device->containers.insert({msvc->name, msvc});
     msvc->cuda_device[replica -1] = cuda_device;
     std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
-    // removed for test environ
-/*    StartContainer(pair, msvc->task->slo, "");
+    StartContainer(pair, msvc->task->slo, "");
     for (auto upstr: msvc->upstreams) {
         AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
     }
-    StopContainer(msvc->name, old_device);*/
+    StopContainer(msvc->name, old_device);
     old_device->containers.erase(msvc->name);
 }
 
@@ -314,13 +309,13 @@ void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs) 
     Status status;
     request.set_name(msvc->name);
     request.set_value(new_bs);
-    /*std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);*/
+    GPR_ASSERT(ok);
 }
 
 void Controller::StopContainer(std::string name, NodeHandle *device, bool forced) {
@@ -330,18 +325,17 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     Status status;
     request.set_name(name);
     request.set_forced(forced);
-    containers[name].running = false;
-    /*std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
     GPR_ASSERT(device->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);*/
+    GPR_ASSERT(ok);
 }
 
 void Controller::optimizeBatchSizeStep(
-        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
+        const Pipeline &models,
         std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
     ModelType candidate;
     int max_saving = 0;
@@ -374,7 +368,7 @@ void Controller::optimizeBatchSizeStep(
 }
 
 std::map<ModelType, int> Controller::getInitialBatchSizes(
-        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
+        const Pipeline &models, int slo,
         int nObjects) {
     std::map<ModelType, int> batch_sizes = {};
     std::map<ModelType, int> estimated_infer_times = {};
@@ -404,29 +398,28 @@ std::map<ModelType, int> Controller::getInitialBatchSizes(
     return batch_sizes;
 }
 
-std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
-Controller::getModelsByPipelineType(PipelineType type) {
+Pipeline Controller::getModelsByPipelineType(PipelineType type) {
     switch (type) {
         case PipelineType::Traffic:
             return {{ModelType::Yolov5,       {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::Yolov5_Plate, 2}}},
-                    {ModelType::Retinaface,   {{ModelType::Arcface,    -1}}},
-                    {ModelType::Arcface,      {{ModelType::Sink,   -1}}},
-                    {ModelType::CarBrand,     {{ModelType::Sink,   -1}}},
-                    {ModelType::Yolov5_Plate, {{ModelType::Sink,   -1}}},
+                    {ModelType::Retinaface,   {{ModelType::Arcface,    0}}},
+                    {ModelType::Arcface,      {{ModelType::Sink,       -1}}},
+                    {ModelType::CarBrand,     {{ModelType::Sink,       -1}}},
+                    {ModelType::Yolov5_Plate, {{ModelType::Sink,       -1}}},
                     {ModelType::Sink,     {}}};
         case PipelineType::Video_Call:
             return {{ModelType::Retinaface, {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}},
-                    {ModelType::Gender,     {{ModelType::Sink,   -1}}},
-                    {ModelType::Age,        {{ModelType::Sink,   -1}}},
-                    {ModelType::Emotionnet, {{ModelType::Sink,   -1}}},
-                    {ModelType::Arcface,    {{ModelType::Sink,   -1}}},
+                    {ModelType::Gender,     {{ModelType::Sink,       -1}}},
+                    {ModelType::Age,        {{ModelType::Sink,       -1}}},
+                    {ModelType::Emotionnet, {{ModelType::Sink,       -1}}},
+                    {ModelType::Arcface,    {{ModelType::Sink,       -1}}},
                     {ModelType::Sink,   {}}};
         case PipelineType::Building_Security:
-            return {{ModelType::Yolov5,     {{ModelType::Retinaface, 0}}},
-                    {ModelType::Retinaface, {{ModelType::Gender,     -1}, {ModelType::Age, -1}}},
-                    {ModelType::Movenet,    {{ModelType::Sink,   -1}}},
-                    {ModelType::Gender,     {{ModelType::Sink,   -1}}},
-                    {ModelType::Age,        {{ModelType::Sink,   -1}}},
+            return {{ModelType::Yolov5,     {{ModelType::Retinaface, 0}, {ModelType::Movenet, 0}}},
+                    {ModelType::Retinaface, {{ModelType::Gender,     0}, {ModelType::Age, 0}}},
+                    {ModelType::Movenet,    {{ModelType::Sink,       -1}}},
+                    {ModelType::Gender,     {{ModelType::Sink,       -1}}},
+                    {ModelType::Age,        {{ModelType::Sink,       -1}}},
                     {ModelType::Sink,   {}}};
         default:
             return {};
@@ -607,4 +600,34 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
         i *= 2;
     }
     return time_per_frame[batch_size] * batch_size;
+}
+
+std::map<ModelType, std::vector<int>> Controller::InitialRequestCount(const std::string &input, const Pipeline &models,
+                                                                      int fps) {
+    std::map<ModelType, std::vector<int>> request_counts = {};
+    std::vector<int> fps_values = {fps, fps * 3, fps * 7, fps * 15, fps * 30, fps * 60};
+
+    request_counts[models[0].first] = fps_values;
+    json objectCount = json::parse(std::ifstream("../jsons/object_count.json"))[input];
+
+    for (const auto &m: models) {
+        if (m.first == ModelType::Sink) {
+            request_counts[m.first] = std::vector<int>(6, 0);
+            continue;
+        }
+
+        for (const auto &d: m.second) {
+            if (d.second == -1) {
+                request_counts[d.first] = request_counts[m.first];
+            } else {
+                std::vector<int> objects = (d.second == 0 ? objectCount["person"] : objectCount["car"]).get<std::vector<int>>();
+
+                for (int j : fps_values) {
+                    int count = std::accumulate(objects.begin(), objects.begin() + j, 0);
+                    request_counts[d.first].push_back(request_counts[m.first][0] * count);
+                }
+            }
+        }
+    }
+    return request_counts;
 }

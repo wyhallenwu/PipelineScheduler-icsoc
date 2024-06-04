@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
     msvcsList.push_back(new BaseBBoxCropperVerifier(pipeConfigs[3]));
     msvcsList[3]->SetInQueue(msvcsList[2]->GetOutQueue());
     // dynamic_cast<BaseBBoxCropper*>(msvcsList[3])->setInferenceShape(dynamic_cast<BaseBatchInferencer*>(msvcsList[2])->getInputShapeVector());
-    if (configs["container"]["cont_RUNMODE"] == RUNMODE::EMPTY_PROFILING) {
+    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
         msvcsList.push_back(new BaseSink(pipeConfigs[4]));
         msvcsList[4]->SetInQueue(msvcsList[3]->GetOutQueue());
     } else {

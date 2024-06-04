@@ -13,8 +13,6 @@ using boost::interprocess::open_only;
 using json = nlohmann::ordered_json;
 
 struct ReceiverConfigs : BaseMicroserviceConfigs {
-    uint16_t msvc_numWarmUpBatches;
-    uint16_t msvc_numProfileBatches;
     uint8_t msvc_inputRandomizeScheme;
     std::string msvc_dataShape;
 };

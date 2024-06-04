@@ -301,7 +301,7 @@
         "cont_numWarmUpBatches": 15
     },
     "profiling": {
-        "profile_minBatch": 1,
+        "profile_minBatch": 16,
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,

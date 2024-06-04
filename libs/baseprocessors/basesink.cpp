@@ -19,7 +19,6 @@ BaseSink::BaseSink(const json &jsonConfigs) : Microservice(jsonConfigs) {
 void BaseSink::sink() {
     Request<LocalCPUReqDataType> inferTimeReport;
     BatchSizeType batchSize;
-    int keepProfiling = 0;
 
     while (true) {
         if (this->STOP_THREADS) {
@@ -41,7 +40,6 @@ void BaseSink::sink() {
                 msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
 
                 setDevice();
-                keepProfiling = 1;
                 RELOADING = false;
                 READY = true;
                 info("{0:s} is reloaded.", msvc_name);
@@ -64,10 +62,6 @@ void BaseSink::sink() {
          * 6. When each request was completed by the postprocessor
          */
         batchSize = inferTimeReport.req_batchSize;
-        if (inferTimeReport.req_travelPath[batchSize - 1].find("BATCH_ENDS") != std::string::npos) {
-            inferTimeReport.req_travelPath[batchSize - 1] = removeSubstring(inferTimeReport.req_travelPath[batchSize - 1], "BATCH_ENDS");
-            keepProfiling = 0;
-        }
 
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             for (BatchSizeType i = 0; i < batchSize; i++) {
@@ -83,21 +77,6 @@ void BaseSink::sink() {
                 msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(inferTimeReport.req_origGenTime[i].back() - inferTimeReport.req_origGenTime[i].front()).count() << std::endl;
             }
 
-            // it transfers a dummy request back to the data generator to keep the profiling mode running
-            msvc_OutQueue.at(0)->emplace(
-                Request<LocalCPUReqDataType>(
-                    inferTimeReport.req_origGenTime,
-                    inferTimeReport.req_e2eSLOLatency,
-                    inferTimeReport.req_travelPath,
-                    inferTimeReport.req_batchSize,
-                    {
-                        {
-                            {1},
-                            {cv::Mat(1, 1, CV_8U, cv::Scalar(keepProfiling))}
-                        }
-                    }
-                )
-            );
         /**
          * @brief 
          * 

@@ -129,8 +129,6 @@ public:
 
     void profiling(const json &pipeConfigs, const json &profileConfigs);
 
-    void loadProfilingConfigs();
-
     void runService(const json &pipeConfigs, const json &configs);
 
 protected:

@@ -51,6 +51,8 @@ enum ModelType {
     CarBrand
 };
 
+typedef std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> Pipeline;
+
 extern std::map<ModelType, std::vector<std::string>> MODEL_INFO;
 
 enum PipelineType {
@@ -62,9 +64,9 @@ enum PipelineType {
 struct HardwareMetrics {
     ClockType timestamp;
     float requestRate = 0; // TODOL Remove request rate. Keep for now for compatibility
-    float cpuUsage = 0;
-    unsigned int memUsage = 0;
-    float gpuUsage = 0;
+    double cpuUsage = 0;
+    long memUsage = 0;
+    unsigned int gpuUsage = 0;
     unsigned int gpuMemUsage = 0;
 };
 
@@ -136,8 +138,6 @@ private:
         google::protobuf::RepeatedField<int32_t> queue_lengths;
         std::vector<ContainerHandle *> upstreams;
         std::vector<ContainerHandle *> downstreams;
-        // TODO: remove test code
-        bool running;
     };
 
     float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
@@ -148,6 +148,8 @@ private:
 
     double LoadTimeEstimator(const char *model_path, double input_mem_size);
     int InferTimeEstimator(ModelType model, int batch_size);
+    std::map<ModelType, std::vector<int>> InitialRequestCount(const std::string &input, const Pipeline &models,
+                                                              int fps = 30);
 
 
     class RequestHandler {
@@ -198,15 +200,14 @@ private:
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 
     void optimizeBatchSizeStep(
-            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
+            const Pipeline &models,
             std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
 
     std::map<ModelType, int> getInitialBatchSizes(
-            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models, int slo,
+            const Pipeline &models, int slo,
             int nObjects);
 
-    std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>>
-    getModelsByPipelineType(PipelineType type);
+    Pipeline getModelsByPipelineType(PipelineType type);
 
     bool running;
     std::map<std::string, NodeHandle> devices;
