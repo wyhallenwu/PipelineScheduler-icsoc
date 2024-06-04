@@ -9,7 +9,7 @@ ABSL_FLAG(uint16_t, port, 0, "server port for the service");
 ABSL_FLAG(int16_t, device, 0, "Index of GPU device");
 ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
 ABSL_FLAG(std::string, log_dir, "../logs", "Log path for the container");
-ABSL_FLAG(bool, profiling_mode, false, "flag to make the model running in profiling mode.");
+ABSL_FLAG(uint16_t, profiling_mode, 0, "flag to make the model running in profiling mode 0:deployment, 1:profiling, 2:empty_profiling");
 
 
 void addProfileConfigs(json &msvcConfigs, const json &profileConfigs) {
@@ -27,9 +27,9 @@ json loadRunArgs(int argc, char **argv) {
     int8_t device = absl::GetFlag(FLAGS_device);
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     std::string logPath = absl::GetFlag(FLAGS_log_dir);
-    bool profiling_mode = absl::GetFlag(FLAGS_profiling_mode);
+    uint8_t profiling_mode = absl::GetFlag(FLAGS_profiling_mode);
 
-    RUNMODE runmode = profiling_mode ? RUNMODE::EMPTY_PROFILING : RUNMODE::DEPLOYMENT;
+    RUNMODE runmode = static_cast<RUNMODE>(profiling_mode);
 
     spdlog::set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
     spdlog::set_level(spdlog::level::level_enum(logLevel));
@@ -48,7 +48,7 @@ json loadRunArgs(int argc, char **argv) {
      * 2. Setting the batch size to the smallest profile batch size
      * 
      */
-    if (profiling_mode) {
+    if (profiling_mode == 2) {
 
         name = removeSubstring(templateModelPath, ".engine");
         name = replaceSubstring(name, "[batch]", std::to_string(minBatch));
@@ -74,7 +74,7 @@ json loadRunArgs(int argc, char **argv) {
         containerConfigs.at("cont_pipeline")[i]["msvc_containerLogPath"] = logPath + "/" + name;
         containerConfigs.at("cont_pipeline")[i]["msvc_RUNMODE"] = runmode;
         containerConfigs.at(
-                "cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs["metricsServer_scrapeIntervalMillisec"];
+                "cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs["metricsServer_metricsReportIntervalMillisec"];
 
         /**
          * @brief     If this is profiling, set configurations to the first batch size that should be profiled
@@ -283,11 +283,19 @@ ContainerAgent::ContainerAgent(const json &configs) {
         cont_processTableName = cont_pipeName + "_" + cont_taskName + "_process_table";
         cont_hwMetricsTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_hwmetrics_table";
     }
-    else if (cont_RUNMODE == RUNMODE::EMPTY_PROFILING) {
+    else if (cont_RUNMODE == RUNMODE::PROFILING) {
         cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_profile_arrival_table";
         cont_processTableName = cont_pipeName + "_" + cont_taskName + "_profile_process_table";
         cont_hwMetricsTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_profile_hwmetrics_table";
+
+        sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
+        session.exec(sql_statement.c_str());
+        sql_statement = "DROP TABLE IF EXISTS " + cont_processTableName + ";";
+        session.exec(sql_statement.c_str());
+        sql_statement = "DROP TABLE IF EXISTS " + cont_hwMetricsTableName + ";";
+        session.exec(sql_statement.c_str());
     }
+    
     sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_arrivalTableName + " ("
                                                                             "arrival_timestamps BIGINT, "
                                                                             "origin VARCHAR(50), "
@@ -298,8 +306,6 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                             "request_num INTEGER)";
 
     res = session.exec(sql_statement.c_str());
-
-    spdlog::info("{0:s} created arrival table and process table.", cont_name);
 
     // Create process table
     sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_processTableName + " ("
@@ -315,16 +321,20 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                             "request_num INTEGER)";
 
     session.exec(sql_statement.c_str());
-    sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
-                    "   timestamps BIGINT NOT NULL,"
-                    "   batch_size INTEGER NOT NULL,"
-                    "   cpu_usage FLOAT NOT NULL,"
-                    "   mem_usage BIGINT NOT NULL,"
-                    "   gpu_usage FLOAT NOT NULL,"
-                    "   gpu_mem_usage BIGINT NOT NULL,"
-                    "   PRIMARY KEY (timestamps)"
-                    ");";
-    res = session.exec(sql_statement.c_str());
+    if (cont_RUNMODE == RUNMODE::PROFILING) {
+        sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
+                "   timestamps BIGINT NOT NULL,"
+                "   batch_size INTEGER NOT NULL,"
+                "   cpu_usage FLOAT NOT NULL,"
+                "   mem_usage BIGINT NOT NULL,"
+                "   gpu_usage FLOAT NOT NULL,"
+                "   gpu_mem_usage BIGINT NOT NULL,"
+                "   PRIMARY KEY (timestamps)"
+                ");";
+        res = session.exec(sql_statement.c_str());
+    }
+
+    spdlog::info("{0:s} created arrival table and process table.", cont_name);
     
 
     session.commit();
@@ -345,7 +355,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
     sender_cq = new CompletionQueue();
 
     run = true;
-    reportMetrics = false;
+    reportHwMetrics = false;
     profiler = nullptr;
     std::thread receiver(&ContainerAgent::HandleRecvRpcs, this);
     receiver.detach();
@@ -365,9 +375,9 @@ void ContainerAgent::ReportStart() {
     GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
     pid = reply.pid();
-    if (cont_taskName != "datasource") {
+    if (cont_taskName != "datasource" && cont_taskName != "sink") {
         profiler = new Profiler({pid});
-        reportMetrics = true;
+        reportHwMetrics = true;
     }
 }
 
@@ -381,7 +391,7 @@ void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
         this->waitReady();
         this->START();
 
-        collectRuntimeMetrics();
+        collectRuntimeMetrics(); 
     }
 }
 
@@ -389,66 +399,93 @@ void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
 void ContainerAgent::collectRuntimeMetrics() {
     // TODO: Implement a way to collect profile metrics (copy code from device Agent) and send to metrics server
     std::vector<int> queueSizes;
-    int i, arrivalRate, lateCount;
+    int i, lateCount;
     ArrivalRecordType arrivalRecords;
     ProcessRecordType processRecords;
     std::string sql;
     while (run) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(cont_metricsServerConfigs.scrapeIntervalMillisec));
-        for (auto msvc: cont_msvcsList) {
-            queueSizes.push_back(msvc->GetOutQueueSize(0));
+        if (cont_taskName == "datasource") {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+            continue;
         }
-        // arrivalRate = cont_msvcsList[1]->GetArrivalRate();
-        lateCount = cont_msvcsList[1]->GetDroppedReqCount();
-        if (i++ > 20) {
-            i = 0;
-            // report full metrics to metrics server including everything
-//            server.sendMetrics.queueSizes = queueSizes;
-//            server.sendMetrics.arrivalRate = arrivalRate;
-//            server.sendMetrics.lateCount = lateCount;
-//            server.sendMetrics.hardware = metrics;
-        } else { // aggregate hardware
-            if (reportMetrics && pid != 0) {
-                Profiler::sysStats stats = profiler->reportAtRuntime(pid);
-                cont_hwMetrics.cpuUsage =
-                        (1 - 1 / i) * cont_hwMetrics.cpuUsage + (1 / i) * stats.cpuUsage; // uint
-                cont_hwMetrics.memUsage =
-                        (1 - 1 / i) * cont_hwMetrics.memUsage + (1 / i) * stats.memoryUsage; // uint
-                cont_hwMetrics.gpuUsage =
-                        (1 - 1 / i) * cont_hwMetrics.memUsage + (1 / i) * stats.gpuUtilization; // uint
-                cont_hwMetrics.gpuMemUsage =
-                        (1 - 1 / i) * cont_hwMetrics.memUsage + (1 / i) * stats.gpuMemoryUsage; // uint
+        auto metricsStopwatch = Stopwatch();
+        metricsStopwatch.start();
+        auto startTime = metricsStopwatch.getStartTime();
+        if (startTime >= cont_metricsServerConfigs.nextHwMetricsScrapeTime) {
+            if (reportHwMetrics && pid > 0) {
+                Profiler::sysStats stats = profiler->reportAtRuntime(1, pid);
+                HardwareMetrics hwMetrics = {startTime, 0, stats.cpuUsage, stats.memoryUsage, stats.gpuUtilization, stats.gpuMemoryUsage};
+                cont_hwMetrics.emplace_back(hwMetrics);
+                cont_metricsServerConfigs.nextHwMetricsScrapeTime += std::chrono::milliseconds(cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
             }
-            // Report metrics except for the data source
-            // TODO: find a better way to idenfiy the datasource rather than using taskName
-            std::string table_prefix = cont_pipeName + "_" + cont_taskName;
-            if (cont_taskName != "datasource") {
-                // Report Arrival metrics
-                arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
-                pqxx::work session(*cont_metricsServerConn);
-                for (auto record: arrivalRecords) {
-                    sql = "INSERT INTO " + table_prefix + "_arrival_table "
-                                                          "(arrival_timestamps, origin, transfer_duration, full_transfer_duration, "
-                                                          "rpc_batch_size, request_size, request_num) "
-                                                          "VALUES (";
-                    sql += timePointToEpochString(record.arrivalTime) + ", ";
+        }
+
+        metricsStopwatch.reset();
+        auto scrapeLatency = metricsStopwatch.elapsed_seconds();
+
+        metricsStopwatch.start();
+        startTime = metricsStopwatch.getStartTime();
+        if (startTime >= cont_metricsServerConfigs.nextMetricsReportTime) {
+            for (auto msvc: cont_msvcsList) {
+                queueSizes.push_back(msvc->GetOutQueueSize(0));
+                // arrivalRate = cont_msvcsList[1]->GetArrivalRate();
+                lateCount = cont_msvcsList[1]->GetDroppedReqCount();
+            }
+
+            pqxx::work session(*cont_metricsServerConn);
+            if (reportHwMetrics && !cont_hwMetrics.empty()) {
+                sql = "INSERT INTO " + cont_hwMetricsTableName + " (timestamps, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES";
+                for (const auto &record : cont_hwMetrics) {
+                    sql += "(" + timePointToEpochString(record.timestamp) + ", ";
+                    sql += std::to_string(0) + ", ";
+                    sql += std::to_string(record.cpuUsage) + ", ";
+                    sql += std::to_string(record.memUsage) + ", ";
+                    sql += std::to_string(record.gpuUsage) + ", ";
+                    sql += std::to_string(record.gpuMemUsage) + ")";
+                    if (&record != &cont_hwMetrics.back()) {
+                        sql += ", ";
+                    } else {
+                        sql += ";";
+                    }
+                }
+                session.exec(sql.c_str());
+                cont_hwMetrics.clear();
+            }
+            arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
+            if (!arrivalRecords.empty()) {
+
+                sql = "INSERT INTO " + cont_arrivalTableName +
+                    "(arrival_timestamps, origin, transfer_duration, full_transfer_duration, "
+                    "rpc_batch_size, request_size, request_num) "
+                    "VALUES";
+                for (auto &record: arrivalRecords) {
+                    sql += "(" + timePointToEpochString(record.arrivalTime) + ", ";
                     sql += "'" + record.reqOrigin + "'" + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.arrivalTime - record.prevSenderTime).count()) + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.arrivalTime - record.prevPostProcTime).count()) + ", ";
                     sql += std::to_string(record.rpcBatchSize) + ", ";
                     sql += std::to_string(record.reqSize) + ", ";
                     sql += std::to_string(record.reqNum) + ")";
-                    session.exec(sql.c_str());
-                }
 
-                processRecords = cont_msvcsList[3]->getProcessRecords();
-                for (auto record : processRecords) {
-                    sql = "INSERT INTO " + table_prefix + "_process_table "
-                                                          "(postprocess_timestamps, origin, prep_duration, batch_duration, "
-                                                          "infer_duration, post_duration, infer_batch_size, input_size, "
-                                                          "output_size, request_num) "
-                                                          "VALUES (";
-                    sql += timePointToEpochString(record.postEndTime) + ", "; 
+                    if (&record != &arrivalRecords.back()) {
+                        sql += ", ";
+                    } else {
+                        sql += ";";
+                    }
+                }
+                session.exec(sql.c_str());
+                arrivalRecords.clear();
+            }
+
+            processRecords = cont_msvcsList[3]->getProcessRecords();
+            if (!processRecords.empty()) {
+                
+                sql = "INSERT INTO " + cont_processTableName + "(postprocess_timestamps, origin, prep_duration, batch_duration, "
+                                                                "infer_duration, post_duration, infer_batch_size, input_size, "
+                                                                "output_size, request_num) "
+                                                                "VALUES";
+                for (auto &record : processRecords) {
+                    sql += "(" + timePointToEpochString(record.postEndTime) + ", "; 
                     sql += "'" + record.reqOrigin + "'" + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.preEndTime - record.preStartTime).count()) + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(record.batchingEndTime - record.preEndTime).count()) + ", ";
@@ -458,15 +495,23 @@ void ContainerAgent::collectRuntimeMetrics() {
                     sql += std::to_string(record.inputSize) + ", ";
                     sql += std::to_string(record.outputSize) + ", ";
                     sql += std::to_string(record.reqNum) + ")";
-                    session.exec(sql.c_str());
+                    if (&record != &processRecords.back()) {
+                        sql += ", ";
+                    } else {
+                        sql += ";";
+                    }
                 }
-                session.commit();
+                session.exec(sql.c_str());
+                processRecords.clear();
             }
-
+            session.commit();
+            cont_metricsServerConfigs.nextMetricsReportTime += std::chrono::milliseconds(cont_metricsServerConfigs.metricsReportIntervalMillisec);
         }
-        processRecords.clear();
-        arrivalRecords.clear();
-        queueSizes.clear();
+        metricsStopwatch.stop();
+        auto reportLatency = metricsStopwatch.elapsed_seconds();
+
+        std::chrono::milliseconds sleepPeriod(cont_metricsServerConfigs.metricsReportIntervalMillisec - (scrapeLatency + reportLatency) / 1000);
+        std::this_thread::sleep_for(sleepPeriod);
     }
 }
 

@@ -30,7 +30,7 @@ ABSL_DECLARE_FLAG(uint16_t, port);
 ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
 ABSL_DECLARE_FLAG(std::string, log_dir);
-ABSL_DECLARE_FLAG(bool, profiling_mode);
+ABSL_DECLARE_FLAG(uint16_t, profiling_mode);
 
 using json = nlohmann::ordered_json;
 
@@ -223,19 +223,27 @@ protected:
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     std::atomic<bool> run;
 
-    bool reportMetrics;
     unsigned int pid;
-    std::string cont_hwMetricsTableName;
-    HardwareMetrics cont_hwMetrics;
-    std::string cont_arrivalTableName;
-    std::string cont_processTableName;
     Profiler *profiler;
 
     std::string cont_logDir;
     RUNMODE cont_RUNMODE;
     uint8_t cont_deviceIndex;
+
+    /**
+     * @brief Metrics
+     */
+
+    bool reportHwMetrics;
+    std::string cont_hwMetricsTableName;
+    HardwareMetricsRecords cont_hwMetrics;
+
+    std::string cont_arrivalTableName;
+    std::string cont_processTableName;
+
     MetricsServerConfigs cont_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> cont_metricsServerConn = nullptr;
+
 };
 
 #endif //CONTAINER_AGENT_H

@@ -60,12 +60,15 @@ enum PipelineType {
 };
 
 struct HardwareMetrics {
-    float requestRate = 0;
+    ClockType timestamp;
+    float requestRate = 0; // TODOL Remove request rate. Keep for now for compatibility
     float cpuUsage = 0;
     unsigned int memUsage = 0;
     float gpuUsage = 0;
     unsigned int gpuMemUsage = 0;
 };
+
+typedef std::vector<HardwareMetrics> HardwareMetricsRecords;
 
 namespace TaskDescription {
     struct TaskStruct {
@@ -185,9 +188,6 @@ private:
 
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
                         std::string source = "", int replica = 1);
-
-    void FakeContainer(ContainerHandle* cont, int slo);
-    void FakeStartContainer(std::pair<std::string, ContainerHandle *> &cont, int slo, int replica = 1);
 
     void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
 

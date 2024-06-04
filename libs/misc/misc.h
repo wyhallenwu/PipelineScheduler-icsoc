@@ -85,12 +85,19 @@ struct MetricsServerConfigs {
     std::string DBName = "pipeline";
     std::string user = "container_agent";
     std::string password = "pipe";
-    uint64_t scrapeIntervalMillisec = 60000;
+    uint64_t hwMetricsScrapeIntervalMillisec = 50;
+    uint64_t metricsReportIntervalMillisec = 60000;
+    ClockType nextHwMetricsScrapeTime;
+    ClockType nextMetricsReportTime;
 
     MetricsServerConfigs(const std::string &path) {
         std::ifstream file(path);
         nlohmann::json j = nlohmann::json::parse(file);
         from_json(j);
+
+        nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(4 * hwMetricsScrapeIntervalMillisec);
+        nextMetricsReportTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(metricsReportIntervalMillisec);
+
     }
 
     MetricsServerConfigs() = default;
@@ -101,7 +108,8 @@ struct MetricsServerConfigs {
         j.at("metricsServer_DBName").get_to(DBName);
         j.at("metricsServer_user").get_to(user);
         j.at("metricsServer_password").get_to(password);
-        j.at("metricsServer_scrapeIntervalMillisec").get_to(scrapeIntervalMillisec);
+        j.at("metricsServer_hwMetricsScrapeIntervalMillisec").get_to(hwMetricsScrapeIntervalMillisec);
+        j.at("metricsServer_metricsReportIntervalMillisec").get_to(metricsReportIntervalMillisec);
     }
 };
 
@@ -183,14 +191,16 @@ public:
         running = false;
     }
 
-    double elapsed_seconds() const {
+    uint64_t elapsed_seconds() const {
         if (running) {
-            auto elapsed = std::chrono::high_resolution_clock::now() - start_time;
-            return std::chrono::duration<double>(elapsed).count();
+            return std::chrono::duration_cast<TimePrecisionType>(std::chrono::high_resolution_clock::now() - start_time).count();
         } else {
-            auto elapsed = stop_time - start_time;
-            return std::chrono::duration<double>(elapsed).count();
+            return std::chrono::duration_cast<TimePrecisionType>(stop_time - start_time).count();
         }
+    }
+
+    ClockType getStartTime() {
+        return start_time;
     }
 };
 

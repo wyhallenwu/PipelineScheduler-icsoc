@@ -37,7 +37,7 @@ public:
     static std::vector<long> getGpuMemory(int device_count);
     [[nodiscard]] std::vector<sysStats> getStats(unsigned int pid) const;
     std::vector<sysStats> popStats(unsigned int pid);
-    sysStats reportAtRuntime(unsigned int pid);
+    sysStats reportAtRuntime(unsigned int cpu_pid, unsigned int gpu_pid);
 
 private:
     void collectStats();
@@ -56,6 +56,8 @@ private:
     bool nvmlInitialized;
     bool running;
     std::thread profilerThread;
+
+    std::map<unsigned int, std::pair<long, long>> prevCpuTimes;
     std::map<unsigned int, nvmlDevice_t> pidOnDevices;
     std::map<unsigned int, std::vector<sysStats>> stats;
 };
