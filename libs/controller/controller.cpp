@@ -67,39 +67,6 @@ Controller::Controller() {
 
     running = true;
     devices = std::map<std::string, NodeHandle>();
-    // TODO: Remove Test Code
-    devices.insert({"server",
-                    {"server",
-                     {},
-                     new CompletionQueue(),
-                     SystemDeviceType::Server,
-                     4, std::vector<double>(4, 0.0),
-                     {8000, 8000, 8000, 8000},
-                     std::vector<double>(4, 0.0), 55001, {}}});
-    devices.insert({"edge1",
-                    {"edge1",
-                     {},
-                     new CompletionQueue(),
-                     SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
-                     {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
-    devices.insert({"edge2",
-                    {"edge2",
-                     {},
-                     new CompletionQueue(),
-                     SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
-                     {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
-    devices.insert({"edge3",
-                    {"edge3",
-                     {},
-                     new CompletionQueue(),
-                     SystemDeviceType::Edge,
-                     1, std::vector<double>(1, 0.0),
-                     {4000},
-                     std::vector<double>(1, 0.0), 55001, {}}});
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
 
@@ -140,7 +107,7 @@ void Controller::HandleRecvRpcs() {
 }
 
 void Controller::Scheduling() {
-    // TODO: @Jinghang, @Quang, @Yuheng please out your scheduling loop inside of here
+    // TODO: please out your scheduling loop inside of here
     while (running) {
         // use list of devices, tasks and containers to schedule depending on your algorithm
         // put helper functions as a private member function of the controller and write them at the bottom of this file.
@@ -162,10 +129,8 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     device->containers.insert({tmp, task->subtasks[tmp]});
     device = &devices["server"];
 
-    // TODO: @Jinghang, @Quang, @Yuheng get correct initial batch size, cuda devices, and number of replicas
-    // based on TaskDescription and System State if one of them does not apply to your algorithm just leave it at 1
-    // all of you should use different cuda devices at the server!
-    auto batch_sizes = std::map<ModelType, int>();
+    // TODO: get correct initial batch size, cuda devices, and number of replicas
+    auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
     int cuda_device = 1;
     int replicas = 1;
     for (const auto &m: models) {
@@ -190,41 +155,8 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     }
 
     for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
-        // StartContainer(msvc, task->slo, t.source, replicas);
-        FakeStartContainer(msvc, task->slo, replicas);
+        StartContainer(msvc, task->slo, t.source, replicas);
     }
-}
-
-void Controller::FakeContainer(ContainerHandle *cont, int slo) {
-    // @Jinghang, @Quang, @Yuheng this is a fake container that updates metrics every 1.2 seconds you can adjust the values etc. to have different scheduling results
-    while (cont->running) {
-        cont->metrics.cpuUsage = (rand() % 100) / 100.0;
-        cont->metrics.memUsage = (rand() % 1500 + 500) / 1000.0;
-        cont->metrics.gpuUsage = (rand() % 100) / 100.0;
-        cont->metrics.gpuMemUsage = (rand() % 100) / 100.0;
-        cont->metrics.requestRate = (rand() % 70 + 30) / 100.0;
-        cont->queue_lengths = {};
-        for (int i = 0; i < 5; i++) {
-            cont->queue_lengths.Add((rand() % 10));
-        }
-        cont->task->last_latency = (cont->task->last_latency + slo * 0.8 + (rand() % (int) (slo * 0.4))) / 2;
-        cont->device_agent->processors_utilization[cont->cuda_device[0]] += (rand() % 100) / 100.0;
-        cont->device_agent->processors_utilization[cont->cuda_device[0]] /= 2;
-
-        // @Jinghang, @Quang, @Yuheng change this logging to help you verify your algorithm probably add the batch size or something else
-        spdlog::info("Container {} is running on device {} and metrics are updated", cont->name, cont->device_agent->ip);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1200));
-    }
-}
-
-void Controller::FakeStartContainer(std::pair<std::string, ContainerHandle *> &cont, int slo, int replica) {
-    cont.second->running = true;
-    for (int i=0; i<replica; i++) {
-        std::cout << "Starting container: " << cont.first << std::endl;
-        std::thread t(&Controller::FakeContainer, this, cont.second, slo);
-        t.detach();
-    }
-
 }
 
 void Controller::UpdateLightMetrics() {

@@ -133,8 +133,6 @@ private:
         google::protobuf::RepeatedField<int32_t> queue_lengths;
         std::vector<ContainerHandle *> upstreams;
         std::vector<ContainerHandle *> downstreams;
-        // TODO: remove test code
-        bool running;
     };
 
     float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
@@ -185,9 +183,6 @@ private:
 
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
                         std::string source = "", int replica = 1);
-
-    void FakeContainer(ContainerHandle* cont, int slo);
-    void FakeStartContainer(std::pair<std::string, ContainerHandle *> &cont, int slo, int replica = 1);
 
     void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
 
