@@ -277,6 +277,10 @@ bool Engine::build() {
     return true;
 }
 
+std::string Engine::getEngineName() const {
+    return m_engineName;
+}
+
 /**
  * @brief Load the saved (or previously generated) engine file
  * 

@@ -166,6 +166,9 @@ public:
     }
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
+    virtual std::string getModelName() override {
+        return msvc_inferenceEngine->getEngineName();
+    }
 protected:
     BatchSizeType msvc_onBufferBatchSize;
     std::vector<void *> msvc_engineInputBuffers, msvc_engineOutputBuffers;

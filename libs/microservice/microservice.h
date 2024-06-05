@@ -692,6 +692,8 @@ public:
 
     bool PAUSE_THREADS = false;
 
+    virtual std::string getModelName() {return "model";}
+
 protected:
     std::vector<ThreadSafeFixSizedDoubleQueue *> msvc_InQueue, msvc_OutQueue;
     //

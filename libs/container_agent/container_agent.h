@@ -213,6 +213,9 @@ protected:
     std::string cont_taskName;
     // Name of the host where the container is running
     std::string cont_hostDevice;
+
+    std::string cont_inferModel;
+
     float arrivalRate;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
