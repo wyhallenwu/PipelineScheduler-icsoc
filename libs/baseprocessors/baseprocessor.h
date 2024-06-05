@@ -26,8 +26,15 @@ inline std::string getTimeDifString(const ClockType &start, const ClockType &end
 
 inline cv::Scalar vectorToScalar(const std::vector<float>& vec);
 
+inline cv::cuda::GpuMat convertColor(
+    const cv::cuda::GpuMat &input,
+    uint8_t IMG_TYPE,
+    uint8_t COLOR_CVT_TYPE,
+    cv::cuda::Stream &stream
+);
+
 inline cv::cuda::GpuMat resizePadRightBottom(
-    cv::cuda::GpuMat &input,
+    const cv::cuda::GpuMat &input,
     size_t height,
     size_t width,
     const std::vector<float>& bgcolor = {128, 128, 128},
@@ -38,7 +45,7 @@ inline cv::cuda::GpuMat resizePadRightBottom(
 );
 
 inline cv::cuda::GpuMat normalize(
-    cv::cuda::GpuMat &input,
+    const cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
     const std::vector<float>& subVals = {0.f, 0.f, 0.f},
     const std::vector<float>& divVals = {1.f, 1.f, 1.f},
@@ -46,7 +53,7 @@ inline cv::cuda::GpuMat normalize(
 );
 
 inline cv::cuda::GpuMat cvtHWCToCHW(
-    cv::cuda::GpuMat &input,
+    const cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream = cv::cuda::Stream::Null(),
     uint8_t IMG_TYPE = 16 //CV_8UC3
 );

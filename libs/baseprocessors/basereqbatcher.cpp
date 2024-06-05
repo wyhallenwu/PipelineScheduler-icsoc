@@ -22,7 +22,7 @@ inline cv::Scalar vectorToScalar(const std::vector<float>& vec) {
  * @param stream an opencv stream for asynchronous operation on cuda
  */
 inline cv::cuda::GpuMat normalize(
-    cv::cuda::GpuMat &input,
+    const cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream,
     const std::vector<float>& subVals,
     const std::vector<float>& divVals,
@@ -51,7 +51,7 @@ inline cv::cuda::GpuMat normalize(
 }
 
 inline cv::cuda::GpuMat cvtHWCToCHW(
-    cv::cuda::GpuMat &input,
+    const cv::cuda::GpuMat &input,
     cv::cuda::Stream &stream,
     uint8_t IMG_TYPE
 ) {
@@ -94,6 +94,30 @@ inline cv::cuda::GpuMat cvtHWCToCHW(
     return transposed;
 }
 
+inline cv::cuda::GpuMat convertColor(
+    const cv::cuda::GpuMat &input,
+    uint8_t IMG_TYPE,
+    uint8_t COLOR_CVT_TYPE,
+    cv::cuda::Stream &stream
+) {
+    trace("Going into {0:s}", __func__);
+    // If the image is grayscale, then the target image type should be 0
+    uint16_t TARGET_IMG_TYPE;
+    if (GRAYSCALE_CONVERSION_CODES.count(COLOR_CVT_TYPE)) {
+        TARGET_IMG_TYPE = 0;
+    } else {
+        TARGET_IMG_TYPE = IMG_TYPE;
+    }
+
+    cv::cuda::GpuMat color_cvt_image(input.rows, input.cols, TARGET_IMG_TYPE);
+    cv::cuda::cvtColor(input, color_cvt_image, COLOR_CVT_TYPE, 0, stream);
+
+    stream.waitForCompletion();
+    trace("Finished {0:s}", __func__);
+
+    return color_cvt_image;
+}
+
 /**
  * @brief resize the input data without changing the aspect ratio and pad the empty area with a designated color
  * 
@@ -104,7 +128,7 @@ inline cv::cuda::GpuMat cvtHWCToCHW(
  * @return cv::cuda::GpuMat 
  */
 inline cv::cuda::GpuMat resizePadRightBottom(
-    cv::cuda::GpuMat &input,
+    const cv::cuda::GpuMat &input,
     const size_t height,
     const size_t width,
     const std::vector<float> &bgcolor,
@@ -116,24 +140,13 @@ inline cv::cuda::GpuMat resizePadRightBottom(
 ) {
     trace("Going into {0:s}", __func__);
 
-    uint16_t TARGET_IMG_TYPE;
-
-    // If the image is grayscale, then the target image type should be 0
-    if (GRAYSCALE_CONVERSION_CODES.count(COLOR_CVT_TYPE)) {
-        TARGET_IMG_TYPE = 0;
-    } else {
-        TARGET_IMG_TYPE = IMG_TYPE;
-    }
-    cv::cuda::GpuMat color_cvt_image(input.rows, input.cols, TARGET_IMG_TYPE);
-    cv::cuda::cvtColor(input, color_cvt_image, COLOR_CVT_TYPE, 0, stream);
-
     float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
     int unpad_h = r * input.rows;
     //Create a new GPU Mat 
-    cv::cuda::GpuMat resized(unpad_h, unpad_w, TARGET_IMG_TYPE);
-    cv::cuda::resize(color_cvt_image, resized, resized.size(), 0, 0, RESIZE_INTERPOL_TYPE, stream);
-    cv::cuda::GpuMat out(height, width, TARGET_IMG_TYPE, vectorToScalar(bgcolor));
+    cv::cuda::GpuMat resized(unpad_h, unpad_w, input.type());
+    cv::cuda::resize(input, resized, resized.size(), 0, 0, RESIZE_INTERPOL_TYPE, stream);
+    cv::cuda::GpuMat out(height, width, input.type(), vectorToScalar(bgcolor));
     // Creating an opencv stream for asynchronous operation on cuda
     resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
 
@@ -377,16 +390,27 @@ void BaseReqBatcher::batchRequests() {
             (this->msvc_outReqShape.at(0))[0][1],
             (this->msvc_outReqShape.at(0))[0][2]
         );
-        data.data = resizePadRightBottom(
+
+        data.data = convertColor(
             currReq.req_data[0].data,
-            (this->msvc_outReqShape.at(0))[0][1],
-            (this->msvc_outReqShape.at(0))[0][2],
-            {128, 128, 128},
-            *preProcStream,
             msvc_imgType,
             msvc_colorCvtType,
-            msvc_resizeInterpolType
+            *preProcStream
         );
+
+        // Only resize if the output shape is not the same as the input shape
+        if (this->msvc_outReqShape.at(0)[0][1] != 0 && this->msvc_outReqShape.at(0)[0][2] != 0) {
+            data.data = resizePadRightBottom(
+                data.data,
+                (this->msvc_outReqShape.at(0))[0][1],
+                (this->msvc_outReqShape.at(0))[0][2],
+                {128, 128, 128},
+                *preProcStream,
+                msvc_imgType,
+                msvc_colorCvtType,
+                msvc_resizeInterpolType
+            );
+        }
 
         data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
 
@@ -422,17 +446,6 @@ void BaseReqBatcher::batchRequests() {
             );
             continue;
         }
-        msvc_OutQueue[0]->emplace(
-                Request<LocalGPUReqDataType>{
-                    {},
-                    {},
-                    {"STOP_PROFILING"},
-                    0,
-                    {},
-                    {}
-                }
-            );
-        this->STOP_THREADS = true;
 
         // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
         // cudaFree(currReq.req_data[0].data.cudaPtr());
