@@ -297,11 +297,11 @@ ContainerAgent::ContainerAgent(const json &configs) {
         std::string sql_statement;
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
             cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_arrival_table";
-            cont_processTableName = cont_pipeName + "_" + cont_taskName + "_process_table";
+            cont_processTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_process_table";
             cont_hwMetricsTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_hwmetrics_table";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
             cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_profile_arrival_table";
-            cont_processTableName = cont_pipeName + "_" + cont_taskName + "_profile_process_table";
+            cont_processTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_profile_process_table";
             cont_hwMetricsTableName =
                     cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_profile_hwmetrics_table";
 
