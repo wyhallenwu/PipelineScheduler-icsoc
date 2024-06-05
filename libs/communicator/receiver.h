@@ -25,8 +25,6 @@ public:
         server->Shutdown();
         cq->Shutdown();
     }
-    // Data generator for profiling
-    void profileDataGenerator();
 
     template<typename ReqDataType>
     void processInferTimeReport(Request<ReqDataType> &timeReport);

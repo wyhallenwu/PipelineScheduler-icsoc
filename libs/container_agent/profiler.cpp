@@ -1,3 +1,4 @@
+#include <cmath>
 #include "profiler.h"
 
 Profiler::Profiler(const std::vector<unsigned int> &pids) {
@@ -105,7 +106,7 @@ std::vector<Profiler::sysStats> Profiler::popStats(unsigned int pid) {
 
 Profiler::sysStats Profiler::reportAtRuntime(unsigned int cpu_pid, unsigned int gpu_pid) {
     sysStats value{};
-    value.cpuUsage = getCPUInfo(cpu_pid);
+    value.cpuUsage = (float) getCPUInfo(cpu_pid);
     value.memoryUsage = getMemoryInfo(cpu_pid) / 1000; // convert to MB
     auto gpu = getGPUInfo(gpu_pid, pidOnDevices[gpu_pid]);
     value.gpuUtilization = gpu.gpuUtilization;
@@ -251,8 +252,11 @@ double Profiler::getCPUInfo(unsigned int pid) {
         long prev_total_active = prevCpuTimes[pid].second;
         cpuUsage = 100.0 * (process_active - prev_process_active) / (total_active - prev_total_active);
     }
-    prevCpuTimes[pid] = std::make_pair(process_active, total_active);
 
+    prevCpuTimes[pid] = std::make_pair(process_active, total_active);
+    if (std::isinf(cpuUsage) || std::isnan(cpuUsage)) {
+        return 0.0;
+    }
     return cpuUsage;
 }
 

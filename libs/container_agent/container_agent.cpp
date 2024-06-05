@@ -385,7 +385,7 @@ void ContainerAgent::ReportStart() {
     GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
     pid = reply.pid();
-    std::cout << "Container Agent started with pid: " << pid << std::endl;
+    spdlog::info("Container Agent started with pid: {0:d}", pid);
     if (cont_taskName != "datasource" && cont_taskName != "sink") {
         profiler = new Profiler({pid});
         reportHwMetrics = true;
@@ -394,7 +394,7 @@ void ContainerAgent::ReportStart() {
 
 
 void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
-    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
+    if (configs["container"]["cont_RUNMODE"] == RUNMODE::EMPTY_PROFILING) {
         profiling(pipeConfigs, configs["profiling"]);
     } else {
         this->dispatchMicroservices();
@@ -423,7 +423,7 @@ void ContainerAgent::collectRuntimeMetrics() {
         auto startTime = metricsStopwatch.getStartTime();
         if (startTime >= cont_metricsServerConfigs.nextHwMetricsScrapeTime) {
             if (reportHwMetrics && pid > 0) {
-                Profiler::sysStats stats = profiler->reportAtRuntime(1, pid);
+                Profiler::sysStats stats = profiler->reportAtRuntime(getpid(), pid);
                 HardwareMetrics hwMetrics = {startTime, 0, stats.cpuUsage, stats.memoryUsage, stats.gpuUtilization,
                                              stats.gpuMemoryUsage};
                 cont_hwMetrics.emplace_back(hwMetrics);
@@ -440,16 +440,18 @@ void ContainerAgent::collectRuntimeMetrics() {
         if (startTime >= cont_metricsServerConfigs.nextMetricsReportTime) {
             for (auto msvc: cont_msvcsList) {
                 queueSizes.push_back(msvc->GetOutQueueSize(0));
-                // arrivalRate = cont_msvcsList[1]->GetArrivalRate();
                 lateCount = cont_msvcsList[1]->GetDroppedReqCount();
             }
 
             pqxx::work session(*cont_metricsServerConn);
             if (reportHwMetrics && !cont_hwMetrics.empty()) {
                 sql = "INSERT INTO " + cont_hwMetricsTableName +
-                      " (timestamps, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES";
+                      " (timestamps, batch_size, engine_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
                 for (const auto &record: cont_hwMetrics) {
+                    spdlog::info("CPU Usage: {0:f}, Memory Usage: {1:d}, GPU Usage: {2:d}, GPU Memory Usage: {3:d}",
+                                 record.cpuUsage, record.memUsage, record.gpuUsage, record.gpuMemUsage);
                     sql += "(" + timePointToEpochString(record.timestamp) + ", ";
+                    sql += std::to_string(0) + ", ";
                     sql += std::to_string(0) + ", ";
                     sql += std::to_string(record.cpuUsage) + ", ";
                     sql += std::to_string(record.memUsage) + ", ";
@@ -457,10 +459,9 @@ void ContainerAgent::collectRuntimeMetrics() {
                     sql += std::to_string(record.gpuMemUsage) + ")";
                     if (&record != &cont_hwMetrics.back()) {
                         sql += ", ";
-                    } else {
-                        sql += ";";
                     }
                 }
+                sql += ";";
                 session.exec(sql.c_str());
                 cont_hwMetrics.clear();
             }

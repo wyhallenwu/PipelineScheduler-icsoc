@@ -249,7 +249,7 @@
             },
             {
                 "msvc_name": "::sender",
-                "msvc_idealBatchSize": 8,
+                "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -302,7 +302,7 @@
     },
     "profiling": {
         "profile_minBatch": 16,
-        "profile_maxBatch": 64,
+        "profile_maxBatch": 16,
         "profile_stepMode": 1,
         "profile_step": 1,
         "profile_templateModelPath": "../models/yolov5n_dynamic_nms_3090_fp32_[batch]_1.engine",

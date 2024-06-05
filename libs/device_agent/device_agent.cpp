@@ -275,7 +275,6 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
         device_agent->containers[request.msvc_name()].pid = pid;
         std::cout << "Received start report from " << request.msvc_name() << " with pid: " << pid << std::endl;
 
-
         reply.set_pid(pid);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
