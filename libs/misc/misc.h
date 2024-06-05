@@ -40,7 +40,8 @@ struct ArrivalRecord {
     uint32_t rpcBatchSize;
     uint32_t reqSize;
     uint32_t reqNum;
-    std::string reqOrigin;
+    std::string reqOriginStream;
+    std::string originDevice;
 };
 typedef std::vector<ArrivalRecord> ArrivalRecordType;
 
@@ -55,7 +56,7 @@ struct ProcessRecord {
     uint32_t inputSize;
     uint32_t outputSize;
     uint32_t reqNum;
-    std::string reqOrigin;
+    std::string reqOriginStream;
 };
 typedef std::vector<ProcessRecord> ProcessRecordType;
 typedef std::chrono::microseconds TimePrecisionType;
@@ -217,5 +218,9 @@ std::vector<std::string> splitString(const std::string& str, const std::string& 
 std::string getTimestampString();
 
 uint64_t getTimestamp();
+
+void executeSQL(pqxx::connection &conn, const std::string &sql);
+
+bool isHypertable(pqxx::connection &conn, const std::string &tableName);
 
 #endif

@@ -356,7 +356,14 @@ void BaseReqBatcher::batchRequests() {
         // TODO: Add rpc batch size instead of hardcoding
         if (msvc_batchCount >= msvc_numWarmupBatches) {
             // Only start recording after the warmup period
-            msvc_arrivalRecords.addRecord(currReq.req_origGenTime[0], 10, requestSize, msvc_inReqCount);
+            msvc_arrivalRecords.addRecord(
+                currReq.req_origGenTime[0],
+                10,
+                requestSize,
+                msvc_inReqCount,
+                getOriginStream(currReq.req_travelPath[0]),
+                getSenderHost(currReq.req_travelPath[0])
+            );
         }
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
@@ -373,7 +380,7 @@ void BaseReqBatcher::batchRequests() {
         currReq_batchSize = currReq.req_batchSize;
 
         outBatch_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
-        outBatch_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_containerName + "_" + std::to_string(msvc_inReqCount) + "]");
+        outBatch_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_containerName + "|" + std::to_string(msvc_inReqCount) + "]");
         trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
         msvc_onBufferBatchSize++;

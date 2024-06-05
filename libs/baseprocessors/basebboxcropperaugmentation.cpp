@@ -452,7 +452,7 @@ void BaseBBoxCropperAugmentation::cropping() {
             if (msvc_batchCount > msvc_numWarmupBatches) {
                 currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
                 // TODO: Add the request number
-                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0);
+                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0, getOriginStream(currReq.req_travelPath[i]));
             }
             // Clearing out data of the vector
             singleImageBBoxList.clear();

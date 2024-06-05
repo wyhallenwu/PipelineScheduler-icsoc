@@ -147,3 +147,20 @@ std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &m
     }
 }
 
+void executeSQL(pqxx::connection &conn, const std::string &sql) {
+    pqxx::work session(conn);
+    try {
+        session.exec(sql.c_str());
+        session.commit();
+    } catch (const pqxx::sql_error &e) {
+        spdlog::error("{0:s} SQL Error: {1:s}", __func__, e.what());
+        exit(1);
+    }
+}
+
+bool isHypertable(pqxx::connection &conn, const std::string &tableName) {
+    pqxx::work txn(conn);
+    std::string query = "SELECT EXISTS (SELECT 1 FROM timescaledb_information.hypertables WHERE hypertable_name = '" + tableName + "');";
+    pqxx::result r = txn.exec(query);
+    return r[0][0].as<bool>();
+}

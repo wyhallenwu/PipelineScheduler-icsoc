@@ -283,74 +283,102 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
     arrivalRate = 0;
 
-    cont_metricsServerConfigs.from_json(containerConfigs["cont_metricsServerConfigs"]);
-    cont_metricsServerConfigs.user = "container_agent";
-    cont_metricsServerConfigs.password = "agent";
+    if (cont_taskName != "datasource") {
+        cont_metricsServerConfigs.from_json(containerConfigs["cont_metricsServerConfigs"]);
+        cont_metricsServerConfigs.user = "container_agent";
+        cont_metricsServerConfigs.password = "agent";
 
-    cont_metricsServerConn = connectToMetricsServer(cont_metricsServerConfigs, cont_name);
-    // Create arrival table
-    pqxx::work session(*cont_metricsServerConn);
-    std::string sql_statement;
-    if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
-        cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_arrival_table";
-        cont_processTableName = cont_pipeName + "_" + cont_taskName + "_process_table";
-        cont_hwMetricsTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_hwmetrics_table";
-    } else if (cont_RUNMODE == RUNMODE::PROFILING) {
-        cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_profile_arrival_table";
-        cont_processTableName = cont_pipeName + "_" + cont_taskName + "_profile_process_table";
-        cont_hwMetricsTableName =
-                cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_profile_hwmetrics_table";
+        cont_metricsServerConn = connectToMetricsServer(cont_metricsServerConfigs, cont_name);
+        // Create arrival table
+        std::string sql_statement;
+        if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
+            cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_arrival_table";
+            cont_processTableName = cont_pipeName + "_" + cont_taskName + "_process_table";
+            cont_hwMetricsTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_hwmetrics_table";
+        } else if (cont_RUNMODE == RUNMODE::PROFILING) {
+            cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_profile_arrival_table";
+            cont_processTableName = cont_pipeName + "_" + cont_taskName + "_profile_process_table";
+            cont_hwMetricsTableName =
+                    cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_profile_hwmetrics_table";
 
-        sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
-        session.exec(sql_statement.c_str());
-        sql_statement = "DROP TABLE IF EXISTS " + cont_processTableName + ";";
-        session.exec(sql_statement.c_str());
-        sql_statement = "DROP TABLE IF EXISTS " + cont_hwMetricsTableName + ";";
-        session.exec(sql_statement.c_str());
+            sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+            sql_statement = "DROP TABLE IF EXISTS " + cont_processTableName + ";";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+            sql_statement = "DROP TABLE IF EXISTS " + cont_hwMetricsTableName + ";";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+        }
+
+        sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_arrivalTableName + " ("
+                                                                                "arrival_timestamps BIGINT NOT NULL, "
+                                                                                "stream TEXT NOT NULL, "
+                                                                                "sender_host TEXT NOT NULL, "
+                                                                                "receiver_host TEXT NOT NULL, "
+                                                                                "transfer_duration INTEGER NOT NULL, "
+                                                                                "full_transfer_duration INTEGER NOT NULL, "
+                                                                                "rpc_batch_size INTEGER NOT NULL, "
+                                                                                "request_size INTEGER NOT NULL, "
+                                                                                "request_num INTEGER NOT NULL)";
+
+        executeSQL(*cont_metricsServerConn, sql_statement);
+
+        sql_statement = "SELECT create_hypertable('" + cont_arrivalTableName + "', 'arrival_timestamps', if_not_exists => TRUE);";
+        
+        executeSQL(*cont_metricsServerConn, sql_statement);
+
+        sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (stream);";
+        sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (sender_host);";
+        sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (receiver_host);";
+        
+        executeSQL(*cont_metricsServerConn, sql_statement);
+
+        // Create process table
+        sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_processTableName + " ("
+                                                                                "postprocess_timestamps BIGINT NOT NULL, "
+                                                                                "stream TEXT NOT NULL, "
+                                                                                "model_name TEXT NOT NULL, "
+                                                                                "host TEXT NOT NULL, "
+                                                                                "prep_duration INTEGER NOT NULL, "
+                                                                                "batch_duration INTEGER NOT NULL, "
+                                                                                "infer_duration INTEGER NOT NULL, "
+                                                                                "post_duration INTEGER NOT NULL, "
+                                                                                "infer_batch_size INTEGER NOT NULL, "
+                                                                                "input_size INTEGER NOT NULL, "
+                                                                                "output_size INTEGER NOT NULL, "
+                                                                                "request_num INTEGER NOT NULL)";
+        executeSQL(*cont_metricsServerConn, sql_statement);
+
+        sql_statement = "SELECT create_hypertable('" + cont_processTableName + "', 'postprocess_timestamps', if_not_exists => TRUE);";
+        executeSQL(*cont_metricsServerConn, sql_statement);
+
+        sql_statement = "CREATE INDEX ON " + cont_processTableName + " (stream);";
+        sql_statement += "CREATE INDEX ON " + cont_processTableName + " (model_name);";
+        sql_statement += "CREATE INDEX ON " + cont_processTableName + " (host);";
+        executeSQL(*cont_metricsServerConn, sql_statement);
+
+        if (cont_RUNMODE == RUNMODE::PROFILING) {
+            sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
+                                                                                    "   timestamps BIGINT NOT NULL,"
+                                                                                    "   model_name TEXT NOT NULL,"
+                                                                                    "   batch_size INTEGER NOT NULL,"
+                                                                                    "   cpu_usage FLOAT NOT NULL,"
+                                                                                    "   mem_usage BIGINT NOT NULL,"
+                                                                                    "   gpu_usage INTEGER NOT NULL,"
+                                                                                    "   gpu_mem_usage BIGINT NOT NULL,"
+                                                                                    "   PRIMARY KEY (timestamps)"
+                                                                                    ");";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "SELECT create_hypertable('" + cont_hwMetricsTableName + "', 'timestamps', if_not_exists => TRUE);";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "CREATE INDEX ON " + cont_hwMetricsTableName + " (model_name);";
+            sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (engine_size);";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+        }
+
+        spdlog::info("{0:s} created arrival table and process table.", cont_name);
     }
-
-    sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_arrivalTableName + " ("
-                                                                            "arrival_timestamps BIGINT, "
-                                                                            "origin VARCHAR(50), "
-                                                                            "transfer_duration INTEGER, "
-                                                                            "full_transfer_duration INTEGER, "
-                                                                            "rpc_batch_size INTEGER, "
-                                                                            "request_size INTEGER, "
-                                                                            "request_num INTEGER)";
-
-    session.exec(sql_statement.c_str());
-
-    // Create process table
-    sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_processTableName + " ("
-                                                                            "postprocess_timestamps BIGINT, "
-                                                                            "origin VARCHAR(50), "
-                                                                            "prep_duration INTEGER, "
-                                                                            "batch_duration INTEGER, "
-                                                                            "infer_duration INTEGER, "
-                                                                            "post_duration INTEGER, "
-                                                                            "infer_batch_size INTEGER, "
-                                                                            "input_size INTEGER, "
-                                                                            "output_size INTEGER, "
-                                                                            "request_num INTEGER)";
-
-    session.exec(sql_statement.c_str());
-
-    if (cont_RUNMODE == RUNMODE::PROFILING) {
-        sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
-                                                                                  "   timestamps BIGINT NOT NULL,"
-                                                                                  "   batch_size INTEGER NOT NULL,"
-                                                                                  "   engine_size INTEGER NOT NULL,"
-                                                                                  "   cpu_usage FLOAT NOT NULL,"
-                                                                                  "   mem_usage BIGINT NOT NULL,"
-                                                                                  "   gpu_usage INTEGER NOT NULL,"
-                                                                                  "   gpu_mem_usage BIGINT NOT NULL,"
-                                                                                  "   PRIMARY KEY (timestamps)"
-                                                                                  ");";
-        session.exec(sql_statement.c_str());
-    }
-
-    spdlog::info("{0:s} created arrival table and process table.", cont_name);
-    session.commit();
 
 
     int own_port = containerConfigs.at("cont_port");
@@ -447,15 +475,16 @@ void ContainerAgent::collectRuntimeMetrics() {
             }
 
             pqxx::work session(*cont_metricsServerConn);
+            std::string modelName = cont_msvcsList[2]->getModelName();
             if (reportHwMetrics && !cont_hwMetrics.empty()) {
                 sql = "INSERT INTO " + cont_hwMetricsTableName +
-                      " (timestamps, batch_size, engine_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
+                      " (timestamps, model_name, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
                 for (const auto &record: cont_hwMetrics) {
                     spdlog::info("CPU Usage: {0:f}, Memory Usage: {1:d}, GPU Usage: {2:d}, GPU Memory Usage: {3:d}",
                                  record.cpuUsage, record.memUsage, record.gpuUsage, record.gpuMemUsage);
                     sql += "(" + timePointToEpochString(record.timestamp) + ", ";
-                    sql += std::to_string(0) + ", ";
-                    sql += std::to_string(0) + ", ";
+                    sql += "'" + modelName + "', ";
+                    sql += std::to_string(cont_msvcsList[1]->msvc_idealBatchSize) + ", ";
                     sql += std::to_string(record.cpuUsage) + ", ";
                     sql += std::to_string(record.memUsage) + ", ";
                     sql += std::to_string(record.gpuUsage) + ", ";
@@ -472,12 +501,14 @@ void ContainerAgent::collectRuntimeMetrics() {
             if (!arrivalRecords.empty()) {
 
                 sql = "INSERT INTO " + cont_arrivalTableName +
-                      "(arrival_timestamps, origin, transfer_duration, full_transfer_duration, "
-                      "rpc_batch_size, request_size, request_num) "
-                      "VALUES";
+                      "(arrival_timestamps, stream, sender_host, receiver_host, transfer_duration, "
+                      "full_transfer_duration, rpc_batch_size, request_size, request_num) "
+                      "VALUES ";
                 for (auto &record: arrivalRecords) {
                     sql += "(" + timePointToEpochString(record.arrivalTime) + ", ";
-                    sql += "'" + record.reqOrigin + "'" + ", ";
+                    sql += "'" + record.reqOriginStream + "'" + ", ";
+                    sql += "'" + record.originDevice + "'" + ", ";
+                    sql += "'" + cont_hostDevice + "'" + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(
                             record.arrivalTime - record.prevSenderTime).count()) + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(
@@ -500,13 +531,15 @@ void ContainerAgent::collectRuntimeMetrics() {
             if (!processRecords.empty()) {
 
                 sql = "INSERT INTO " + cont_processTableName +
-                      "(postprocess_timestamps, origin, prep_duration, batch_duration, "
-                      "infer_duration, post_duration, infer_batch_size, input_size, "
+                      "(postprocess_timestamps, stream, model_name, host, prep_duration, "
+                      "batch_duration, infer_duration, post_duration, infer_batch_size, input_size, "
                       "output_size, request_num) "
-                      "VALUES";
+                      "VALUES ";
                 for (auto &record: processRecords) {
                     sql += "(" + timePointToEpochString(record.postEndTime) + ", ";
-                    sql += "'" + record.reqOrigin + "'" + ", ";
+                    sql += "'" + record.reqOriginStream + "'" + ", ";
+                    sql += "'" + modelName + "', ";
+                    sql += "'" + cont_hostDevice + "'" + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(
                             record.preEndTime - record.preStartTime).count()) + ", ";
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(

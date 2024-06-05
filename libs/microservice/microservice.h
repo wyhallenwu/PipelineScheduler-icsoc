@@ -54,9 +54,9 @@ struct Request {
     RequestSLOType req_e2eSLOLatency;
     /**
      * @brief The path that this request and its ancestors have travelled through.
-     * Template `[hostDeviceName_microserviceID_inReqNumber_outReqNumber]
+     * Template `[hostDeviceName|microserviceID|inReqNumber|outReqNumber]
      * For instance, for a request from container with id of `YOLOv5_01` to container with id of `retinaface_02`
-     * we may have a path that looks like this `[edge_YOLOv5_01_05_05][server_retinaface_02_09_09]`
+     * we may have a path that looks like this `[edge|YOLOv5_01|05|05][server|retinaface_02|09|09]`
      */
 
     RequestPathType req_travelPath;
@@ -420,10 +420,11 @@ public:
         uint32_t rpcBatchSize,
         uint32_t requestSize,
         uint32_t reqNumber,
-        std::string reqOrigin = "stream"
+        std::string reqOrigin,
+        std::string senderHost
     ) {
         std::unique_lock<std::mutex> lock(mutex);
-        records.push_back({timestamps[1], timestamps[2], timestamps[3], rpcBatchSize, requestSize, reqNumber, reqOrigin});
+        records.push_back({timestamps[1], timestamps[2], timestamps[3], rpcBatchSize, requestSize, reqNumber, reqOrigin, senderHost});
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();
@@ -775,9 +776,9 @@ protected:
     virtual void updateReqRate(ClockType lastInterReqDuration);
 
     // Get the frame ID from the path of travel of this request
-    uint64_t getFrameID(const std::string &path) {
+    inline uint64_t getFrameID(const std::string &path) {
         std::string temp = splitString(path, "]")[0];
-        temp = splitString(temp, "_").back();
+        temp = splitString(temp, "|").back();
         return std::stoull(temp);
     }
 
@@ -789,7 +790,7 @@ protected:
      * @return true if **batch size has been increase**
      * @return false if **otherwise**
      */
-    bool increaseBatchSize() {
+    inline bool increaseBatchSize() {
         // If we already have the max batch size, then we can stop the thread
         if (++msvc_idealBatchSize > msvc_maxBatchSize) {
             if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
@@ -808,7 +809,7 @@ protected:
      * @return true 
      * @return false 
      */
-    bool checkProfileFrameReset(const int64_t &req_currFrameID) {
+    inline bool checkProfileFrameReset(const int64_t &req_currFrameID) {
         bool reset = false;
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
             // This case the video has been reset, which means the profiling for this current batch size is completed
@@ -826,7 +827,7 @@ protected:
      * If the batch size exceeds the value of maximum batch size, then the microservice should stop processing requests
      * 
      */
-    bool checkProfileEnd(const std::string &path) {
+    inline bool checkProfileEnd(const std::string &path) {
         if (msvc_RUNMODE != RUNMODE::PROFILING) {
             return false;
         }
@@ -837,6 +838,20 @@ protected:
             return !increaseBatchSize();
         }
         return false;
+    }
+
+    inline std::string getOriginStream(const std::string &path) {
+        std::string temp = splitString(path, "]")[0];
+        temp = splitString(temp, "[").back();
+        temp = splitString(temp, "|")[1];
+        return temp;
+    }
+
+    inline std::string getSenderHost(const std::string &path) {
+        std::string temp = splitString(path, "[").back();
+        temp = splitString(temp, "]").front();
+        temp = splitString(temp, "|")[0];
+        return temp;
     }
 
     // Logging file path, where each microservice is supposed to log in running metrics
