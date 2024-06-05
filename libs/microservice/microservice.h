@@ -775,19 +775,18 @@ protected:
      * (1) if in deployment mode, then we keep the batch size at the maximum
      * (2) if in profiling mode, then we stop the thread
      * 
-     * @return true 
-     * @return false 
+     * @return true if **batch size has been increase**
+     * @return false if **otherwise**
      */
     bool increaseBatchSize() {
         // If we already have the max batch size, then we can stop the thread
         if (++msvc_idealBatchSize > msvc_maxBatchSize) {
-            if (msvc_RUNMODE == RUNMODE::PROFILING) {
-                return true;
-            } else {
+            if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
                 msvc_idealBatchSize = msvc_maxBatchSize;
             }
+            return false;
         }
-        return false;
+        return true;
     }
 
     /**
@@ -817,9 +816,14 @@ protected:
      * 
      */
     bool checkProfileEnd(const std::string &path) {
+        if (msvc_RUNMODE != RUNMODE::PROFILING) {
+            return false;
+        }
+
         bool frameReset = checkProfileFrameReset(getFrameID(path));
         if (frameReset) {
-            return increaseBatchSize();
+            // The invert operator means if batch size cannot be increased, then we should stop the thread
+            return !increaseBatchSize();
         }
         return false;
     }
