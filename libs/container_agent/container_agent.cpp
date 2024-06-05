@@ -106,6 +106,9 @@ json loadRunArgs(int argc, char **argv) {
         }
     }
 
+    if (containerConfigs["cont_taskName"] != "datasource") {
+        containerConfigs["cont_inferModelName"] = splitString(containerConfigs.at("cont_pipeline")[2]["path"], "/").back();
+    }
 
     json finalConfigs;
     finalConfigs["container"] = containerConfigs;
@@ -284,6 +287,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
     arrivalRate = 0;
 
     if (cont_taskName != "datasource") {
+        cont_inferModel = containerConfigs["cont_inferModelName"];
         cont_metricsServerConfigs.from_json(containerConfigs["cont_metricsServerConfigs"]);
         cont_metricsServerConfigs.user = "container_agent";
         cont_metricsServerConfigs.password = "agent";
@@ -302,10 +306,6 @@ ContainerAgent::ContainerAgent(const json &configs) {
                     cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_profile_hwmetrics_table";
 
             sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
-            executeSQL(*cont_metricsServerConn, sql_statement);
-            sql_statement = "DROP TABLE IF EXISTS " + cont_processTableName + ";";
-            executeSQL(*cont_metricsServerConn, sql_statement);
-            sql_statement = "DROP TABLE IF EXISTS " + cont_hwMetricsTableName + ";";
             executeSQL(*cont_metricsServerConn, sql_statement);
         }
 
@@ -373,7 +373,15 @@ ContainerAgent::ContainerAgent(const json &configs) {
             executeSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "CREATE INDEX ON " + cont_hwMetricsTableName + " (model_name);";
-            sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (engine_size);";
+            sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+
+            // Delete entries about the model from the tables
+            sql_statement = "DELETE FROM " + cont_hwMetricsTableName + " WHERE ";
+            sql_statement += "'" + cont_inferModel + "' = model_name;";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+            sql_statement = "DELETE FROM " + cont_processTableName + " WHERE ";
+            sql_statement += "'" + cont_inferModel + "' = model_name;";
             executeSQL(*cont_metricsServerConn, sql_statement);
         }
 
