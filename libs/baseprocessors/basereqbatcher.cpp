@@ -422,17 +422,6 @@ void BaseReqBatcher::batchRequests() {
             );
             continue;
         }
-        msvc_OutQueue[0]->emplace(
-                Request<LocalGPUReqDataType>{
-                    {},
-                    {},
-                    {"STOP_PROFILING"},
-                    0,
-                    {},
-                    {}
-                }
-            );
-        this->STOP_THREADS = true;
 
         // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
         // cudaFree(currReq.req_data[0].data.cudaPtr());

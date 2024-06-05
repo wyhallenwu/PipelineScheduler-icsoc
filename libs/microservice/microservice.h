@@ -779,10 +779,8 @@ protected:
      * @return false 
      */
     bool increaseBatchSize() {
-        msvc_idealBatchSize++;
-        
         // If we already have the max batch size, then we can stop the thread
-        if (msvc_idealBatchSize > msvc_maxBatchSize) {
+        if (++msvc_idealBatchSize > msvc_maxBatchSize) {
             if (msvc_RUNMODE == RUNMODE::PROFILING) {
                 return true;
             } else {
@@ -804,7 +802,7 @@ protected:
         bool reset = false;
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
             // This case the video has been reset, which means the profiling for this current batch size is completed
-            if (msvc_currFrameID > req_currFrameID && req_currFrameID == 1) {
+            if (msvc_currFrameID > req_currFrameID && req_currFrameID == 0) {
                 reset = true;
             }
             msvc_currFrameID = req_currFrameID;
@@ -821,7 +819,7 @@ protected:
     bool checkProfileEnd(const std::string &path) {
         bool frameReset = checkProfileFrameReset(getFrameID(path));
         if (frameReset) {
-            return !increaseBatchSize();
+            return increaseBatchSize();
         }
         return false;
     }

@@ -24,8 +24,13 @@ void DataReader::Process() {
         cv::Mat frame;
         source >> frame;
         if (frame.empty()) {
-            std::cout << "No more frames to read" << std::endl;
-            return;
+            std::cout << "No more frames to read, restarting the video" << std::endl;
+            source.set(cv::CAP_PROP_POS_FRAMES, 0);
+            source >> frame;
+            if (frame.empty()) {
+                std::cout << "No more frames to read" << std::endl;
+                return;
+            }
         }
         if (frame_count > 1 && i++ >= frame_count) {
             i = 1;
