@@ -1,4 +1,3 @@
-#include <cmath>
 #include "profiler.h"
 
 Profiler::Profiler(const std::vector<unsigned int> &pids) {
@@ -247,13 +246,12 @@ double Profiler::getCPUInfo(unsigned int pid) {
     }
 
     double cpuUsage = 0.0;
-    if (prevCpuTimes.count(pid) > 0) {
-        long prev_process_active = prevCpuTimes[pid].first;
-        long prev_total_active = prevCpuTimes[pid].second;
-        cpuUsage = 100.0 * (process_active - prev_process_active) / (total_active - prev_total_active);
+    if (prevCpuTimes[pid].size() > 0) {
+        std::pair<long, long> prev_active = prevCpuTimes[pid].front();
+        cpuUsage = 100.0 * (process_active - prev_active.first) / (total_active - prev_active.second);
     }
 
-    prevCpuTimes[pid] = std::make_pair(process_active, total_active);
+    prevCpuTimes[pid].push(std::make_pair(process_active, total_active));
     if (std::isinf(cpuUsage) || std::isnan(cpuUsage)) {
         return 0.0;
     }
