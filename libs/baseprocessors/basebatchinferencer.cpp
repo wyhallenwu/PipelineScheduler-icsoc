@@ -123,6 +123,15 @@ void BaseBatchInferencer::inference() {
         // Meaning the the timeout in pop() has been reached and no request was actually popped
         if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
             continue;
+        
+        /**
+         * @brief ONLY IN PROFILING MODE
+         * Check if the profiling is to be stopped, if true, then send a signal to the downstream microservice to stop profiling
+         */
+        } else if (strcmp(currReq.req_travelPath[0].c_str(), "STOP_PROFILING") == 0) {
+            STOP_THREADS = true;
+            msvc_OutQueue[0]->emplace(currReq);
+            continue;
         }
 
         msvc_inReqCount++;
@@ -167,7 +176,7 @@ void BaseBatchInferencer::inference() {
 
         timeNow = std::chrono::high_resolution_clock::now();
         /**
-         * @brief During profiling mode, there are six important timestamps to be recorded:
+         * @brief There are six important timestamps to be recorded:
          * 1. When the request was generated
          * 2. When the request was received by the batcher
          * 3. When the request was done preprocessing by the batcher

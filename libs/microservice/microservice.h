@@ -52,9 +52,13 @@ struct Request {
     BatchTimeType req_origGenTime;
     // The end-to-end service level latency objective to which this request is subject
     RequestSLOType req_e2eSLOLatency;
-    // The path that this request and its ancestors have travelled through.
-    // Template `[microserviceID_reqNumber][microserviceID_reqNumber][microserviceID_reqNumberWhenItIsSentOut]`
-    // For instance, `[YOLOv5_01_05][retinaface_02_09]`
+    /**
+     * @brief The path that this request and its ancestors have travelled through.
+     * Template `[microserviceID_inReqNumber_outReqNumber]
+     * For instance, for a request from container with id of `YOLOv5_01` to container with id of `retinaface_02`
+     * we may have a path that looks like this `[YOLOv5_01_05_05][retinaface_02_09_09]`
+     */
+
     RequestPathType req_travelPath;
 
     // Batch size
@@ -279,7 +283,8 @@ enum class NeighborType {
 
 enum RUNMODE {
     DEPLOYMENT,
-    PROFILING
+    PROFILING,
+    EMPTY_PROFILING
 };
 
 namespace msvcconfigs {
@@ -394,12 +399,12 @@ using msvcconfigs::NeighborMicroserviceConfigs;
 using msvcconfigs::BaseMicroserviceConfigs;
 using msvcconfigs::MicroserviceType;
 
-class arrivalReqRecords {
+class ArrivalReqRecords {
 public:
-    arrivalReqRecords(uint64_t keepLength = 60000) {
+    ArrivalReqRecords(uint64_t keepLength = 60000) {
         this->keepLength = std::chrono::milliseconds(keepLength);
     }
-    ~arrivalReqRecords() = default;
+    ~ArrivalReqRecords() = default;
 
 
     /**
@@ -410,9 +415,15 @@ public:
      *
      * @param timestamps
      */
-    void addRecord(RequestTimeType timestamps, uint64_t reqNumber) {
+    void addRecord(
+        RequestTimeType timestamps,
+        uint32_t rpcBatchSize,
+        uint32_t requestSize,
+        uint32_t reqNumber,
+        std::string reqOrigin = "stream"
+    ) {
         std::unique_lock<std::mutex> lock(mutex);
-        records.push_back(std::make_tuple(timestamps[0], timestamps[1], timestamps[2], reqNumber));
+        records.push_back({timestamps[1], timestamps[2], timestamps[3], rpcBatchSize, requestSize, reqNumber, reqOrigin});
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();
@@ -424,7 +435,7 @@ public:
         auto timeNow = std::chrono::high_resolution_clock::now();
         auto it = records.begin();
         while (it != records.end()) {
-            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - std::get<2>(*it));
+            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - it->arrivalTime);
             if (timePassed > keepLength) {
                 it = records.erase(it);
                 currNumEntries--;
@@ -453,11 +464,92 @@ private:
     uint64_t totalNumEntries = 0, currNumEntries = 0;
 };
 
+class ProcessReqRecords {
+public:
+    ProcessReqRecords(uint64_t keepLength = 60000) {
+        this->keepLength = std::chrono::milliseconds(keepLength);
+    }
+    ~ProcessReqRecords() = default;
+
+
+    /**
+     * @brief Add a new arrival to the records. There are 3 timestamps to keep be kept.
+     * 1. The time the request is processed by the upstream postprocessor and placed onto the outqueue.
+     * 2. The time the request is sent out by upstream sender.
+     * 3. The time the request is placed onto the outqueue of receiver.
+     *
+     * @param timestamps
+     */
+    void addRecord(
+        RequestTimeType timestamps,
+        uint32_t inferBatchSize,
+        uint32_t inputSize,
+        uint32_t outputSize,
+        uint32_t reqNumber,
+        std::string reqOrigin = "stream"
+    ) {
+        std::unique_lock<std::mutex> lock(mutex);
+        records.push_back(
+            {
+                timestamps[1],
+                timestamps[2],
+                timestamps[3],
+                timestamps[4],
+                timestamps[5],
+                timestamps[6],
+                inferBatchSize,
+                inputSize,
+                outputSize,
+                reqNumber,
+                reqOrigin
+            }
+        );
+        currNumEntries++;
+        totalNumEntries++;
+        clearOldRecords();
+        mutex.unlock();
+    }
+
+    void clearOldRecords() {
+        std::chrono::milliseconds timePassed;
+        auto timeNow = std::chrono::high_resolution_clock::now();
+        auto it = records.begin();
+        while (it != records.end()) {
+            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - it->postEndTime);
+            if (timePassed > keepLength) {
+                it = records.erase(it);
+                currNumEntries--;
+            } else {
+                break;
+            }
+        }
+    }
+
+    ProcessRecordType getRecords() {
+        std::unique_lock<std::mutex> lock(mutex);
+        ProcessRecordType temp = records;
+        records.clear();
+        currNumEntries = 0;
+        mutex.unlock();
+        return temp;
+    }
+    void setKeepLength(uint64_t keepLength) {
+        this->keepLength = std::chrono::milliseconds(keepLength);
+    }
+
+private:
+    std::mutex mutex;
+    ProcessRecordType records;
+    std::chrono::milliseconds keepLength;
+    uint64_t totalNumEntries = 0, currNumEntries = 0;
+};
+
 /**
  * @brief 
  * 
  */
 class Microservice {
+friend class ContainerAgent;
 public:
     // Constructor that loads a struct args
     explicit Microservice(const json &jsonConfigs);
@@ -475,6 +567,10 @@ public:
 
     void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue *> queue) {
         msvc_InQueue = std::move(queue);
+    };
+
+    std::vector<ThreadSafeFixSizedDoubleQueue *> GetInQueue() {
+        return msvc_InQueue;
     };
 
     std::vector<ThreadSafeFixSizedDoubleQueue *> GetOutQueue() {
@@ -577,6 +673,10 @@ public:
         return {};
     }
 
+    virtual ProcessRecordType getProcessRecords() {
+        return {};
+    }
+
     bool RELOADING = true;
 
     std::ofstream msvc_logFile;
@@ -592,6 +692,7 @@ protected:
     bool STOP_THREADS = false;
     bool READY = false;
 
+    json msvc_configs;
     /**
      * @brief Running mode of the container, globally set for all microservices inside the container
      * Default to be deployment.
@@ -616,6 +717,8 @@ protected:
     uint64_t msvc_inReqCount = 0;
     //
     uint64_t msvc_outReqCount = 0;
+    //
+    uint64_t msvc_batchCount = 0;
 
     //
     NumMscvType nummsvc_upstreamMicroservices = 0;
@@ -631,6 +734,15 @@ protected:
 
     // Ideal batch size for this microservice, runtime batch size could be smaller though
     BatchSizeType msvc_idealBatchSize;
+
+    // Maximum batch size, only used during profiling
+    BatchSizeType msvc_maxBatchSize;
+
+    //
+    uint16_t msvc_numWarmupBatches = 15;
+
+    // Frame ID, only used during profiling
+    int64_t msvc_currFrameID = -1;
 
     //
     MODEL_DATA_TYPE msvc_modelDataType = MODEL_DATA_TYPE::fp32;
@@ -650,6 +762,67 @@ protected:
 
     //
     virtual void updateReqRate(ClockType lastInterReqDuration);
+
+    // Get the frame ID from the path of travel of this request
+    uint64_t getFrameID(const std::string &path) {
+        std::string temp = splitString(path, "]")[0];
+        temp = splitString(temp, "_").back();
+        return std::stoull(temp);
+    }
+
+    /**
+     * @brief Try increasing the batch size by 1, if the batch size is already at the maximum:
+     * (1) if in deployment mode, then we keep the batch size at the maximum
+     * (2) if in profiling mode, then we stop the thread
+     * 
+     * @return true 
+     * @return false 
+     */
+    bool increaseBatchSize() {
+        // If we already have the max batch size, then we can stop the thread
+        if (++msvc_idealBatchSize > msvc_maxBatchSize) {
+            if (msvc_RUNMODE == RUNMODE::PROFILING) {
+                return true;
+            } else {
+                msvc_idealBatchSize = msvc_maxBatchSize;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @brief ONLY IN PROFILING MODE
+     * Check if the frame index of the incoming stream is reset, which is a signal to change the batch size.
+     * 
+     * @param req_currFrameID 
+     * @return true 
+     * @return false 
+     */
+    bool checkProfileFrameReset(const int64_t &req_currFrameID) {
+        bool reset = false;
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            // This case the video has been reset, which means the profiling for this current batch size is completed
+            if (msvc_currFrameID > req_currFrameID && req_currFrameID == 0) {
+                reset = true;
+            }
+            msvc_currFrameID = req_currFrameID;
+        }
+        return reset;
+    }
+
+    /**
+     * @brief ONLY IN PROFILING MODE
+     * Check if the frame index of the incoming stream is reset, which is a signal to change the batch size.
+     * If the batch size exceeds the value of maximum batch size, then the microservice should stop processing requests
+     * 
+     */
+    bool checkProfileEnd(const std::string &path) {
+        bool frameReset = checkProfileFrameReset(getFrameID(path));
+        if (frameReset) {
+            return increaseBatchSize();
+        }
+        return false;
+    }
 
     // Logging file path, where each microservice is supposed to log in running metrics
     std::string msvc_microserviceLogPath;

@@ -3,7 +3,7 @@
 #include <utility>
 
 RetinaFaceAgent::RetinaFaceAgent(
-    const json &configs
+        const json &configs
 ) : ContainerAgent(configs) {
     // for (uint16_t i = 4; i < msvcs.size(); i++) {
     //     msvcs[i]->dispatchThread();
@@ -11,7 +11,7 @@ RetinaFaceAgent::RetinaFaceAgent(
 }
 
 RetinaFaceDataSource::RetinaFaceDataSource(
-    const json &configs
+        const json &configs
 ) : ContainerAgent(configs) {
 
     // msvcs = std::move(services);
@@ -39,15 +39,11 @@ int main(int argc, char **argv) {
         agent = new RetinaFaceAgent(configs);
     }
 
-    std::vector<Microservice*> msvcsList;
-    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
-        msvcsList.push_back(new ProfileGenerator(pipeConfigs[0]));
-    } else {    
-        if (pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
-            msvcsList.push_back(new DataReader(pipeConfigs[0]));
-        } else {
-            msvcsList.push_back(new Receiver(pipeConfigs[0]));
-        }
+    std::vector<Microservice *> msvcsList;
+    if (pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
+        msvcsList.push_back(new DataReader(pipeConfigs[0]));
+    } else {
+        msvcsList.push_back(new Receiver(pipeConfigs[0]));
     }
     msvcsList.push_back(new BaseReqBatcher(pipeConfigs[1]));
     msvcsList[1]->SetInQueue(msvcsList[0]->GetOutQueue());
@@ -59,7 +55,6 @@ int main(int argc, char **argv) {
     if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
         msvcsList.push_back(new BaseSink(pipeConfigs[4]));
         msvcsList[4]->SetInQueue(msvcsList[3]->GetOutQueue());
-        msvcsList[0]->SetInQueue(msvcsList[4]->GetOutQueue());
     } else {
         for (uint16_t i = 4; i < pipeConfigs.size(); i++) {
             if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::localGPU) {

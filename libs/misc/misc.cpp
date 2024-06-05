@@ -73,7 +73,7 @@ std::string removeSubstring(const std::string& str, const std::string& substring
 
 std::string timePointToEpochString(const std::chrono::system_clock::time_point& tp) {
     // Convert time_point to nanoseconds
-    std::chrono::microseconds ns = std::chrono::duration_cast<std::chrono::microseconds>(tp.time_since_epoch());
+    TimePrecisionType ns = std::chrono::duration_cast<TimePrecisionType>(tp.time_since_epoch());
 
     // Convert nanoseconds to string
     std::stringstream ss;
@@ -93,17 +93,17 @@ std::string replaceSubstring(const std::string& input, const std::string& toRepl
     return result;
 }
 
-std::vector<std::string> splitString(const std::string& str, char delimiter) {
+std::vector<std::string> splitString(const std::string& str, const std::string& delimiter) {
     std::vector<std::string> result;
-    size_t start = 0, end = 0;
+    size_t start = 0, end = str.find(delimiter);
 
-    while ((end = str.find(delimiter, start)) != std::string::npos) {
+    while (end != std::string::npos) {
         result.push_back(str.substr(start, end - start));
-        start = end + 1;
+        start = end + delimiter.length();
+        end = str.find(delimiter, start);
     }
 
     result.push_back(str.substr(start));
-
     return result;
 }
 
@@ -123,5 +123,27 @@ std::string getTimestampString() {
 
 uint64_t getTimestamp() {
     return std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+}
+
+
+std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &metricsServerConfigs, const std::string &name) {
+    try {
+        std::string conn_statement = absl::StrFormat(
+            "host=%s port=%d user=%s password=%s dbname=%s",
+            metricsServerConfigs.ip, metricsServerConfigs.port,
+            metricsServerConfigs.user, metricsServerConfigs.password, metricsServerConfigs.DBName
+        );
+        std::unique_ptr<pqxx::connection> metricsServerConn = std::make_unique<pqxx::connection>(conn_statement);
+
+        if (metricsServerConn->is_open()) {
+            spdlog::info("{0:s} connected to database successfully: {1:s}", name, metricsServerConn->dbname());
+        } else {
+            spdlog::error("Metrics Server is not open.");
+        }
+
+        return metricsServerConn;
+    } catch (const std::exception &e) {
+        std::cerr << e.what() << std::endl;
+    }
 }
 

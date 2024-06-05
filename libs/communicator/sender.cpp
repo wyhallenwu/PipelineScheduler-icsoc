@@ -74,16 +74,33 @@ void GPUSender::Process() {
         // Meaning the the timeout in pop() has been reached and no request was actually popped
         if (strcmp(request.req_travelPath[0].c_str(), "empty") == 0) {
             continue;
+
+        /**
+         * @brief ONLY IN PROFILING MODE
+         * Check if the profiling is to be stopped, if true, then send a signal to the downstream microservice to stop profiling
+         */
+        } else if (strcmp(request.req_travelPath[0].c_str(), "STOP_PROFILING") == 0) {
+            STOP_THREADS = true;
+            msvc_OutQueue[0]->emplace(request);
+            continue;
         }
         int size = msvc_InQueue[0]->size();
         elements = {request.req_data};
-        timestamp = {request.req_origGenTime[0]};
+        /**
+         * @brief An outgoing request should contain exactly 3 timestamps:
+         * 1. The time when the request was generated at the very beginning of the pipeline, this timestamp is always at the front.
+         * 2. The time when the request was putin the out queue of the previous microservice, which is either a postprocessor (regular container) or a data reader (data source).
+         * 3. The time this request is sent, which is right about now().
+         */
+        timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
+        timestamp[0].emplace_back(std::chrono::system_clock::now());
         path = {request.req_travelPath[0]};
         slo = {request.req_e2eSLOLatency[0]};
         while (size-- > 0 && elements.size() < 10) {
             request = msvc_InQueue[0]->pop2();
             elements.push_back(request.req_data);
-            timestamp.push_back(request.req_origGenTime[0]);
+            timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
+            timestamp[0].emplace_back(std::chrono::system_clock::now());
             path.push_back(request.req_travelPath[0]);
             slo.push_back(request.req_e2eSLOLatency[0]);
         }
@@ -120,7 +137,7 @@ std::string GPUSender::SendGpuPointer(
         ref->set_height(elements[i][0].shape[1]);
         ref->set_width(elements[i][0].shape[2]);
         for (auto ts: timestamp[0]) {
-            ref->add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
+            ref->add_timestamp(std::chrono::duration_cast<TimePrecisionType>(ts.time_since_epoch()).count());
         }
         ref->set_path(path[i]);
         ref->set_slo(slo[i]);
@@ -159,10 +176,6 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Empt
     GPR_ASSERT(ok);
     if (status.ok()) {
         if (got_tag == tag) {
-//            for (RequestData<LocalGPUReqDataType> el: *tagToGpuPointer[tag]) {
-//                el.data.release();
-//            }
-//            delete tagToGpuPointer[tag];
             tagToGpuPointer.erase(tag);
         } else {
             return "Complete but Wrong Tag Received";
@@ -203,16 +216,32 @@ void LocalCPUSender::Process() {
         // Meaning the the timeout in pop() has been reached and no request was actually popped
         if (strcmp(request.req_travelPath[0].c_str(), "empty") == 0) {
             continue;
+        /**
+         * @brief ONLY IN PROFILING MODE
+         * Check if the profiling is to be stopped, if true, then send a signal to the downstream microservice to stop profiling
+         */
+        } else if (strcmp(request.req_travelPath[0].c_str(), "STOP_PROFILING") == 0) {
+            STOP_THREADS = true;
+            msvc_OutQueue[0]->emplace(request);
+            continue;
         }
         int size = msvc_InQueue[0]->size();
         elements = {request.req_data};
-        timestamp = {request.req_origGenTime[0]};
+        /**
+         * @brief An outgoing request should contain exactly 3 timestamps:
+         * 1. The time when the request was generated at the very beginning of the pipeline, this timestamp is always at the front.
+         * 2. The time when the request was putin the out queue of the previous microservice, which is either a postprocessor (regular container) or a data reader (data source).
+         * 3. The time this request is sent, which is right about now().
+         */
+        timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
+        timestamp[0].emplace_back(std::chrono::system_clock::now());
         path = {request.req_travelPath[0]};
         slo = {request.req_e2eSLOLatency[0]};
         while (size-- > 0  && elements.size() < 10) {
             request = msvc_InQueue[0]->pop1();
             elements.push_back(request.req_data);
-            timestamp.push_back(request.req_origGenTime[0]);
+            timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
+            timestamp[0].emplace_back(std::chrono::system_clock::now());
             path.push_back(request.req_travelPath[0]);
             slo.push_back(request.req_e2eSLOLatency[0]);
         }
@@ -246,7 +275,7 @@ std::string LocalCPUSender::SendSharedMemory(
         ref->set_height(elements[i][0].shape[1]);
         ref->set_width(elements[i][0].shape[2]);
         for (auto ts: timestamp[0]) {
-            ref->add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
+            ref->add_timestamp(std::chrono::duration_cast<TimePrecisionType>(ts.time_since_epoch()).count());
         }
         ref->set_path(path[i]);
         ref->set_slo(slo[i]);
@@ -295,16 +324,33 @@ void RemoteCPUSender::Process() {
         // Meaning the the timeout in pop() has been reached and no request was actually popped
         if (strcmp(request.req_travelPath[0].c_str(), "empty") == 0) {
             continue;
+        
+        /**
+         * @brief ONLY IN PROFILING MODE
+         * Check if the profiling is to be stopped, if true, then send a signal to the downstream microservice to stop profiling
+         */
+        } else if (strcmp(request.req_travelPath[0].c_str(), "STOP_PROFILING") == 0) {
+            STOP_THREADS = true;
+            msvc_OutQueue[0]->emplace(request);
+            continue;
         }
         int size = msvc_InQueue[0]->size();
         elements = {request.req_data};
-        timestamp = {request.req_origGenTime[0]};
+        /**
+         * @brief An outgoing request should contain exactly 3 timestamps:
+         * 1. The time when the request was generated at the very beginning of the pipeline, this timestamp is always at the front.
+         * 2. The time when the request was putin the out queue of the previous microservice, which is either a postprocessor (regular container) or a data reader (data source).
+         * 3. The time this request is sent, which is right about now().
+         */
+        timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
+        timestamp[0].emplace_back(std::chrono::system_clock::now());
         path = {request.req_travelPath[0]};
         slo = {request.req_e2eSLOLatency[0]};
         while (size-- > 0  && elements.size() < msvc_idealBatchSize) {
             request = msvc_InQueue[0]->pop1();
             elements.push_back(request.req_data);
-            timestamp.push_back(request.req_origGenTime[0]);
+            timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
+            timestamp[0].emplace_back(std::chrono::system_clock::now());
             path.push_back(request.req_travelPath[0]);
             slo.push_back(request.req_e2eSLOLatency[0]);
         }
@@ -336,7 +382,7 @@ std::string RemoteCPUSender::SendSerializedData(
         ref->set_height(elements[i][0].shape[1]);
         ref->set_width(elements[i][0].shape[2]);
         for (auto ts: timestamp[0]) {
-            ref->add_timestamp(std::chrono::duration_cast<std::chrono::nanoseconds>(ts.time_since_epoch()).count());
+            ref->add_timestamp(std::chrono::duration_cast<TimePrecisionType>(ts.time_since_epoch()).count());
         }
         ref->set_path(path[i]);
         ref->set_slo(slo[i]);

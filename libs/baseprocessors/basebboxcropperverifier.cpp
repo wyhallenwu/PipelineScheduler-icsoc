@@ -10,13 +10,13 @@ BaseBBoxCropperVerifierConfigs BaseBBoxCropperVerifier::loadConfigsFromJson(cons
 void BaseBBoxCropperVerifier::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     spdlog::trace("{0:s} is LOANDING configs...", __func__);
     if (!isConstructing) { // If the microservice is being reloaded
-        Microservice::loadConfigs(jsonConfigs, isConstructing);
+        BasePostprocessor::loadConfigs(jsonConfigs, isConstructing);
     }
     BaseBBoxCropperVerifierConfigs configs = loadConfigsFromJson(jsonConfigs);
     spdlog::trace("{0:s} FINISHED loading configs...", __func__);
 }
 
-BaseBBoxCropperVerifier::BaseBBoxCropperVerifier(const json &jsonConfigs) : Microservice(jsonConfigs) {
+BaseBBoxCropperVerifier::BaseBBoxCropperVerifier(const json &jsonConfigs) : BasePostprocessor(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
     info("{0:s} is created.", msvc_name); 
 }
@@ -145,6 +145,9 @@ void BaseBBoxCropperVerifier::cropping() {
         // Meaning the the timeout in pop() has been reached and no request was actually popped
         if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
             continue;
+        } else if (strcmp(currReq.req_travelPath[0].c_str(), "STOP_PROFILING") == 0) {
+            STOP_THREADS = true;
+            continue;
         }
 
         msvc_inReqCount++;
@@ -194,6 +197,9 @@ void BaseBBoxCropperVerifier::cropping() {
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
 
+            // We consider this when the request was received by the postprocessor
+            currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
+
             currReq_path = currReq.req_travelPath[i];
 
             // If there is no object in frame, we don't have to do nothing.
@@ -206,7 +212,8 @@ void BaseBBoxCropperVerifier::cropping() {
             // crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
             // trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
-            timeNow = std::chrono::high_resolution_clock::now();
+            uint32_t totalInMem = imageList[i].data.channels() * imageList[i].data.rows * imageList[i].data.cols * CV_ELEM_SIZE1(imageList[i].data.type());
+            uint32_t totalOutMem = 0;
 
             if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(orig_h, orig_w, imageList[i].data.type());
@@ -220,7 +227,7 @@ void BaseBBoxCropperVerifier::cropping() {
                 checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalCPUReqDataType>{
-                        {{currReq.req_origGenTime[i][0], timeNow}},
+                        {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
                         {currReq.req_e2eSLOLatency[i]},
                         {currReq_path},
                         1,
@@ -233,7 +240,7 @@ void BaseBBoxCropperVerifier::cropping() {
             } else {
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalGPUReqDataType>{
-                        {{currReq.req_origGenTime[i][0], timeNow}},
+                        {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
                         {currReq.req_e2eSLOLatency[i]},
                         {currReq_path},
                         1,
@@ -242,10 +249,29 @@ void BaseBBoxCropperVerifier::cropping() {
                 );
                 trace("{0:s} emplaced an image to GPU queue {2:d}.", msvc_name, bboxClass, queueIndex);
             }
-            // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
-            // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
-            // Clearing out data of the vector
 
+            totalOutMem += imageList[i].data.channels() * imageList[i].data.rows * imageList[i].data.cols * CV_ELEM_SIZE1(imageList[i].data.type());
+
+            /**
+             * @brief There are 7 important timestamps to be recorded:
+             * 1. When the request was generated
+             * 2. When the request was received by the batcher
+             * 3. When the request was done preprocessing by the batcher
+             * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
+             * 5. When the batch inferencer was completed by the inferencer 
+             * 6. When the request was received by the postprocessor
+             * 7. When each request was completed by the postprocessor
+             */
+
+            msvc_batchCount++;
+            // If the number of warmup batches has been passed, we start to record the latency
+            if (msvc_batchCount > msvc_numWarmupBatches) {
+                currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
+                // TODO: Add the request number
+                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0);
+            }
+
+            // Clearing out data of the vector
             outReqData.clear();
             singleImageBBoxList.clear();
         }
@@ -253,7 +279,6 @@ void BaseBBoxCropperVerifier::cropping() {
         // for (size_t i = 0; i < currReq_data.size(); i++) {
         //     checkCudaErrorCode(cudaFree(currReq_data.at(i).data.cudaPtr()));
         // }
-
 
         
         trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);

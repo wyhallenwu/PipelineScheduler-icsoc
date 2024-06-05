@@ -3,7 +3,7 @@
 #include <utility>
 
 MoveNetAgent::MoveNetAgent(
-    const json& configs
+        const json &configs
 ) : ContainerAgent(configs) {
     // for (uint16_t i = 4; i < msvcs.size(); i++) {
     //     msvcs[i]->dispatchThread();
@@ -20,12 +20,8 @@ int main(int argc, char **argv) {
 
     agent = new MoveNetAgent(configs);
 
-    std::vector<Microservice*> msvcsList;
-    if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
-        msvcsList.push_back(new ProfileGenerator(pipeConfigs[0]));
-    } else {    
-        msvcsList.push_back(new Receiver(pipeConfigs[0]));
-    }
+    std::vector<Microservice *> msvcsList;
+    msvcsList.push_back(new Receiver(pipeConfigs[0]));
     msvcsList.push_back(new BaseReqBatcher(pipeConfigs[1]));
     msvcsList[1]->SetInQueue(msvcsList[0]->GetOutQueue());
     msvcsList.push_back(new BaseBatchInferencer(pipeConfigs[2]));
@@ -36,7 +32,6 @@ int main(int argc, char **argv) {
     if (configs["container"]["cont_RUNMODE"] == RUNMODE::PROFILING) {
         msvcsList.push_back(new BaseSink(pipeConfigs[4]));
         msvcsList[4]->SetInQueue(msvcsList[3]->GetOutQueue());
-        msvcsList[0]->SetInQueue(msvcsList[4]->GetOutQueue());
     } else {
         for (uint16_t i = 4; i < pipeConfigs.size(); i++) {
             if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::localGPU) {

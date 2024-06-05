@@ -9,6 +9,10 @@
 #include "controller.h"
 #include "indevicecommunication.grpc.pb.h"
 #include "controlcommunication.grpc.pb.h"
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <ifaddrs.h>
 
 using trt::TRTConfigs;
 
@@ -69,13 +73,15 @@ private:
         std::string command;
         std::string container_name = name;
         std::replace(container_name.begin(), container_name.end(), ':', '-');
-        command = "docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/app/data/  "
-                  "-v /ssd0/tung/PipePlusPlus/logs/:/app/logs/ -v /ssd0/tung/PipePlusPlus/models/:/app/models/ "
-                  "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
-                  "-d --rm --runtime nvidia --gpus all --name " +
+        command =
+                "docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/app/data/  "
+                "-v /ssd0/tung/PipePlusPlus/logs/:/app/logs/ -v /ssd0/tung/PipePlusPlus/models/:/app/models/ "
+                "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
+                "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
-                R"(%s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs')",
+                R"(%s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs ')",
                 container_name, executable, name, start_string, device, port);
+                // + "| ./outputbuffer.pl --lines 50";
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         return system(command.c_str());
@@ -228,6 +234,8 @@ private:
 
     // This will be mounted into the container to easily collect all logs.
     std::string dev_logPath = "../logs";
+    MetricsServerConfigs dev_metricsServerConfigs;
+    std::unique_ptr<pqxx::connection> dev_metricsServerConn = nullptr;
 };
 
 #endif //DEVICE_AGENT_H

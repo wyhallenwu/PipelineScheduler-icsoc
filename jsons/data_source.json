@@ -2,6 +2,7 @@
     "container": {
         "cont_pipeName": "every",
         "cont_taskName": "datasource",
+        "cont_hostDevice": "server",
         "cont_name": "data_source_0",
         "cont_pipeline": [
             {
@@ -11,7 +12,7 @@
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
@@ -34,13 +35,13 @@
                     ]
                 ],
                 "msvc_svcLevelObjLatency": 999999,
-                "msvc_type": 3,
+                "msvc_type": 500,
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 4,
                         "nb_link": [
-                            "../data/preview/batch_test.mp4"
+                            "../data/preview/traffic_profiling.mp4"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "video_source",
@@ -85,11 +86,11 @@
                     ]
                 ],
                 "msvc_svcLevelObjLatency": 999999,
-                "msvc_type": 4,
+                "msvc_type": 4000,
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 2,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
@@ -107,7 +108,8 @@
                 "msvc_maxQueueSize": 100
             }
         ],
-        "cont_metricServerConfigs": "../jsons/metricsserver.json"
+        "cont_metricServerConfigs": "../jsons/metricsserver.json",
+        "cont_numWarmUpBatches": 15
     },
     "profiling": {
         "profile_minBatch": 0,
@@ -116,7 +118,6 @@
         "profile_step": 0,
         "profile_templateModelPath": "",
         "profile_inputRandomizeScheme": 0,
-        "profile_numWarmUpBatches": 0,
-        "profile_numProfileBatches": 0
+        "profile_numProfileFrames": 0
     }
 }

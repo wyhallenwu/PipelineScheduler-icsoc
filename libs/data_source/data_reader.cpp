@@ -24,15 +24,23 @@ void DataReader::Process() {
         cv::Mat frame;
         source >> frame;
         if (frame.empty()) {
-            std::cout << "No more frames to read" << std::endl;
-            return;
+            std::cout << "No more frames to read, restarting the video" << std::endl;
+            source.set(cv::CAP_PROP_POS_FRAMES, 0);
+            source >> frame;
+            if (frame.empty()) {
+                std::cout << "No more frames to read" << std::endl;
+                return;
+            }
         }
         if (frame_count > 1 && i++ >= frame_count) {
             i = 1;
         } else {
-            Request<LocalCPUReqDataType> req = {{{time}}, {msvc_svcLevelObjLatency},
+            // two `time`s is not necessary, but it follows the format set for the downstreams.
+            int frameNum = (int) source.get(cv::CAP_PROP_POS_FRAMES);
+            Request<LocalCPUReqDataType> req = {{{time, time}}, {msvc_svcLevelObjLatency},
                                                 {"[" + link + "_" +
-                                                 std::to_string((int) source.get(cv::CAP_PROP_POS_FRAMES)) + "]"}, 1,
+                                                 std::to_string(frameNum) + 
+                                                 "_" + std::to_string(frameNum) + "]"}, 1,
                                                 {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols},
                                                                                   frame}}};
             msvc_OutQueue[0]->emplace(req);

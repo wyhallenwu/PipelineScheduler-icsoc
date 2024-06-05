@@ -20,7 +20,7 @@ using json = nlohmann::ordered_json;
 
 inline uint64_t getNumberAtIndex(const std::string& str, int index);
 inline std::string getTimeDifString(const ClockType &start, const ClockType &end) {
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    auto duration = std::chrono::duration_cast<TimePrecisionType>(end - start);
     return std::to_string(duration.count());
 }
 
@@ -98,7 +98,7 @@ public:
     virtual void batchRequestsProfiling();
 
     void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread batcher(&BaseReqBatcher::batchRequestsProfiling, this);
             batcher.detach();
@@ -119,7 +119,7 @@ public:
 
 protected:
     // Record
-    arrivalReqRecords msvc_arrivalRecords;
+    ArrivalReqRecords msvc_arrivalRecords;
 
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
@@ -147,7 +147,7 @@ public:
     RequestShapeType getOutputShapeVector();
 
     void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread inferencer(&BaseBatchInferencer::inferenceProfiling, this);
             inferencer.detach();
@@ -196,7 +196,30 @@ inline void cropOneBox(
     cv::cuda::GpuMat &croppedBBoxes
 );
 
-class BaseBBoxCropper : public Microservice {
+class BasePostprocessor : public Microservice {
+public:
+    BasePostprocessor(const json &jsonConfigs) : Microservice(jsonConfigs) {
+        loadConfigs(jsonConfigs, true);
+    };
+    ~BasePostprocessor() = default;
+
+    virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override {
+        if (!isConstructing) {
+            Microservice::loadConfigs(jsonConfigs, isConstructing);
+        }
+        msvc_processRecords.setKeepLength((uint64_t)jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
+    };
+    virtual ProcessRecordType getProcessRecords() override {
+        return msvc_processRecords.getRecords();
+    }
+    virtual void addToPath(RequestPathType &path, uint64_t reqNum) {
+        
+    }
+protected:
+    ProcessReqRecords msvc_processRecords;
+};
+
+class BaseBBoxCropper : public BasePostprocessor {
 public:
     BaseBBoxCropper(const json &jsonConfigs);
     ~BaseBBoxCropper() = default;
@@ -214,7 +237,7 @@ public:
     void cropProfiling();
 
     void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread postprocessor(&BaseBBoxCropper::cropProfiling, this);
             postprocessor.detach();
@@ -228,7 +251,7 @@ public:
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
-class BaseBBoxCropperAugmentation : public Microservice {
+class BaseBBoxCropperAugmentation : public BasePostprocessor {
 public:
     BaseBBoxCropperAugmentation(const json &jsonConfigs);
     ~BaseBBoxCropperAugmentation() = default;
@@ -246,7 +269,7 @@ public:
     void cropProfiling();
 
     void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread postprocessor(&BaseBBoxCropperAugmentation::cropProfiling, this);
             postprocessor.detach();
@@ -260,7 +283,7 @@ public:
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
-class BaseBBoxCropperVerifier : public Microservice {
+class BaseBBoxCropperVerifier : public BasePostprocessor {
 public:
     BaseBBoxCropperVerifier(const json& jsonConfigs);
     ~BaseBBoxCropperVerifier() = default;
@@ -270,7 +293,7 @@ public:
     void cropProfiling();
 
     virtual void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread postprocessor(&BaseBBoxCropperVerifier::cropProfiling, this);
             postprocessor.detach();
@@ -285,7 +308,7 @@ public:
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 };
 
-class BaseClassifier : public Microservice {
+class BaseClassifier : public BasePostprocessor {
 public:
     BaseClassifier(const json &jsonConfigs);
     ~BaseClassifier() = default;
@@ -293,7 +316,7 @@ public:
     virtual void classify() ;
 
     virtual void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread classifier(&BaseClassifier::classifyProfiling, this);
             classifier.detach();
@@ -323,7 +346,7 @@ public:
     virtual void classifyProfiling() override;
 };
 
-class BaseKPointExtractor : public Microservice{
+class BaseKPointExtractor : public BasePostprocessor {
 public:
     BaseKPointExtractor(const json &jsonConfigs);
     ~BaseKPointExtractor() = default;
@@ -331,7 +354,7 @@ public:
     virtual void extractor();
 
     virtual void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread extractor(&BaseKPointExtractor::extractorProfiling, this);
             extractor.detach();
@@ -356,7 +379,7 @@ public:
     virtual void sink();
 
     virtual void dispatchThread() override {
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             spdlog::trace("{0:s} dispatching profiling thread.", __func__);
             std::thread sinker(&BaseSink::sink, this);
             sinker.detach();

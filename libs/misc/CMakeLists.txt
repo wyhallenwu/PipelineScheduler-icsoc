@@ -67,6 +67,9 @@ target_include_directories(misc
             $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
             ${OpenCV_INCLUDE_DIRS}
             ${CUDA_INCLUDE_DIRS} 
+            ${PostgreSQL_INCLUDE_DIRS}
+            ${LIBPQXX_INCLUDE_DIRS}
+            
         PRIVATE
             # Used only when building the library:
             src)
@@ -76,6 +79,8 @@ target_link_libraries(misc
         ${OpenCV_LIBS}
         ${CUDA_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
+        ${PostgreSQL_LIBRARIES}
+        ${LIBPQXX_LIBRARIES}
 )
 
 # Here we configure variables specifying the target directories.

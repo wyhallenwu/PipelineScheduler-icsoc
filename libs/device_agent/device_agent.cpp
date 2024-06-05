@@ -5,11 +5,43 @@ ABSL_FLAG(std::string, controller_url, "", "string that identifies the controlle
 
 const unsigned long CONTAINER_BASE_PORT = 50001;
 
+std::string getHostIP() {
+    struct ifaddrs *ifAddrStruct = nullptr;
+    struct ifaddrs *ifa = nullptr;
+    void *tmpAddrPtr = nullptr;
+
+    getifaddrs(&ifAddrStruct);
+
+    for (ifa = ifAddrStruct; ifa != nullptr; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr) {
+            continue;
+        }
+        // check it is IP4
+        if (ifa->ifa_addr->sa_family == AF_INET) {
+            tmpAddrPtr = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+            char addressBuffer[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, tmpAddrPtr, addressBuffer, INET_ADDRSTRLEN);
+            if (std::strcmp(ifa->ifa_name, "lo") != 0) { // exclude loopback
+                freeifaddrs(ifAddrStruct);
+                return std::string(addressBuffer);
+            }
+        }
+    }
+    if (ifAddrStruct != nullptr) freeifaddrs(ifAddrStruct);
+    return "";
+}
+
 DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type) {
     name = n;
     processing_units = 0;
     utilization = {};
     mem_utilization = {};
+
+    dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
+    dev_metricsServerConfigs.user = "device_agent";
+    dev_metricsServerConfigs.password = "agent";
+    dev_metricsServerConn = connectToMetricsServer(dev_metricsServerConfigs, "Device_agent");
+
     std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60003);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
@@ -39,7 +71,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
         thread.detach();
     }
 
-    Ready(name, controller_url, type);
+    Ready(name, getHostIP(), type);
 }
 
 bool DeviceAgent::CreateContainer(
@@ -217,18 +249,33 @@ void DeviceAgent::HandleControlRecvRpcs() {
     }
 }
 
+int getContainerProcessPid(std::string container_name_or_id) {
+    std::replace(container_name_or_id.begin(), container_name_or_id.end(), ':', '-');
+    std::string cmd = "docker inspect --format '{{.State.Pid}}' " + container_name_or_id;
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return std::stoi(result);
+}
+
 void DeviceAgent::ReportStartRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
         service->RequestReportMsvcStart(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new ReportStartRequestHandler(service, cq, device_agent);
-        std::cout << "Received start report from " << request.msvc_name() << " with pid: " << request.pid() << std::endl;
 
-        device_agent->containers[request.msvc_name()].pid = request.pid();
+        int pid = getContainerProcessPid(request.msvc_name());
+        device_agent->containers[request.msvc_name()].pid = pid;
+        std::cout << "Received start report from " << request.msvc_name() << " with pid: " << pid << std::endl;
 
-
-        reply.set_pid(request.pid());
+        reply.set_pid(pid);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

@@ -2,6 +2,8 @@
     "container": {
         "cont_pipeName": "pedestrian_security",
         "cont_taskName": "movenet",
+        "cont_hostDevice": "server",
+        "cont_name": "movenet_0",
         "cont_pipeline": [
             {
                 "msvc_name": "::receiver",
@@ -277,16 +279,17 @@
             }
         ],
         "cont_metricServerConfigs": "../jsons/metricsserver.json",
-        "cont_metricScrapeIntervalSecond": 60
+        "cont_numWarmUpBatches": 15
     },
     "profiling": {
-        "profile_minBatch": 1,
+        "profile_minBatch": 64,
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,
         "profile_templateModelPath": "../models/pose_3090_fp32_[batch]_1.engine",
         "profile_inputRandomizeScheme": 0,
         "profile_numWarmUpBatches": 10,
-        "profile_numProfileBatches": 100
+        "profile_numProfileBatches": 100,
+        "profile_numProfileReqs": 1800
     }
 }

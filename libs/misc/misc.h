@@ -9,6 +9,11 @@
 #include "spdlog/spdlog.h"
 #include "opencv2/opencv.hpp"
 #include <unordered_set>
+#include <pqxx/pqxx>
+#include "absl/strings/str_format.h"
+#include "absl/flags/parse.h"
+#include "absl/flags/flag.h"
+#include <fstream>
 
 
 typedef uint16_t NumQueuesType;
@@ -27,7 +32,33 @@ typedef std::vector<std::vector<int32_t>> RequestShapeType;
 typedef cv::cuda::GpuMat LocalGPUReqDataType;
 typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
-typedef std::vector<std::tuple<ClockType, ClockType, ClockType, uint64_t>> ArrivalRecordType;
+
+struct ArrivalRecord {
+    ClockType prevPostProcTime;
+    ClockType prevSenderTime;
+    ClockType arrivalTime;
+    uint32_t rpcBatchSize;
+    uint32_t reqSize;
+    uint32_t reqNum;
+    std::string reqOrigin;
+};
+typedef std::vector<ArrivalRecord> ArrivalRecordType;
+
+struct ProcessRecord {
+    ClockType preStartTime;
+    ClockType preEndTime;
+    ClockType batchingEndTime;
+    ClockType batchInferenceTime;
+    ClockType postStartTime;
+    ClockType postEndTime;
+    uint32_t inferBatchSize;
+    uint32_t inputSize;
+    uint32_t outputSize;
+    uint32_t reqNum;
+    std::string reqOrigin;
+};
+typedef std::vector<ProcessRecord> ProcessRecordType;
+typedef std::chrono::microseconds TimePrecisionType;
 
 const std::unordered_set<uint16_t> GRAYSCALE_CONVERSION_CODES = {6, 7, 10, 11};
 
@@ -47,6 +78,42 @@ const std::vector<std::string> cocoClassNames = {
         "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
         "hair drier", "toothbrush"
 };
+
+struct MetricsServerConfigs {
+    std::string ip = "localhost";
+    uint64_t port = 60004;
+    std::string DBName = "pipeline";
+    std::string user = "container_agent";
+    std::string password = "pipe";
+    uint64_t hwMetricsScrapeIntervalMillisec = 50;
+    uint64_t metricsReportIntervalMillisec = 60000;
+    ClockType nextHwMetricsScrapeTime;
+    ClockType nextMetricsReportTime;
+
+    MetricsServerConfigs(const std::string &path) {
+        std::ifstream file(path);
+        nlohmann::json j = nlohmann::json::parse(file);
+        from_json(j);
+
+        nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(4 * hwMetricsScrapeIntervalMillisec);
+        nextMetricsReportTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(metricsReportIntervalMillisec);
+
+    }
+
+    MetricsServerConfigs() = default;
+
+    void from_json(const nlohmann::json &j) {
+        j.at("metricsServer_ip").get_to(ip);
+        j.at("metricsServer_port").get_to(port);
+        j.at("metricsServer_DBName").get_to(DBName);
+        j.at("metricsServer_user").get_to(user);
+        j.at("metricsServer_password").get_to(password);
+        j.at("metricsServer_hwMetricsScrapeIntervalMillisec").get_to(hwMetricsScrapeIntervalMillisec);
+        j.at("metricsServer_metricsReportIntervalMillisec").get_to(metricsReportIntervalMillisec);
+    }
+};
+
+std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &metricsServerConfigs, const std::string &name);
 
 enum MODEL_DATA_TYPE {
     int8 = sizeof(uint8_t),
@@ -124,14 +191,16 @@ public:
         running = false;
     }
 
-    double elapsed_seconds() const {
+    uint64_t elapsed_seconds() const {
         if (running) {
-            auto elapsed = std::chrono::high_resolution_clock::now() - start_time;
-            return std::chrono::duration<double>(elapsed).count();
+            return std::chrono::duration_cast<TimePrecisionType>(std::chrono::high_resolution_clock::now() - start_time).count();
         } else {
-            auto elapsed = stop_time - start_time;
-            return std::chrono::duration<double>(elapsed).count();
+            return std::chrono::duration_cast<TimePrecisionType>(stop_time - start_time).count();
         }
+    }
+
+    ClockType getStartTime() {
+        return start_time;
     }
 };
 
@@ -143,7 +212,7 @@ std::string timePointToEpochString(const std::chrono::system_clock::time_point& 
 
 std::string replaceSubstring(const std::string& input, const std::string& toReplace, const std::string& replacement);
 
-std::vector<std::string> splitString(const std::string& str, char delimiter) ;
+std::vector<std::string> splitString(const std::string& str, const std::string& delimiter) ;
 
 std::string getTimestampString();
 

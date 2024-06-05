@@ -1,7 +1,8 @@
 {
     "container": {
-        "cont_pipeName": "traffic_pipeline",
+        "cont_pipeName": "traffic",
         "cont_taskName": "yolov5",
+        "cont_hostDevice": "server",
         "cont_name": "yolov5_0",
         "cont_pipeline": [
             {
@@ -248,12 +249,12 @@
             },
             {
                 "msvc_name": "::sender",
-                "msvc_idealBatchSize": 8,
+                "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 2,
                         "nb_link": [
                             "localhost:55012"
                         ],
@@ -278,7 +279,7 @@
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
@@ -296,16 +297,18 @@
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
             }
         ],
-        "cont_metricServerConfigs": "../jsons/metricsserver.json"
+        "cont_metricServerConfigs": "../jsons/metricsserver.json",
+        "cont_numWarmUpBatches": 15
     },
     "profiling": {
-        "profile_minBatch": 1,
-        "profile_maxBatch": 64,
+        "profile_minBatch": 16,
+        "profile_maxBatch": 16,
         "profile_stepMode": 1,
         "profile_step": 1,
         "profile_templateModelPath": "../models/yolov5n_dynamic_nms_3090_fp32_[batch]_1.engine",
         "profile_inputRandomizeScheme": 0,
         "profile_numWarmUpBatches": 10,
-        "profile_numProfileBatches": 100
+        "profile_numProfileBatches": 100,
+        "profile_numProfileReqs": 1800
     }
 }

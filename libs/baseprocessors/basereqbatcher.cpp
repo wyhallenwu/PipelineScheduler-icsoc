@@ -249,8 +249,11 @@ void BaseReqBatcher::batchRequests() {
     // Batch reqs' gen time
     BatchTimeType outBatch_genTime;
 
+    // out request's gen time
+    RequestTimeType outReq_genTime;
+
     // Batch reqs' slos
-    RequestSLOType outReq_slo;
+    RequestSLOType outBatch_slo;
 
     // Batch reqs' paths
     RequestPathType outBatch_path;
@@ -300,7 +303,7 @@ void BaseReqBatcher::batchRequests() {
 
                 outBatch_genTime.clear();
                 outBatch_path.clear();
-                outReq_slo.clear();
+                outBatch_slo.clear();
                 bufferData.clear();
                 prevData.clear();
 
@@ -333,9 +336,15 @@ void BaseReqBatcher::batchRequests() {
         }
         
         msvc_inReqCount++;
+    
+        uint32_t requestSize = currReq.req_data[0].data.channels() * currReq.req_data[0].data.rows * currReq.req_data[0].data.cols * CV_ELEM_SIZE1(currReq.req_data[0].data.type());
 
         // Keeping record of the arrival requests
-        msvc_arrivalRecords.addRecord(currReq.req_origGenTime[0], msvc_inReqCount);
+        // TODO: Add rpc batch size instead of hardcoding
+        if (msvc_batchCount >= msvc_numWarmupBatches) {
+            // Only start recording after the warmup period
+            msvc_arrivalRecords.addRecord(currReq.req_origGenTime[0], 10, requestSize, msvc_inReqCount);
+        }
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
@@ -344,9 +353,13 @@ void BaseReqBatcher::batchRequests() {
             this->updateReqRate(currReq_genTime);
         }
 
+        // After the communication-related timestamps have been kept in the arrival record, all except the very first one (genTime) are removed.
+        // The first timestamp will be carried till the end of the pipeline to determine the total latency and if the request is late, along the way.
+        outReq_genTime = {currReq_genTime, std::chrono::high_resolution_clock::now()};
+
         currReq_batchSize = currReq.req_batchSize;
 
-        outReq_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
+        outBatch_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
         outBatch_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_containerName + "_" + std::to_string(msvc_inReqCount) + "]");
         trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
@@ -388,8 +401,27 @@ void BaseReqBatcher::batchRequests() {
         timeNow = std::chrono::high_resolution_clock::now();
 
         // Add the whole time vector of currReq to outReq
-        currReq.req_origGenTime[0].emplace_back(timeNow);
-        outBatch_genTime.emplace_back(currReq.req_origGenTime[0]);
+        outReq_genTime.emplace_back(timeNow);
+        outBatch_genTime.emplace_back(outReq_genTime);
+
+        /**
+         * @brief ONLY IN PROFILING MODE
+         * Check if the profiling is to be stopped, if true, then send a signal to the downstream microservice to stop profiling
+         */
+        if (checkProfileEnd(currReq.req_travelPath[0])) {
+            this->STOP_THREADS = true;
+            msvc_OutQueue[0]->emplace(
+                Request<LocalGPUReqDataType>{
+                    {},
+                    {},
+                    {"STOP_PROFILING"},
+                    0,
+                    {},
+                    {}
+                }
+            );
+            continue;
+        }
 
         // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
         // cudaFree(currReq.req_data[0].data.cudaPtr());
@@ -405,18 +437,21 @@ void BaseReqBatcher::batchRequests() {
 
             outReq = {
                 outBatch_genTime,
-                outReq_slo,
+                outBatch_slo,
                 outBatch_path,
                 msvc_onBufferBatchSize,
                 bufferData,
                 prevData
             };
+
+            msvc_batchCount++;
+
             trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
             msvc_OutQueue[0]->emplace(outReq);
             msvc_onBufferBatchSize = 0;
             outBatch_genTime.clear();
             outBatch_path.clear();
-            outReq_slo.clear();
+            outBatch_slo.clear();
             bufferData.clear();
             prevData.clear();
         }
@@ -643,8 +678,15 @@ void BaseReqBatcher::batchRequestsProfiling() {
  * @return false if otherwise
  */
 bool BaseReqBatcher::isTimeToBatch() {
-    if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
-        return true;
+    if (msvc_RUNMODE != RUNMODE::DEPLOYMENT) {
+        // TODO: This is a temporary solution
+        if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
+            return true;
+        }
+    } else {
+        if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
+            return true;
+        }
     }
     return false;
 }

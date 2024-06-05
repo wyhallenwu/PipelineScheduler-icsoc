@@ -30,7 +30,7 @@ ABSL_DECLARE_FLAG(uint16_t, port);
 ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
 ABSL_DECLARE_FLAG(std::string, log_dir);
-ABSL_DECLARE_FLAG(bool, profiling_mode);
+ABSL_DECLARE_FLAG(uint16_t, profiling_mode);
 
 using json = nlohmann::ordered_json;
 
@@ -46,15 +46,6 @@ using indevicecommunication::Signal;
 using indevicecommunication::Connection;
 using indevicecommunication::ProcessData;
 using EmptyMessage = google::protobuf::Empty;
-
-struct MetricsServerConfigs {
-    std::string ip = "localhost";
-    uint64_t port = 60004;
-    std::string DBName = "pipeline";
-    std::string user = "container_agent";
-    std::string password = "pipe";
-    uint64_t scrapeIntervalMilisec = 60000;
-};
 
 enum TransferMethod {
     LocalCPU,
@@ -138,10 +129,6 @@ public:
 
     void profiling(const json &pipeConfigs, const json &profileConfigs);
 
-    void loadProfilingConfigs();
-
-    void connectToMetricsServer();
-
     void runService(const json &pipeConfigs, const json &configs);
 
 protected:
@@ -224,6 +211,8 @@ protected:
     std::vector<Microservice *> cont_msvcsList;
     std::string cont_pipeName;
     std::string cont_taskName;
+    // Name of the host where the container is running
+    std::string cont_hostDevice;
     float arrivalRate;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
@@ -232,16 +221,27 @@ protected:
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     std::atomic<bool> run;
 
-    bool reportMetrics;
     unsigned int pid;
-    Metrics metrics;
     Profiler *profiler;
 
     std::string cont_logDir;
     RUNMODE cont_RUNMODE;
     uint8_t cont_deviceIndex;
+
+    /**
+     * @brief Metrics
+     */
+
+    bool reportHwMetrics;
+    std::string cont_hwMetricsTableName;
+    HardwareMetricsRecords cont_hwMetrics;
+
+    std::string cont_arrivalTableName;
+    std::string cont_processTableName;
+
     MetricsServerConfigs cont_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> cont_metricsServerConn = nullptr;
+
 };
 
 #endif //CONTAINER_AGENT_H
