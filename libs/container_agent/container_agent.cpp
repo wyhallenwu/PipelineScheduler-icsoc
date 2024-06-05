@@ -74,6 +74,9 @@ json loadRunArgs(int argc, char **argv) {
 
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
         containerConfigs.at("cont_pipeline")[i]["msvc_contName"] = name;
+        containerConfigs.at("cont_pipeline")[i]["msvc_pipelineName"] = containerConfigs["cont_pipeName"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_taskName"] = containerConfigs["cont_taskName"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_hostDevice"] = containerConfigs["cont_hostDevice"];
         containerConfigs.at("cont_pipeline")[i]["msvc_deviceIndex"] = device;
         containerConfigs.at("cont_pipeline")[i]["msvc_containerLogPath"] = logPath + "/" + name;
         containerConfigs.at("cont_pipeline")[i]["msvc_RUNMODE"] = runmode;

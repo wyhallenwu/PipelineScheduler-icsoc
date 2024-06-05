@@ -50,16 +50,23 @@ void msvcconfigs::to_json(json &j, const msvcconfigs::BaseMicroserviceConfigs &v
 void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     BaseMicroserviceConfigs configs = jsonConfigs.get<BaseMicroserviceConfigs>();
 
-    msvc_containerName = configs.msvc_contName;
-    msvc_idealBatchSize = configs.msvc_idealBatchSize;
-    msvc_dataShape = configs.msvc_dataShape;
+    // Identifiers
     msvc_name = configs.msvc_name;
+    msvc_containerName = configs.msvc_contName;
+    msvc_pipelineName = jsonConfigs.at("msvc_pipelineName");
+    msvc_taskName = jsonConfigs.at("msvc_taskName");
+    msvc_hostDevice = jsonConfigs.at("msvc_hostDevice");
+    msvc_idealBatchSize = configs.msvc_idealBatchSize;
+
+    // Configurations
+    msvc_dataShape = configs.msvc_dataShape;
     msvc_svcLevelObjLatency = configs.msvc_svcLevelObjLatency;
     msvc_type = configs.msvc_type;
     PAUSE_THREADS = true;
     msvc_appLvlConfigs = configs.msvc_appLvlConfigs;
     msvc_deviceIndex = configs.msvc_deviceIndex;
     msvc_RUNMODE = configs.msvc_RUNMODE;
+
 
     if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
         msvc_numWarmupBatches = jsonConfigs.at("msvc_numWarmUpBatches");
@@ -79,7 +86,8 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + "_" + getTimestampString() + ".txt";
     }
 
-    
+
+    // Initialize the queues    
     if (isConstructing) {
         msvc_InQueue = {};
         msvc_OutQueue = {};

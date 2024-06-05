@@ -54,9 +54,9 @@ struct Request {
     RequestSLOType req_e2eSLOLatency;
     /**
      * @brief The path that this request and its ancestors have travelled through.
-     * Template `[microserviceID_inReqNumber_outReqNumber]
+     * Template `[hostDeviceName_microserviceID_inReqNumber_outReqNumber]
      * For instance, for a request from container with id of `YOLOv5_01` to container with id of `retinaface_02`
-     * we may have a path that looks like this `[YOLOv5_01_05_05][retinaface_02_09_09]`
+     * we may have a path that looks like this `[edge_YOLOv5_01_05_05][server_retinaface_02_09_09]`
      */
 
     RequestPathType req_travelPath;
@@ -561,8 +561,17 @@ public:
     // Another example is the
     std::string msvc_name;
 
+    //
+    std::string msvc_pipelineName;
+
     // Name of the contianer that holds this microservice
     std::string msvc_containerName;
+
+    //
+    std::string msvc_taskName;
+
+    //
+    std::string msvc_hostDevice;
 
 
     void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue *> queue) {
