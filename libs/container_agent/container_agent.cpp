@@ -459,7 +459,7 @@ void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
 
 void ContainerAgent::collectRuntimeMetrics() {
     std::vector<int> queueSizes;
-    int i, lateCount;
+    int lateCount;
     ArrivalRecordType arrivalRecords;
     ProcessRecordType processRecords;
     std::string sql;
@@ -499,8 +499,6 @@ void ContainerAgent::collectRuntimeMetrics() {
                 sql = "INSERT INTO " + cont_hwMetricsTableName +
                       " (timestamps, model_name, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
                 for (const auto &record: cont_hwMetrics) {
-                    spdlog::info("CPU Usage: {0:f}, Memory Usage: {1:d}, GPU Usage: {2:d}, GPU Memory Usage: {3:d}",
-                                 record.cpuUsage, record.memUsage, record.gpuUsage, record.gpuMemUsage);
                     sql += "(" + timePointToEpochString(record.timestamp) + ", ";
                     sql += "'" + modelName + "', ";
                     sql += std::to_string(cont_msvcsList[1]->msvc_idealBatchSize) + ", ";

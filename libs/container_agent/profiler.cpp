@@ -288,6 +288,12 @@ nvmlAccountingStats_t Profiler::getGPUInfo(unsigned int pid, nvmlDevice_t device
         gpu.memoryUtilization = 0;
         gpu.maxMemoryUsage = 0;
     }
+    nvmlUtilization_t util;
+    result = nvmlDeviceGetUtilizationRates(device, &util);
+    if (result == NVML_SUCCESS) {
+        gpu.gpuUtilization = util.gpu;
+        gpu.memoryUtilization = util.memory;
+    }
     return gpu;
 }
 

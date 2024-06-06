@@ -822,7 +822,7 @@ protected:
         bool reset = false;
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
             // This case the video has been reset, which means the profiling for this current batch size is completed
-            if (msvc_currFrameID > req_currFrameID && req_currFrameID == 0) {
+            if (msvc_currFrameID > req_currFrameID && req_currFrameID == 1) {
                 reset = true;
             }
             msvc_currFrameID = req_currFrameID;
