@@ -287,6 +287,13 @@ enum RUNMODE {
     EMPTY_PROFILING
 };
 
+enum class AllocationMode {
+    //Conservative mode: the microservice will allocate only the amount of memory calculated based on the ideal batch size
+    Conservative, 
+    //Aggressive mode: the microservice will allocate the maximum amount of memory possible
+    Aggressive
+};
+
 namespace msvcconfigs {
     /**
      * @brief Descriptions of up and downstream microservices neighboring this current microservice.
@@ -696,6 +703,8 @@ public:
     virtual std::string getModelName() {return "model";}
 
 protected:
+    AllocationMode msvc_allocationMode = AllocationMode::Conservative;
+
     std::vector<ThreadSafeFixSizedDoubleQueue *> msvc_InQueue, msvc_OutQueue;
     //
     std::vector<uint8_t> msvc_activeInQueueIndex = {}, msvc_activeOutQueueIndex = {};

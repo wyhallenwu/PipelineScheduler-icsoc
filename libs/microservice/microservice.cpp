@@ -67,12 +67,16 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_deviceIndex = configs.msvc_deviceIndex;
     msvc_RUNMODE = configs.msvc_RUNMODE;
 
+    if (jsonConfigs.at("msvc_taskName") != "datasource") {
+        msvc_maxBatchSize = jsonConfigs.at("msvc_maxBatchSize");
+        msvc_allocationMode = static_cast<AllocationMode>(jsonConfigs.at("msvc_allocationMode"));
+    }
+
 
     if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
         msvc_numWarmupBatches = jsonConfigs.at("msvc_numWarmUpBatches");
     } else if (msvc_RUNMODE == RUNMODE::PROFILING) {
         msvc_numWarmupBatches = jsonConfigs.at("profile_numWarmUpBatches");
-        msvc_maxBatchSize = jsonConfigs.at("profile_maxBatch");
     }
     // During profiling, we want to have at least 50 requests for warming ups
     // Results before warming up are not reliable

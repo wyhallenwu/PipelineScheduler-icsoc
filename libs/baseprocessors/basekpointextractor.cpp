@@ -94,7 +94,13 @@ void BaseKPointExtractor::extractor() {
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
 
-                keyPoints = new float[msvc_idealBatchSize * msvc_dataShape[0][0] * msvc_dataShape[0][1] * msvc_dataShape[0][2]];
+                BatchSizeType batchSize;
+                if (msvc_allocationMode == AllocationMode::Conservative) {
+                    batchSize = msvc_idealBatchSize;
+                } else if (msvc_allocationMode == AllocationMode::Aggressive) {
+                    batchSize = msvc_maxBatchSize;
+                }
+                keyPoints = new float[batchSize * msvc_dataShape[0][0] * msvc_dataShape[0][1] * msvc_dataShape[0][2]];
 
                 info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;

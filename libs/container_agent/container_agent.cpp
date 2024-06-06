@@ -71,6 +71,17 @@ json loadRunArgs(int argc, char **argv) {
     json metricsServerConfigs = json::parse(metricsServerCfgsFile);
 
     containerConfigs["cont_metricsServerConfigs"] = metricsServerConfigs;
+    if (containerConfigs["cont_taskName"] != "datasource") {
+        containerConfigs["cont_inferModelName"] = splitString(containerConfigs.at("cont_pipeline")[2]["path"], "/").back();
+        // The maximum batch size supported by the model (for TensorRT)
+        std::vector<std::string> modelOptions = splitString(containerConfigs["cont_inferModelName"], "_");
+        BatchSizeType maxModelBatchSize = std::stoull(modelOptions[modelOptions.size() - 2]);
+        if (static_cast<RUNMODE>(runmode) == RUNMODE::PROFILING) {
+            containerConfigs["cont_maxBatchSize"] = std::min((BatchSizeType)profilingConfigs["profile_maxBatch"], maxModelBatchSize);
+        } else if (static_cast<RUNMODE>(runmode) == RUNMODE::DEPLOYMENT) {
+            containerConfigs["cont_maxBatchSize"] = std::min((BatchSizeType)containerConfigs.at("cont_pipeline")[2]["msvc_idealBatchSize"], maxModelBatchSize);
+        }
+    }
 
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
         containerConfigs.at("cont_pipeline")[i]["msvc_contName"] = name;
@@ -83,6 +94,10 @@ json loadRunArgs(int argc, char **argv) {
         containerConfigs.at(
                 "cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs["metricsServer_metricsReportIntervalMillisec"];
         containerConfigs.at("cont_pipeline")[i]["msvc_numWarmUpBatches"] = containerConfigs.at("cont_numWarmUpBatches");
+        if (containerConfigs["cont_taskName"] != "datasource") {
+            containerConfigs.at("cont_pipeline")[i]["msvc_maxBatchSize"] = containerConfigs.at("cont_maxBatchSize");
+            containerConfigs.at("cont_pipeline")[i]["msvc_allocationMode"] = containerConfigs.at("cont_allocationMode");
+        }
 
         /**
          * @brief     If this is profiling, set configurations to the first batch size that should be profiled
@@ -104,10 +119,6 @@ json loadRunArgs(int argc, char **argv) {
                                                                                       std::to_string(minBatch));
             }
         }
-    }
-
-    if (containerConfigs["cont_taskName"] != "datasource") {
-        containerConfigs["cont_inferModelName"] = splitString(containerConfigs.at("cont_pipeline")[2]["path"], "/").back();
     }
 
     json finalConfigs;

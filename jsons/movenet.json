@@ -279,7 +279,8 @@
             }
         ],
         "cont_metricServerConfigs": "../jsons/metricsserver.json",
-        "cont_numWarmUpBatches": 15
+        "cont_numWarmUpBatches": 15,
+        "cont_allocationMode": 1
     },
     "profiling": {
         "profile_minBatch": 64,

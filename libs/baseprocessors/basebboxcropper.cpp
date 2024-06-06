@@ -239,10 +239,17 @@ void BaseBBoxCropper::cropping() {
                 delete nmsed_scores;
                 delete nmsed_classes;
 
-                num_detections = new int32_t[msvc_idealBatchSize];
-                nmsed_boxes = new float[msvc_idealBatchSize * maxNumDets * 4];
-                nmsed_scores = new float[msvc_idealBatchSize * maxNumDets];
-                nmsed_classes = new float[msvc_idealBatchSize * maxNumDets];
+                BatchSizeType batchSize;
+                if (msvc_allocationMode == AllocationMode::Conservative) {
+                    batchSize = msvc_idealBatchSize;
+                } else if (msvc_allocationMode == AllocationMode::Aggressive) {
+                    batchSize = msvc_maxBatchSize;
+                }
+                num_detections = new int32_t[batchSize];
+                nmsed_boxes = new float[batchSize * maxNumDets * 4];
+                nmsed_scores = new float[batchSize * maxNumDets];
+                nmsed_classes = new float[batchSize * maxNumDets];
+                
 
                 ptrList = {nmsed_boxes, nmsed_scores, nmsed_classes};
 

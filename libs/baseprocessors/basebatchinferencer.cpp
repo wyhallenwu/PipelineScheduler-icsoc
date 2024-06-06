@@ -17,6 +17,11 @@ void BaseBatchInferencer::loadConfigs(const json &jsonConfigs, bool isConstructi
     }
 
     msvc_engineConfigs = jsonConfigs.get<TRTConfigs>();
+    if (msvc_allocationMode == AllocationMode::Conservative) {
+        msvc_engineConfigs.maxBatchSize = msvc_idealBatchSize;
+    } else if (msvc_allocationMode == AllocationMode::Aggressive) {
+        msvc_engineConfigs.maxBatchSize = msvc_maxBatchSize;
+    }
     msvc_engineConfigs.maxBatchSize = msvc_idealBatchSize;
     msvc_engineConfigs.deviceIndex = msvc_deviceIndex;
 
