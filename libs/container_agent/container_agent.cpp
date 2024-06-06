@@ -79,7 +79,7 @@ json loadRunArgs(int argc, char **argv) {
         if (static_cast<RUNMODE>(runmode) == RUNMODE::PROFILING) {
             containerConfigs["cont_maxBatchSize"] = std::min((BatchSizeType)profilingConfigs["profile_maxBatch"], maxModelBatchSize);
         } else if (static_cast<RUNMODE>(runmode) == RUNMODE::DEPLOYMENT) {
-            containerConfigs["cont_maxBatchSize"] = std::min((BatchSizeType)containerConfigs.at("cont_pipeline")[2]["msvc_idealBatchSize"], maxModelBatchSize);
+            containerConfigs["cont_maxBatchSize"] = maxModelBatchSize;
         }
     }
 
@@ -495,24 +495,26 @@ void ContainerAgent::collectRuntimeMetrics() {
 
             pqxx::work session(*cont_metricsServerConn);
             std::string modelName = cont_msvcsList[2]->getModelName();
-            if (reportHwMetrics && !cont_hwMetrics.empty()) {
-                sql = "INSERT INTO " + cont_hwMetricsTableName +
-                      " (timestamps, model_name, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
-                for (const auto &record: cont_hwMetrics) {
-                    sql += "(" + timePointToEpochString(record.timestamp) + ", ";
-                    sql += "'" + modelName + "', ";
-                    sql += std::to_string(cont_msvcsList[1]->msvc_idealBatchSize) + ", ";
-                    sql += std::to_string(record.cpuUsage) + ", ";
-                    sql += std::to_string(record.memUsage) + ", ";
-                    sql += std::to_string(record.gpuUsage) + ", ";
-                    sql += std::to_string(record.gpuMemUsage) + ")";
-                    if (&record != &cont_hwMetrics.back()) {
-                        sql += ", ";
+            if (cont_RUNMODE == RUNMODE::PROFILING) {
+                if (reportHwMetrics && !cont_hwMetrics.empty()) {
+                    sql = "INSERT INTO " + cont_hwMetricsTableName +
+                        " (timestamps, model_name, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
+                    for (const auto &record: cont_hwMetrics) {
+                        sql += "(" + timePointToEpochString(record.timestamp) + ", ";
+                        sql += "'" + modelName + "', ";
+                        sql += std::to_string(cont_msvcsList[1]->msvc_idealBatchSize) + ", ";
+                        sql += std::to_string(record.cpuUsage) + ", ";
+                        sql += std::to_string(record.memUsage) + ", ";
+                        sql += std::to_string(record.gpuUsage) + ", ";
+                        sql += std::to_string(record.gpuMemUsage) + ")";
+                        if (&record != &cont_hwMetrics.back()) {
+                            sql += ", ";
+                        }
                     }
+                    sql += ";";
+                    session.exec(sql.c_str());
+                    cont_hwMetrics.clear();
                 }
-                sql += ";";
-                session.exec(sql.c_str());
-                cont_hwMetrics.clear();
             }
             arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
             if (!arrivalRecords.empty()) {

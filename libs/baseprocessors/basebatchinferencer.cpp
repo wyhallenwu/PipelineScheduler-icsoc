@@ -22,7 +22,6 @@ void BaseBatchInferencer::loadConfigs(const json &jsonConfigs, bool isConstructi
     } else if (msvc_allocationMode == AllocationMode::Aggressive) {
         msvc_engineConfigs.maxBatchSize = msvc_maxBatchSize;
     }
-    msvc_engineConfigs.maxBatchSize = msvc_idealBatchSize;
     msvc_engineConfigs.deviceIndex = msvc_deviceIndex;
 
     spdlog::trace("{0:s} FINISHED loading configs...", __func__);
