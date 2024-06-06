@@ -7,7 +7,7 @@
         "cont_pipeline": [
             {
                 "msvc_name": "::data_reader",
-                "msvc_idealBatchSize": 15,
+                "msvc_idealBatchSize": 30,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -109,7 +109,8 @@
             }
         ],
         "cont_metricServerConfigs": "../jsons/metricsserver.json",
-        "cont_numWarmUpBatches": 15
+        "cont_numWarmUpBatches": 15,
+        "cont_allocationMode": 1
     },
     "profiling": {
         "profile_minBatch": 0,

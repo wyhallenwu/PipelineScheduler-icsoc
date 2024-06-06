@@ -80,8 +80,14 @@ void BaseClassifier::classify() {
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
                 
-                predictedProbs = new float[msvc_idealBatchSize * msvc_numClasses];
-                predictedClass = new uint16_t[msvc_idealBatchSize];
+                BatchSizeType batchSize;
+                if (msvc_allocationMode == AllocationMode::Conservative) {
+                    batchSize = msvc_idealBatchSize;
+                } else if (msvc_allocationMode == AllocationMode::Aggressive) {
+                    batchSize = msvc_maxBatchSize;
+                }
+                predictedProbs = new float[batchSize * msvc_numClasses];
+                predictedClass = new uint16_t[batchSize];
                 info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
                 READY = true;

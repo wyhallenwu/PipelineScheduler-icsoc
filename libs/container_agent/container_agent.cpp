@@ -71,6 +71,17 @@ json loadRunArgs(int argc, char **argv) {
     json metricsServerConfigs = json::parse(metricsServerCfgsFile);
 
     containerConfigs["cont_metricsServerConfigs"] = metricsServerConfigs;
+    if (containerConfigs["cont_taskName"] != "datasource") {
+        containerConfigs["cont_inferModelName"] = splitString(containerConfigs.at("cont_pipeline")[2]["path"], "/").back();
+        // The maximum batch size supported by the model (for TensorRT)
+        std::vector<std::string> modelOptions = splitString(containerConfigs["cont_inferModelName"], "_");
+        BatchSizeType maxModelBatchSize = std::stoull(modelOptions[modelOptions.size() - 2]);
+        if (static_cast<RUNMODE>(runmode) == RUNMODE::PROFILING) {
+            containerConfigs["cont_maxBatchSize"] = std::min((BatchSizeType)profilingConfigs["profile_maxBatch"], maxModelBatchSize);
+        } else if (static_cast<RUNMODE>(runmode) == RUNMODE::DEPLOYMENT) {
+            containerConfigs["cont_maxBatchSize"] = maxModelBatchSize;
+        }
+    }
 
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
         containerConfigs.at("cont_pipeline")[i]["msvc_contName"] = name;
@@ -83,6 +94,10 @@ json loadRunArgs(int argc, char **argv) {
         containerConfigs.at(
                 "cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs["metricsServer_metricsReportIntervalMillisec"];
         containerConfigs.at("cont_pipeline")[i]["msvc_numWarmUpBatches"] = containerConfigs.at("cont_numWarmUpBatches");
+        if (containerConfigs["cont_taskName"] != "datasource") {
+            containerConfigs.at("cont_pipeline")[i]["msvc_maxBatchSize"] = containerConfigs.at("cont_maxBatchSize");
+            containerConfigs.at("cont_pipeline")[i]["msvc_allocationMode"] = containerConfigs.at("cont_allocationMode");
+        }
 
         /**
          * @brief     If this is profiling, set configurations to the first batch size that should be profiled
@@ -104,10 +119,6 @@ json loadRunArgs(int argc, char **argv) {
                                                                                       std::to_string(minBatch));
             }
         }
-    }
-
-    if (containerConfigs["cont_taskName"] != "datasource") {
-        containerConfigs["cont_inferModelName"] = splitString(containerConfigs.at("cont_pipeline")[2]["path"], "/").back();
     }
 
     json finalConfigs;
@@ -448,7 +459,7 @@ void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
 
 void ContainerAgent::collectRuntimeMetrics() {
     std::vector<int> queueSizes;
-    int i, lateCount;
+    int lateCount;
     ArrivalRecordType arrivalRecords;
     ProcessRecordType processRecords;
     std::string sql;
@@ -484,26 +495,26 @@ void ContainerAgent::collectRuntimeMetrics() {
 
             pqxx::work session(*cont_metricsServerConn);
             std::string modelName = cont_msvcsList[2]->getModelName();
-            if (reportHwMetrics && !cont_hwMetrics.empty()) {
-                sql = "INSERT INTO " + cont_hwMetricsTableName +
-                      " (timestamps, model_name, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
-                for (const auto &record: cont_hwMetrics) {
-                    spdlog::info("CPU Usage: {0:f}, Memory Usage: {1:d}, GPU Usage: {2:d}, GPU Memory Usage: {3:d}",
-                                 record.cpuUsage, record.memUsage, record.gpuUsage, record.gpuMemUsage);
-                    sql += "(" + timePointToEpochString(record.timestamp) + ", ";
-                    sql += "'" + modelName + "', ";
-                    sql += std::to_string(cont_msvcsList[1]->msvc_idealBatchSize) + ", ";
-                    sql += std::to_string(record.cpuUsage) + ", ";
-                    sql += std::to_string(record.memUsage) + ", ";
-                    sql += std::to_string(record.gpuUsage) + ", ";
-                    sql += std::to_string(record.gpuMemUsage) + ")";
-                    if (&record != &cont_hwMetrics.back()) {
-                        sql += ", ";
+            if (cont_RUNMODE == RUNMODE::PROFILING) {
+                if (reportHwMetrics && !cont_hwMetrics.empty() && !cont_msvcsList[0]->STOP_THREADS) {
+                    sql = "INSERT INTO " + cont_hwMetricsTableName +
+                        " (timestamps, model_name, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
+                    for (const auto &record: cont_hwMetrics) {
+                        sql += "(" + timePointToEpochString(record.timestamp) + ", ";
+                        sql += "'" + modelName + "', ";
+                        sql += std::to_string(cont_msvcsList[1]->msvc_idealBatchSize) + ", ";
+                        sql += std::to_string(record.cpuUsage) + ", ";
+                        sql += std::to_string(record.memUsage) + ", ";
+                        sql += std::to_string(record.gpuUsage) + ", ";
+                        sql += std::to_string(record.gpuMemUsage) + ")";
+                        if (&record != &cont_hwMetrics.back()) {
+                            sql += ", ";
+                        }
                     }
+                    sql += ";";
+                    session.exec(sql.c_str());
+                    cont_hwMetrics.clear();
                 }
-                sql += ";";
-                session.exec(sql.c_str());
-                cont_hwMetrics.clear();
             }
             arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
             if (!arrivalRecords.empty()) {
