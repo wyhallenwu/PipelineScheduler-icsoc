@@ -85,6 +85,9 @@ find_package(OpenCV REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 # find_package(LightGBM REQUIRED)
 
+# Manually specify the path to Python
+find_package(PythonLibs 3 REQUIRED)
+
 # Find Protobuf installation
 option(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf CONFIG REQUIRED)
@@ -173,8 +176,8 @@ target_link_libraries(runSink PipePlusPlusSink)
 add_executable(Communicator libs/communicator/main.cpp)
 target_link_libraries(Communicator communicator)
 
-add_executable(DeviceAgent libs/device_agent/main.cpp)
-target_link_libraries(DeviceAgent device_agent)
+# add_executable(DeviceAgent libs/device_agent/main.cpp)
+# target_link_libraries(DeviceAgent device_agent)
 
 add_executable(Controller libs/controller/main.cpp)
 target_link_libraries(Controller controller)
@@ -211,3 +214,6 @@ target_link_libraries(Container_Age age)
 
 add_executable(Container_CarBrand libs/carbrand/carbrand.cpp)
 target_link_libraries(Container_CarBrand carbrand)
+
+add_executable(Profiler libs/device_agent/profiler.cpp)
+target_link_libraries(Profiler device_agent)
