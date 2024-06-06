@@ -93,7 +93,7 @@ json loadRunArgs(int argc, char **argv) {
          */
         if (profiling_mode == 1) {
             addProfileConfigs(containerConfigs.at("cont_pipeline")[i], profilingConfigs);
-            
+
         } else if (profiling_mode == 2) {
             containerConfigs.at("cont_pipeline")[i].at("msvc_idealBatchSize") = minBatch;
             if (i == 0) {
@@ -323,13 +323,13 @@ ContainerAgent::ContainerAgent(const json &configs) {
         executeSQL(*cont_metricsServerConn, sql_statement);
 
         sql_statement = "SELECT create_hypertable('" + cont_arrivalTableName + "', 'arrival_timestamps', if_not_exists => TRUE);";
-        
+
         executeSQL(*cont_metricsServerConn, sql_statement);
 
         sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (stream);";
         sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (sender_host);";
         sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (receiver_host);";
-        
+
         executeSQL(*cont_metricsServerConn, sql_statement);
 
         // Create process table

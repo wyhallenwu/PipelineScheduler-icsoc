@@ -85,6 +85,9 @@ find_package(OpenCV REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 # find_package(LightGBM REQUIRED)
 
+# Manually specify the path to Python
+find_package(PythonLibs 3 REQUIRED)
+
 # Find Protobuf installation
 option(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf CONFIG REQUIRED)
@@ -188,8 +191,8 @@ target_link_libraries(Container_Yolov5 yolov5)
 add_executable(Container_Yolov5-plate libs/yolov5-plate/yolov5-plate.cpp)
 target_link_libraries(Container_Yolov5-plate yolov5-plate)
 
-add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
-target_link_libraries(convert_onnx2trt onnx2trt)
+#add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
+#target_link_libraries(convert_onnx2trt onnx2trt)
 
 add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
 target_link_libraries(Container_RetinaFace retinaface)
@@ -211,3 +214,6 @@ target_link_libraries(Container_Age age)
 
 add_executable(Container_CarBrand libs/carbrand/carbrand.cpp)
 target_link_libraries(Container_CarBrand carbrand)
+
+# add_executable(Profiler libs/device_agent/profiler.cpp)
+# target_link_libraries(Profiler device_agent)

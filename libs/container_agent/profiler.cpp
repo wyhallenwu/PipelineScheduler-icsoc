@@ -1,302 +1,244 @@
 #include "profiler.h"
 
-Profiler::Profiler(const std::vector<unsigned int> &pids) {
-    if (!initializeNVML()) {
-        std::cerr << "Failed to initialize NVML" << std::endl;
-        return;
+// Shared buffer and synchronization primitives
+std::mutex mtx;
+std::condition_variable cv;
+std::string sharedBuffer;
+bool dataReady = false;
+
+// Function to execute a command and capture the output asynchronously
+void execCommandAsync(const char* cmd) {
+    std::array<char, 128> buffer;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
     }
-    pidOnDevices = std::map<unsigned int, nvmlDevice_t>();
-    if (!pids.empty()) {
-        auto devices = getDevices();
-        for (const auto &pid: pids) {
-            setPidOnDevices(pid, devices);
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        std::string result(buffer.data());
+
+        // Lock the mutex and update the shared buffer
+        std::lock_guard<std::mutex> lock(mtx);
+        sharedBuffer += result;
+        dataReady = true;
+        cv.notify_one(); // Notify the main thread
+    }
+}
+
+// Function to parse the delimited output and populate sysStats
+void parseDelimited(const std::string& data, Profiler::sysStats *stats) {
+    std::cout << "Start parsing\n";
+    std::istringstream ss(data);
+    std::string line;
+
+    while (std::getline(ss, line)) {
+        std::istringstream lineStream(line);
+        std::string token;
+        std::vector<std::string> tokens;
+
+        // Check if line contains GPU Load or RAM information
+        if (line.find("GPU Load") != std::string::npos) {
+            stats->gpuUtilization = std::stod(line.substr(line.find(":") + 1));
+            continue;
+        }
+
+        if (line.find("RAM:") != std::string::npos) {
+            std::string ramData = line.substr(line.find(":") + 1);
+            std::istringstream ramStream(ramData);
+            std::string ramToken;
+            std::vector<std::string> ramTokens;
+            while (std::getline(ramStream, ramToken, ',')) {
+                ramTokens.push_back(ramToken);
+            }
+            for (const auto& token : ramTokens) {
+                if (token.find("GPU") != std::string::npos) {
+                    stats->totalGpuRamUsage = std::stod(token.substr(token.find("=") + 1));
+                } else if (token.find("CPU") != std::string::npos) {
+                    stats->totalCpuRamUsage = std::stod(token.substr(token.find("=") + 1));
+                } else if (token.find("TOTAL") != std::string::npos) {
+                    stats->maxRamCapacity = std::stod(token.substr(token.find("=") + 1));
+                }
+            }
+            continue;
+        }
+
+        // Parse delimited tokens
+        while (std::getline(lineStream, token, '|')) {
+            tokens.push_back(token);
+        }
+
+        if (tokens.size() == 5) {
+            stats->timestamp = std::stoull(tokens[0]);
+            stats->cpuUtilization = std::stod(tokens[2]);
+            stats->processMemoryUsage = std::stod(tokens[3]);
+            stats->processGpuMemoryUsage = std::stod(tokens[4]);
+        } else {
+            std::cerr << "Unexpected token size: " << tokens.size() << std::endl;
         }
     }
-    nvmlInitialized = true;
+}
+
+Profiler::Profiler(const std::vector<unsigned int> &pids) {
+    std::cout << "Initializing Python..." << std::endl;
+    Py_Initialize();
+    if (!Py_IsInitialized()) {
+        std::cerr << "Failed to initialize Python" << std::endl;
+        return;
+    }
+    std::cout << "Python initialized." << std::endl;
+
     running = false;
+    for (const auto &pid : pids) {
+        stats[pid] = std::vector<sysStats>();
+    }
+    std::cout << "Profiler initialized with PIDs." << std::endl;
 }
 
 Profiler::~Profiler() {
-
-    if (nvmlInitialized) {
-        if (!cleanupNVML()) {
-            std::cerr << "Failed to shutdown NVML" << std::endl;
-        }
+    if (Py_IsInitialized()) {
+        Py_Finalize();
+        std::cout << "Python finalized." << std::endl;
     }
 }
 
 void Profiler::run() {
+    std::cout << "Starting profiler..." << std::endl;
     running = true;
-    profilerThread = std::thread(&Profiler::collectStats, this);
-    profilerThread.detach();
-}
-
-
-void Profiler::stop() {
-    running = false;
-    profilerThread.join();
-}
-
-void Profiler::updatePids(const std::vector<unsigned int> &pids) {
-    bool restart = false;
-    if (running) {
-        stop();
-        restart = true;
-    }
-    pidOnDevices.clear();
-    stats.clear();
-    auto devices = getDevices();
-    for (const auto &pid: pids) {
-        setPidOnDevices(pid, devices);
-    }
-    if (restart) {
-        run();
-    }
+    std::thread collectingStats(&Profiler::collectStats, this);
+    collectingStats.detach();
+    std::cout << "Exitting collecting stats..." << std::endl;
 }
 
 void Profiler::addPid(unsigned int pid) {
-    setPidOnDevices(pid, getDevices());
-}
-
-void Profiler::removePid(unsigned int pid) {
-    pidOnDevices.erase(pid);
-    stats.erase(pid);
+    // stats[pid] = std::vector<sysStats>();
+    std::cout << "Added PID: " << pid << std::endl;
 }
 
 int Profiler::getGpuCount() {
-    unsigned int device_count;
-    nvmlReturn_t result = nvmlDeviceGetCount(&device_count);
-    if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to get device count: " << nvmlErrorString(result) << std::endl;
-        return -1;
-    }
-    return device_count;
+    return 1;
 }
 
-std::vector<long> Profiler::getGpuMemory(int device_count) {
-    std::vector<long> totalMemory;
-    for (int i = 0; i < device_count; i++) {
-        nvmlDevice_t device;
-        nvmlReturn_t result = nvmlDeviceGetHandleByIndex(i, &device);
-        if (result != NVML_SUCCESS) {
-            std::cerr << "Failed to get handle for device " << i << ": " << nvmlErrorString(result) << std::endl;
-            return {-1};
-        }
-        nvmlMemory_t memory;
-        result = nvmlDeviceGetMemoryInfo(device, &memory);
-        if (result != NVML_SUCCESS) {
-            std::cerr << "Failed to get memory info for device " << i << ": " << nvmlErrorString(result) << std::endl;
-            return {-1};
-        }
-        totalMemory.push_back((long) memory.total / 1000000); // convert to MB
-    }
-    return totalMemory;
+std::vector<unsigned int> Profiler::getGpuMemory(int processing_units) {
+    return std::vector<unsigned int>();
 }
 
-std::vector<Profiler::sysStats> Profiler::getStats(unsigned int pid) const {
-    return stats.at(pid);
-}
-
-std::vector<Profiler::sysStats> Profiler::popStats(unsigned int pid) {
-    std::vector<Profiler::sysStats> statsCopy = stats[pid];
-    stats[pid] = std::vector<sysStats>();
-    return statsCopy;
-}
-
-Profiler::sysStats Profiler::reportAtRuntime(unsigned int cpu_pid, unsigned int gpu_pid) {
+Profiler::sysStats Profiler::reportAtRuntime(unsigned int pid) {
     sysStats value{};
-    value.cpuUsage = (float) getCPUInfo(cpu_pid);
-    value.memoryUsage = getMemoryInfo(cpu_pid) / 1000; // convert to MB
-    auto gpu = getGPUInfo(gpu_pid, pidOnDevices[gpu_pid]);
-    value.gpuUtilization = gpu.gpuUtilization;
-    value.gpuMemoryUsage = gpu.memoryUtilization;
+    if (!running) {
+        value.timestamp = 1;
+        return value;
+    }
+    if (stats.find(pid) != stats.end() && !stats[pid].empty()) {
+        value = stats[pid].back();
+    }
     return value;
 }
 
 void Profiler::collectStats() {
-    uint64_t currentTime;
+    std::cout << "Entering collectStats..." << std::endl;
+    // const char* pythonScriptPath = "get_jetson_stats.py"; // Replace with actual path
+    // std::string command = std::string("python3 ") + pythonScriptPath;
+    // Start the Python script in a separate thread
+    std::thread pythonThread(execCommandAsync, "python3 get_jetson_stats.py");
+    std::cout << "Python thread started." << std::endl;
+
     while (running) {
-        for (const auto &[pid, device]: pidOnDevices) {
-            currentTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-            auto cpu = getCPUInfo(pid);
-            auto memory = getMemoryInfo(pid);
-            auto gpu = getGPUInfo(pid, device);
-            auto pcie = getPcieInfo(device);
-            sysStats systemInfo{
-                    currentTime,
-                    cpu,
-                    memory / 1000, // convert to MB
-                    gpu.gpuUtilization,
-                    gpu.memoryUtilization,
-                    (long) gpu.maxMemoryUsage / 1000000, // convert to MB
-                    pcie / 1000 // convert to MB/s
-            };
-            stats[pid].push_back(systemInfo);
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [] { return dataReady; }); // Wait until data is ready
+
+        std::cout << "Data ready, processing..." << std::endl;
+
+        for (auto &entry : stats) {
+            unsigned int pid = entry.first;
+            Profiler::sysStats *stat= new Profiler::sysStats;
+            parseDelimited(sharedBuffer, stat);
+            entry.second.push_back(*stat);
         }
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        sharedBuffer.clear(); // Clear the buffer after processing
+        dataReady = false; // Reset the flag
+        std::cout << "Data processed." << std::endl;
     }
+
+    pythonThread.join(); // Ensure the Python thread is finished
+    std::cout << "Exiting collectStats..." << std::endl;
 }
 
-bool Profiler::initializeNVML() {
-    nvmlReturn_t result = nvmlInit();
-    if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to initialize NVML: " << nvmlErrorString(result) << std::endl;
-        return false;
-    }
-    return true;
-}
-
-bool Profiler::setAccounting(nvmlDevice_t device) {
-    nvmlEnableState_t state;
-    nvmlReturn_t result = nvmlDeviceGetAccountingMode(device, &state);
-    if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to get accounting mode: " << nvmlErrorString(result) << std::endl;
-        return false;
-    }
-    if (state == NVML_FEATURE_DISABLED) {
-        result = nvmlDeviceSetAccountingMode(device, NVML_FEATURE_ENABLED);
-        if (result != NVML_SUCCESS) {
-            std::cerr << "Failed to enable accounting mode: " << nvmlErrorString(result) << std::endl;
-            return false;
-        }
-    }
-    return true;
-}
-
-std::vector<nvmlDevice_t> Profiler::getDevices() {
-    std::vector<nvmlDevice_t> devices;
-    unsigned int deviceCount;
-    nvmlReturn_t result = nvmlDeviceGetCount(&deviceCount);
-    if (NVML_SUCCESS != result) {
-        std::cerr << "Failed to query device count: " << nvmlErrorString(result) << std::endl;
-        return std::vector<nvmlDevice_t> ();
-    }
-    for (unsigned int i = 0; i < deviceCount; i++) {
-        nvmlDevice_t device;
-        result = nvmlDeviceGetHandleByIndex(i, &device);
-        if (NVML_SUCCESS != result) {
-            std::cerr << "Failed to get handle for device " << i << ": " << nvmlErrorString(result) << std::endl;
-            return std::vector<nvmlDevice_t>();
-        }
-        setAccounting(device);
-        devices.push_back(device);
-    }
-    return devices;
-}
-
-void Profiler::setPidOnDevices(unsigned int pid, std::vector<nvmlDevice_t> devices) {
-    for (const auto &device: devices) {
-        nvmlProcessInfo_t processes[64];
-        unsigned int infoCount = 64;
-        nvmlReturn_t result = nvmlDeviceGetComputeRunningProcesses(device, &infoCount, processes);
-        if (NVML_SUCCESS != result) {
-            std::cerr << "Failed to get compute running processes for a device: " << nvmlErrorString(result) << std::endl;
-            break;
-        }
-        for (unsigned int j = 0; j < infoCount; j++) {
-            if (processes[j].pid == pid) {
-                pidOnDevices[pid] = device;
-                stats[pid] = std::vector<sysStats>();
-                break;
-            }
-        }
-    }
-}
-
-bool Profiler::cleanupNVML() {
-    for (const auto &[pid, device]: pidOnDevices) {
-        nvmlReturn_t result = nvmlDeviceClearAccountingPids(device);
-        if (result != NVML_SUCCESS) {
-            std::cerr << "Failed to clear accounting PIDs: " << nvmlErrorString(result) << std::endl;
-            return false;
-        }
-    }
-    return true;
-}
-
-double Profiler::getCPUInfo(unsigned int pid) {
-    std::vector<std::string> timers;
-    std::string timer, line, skip, utime, stime;
-    std::ifstream stream("/proc/stat");
-    if (stream.is_open()) {
-        std::getline(stream, line);
-        std::istringstream linestream(line);
-        linestream >> skip;
-        for(int i = 0; i < 10; ++i) {
-            linestream >> timer;
-            timers.push_back(timer);
-        }
-    }
-    stream.close();
-    long total_active = 0;
-    for(unsigned int i = 0; i < timers.size(); ++i) {
-        if(i != 3 && i != 4) total_active += std::stol(timers[i]);
-    }
-    stream = std::ifstream("/proc/"+ std::to_string(pid) + "/stat");
-    if (stream.is_open()) {
-        std::getline(stream, line);
-        std::istringstream linestream(line);
-        for(int i = 0; i < 13; ++i) linestream >> skip;
-        linestream >> utime >> stime;
-    }
-    long process_active = 0;
-    try {
-        process_active = std::stol(utime) + std::stol(stime);
-    } catch (const std::invalid_argument& ia) {
-    }
-
-    double cpuUsage = 0.0;
-    if (prevCpuTimes[pid].size() > 0) {
-        std::pair<long, long> prev_active = prevCpuTimes[pid].front();
-        cpuUsage = 100.0 * (process_active - prev_active.first) / (total_active - prev_active.second);
-    }
-
-    prevCpuTimes[pid].push(std::make_pair(process_active, total_active));
-    if (std::isinf(cpuUsage) || std::isnan(cpuUsage)) {
-        return 0.0;
-    }
-    return cpuUsage;
-}
-
-long Profiler::getMemoryInfo(unsigned int pid) {
+long Profiler::getMemoryUsageForPID(unsigned int pid) {
     std::string value = "0";
     bool search = true;
     std::string line;
     std::string tmp;
     std::ifstream stream("/proc/" + std::to_string(pid) + "/status");
-    if(stream.is_open()) {
-        while(search == true && stream.peek() != EOF) {
+    if (stream.is_open()) {
+        while (search && stream.peek() != EOF) {
             std::getline(stream, line);
             std::istringstream linestream(line);
             linestream >> tmp;
-            if(tmp == "VmSize:") {
+            if (tmp == "VmSize:") {
                 linestream >> tmp;
                 value = tmp;
                 search = false;
             }
         }
     }
-    return std::atoi(value.c_str());
+    return std::atol(value.c_str());
 }
 
-nvmlAccountingStats_t Profiler::getGPUInfo(unsigned int pid, nvmlDevice_t device) {
-    nvmlAccountingStats_t gpu;
-    nvmlReturn_t result = nvmlDeviceGetAccountingStats(device, pid, &gpu);
-    if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to get GPU Accounting Stats: " << nvmlErrorString(result) << std::endl;
-        gpu.gpuUtilization = 0;
-        gpu.memoryUtilization = 0;
-        gpu.maxMemoryUsage = 0;
-    }
-    return gpu;
-}
+//uint64_t Profiler::getGpuMemory(int device_count) {
+//    uint64_t totalMemory = 0;
+//    PyObject* pStats = PyObject_GetAttrString(pValue, "stats");
+//    if (pStats && PyDict_Check(pStats)) {
+//        PyObject* pRAM = PyDict_GetItemString(pStats, "RAM");
+//        if (pRAM && PyDict_Check(pRAM)) {
+//            PyObject* pRAMTotal = PyDict_GetItemString(pRAM, "total");
+//            if (pRAMTotal && PyLong_Check(pRAMTotal)) {
+//                totalMemory += PyLong_AsUnsignedLongLong(pRAMTotal);
+//            }
+//        }
+//    }
+//    return totalMemory;
+//}
 
-unsigned int Profiler::getPcieInfo(nvmlDevice_t device) {
-    unsigned int pcie;
-    nvmlReturn_t result = nvmlDeviceGetPcieThroughput(device, NVML_PCIE_UTIL_COUNT, &pcie);
-    if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to get PCIe throughput: " << nvmlErrorString(result) << std::endl;
-        pcie = 0;
-    }
-    return pcie;
-}
+
+
+// Main function to interactively input PIDs
+//int main() {
+//    // Vector to store PIDs
+//    std::vector<unsigned int> pids;
+//    unsigned int pid;
+//
+//    std::cout << "Enter PIDs to monitor (enter 0 to finish): " << std::endl;
+//    while (true) {
+//        std::cin >> pid;
+//        if (pid == 0) break;
+//        pids.push_back(pid);
+//    }
+//
+//     // Create the profiler
+//    Profiler *profiler = new Profiler(pids);
+//
+//    // Start the profiler on a separate thread
+//    std::thread profilerThread(&Profiler::run, profiler);
+//
+//    // Monitor the stats
+//    while (true) {
+//        for (const auto& pid : pids) {
+//            Profiler::sysStats stats = profiler->reportAtRuntime(pid);
+//            std::cout << "PID: " << pid << "\n"
+//                    << "Timestamp: " << stats.timestamp << "\n"
+//                    << "CPU Usage: " << stats.cpuUtilization << "%\n"
+//                    << "Process RAM Usage: " << stats.processMemoryUsage << "MB\n"
+//                    << "Process GPU Memory Usage: " << stats.processGpuMemoryUsage << "MB\n"
+//                    << "GPU Load: " << stats.gpuUtilization << "%\n"
+//                    << "Total GPU RAM Usage: " << stats.totalGpuRamUsage << "MB\n"
+//                    << "Total CPU RAM Usage: " << stats.totalCpuRamUsage << "MB\n"
+//                    << "Max RAM: " << stats.maxRamCapacity << "MB\n"
+//                    << std::endl;
+//        }
+//        // Sleep for a short interval to avoid consuming too much CPU
+//        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+//    }
+//    profilerThread.join();
+//    delete profiler;
+//    return 0;
+//}
