@@ -496,7 +496,7 @@ void ContainerAgent::collectRuntimeMetrics() {
             pqxx::work session(*cont_metricsServerConn);
             std::string modelName = cont_msvcsList[2]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
-                if (reportHwMetrics && !cont_hwMetrics.empty()) {
+                if (reportHwMetrics && !cont_hwMetrics.empty() && !cont_msvcsList[0]->STOP_THREADS) {
                     sql = "INSERT INTO " + cont_hwMetricsTableName +
                         " (timestamps, model_name, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
                     for (const auto &record: cont_hwMetrics) {
