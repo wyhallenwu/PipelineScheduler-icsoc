@@ -462,9 +462,9 @@ void ContainerAgent::collectRuntimeMetrics() {
         auto startTime = metricsStopwatch.getStartTime();
         if (startTime >= cont_metricsServerConfigs.nextHwMetricsScrapeTime) {
             if (reportHwMetrics && pid > 0) {
-                Profiler::sysStats stats = profiler->reportAtRuntime(getpid(), pid);
-                HardwareMetrics hwMetrics = {startTime, 0, stats.cpuUsage, stats.memoryUsage, stats.gpuUtilization,
-                                             stats.gpuMemoryUsage};
+                Profiler::sysStats stats = profiler->reportAtRuntime(pid);
+                HardwareMetrics hwMetrics = {startTime, 0, stats.cpuUtilization, stats.processMemoryUsage, stats.gpuUtilization,
+                                             stats.processGpuMemoryUsage};
                 cont_hwMetrics.emplace_back(hwMetrics);
                 cont_metricsServerConfigs.nextHwMetricsScrapeTime += std::chrono::milliseconds(
                         cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);

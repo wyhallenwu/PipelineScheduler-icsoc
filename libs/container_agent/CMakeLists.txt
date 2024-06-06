@@ -58,6 +58,7 @@ target_include_directories(container_agent
         $<BUILD_INTERFACE:${container_agent_SOURCE_DIR}/>
         # Used when installing the library:
         $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
+        ${PYTHON_INCLUDE_DIRS}
         ${OpenCV_INCLUDE_DIRS}
         ${PostgreSQL_INCLUDE_DIRS}
         ${LIBPQXX_INCLUDE_DIRS}
@@ -77,8 +78,7 @@ target_link_libraries(container_agent
         ${PostgreSQL_LIBRARIES}
         ${LIBPQXX_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
-        ${CUDA_LIBRARIES}
-        CUDA::nvml
+        ${PYTHON_LIBRARIES}
         microservice
         controller
         communicator
