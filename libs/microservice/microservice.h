@@ -161,7 +161,6 @@ public:
         //}
         q_cpuQueue.emplace(request);
         q_condition.notify_one();
-        q_mutex.unlock();
     }
 
     /**
@@ -176,7 +175,6 @@ public:
         //}
         q_gpuQueue.emplace(request);
         q_condition.notify_one();
-        q_mutex.unlock();
     }
 
     /**
@@ -199,7 +197,6 @@ public:
         } else {
             request.req_travelPath = {"empty"};
         }
-        q_mutex.unlock();
         return request;
     }
 
@@ -219,8 +216,6 @@ public:
         if (!isEmpty) {
             request = q_gpuQueue.front();
             q_gpuQueue.pop();
-            q_mutex.unlock();
-            return request;
         } else {
             request.req_travelPath = {"empty"};
         }
@@ -228,10 +223,12 @@ public:
     }
 
     void setQueueSize(uint32_t queueSize) {
+        std::unique_lock<std::mutex> lock(q_mutex);
         q_MaxSize = queueSize;
     }
 
     int32_t size() {
+        std::unique_lock<std::mutex> lock(q_mutex);
         if (activeQueueIndex == 1) {
             return q_cpuQueue.size();
         } //else if (activeQueueIndex == 2) {
@@ -240,6 +237,7 @@ public:
     }
 
     int32_t size(uint8_t queueIndex) {
+        std::unique_lock<std::mutex> lock(q_mutex);
         if (queueIndex == 1) {
             return q_cpuQueue.size();
         } //else if (activeQueueIndex == 2) {
@@ -248,18 +246,22 @@ public:
     }
 
     void setActiveQueueIndex(uint8_t index) {
+        std::unique_lock<std::mutex> lock(q_mutex);
         activeQueueIndex = index;
     }
 
     uint8_t getActiveQueueIndex() {
+        std::unique_lock<std::mutex> lock(q_mutex);
         return activeQueueIndex;
     }
 
     void setClassOfInterest(int16_t classOfInterest) {
+        std::unique_lock<std::mutex> lock(q_mutex);
         class_of_interest = classOfInterest;
     }
 
     int16_t getClassOfInterest() {
+        std::unique_lock<std::mutex> lock(q_mutex);
         return class_of_interest;
     }
 };
@@ -435,7 +437,6 @@ public:
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();
-        mutex.unlock();
     }
 
     void clearOldRecords() {
@@ -458,10 +459,10 @@ public:
         ArrivalRecordType temp = records;
         records.clear();
         currNumEntries = 0;
-        mutex.unlock();
         return temp;
     }
     void setKeepLength(uint64_t keepLength) {
+        std::unique_lock<std::mutex> lock(mutex);
         this->keepLength = std::chrono::milliseconds(keepLength);
     }
 
@@ -515,7 +516,6 @@ public:
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();
-        mutex.unlock();
     }
 
     void clearOldRecords() {
@@ -538,10 +538,10 @@ public:
         ProcessRecordType temp = records;
         records.clear();
         currNumEntries = 0;
-        mutex.unlock();
         return temp;
     }
     void setKeepLength(uint64_t keepLength) {
+        std::unique_lock<std::mutex> lock(mutex);
         this->keepLength = std::chrono::milliseconds(keepLength);
     }
 
