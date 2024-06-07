@@ -223,4 +223,6 @@ void executeSQL(pqxx::connection &conn, const std::string &sql);
 
 bool isHypertable(pqxx::connection &conn, const std::string &tableName);
 
+bool tableExists(pqxx::connection &conn, const std::string &tableName);
+
 #endif

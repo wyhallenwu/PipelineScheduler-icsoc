@@ -164,3 +164,10 @@ bool isHypertable(pqxx::connection &conn, const std::string &tableName) {
     pqxx::result r = txn.exec(query);
     return r[0][0].as<bool>();
 }
+
+bool tableExists(pqxx::connection &conn, const std::string &tableName) {
+    pqxx::work txn(conn);
+    std::string query = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '" + tableName + "');";
+    pqxx::result r = txn.exec(query);
+    return r[0][0].as<bool>();
+}

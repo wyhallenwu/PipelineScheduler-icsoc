@@ -320,7 +320,8 @@ ContainerAgent::ContainerAgent(const json &configs) {
             executeSQL(*cont_metricsServerConn, sql_statement);
         }
 
-        sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_arrivalTableName + " ("
+        if (!tableExists(*cont_metricsServerConn, cont_arrivalTableName)) {
+            sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_arrivalTableName + " ("
                                                                                 "arrival_timestamps BIGINT NOT NULL, "
                                                                                 "stream TEXT NOT NULL, "
                                                                                 "sender_host TEXT NOT NULL, "
@@ -331,20 +332,21 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                 "request_size INTEGER NOT NULL, "
                                                                                 "request_num INTEGER NOT NULL)";
 
-        executeSQL(*cont_metricsServerConn, sql_statement);
+            executeSQL(*cont_metricsServerConn, sql_statement);
 
-        sql_statement = "SELECT create_hypertable('" + cont_arrivalTableName + "', 'arrival_timestamps', if_not_exists => TRUE);";
-        
-        executeSQL(*cont_metricsServerConn, sql_statement);
+            sql_statement = "SELECT create_hypertable('" + cont_arrivalTableName + "', 'arrival_timestamps', if_not_exists => TRUE);";
+            
+            executeSQL(*cont_metricsServerConn, sql_statement);
 
-        sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (stream);";
-        sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (sender_host);";
-        sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (receiver_host);";
-        
-        executeSQL(*cont_metricsServerConn, sql_statement);
+            sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (stream);";
+            sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (sender_host);";
+            sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (receiver_host);";
+            
+            executeSQL(*cont_metricsServerConn, sql_statement);
+        }
 
-        // Create process table
-        sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_processTableName + " ("
+        if (!tableExists(*cont_metricsServerConn, cont_processTableName)) {
+            sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_processTableName + " ("
                                                                                 "postprocess_timestamps BIGINT NOT NULL, "
                                                                                 "stream TEXT NOT NULL, "
                                                                                 "model_name TEXT NOT NULL, "
@@ -357,18 +359,21 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                 "input_size INTEGER NOT NULL, "
                                                                                 "output_size INTEGER NOT NULL, "
                                                                                 "request_num INTEGER NOT NULL)";
-        executeSQL(*cont_metricsServerConn, sql_statement);
 
-        sql_statement = "SELECT create_hypertable('" + cont_processTableName + "', 'postprocess_timestamps', if_not_exists => TRUE);";
-        executeSQL(*cont_metricsServerConn, sql_statement);
+            executeSQL(*cont_metricsServerConn, sql_statement);
 
-        sql_statement = "CREATE INDEX ON " + cont_processTableName + " (stream);";
-        sql_statement += "CREATE INDEX ON " + cont_processTableName + " (model_name);";
-        sql_statement += "CREATE INDEX ON " + cont_processTableName + " (host);";
-        executeSQL(*cont_metricsServerConn, sql_statement);
+            sql_statement = "SELECT create_hypertable('" + cont_processTableName + "', 'postprocess_timestamps', if_not_exists => TRUE);";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "CREATE INDEX ON " + cont_processTableName + " (stream);";
+            sql_statement += "CREATE INDEX ON " + cont_processTableName + " (model_name);";
+            sql_statement += "CREATE INDEX ON " + cont_processTableName + " (host);";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+        }
 
         if (cont_RUNMODE == RUNMODE::PROFILING) {
-            sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
+            if (!tableExists(*cont_metricsServerConn, cont_hwMetricsTableName)) {
+                sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
                                                                                     "   timestamps BIGINT NOT NULL,"
                                                                                     "   model_name TEXT NOT NULL,"
                                                                                     "   batch_size INTEGER NOT NULL,"
@@ -378,22 +383,23 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                     "   gpu_mem_usage BIGINT NOT NULL,"
                                                                                     "   PRIMARY KEY (timestamps)"
                                                                                     ");";
-            executeSQL(*cont_metricsServerConn, sql_statement);
+                executeSQL(*cont_metricsServerConn, sql_statement);
 
-            sql_statement = "SELECT create_hypertable('" + cont_hwMetricsTableName + "', 'timestamps', if_not_exists => TRUE);";
-            executeSQL(*cont_metricsServerConn, sql_statement);
+                sql_statement = "SELECT create_hypertable('" + cont_hwMetricsTableName + "', 'timestamps', if_not_exists => TRUE);";
+                executeSQL(*cont_metricsServerConn, sql_statement);
 
-            sql_statement = "CREATE INDEX ON " + cont_hwMetricsTableName + " (model_name);";
-            sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
-            executeSQL(*cont_metricsServerConn, sql_statement);
+                sql_statement = "CREATE INDEX ON " + cont_hwMetricsTableName + " (model_name);";
+                sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
+                executeSQL(*cont_metricsServerConn, sql_statement);
 
-            // Delete entries about the model from the tables
-            sql_statement = "DELETE FROM " + cont_hwMetricsTableName + " WHERE ";
-            sql_statement += "'" + cont_inferModel + "' = model_name;";
-            executeSQL(*cont_metricsServerConn, sql_statement);
-            sql_statement = "DELETE FROM " + cont_processTableName + " WHERE ";
-            sql_statement += "'" + cont_inferModel + "' = model_name;";
-            executeSQL(*cont_metricsServerConn, sql_statement);
+                // Delete entries about the model from the tables
+                sql_statement = "DELETE FROM " + cont_hwMetricsTableName + " WHERE ";
+                sql_statement += "'" + cont_inferModel + "' = model_name;";
+                executeSQL(*cont_metricsServerConn, sql_statement);
+                sql_statement = "DELETE FROM " + cont_processTableName + " WHERE ";
+                sql_statement += "'" + cont_inferModel + "' = model_name;";
+                executeSQL(*cont_metricsServerConn, sql_statement);
+            }
         }
 
         spdlog::info("{0:s} created arrival table and process table.", cont_name);
