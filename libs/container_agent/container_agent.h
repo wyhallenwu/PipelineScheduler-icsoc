@@ -207,6 +207,7 @@ protected:
 
     void HandleRecvRpcs();
 
+    std::string cont_experimentName;
     std::string cont_name;
     std::vector<Microservice *> cont_msvcsList;
     std::string cont_pipeName;

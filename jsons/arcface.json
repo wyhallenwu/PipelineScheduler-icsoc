@@ -1,5 +1,6 @@
 {
     "container": {
+        "cont_experimentName": "experiment",
         "cont_pipeName": "traffic",
         "cont_taskName": "arcface",
         "cont_hostDevice": "server",

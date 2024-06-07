@@ -564,6 +564,7 @@ public:
 
     virtual ~Microservice() = default;
 
+    std::string msvc_experimentName;
     // Name Identifier assigned to the microservice in the format of `type_of_msvc-number`.
     // For instance, an object detector could be named `YOLOv5s-01`.
     // Another example is the

@@ -84,6 +84,7 @@ json loadRunArgs(int argc, char **argv) {
     }
 
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
+        containerConfigs.at("cont_pipeline")[i]["msvc_experimentName"] = containerConfigs["cont_experimentName"];
         containerConfigs.at("cont_pipeline")[i]["msvc_contName"] = name;
         containerConfigs.at("cont_pipeline")[i]["msvc_pipelineName"] = containerConfigs["cont_pipeName"];
         containerConfigs.at("cont_pipeline")[i]["msvc_taskName"] = containerConfigs["cont_taskName"];
@@ -279,6 +280,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
     json containerConfigs = configs["container"];
     //std::cout << containerConfigs.dump(4) << std::endl;
 
+    cont_experimentName = containerConfigs["cont_experimentName"];
     cont_deviceIndex = containerConfigs["cont_device"];
     cont_name = containerConfigs["cont_name"];
     cont_pipeName = containerConfigs["cont_pipeName"];

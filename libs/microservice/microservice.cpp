@@ -53,6 +53,7 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     // Identifiers
     msvc_name = configs.msvc_name;
     msvc_containerName = configs.msvc_contName;
+    msvc_experimentName = jsonConfigs.at("msvc_experimentName");
     msvc_pipelineName = jsonConfigs.at("msvc_pipelineName");
     msvc_taskName = jsonConfigs.at("msvc_taskName");
     msvc_hostDevice = jsonConfigs.at("msvc_hostDevice");
