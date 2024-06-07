@@ -227,6 +227,12 @@ public:
     }
 protected:
     ProcessReqRecords msvc_processRecords;
+
+    struct PerQueueOutRequest {
+        bool used = false;
+        Request<LocalCPUReqDataType> cpuReq;
+        Request<LocalGPUReqDataType> gpuReq;
+    };
 };
 
 class BaseBBoxCropper : public BasePostprocessor {
