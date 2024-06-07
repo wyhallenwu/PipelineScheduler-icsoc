@@ -439,6 +439,7 @@ void ContainerAgent::ReportStart() {
     if (cont_taskName != "datasource" && cont_taskName != "sink") {
         profiler = new Profiler({pid});
         reportHwMetrics = true;
+        profiler->run();
     }
 }
 
@@ -474,6 +475,8 @@ void ContainerAgent::collectRuntimeMetrics() {
         if (startTime >= cont_metricsServerConfigs.nextHwMetricsScrapeTime) {
             if (reportHwMetrics && pid > 0) {
                 Profiler::sysStats stats = profiler->reportAtRuntime(pid);
+                //std::cout << stats.cpuUtilization << ", "
+                //          << stats.processMemoryUsage << ", " << stats.gpuUtilization << ", " << stats.processGpuMemoryUsage << std::endl;
                 HardwareMetrics hwMetrics = {startTime, 0, stats.cpuUtilization, stats.processMemoryUsage, stats.gpuUtilization,
                                              stats.processGpuMemoryUsage};
                 cont_hwMetrics.emplace_back(hwMetrics);

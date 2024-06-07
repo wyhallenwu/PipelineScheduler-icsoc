@@ -1,7 +1,8 @@
 # Builder Image
 FROM pipeline-scheduler-agx
 
-#USER root
+USER root
+RUN pip install -U jetson-stats --force
 WORKDIR /home/soulsaver/PipelineScheduler/build
 #RUN apt install libspdlog-dev libpqxx-dev -y
 #RUN mkdir /app/build -p

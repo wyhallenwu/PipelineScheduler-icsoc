@@ -26,7 +26,7 @@ void execCommandAsync(const char* cmd) {
 
 // Function to parse the delimited output and populate sysStats
 void parseDelimited(const std::string& data, Profiler::sysStats *stats) {
-    std::cout << "Start parsing\n";
+    //std::cout << "Start parsing\n";
     std::istringstream ss(data);
     std::string line;
 
@@ -105,12 +105,11 @@ void Profiler::run() {
     running = true;
     std::thread collectingStats(&Profiler::collectStats, this);
     collectingStats.detach();
-    std::cout << "Exitting collecting stats..." << std::endl;
 }
 
 void Profiler::addPid(unsigned int pid) {
     // stats[pid] = std::vector<sysStats>();
-    std::cout << "Added PID: " << pid << std::endl;
+    // std::cout << "Added PID: " << pid << std::endl;
 }
 
 int Profiler::getGpuCount() {
@@ -145,18 +144,19 @@ void Profiler::collectStats() {
         std::unique_lock<std::mutex> lock(mtx);
         cv.wait(lock, [] { return dataReady; }); // Wait until data is ready
 
-        std::cout << "Data ready, processing..." << std::endl;
+        // std::cout << "Data ready, processing..." << std::endl;
 
         for (auto &entry : stats) {
             unsigned int pid = entry.first;
             Profiler::sysStats *stat= new Profiler::sysStats;
+            std::cout << sharedBuffer << std::endl;
             parseDelimited(sharedBuffer, stat);
             entry.second.push_back(*stat);
         }
 
         sharedBuffer.clear(); // Clear the buffer after processing
         dataReady = false; // Reset the flag
-        std::cout << "Data processed." << std::endl;
+        //std::cout << "Data processed." << std::endl;
     }
 
     pythonThread.join(); // Ensure the Python thread is finished
