@@ -125,7 +125,9 @@ json loadRunArgs(int argc, char **argv) {
     finalConfigs["container"] = containerConfigs;
     finalConfigs["profiling"] = profilingConfigs;
 
-    checkCudaErrorCode(cudaSetDevice(device), __func__);
+    if (containerConfigs["cont_taskName"] != "datasource") {
+        checkCudaErrorCode(cudaSetDevice(device), __func__);
+    }
 
     return finalConfigs;
 };
