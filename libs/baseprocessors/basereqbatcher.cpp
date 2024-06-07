@@ -440,6 +440,7 @@ void BaseReqBatcher::batchRequests() {
          * Check if the profiling is to be stopped, if true, then send a signal to the downstream microservice to stop profiling
          */
         if (checkProfileEnd(currReq.req_travelPath[0])) {
+            spdlog::info("{0:s} is stopping profiling.", msvc_name);
             this->STOP_THREADS = true;
             msvc_OutQueue[0]->emplace(
                 Request<LocalGPUReqDataType>{

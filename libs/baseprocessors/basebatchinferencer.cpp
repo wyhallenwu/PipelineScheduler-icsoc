@@ -154,7 +154,7 @@ void BaseBatchInferencer::inference() {
         for (std::size_t i = 0; i < currReq_batchSize; ++i) {
             trtInBuffer.emplace_back(currReq.req_data[i].data);
         }
-        info("{0:s} extracts inference data from message. Run inference!", msvc_name);
+        trace("{0:s} extracts inference data from message. Run inference!", msvc_name);
         msvc_inferenceEngine->runInference(trtInBuffer, trtOutBuffer, currReq_batchSize, inferenceStream);
         trace("{0:s} finished INFERENCE.", msvc_name);
 
@@ -208,7 +208,7 @@ void BaseBatchInferencer::inference() {
         // for (std::size_t i = 0; i < trtInBuffer.size(); i++) {
         //     checkCudaErrorCode(cudaFree(trtInBuffer.at(i).cudaPtr()));
         // }
-        info("{0:s} emplaced a request for a batch size of {1:d}", msvc_name, currReq_batchSize);
+        trace("{0:s} emplaced a request for a batch size of {1:d}", msvc_name, currReq_batchSize);
 
         msvc_OutQueue[0]->emplace(outReq);
         outReqData.clear();
