@@ -393,15 +393,14 @@ ContainerAgent::ContainerAgent(const json &configs) {
                 sql_statement = "CREATE INDEX ON " + cont_hwMetricsTableName + " (model_name);";
                 sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
                 executeSQL(*cont_metricsServerConn, sql_statement);
-
-                // Delete entries about the model from the tables
-                sql_statement = "DELETE FROM " + cont_hwMetricsTableName + " WHERE ";
-                sql_statement += "'" + cont_inferModel + "' = model_name;";
-                executeSQL(*cont_metricsServerConn, sql_statement);
-                sql_statement = "DELETE FROM " + cont_processTableName + " WHERE ";
-                sql_statement += "'" + cont_inferModel + "' = model_name;";
-                executeSQL(*cont_metricsServerConn, sql_statement);
             }
+            // Delete entries about the model from the tables
+            sql_statement = "DELETE FROM " + cont_hwMetricsTableName + " WHERE ";
+            sql_statement += "'" + cont_inferModel + "' = model_name;";
+            executeSQL(*cont_metricsServerConn, sql_statement);
+            sql_statement = "DELETE FROM " + cont_processTableName + " WHERE ";
+            sql_statement += "'" + cont_inferModel + "' = model_name;";
+            executeSQL(*cont_metricsServerConn, sql_statement);
         }
 
         spdlog::info("{0:s} created arrival table and process table.", cont_name);
