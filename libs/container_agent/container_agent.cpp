@@ -8,6 +8,7 @@ ABSL_FLAG(std::optional<std::string>, trt_json_path, std::nullopt, "json for TRT
 ABSL_FLAG(uint16_t, port, 0, "server port for the service");
 ABSL_FLAG(int16_t, device, 0, "Index of GPU device");
 ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
+ABSL_FLAG(uint16_t, logging_mode, 0, "0:stdout, 1:file, 2:both");
 ABSL_FLAG(std::string, log_dir, "../logs", "Log path for the container");
 ABSL_FLAG(uint16_t, profiling_mode, 0,
           "flag to make the model running in profiling mode 0:deployment, 1:profiling, 2:empty_profiling");
@@ -30,13 +31,11 @@ json loadRunArgs(int argc, char **argv) {
     std::string name = absl::GetFlag(FLAGS_name);
     int8_t device = (int8_t) absl::GetFlag(FLAGS_device);
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
+    uint16_t loggingMode = absl::GetFlag(FLAGS_logging_mode);
     std::string logPath = absl::GetFlag(FLAGS_log_dir);
     uint16_t profiling_mode = absl::GetFlag(FLAGS_profiling_mode);
 
     RUNMODE runmode = static_cast<RUNMODE>(profiling_mode);
-
-    spdlog::set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
-    spdlog::set_level(spdlog::level::level_enum(logLevel));
 
     std::tuple<json, json> configs = msvcconfigs::loadJson();
     json containerConfigs = std::get<0>(configs);
@@ -60,10 +59,13 @@ json loadRunArgs(int argc, char **argv) {
         logPath = "../model_profiles";
     }
 
+    
+
     containerConfigs["cont_device"] = device;
     containerConfigs["cont_name"] = name;
     containerConfigs["cont_logLevel"] = logLevel;
-    containerConfigs["cont_logPath"] = logPath + "/" + name;
+    containerConfigs["cont_loggingMode"] = loggingMode;
+    containerConfigs["cont_logPath"] = logPath;
     containerConfigs["cont_RUNMODE"] = runmode;
     containerConfigs["cont_port"] = absl::GetFlag(FLAGS_port);
 
@@ -212,7 +214,7 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
     this->dispatchMicroservices();
 
     for (BatchSizeType batch = minBatch; batch <= maxBatch;) {
-        spdlog::trace("{0:s} model with a max batch of {1:d}.", __func__, batch);
+        spdlog::get("container_agent")->trace("{0:s} model with a max batch of {1:d}.", __func__, batch);
         if (batch != minBatch) {
             std::string profileDirPath, cont_name;
 
@@ -257,7 +259,7 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
                 msvc->msvc_idealBatchSize = i;
             }
             while (true) {
-                spdlog::info("{0:s} waiting for profiling of model with a max batch of {1:d} and real batch of {2:d}.",
+                spdlog::get("container_agent")->info("{0:s} waiting for profiling of model with a max batch of {1:d} and real batch of {2:d}.",
                              __func__, batch, i);
                 if (cont_msvcsList[0]->checkPause()) {
                     break;
@@ -266,7 +268,7 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
             }
         }
 
-        spdlog::info("===============================================================================================");
+        spdlog::get("container_agent")->info("===============================================================================================");
         if (stepMode == 0) {
             batch += step;
         } else {
@@ -289,15 +291,46 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
     cont_RUNMODE = containerConfigs["cont_RUNMODE"];
 
-    if (cont_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-        // Create the logDir for this container
-        cont_logDir = (std::string) containerConfigs.at("cont_logPath");
-        std::filesystem::create_directory(
-                std::filesystem::path(cont_logDir)
-        );
-    } else {
-        cont_logDir = (std::string) containerConfigs["cont_logPath"];
+    // Create the logDir for this experiment run
+    cont_logDir = containerConfigs["cont_logPath"].get<std::string>() + "/" + cont_experimentName;
+    std::filesystem::create_directory(
+        std::filesystem::path(cont_logDir)
+    );
+
+    cont_logDir += "/" + cont_pipeName + "_" + cont_taskName;
+    std::filesystem::create_directory(
+        std::filesystem::path(cont_logDir)
+    );
+
+    std::string runlogPath = cont_logDir + "/" + "runlog.log";
+
+
+
+    if (containerConfigs["cont_loggingMode"] == 0 || containerConfigs["cont_loggingMode"] == 2) {
+        auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        cont_loggerSinks.emplace_back(console_sink);
     }
+    bool auto_flush = true;
+    if (containerConfigs["cont_loggingMode"] == 1 || containerConfigs["cont_loggingMode"] == 2) {
+        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(runlogPath, auto_flush);
+        cont_loggerSinks.emplace_back(file_sink);
+    }
+
+    cont_logger = std::make_shared<spdlog::logger>("container_agent", cont_loggerSinks.begin(), cont_loggerSinks.end());
+    spdlog::register_logger(cont_logger);
+
+    spdlog::get("container_agent")->set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
+    spdlog::get("container_agent")->set_level(spdlog::level::level_enum(containerConfigs["cont_logLevel"]));
+
+    // if (cont_RUNMODE == RUNMODE::EMPTY_PROFILING) {
+    //     // Create the logDir for this container
+    //     cont_logDir = (std::string) containerConfigs.at("cont_logPath");
+    //     std::filesystem::create_directory(
+    //             std::filesystem::path(cont_logDir)
+    //     );
+    // } else {
+    //     cont_logDir = (std::string) containerConfigs["cont_logPath"];
+    // }
 
     arrivalRate = 0;
 
@@ -404,8 +437,8 @@ ContainerAgent::ContainerAgent(const json &configs) {
             sql_statement += "'" + cont_inferModel + "' = model_name;";
             executeSQL(*cont_metricsServerConn, sql_statement);
         }
-
-        spdlog::info("{0:s} created arrival table and process table.", cont_name);
+        spdlog::get("container_agent")->info("{0:s} created arrival table and process table.", cont_name);
+        spdlog::get("container_agent")->flush();
     }
 
 
@@ -444,7 +477,7 @@ void ContainerAgent::ReportStart() {
     GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
     pid = reply.pid();
-    spdlog::info("Container Agent started with pid: {0:d}", pid);
+    spdlog::get("container_agent")->info("Container Agent started with pid: {0:d}", pid);
     if (cont_taskName != "datasource" && cont_taskName != "sink") {
         profiler = new Profiler({pid});
         reportHwMetrics = true;
@@ -733,7 +766,7 @@ void ContainerAgent::waitPause() {
     bool paused = false;
     while (true) {
         paused = true;
-        spdlog::trace("{0:s} waiting for all microservices to be paused.", __func__);
+        spdlog::get("container_agent")->trace("{0:s} waiting for all microservices to be paused.", __func__);
         for (auto msvc: cont_msvcsList) {
             if (!msvc->checkPause()) {
                 paused = false;
@@ -774,7 +807,7 @@ void ContainerAgent::waitReady() {
     while (!ready) {
         ready = true;
 
-        spdlog::info("{0:s} waiting for all microservices to be ready.", __func__);
+        spdlog::get("container_agent")->info("{0:s} waiting for all microservices to be ready.", __func__);
         for (auto msvc: cont_msvcsList) {
             if (!msvc->checkReady()) {
                 ready = false;

@@ -47,7 +47,7 @@ std::string Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMe
 GPUSender::GPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
     addToName("sender", "GPU");
     tagToGpuPointer = std::map<void *, std::vector<std::vector<RequestData<LocalGPUReqDataType>>> *>();
-    spdlog::trace("{0:s} GPUSender is created.", msvc_name);
+    spdlog::get("container_agent")->trace("{0:s} GPUSender is created.", msvc_name);
 }
 
 void GPUSender::Process() {
@@ -58,14 +58,14 @@ void GPUSender::Process() {
     std::vector<uint32_t> slo;
     while (READY) {
         if (this->STOP_THREADS) {
-            spdlog::info("{0:s} STOPS.", msvc_name);
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         } else if (this->PAUSE_THREADS) {
             if (RELOADING) {
-                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
                 RELOADING = false;
-                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
             ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
@@ -189,7 +189,7 @@ std::string GPUSender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<Empt
 
 LocalCPUSender::LocalCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
     addToName("sender", "LocalCPU");
-    spdlog::trace("{0:s} LocalCPUSender is created.", msvc_name);
+    spdlog::get("container_agent")->trace("{0:s} LocalCPUSender is created.", msvc_name);
 }
 
 void LocalCPUSender::Process() {
@@ -200,14 +200,14 @@ void LocalCPUSender::Process() {
     std::vector<uint32_t> slo;
     while (READY) {
         if (this->STOP_THREADS) {
-            spdlog::info("{0:s} STOPS.", msvc_name);
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         } else if (this->PAUSE_THREADS) {
             if (RELOADING) {
-                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
                 RELOADING = false;
-                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
             ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;
@@ -297,7 +297,7 @@ std::string LocalCPUSender::SendSharedMemory(
 
 RemoteCPUSender::RemoteCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
     addToName("sender", "RemoteCPU");
-    spdlog::trace("{0:s} RemoteCPUSender is created.", msvc_name);
+    spdlog::get("container_agent")->trace("{0:s} RemoteCPUSender is created.", msvc_name);
 }
 
 void RemoteCPUSender::Process() {
@@ -308,14 +308,14 @@ void RemoteCPUSender::Process() {
     std::vector<uint32_t> slo;
     while (READY) {
         if (this->STOP_THREADS) {
-            spdlog::info("{0:s} STOPS.", msvc_name);
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         } else if (this->PAUSE_THREADS) {
             if (RELOADING) {
-                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
                 RELOADING = false;
-                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
             ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;

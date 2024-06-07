@@ -35,13 +35,13 @@ int main(int argc, char **argv) {
     } else {
         for (uint16_t i = 4; i < pipeConfigs.size(); i++) {
             if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::localGPU) {
-                spdlog::info("Local GPU Sender");
+                spdlog::get("container_agent")->info("Local GPU Sender");
                 msvcsList.push_back(new GPUSender(pipeConfigs[i]));
             } else if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::sharedMemory) {
-                spdlog::info("Local CPU Sender");
+                spdlog::get("container_agent")->info("Local CPU Sender");
                 msvcsList.push_back(new LocalCPUSender(pipeConfigs[i]));
             } else if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::serialized) {
-                spdlog::info("Remote CPU Sender");
+                spdlog::get("container_agent")->info("Remote CPU Sender");
                 msvcsList.push_back(new RemoteCPUSender(pipeConfigs[i]));
             }
             msvcsList[i]->SetInQueue({msvcsList[3]->GetOutQueue(pipeConfigs[3].at("msvc_dnstreamMicroservices")[i-4].at("nb_classOfInterest"))});

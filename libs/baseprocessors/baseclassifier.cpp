@@ -17,7 +17,7 @@ void BaseClassifier::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 
 BaseClassifier::BaseClassifier(const json &jsonConfigs) : BasePostprocessor(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
-    info("{0:s} is created.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name); 
 }
 
 inline uint16_t maxIndex(float* arr, size_t size) {
@@ -41,7 +41,7 @@ void BaseClassifier::classify() {
     // Batch size of current request
     BatchSizeType currReq_batchSize;
 
-    info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name); 
 
 
     cudaStream_t postProcStream;
@@ -61,7 +61,7 @@ void BaseClassifier::classify() {
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
-            info("{0:s} STOPS.", msvc_name);
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
@@ -88,7 +88,7 @@ void BaseClassifier::classify() {
                 }
                 predictedProbs = new float[batchSize * msvc_numClasses];
                 predictedClass = new uint16_t[batchSize];
-                info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
                 READY = true;
             }
@@ -121,7 +121,7 @@ void BaseClassifier::classify() {
         }
 
         currReq_batchSize = currReq.req_batchSize;
-        trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
+        spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
         currReq_data = currReq.req_data;
 
@@ -169,7 +169,7 @@ void BaseClassifier::classify() {
                         } //req_data
                     }
                 );
-                trace("{0:s} emplaced an image to CPU queue.", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} emplaced an image to CPU queue.", msvc_name);
             } else {
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalGPUReqDataType>{
@@ -182,7 +182,7 @@ void BaseClassifier::classify() {
                         }
                     }
                 );
-                trace("{0:s} emplaced an image to GPU queue.", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} emplaced an image to GPU queue.", msvc_name);
             }
 
             uint32_t totalOutMem = totalInMem;
@@ -206,7 +206,7 @@ void BaseClassifier::classify() {
             }
         }
 
-        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+        spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
 
     }
@@ -230,7 +230,7 @@ void BaseClassifier::classifyProfiling() {
     // Batch size of current request
     BatchSizeType inferTimeReport_batchSize;
 
-    info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name); 
 
 
     cudaStream_t postProcStream;
@@ -250,7 +250,7 @@ void BaseClassifier::classifyProfiling() {
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
-            info("{0:s} STOPS.", msvc_name);
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
@@ -271,7 +271,7 @@ void BaseClassifier::classifyProfiling() {
                 
                 predictedProbs = new float[msvc_idealBatchSize * msvc_numClasses];
                 predictedClass = new uint16_t[msvc_idealBatchSize];
-                info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
                 READY = true;
             }
@@ -296,7 +296,7 @@ void BaseClassifier::classifyProfiling() {
         }
 
         inferTimeReport_batchSize = inferTimeReportReq.req_batchSize;
-        trace("{0:s} popped a request of batch size {1:d}", msvc_name, inferTimeReport_batchSize);
+        spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}", msvc_name, inferTimeReport_batchSize);
 
         inferTimeReportData = inferTimeReportReq.req_data;
 
@@ -332,7 +332,7 @@ void BaseClassifier::classifyProfiling() {
         );
         
 
-        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+        spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
 
     }

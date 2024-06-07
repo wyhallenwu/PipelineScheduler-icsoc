@@ -6,7 +6,7 @@ ReceiverConfigs Receiver::loadConfigsFromJson(const json &jsonConfigs) {
 }
 
 void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
-    spdlog::trace("{0:s} is LOANDING configs...", __func__);
+    spdlog::get("container_agent")->trace("{0:s} is LOANDING configs...", __func__);
 
     if (!isConstructing) { // If this is not called from the constructor, then we are loading configs from a file for Microservice class
         Microservice::loadConfigs(jsonConfigs);
@@ -30,12 +30,12 @@ void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         server = builder.BuildAndStart();
         msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
     }
-    spdlog::trace("{0:s} FINISHED loading configs...", __func__);
+    spdlog::get("container_agent")->trace("{0:s} FINISHED loading configs...", __func__);
 }
 
 Receiver::Receiver(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
-    spdlog::info("{0:s} is created.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name); 
 }
 
 template<typename ReqDataType>
@@ -268,11 +268,11 @@ void Receiver::HandleRpcs() {
     READY = true;
     while (true) {
         if (this->STOP_THREADS) {
-            spdlog::info("{0:s} STOPS.", msvc_name);
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         } else if (this->PAUSE_THREADS) {
             if (RELOADING) {
-                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
                 /*void* target;
                 auto test = cv::cuda::GpuMat(1, 1, CV_8UC3);
@@ -286,7 +286,7 @@ void Receiver::HandleRpcs() {
                     setDevice();
                 }*/
                 RELOADING = false;
-                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
             //spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;

@@ -3,17 +3,17 @@
 using namespace spdlog;
 
 void BaseSink::loadConfigs(const json &jsonConfigs, bool isConstructing) {
-    spdlog::trace("{0:s} is LOANDING configs...", __func__);
+    spdlog::get("container_agent")->trace("{0:s} is LOANDING configs...", __func__);
     if (!isConstructing) {
         Microservice::loadConfigs(jsonConfigs, isConstructing);
     }
-    spdlog::trace("{0:s} FINISHED loading configs...", __func__);
+    spdlog::get("container_agent")->trace("{0:s} FINISHED loading configs...", __func__);
 }
 
 BaseSink::BaseSink(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
     msvc_name = "sink";
-    info("{0:s} is created.", __func__);
+    spdlog::get("container_agent")->info("{0:s} is created.", __func__);
 }
 
 void BaseSink::sink() {
@@ -23,7 +23,7 @@ void BaseSink::sink() {
     while (true) {
         if (this->STOP_THREADS) {
             if (this->STOP_THREADS) {
-                info("{0:s} STOPS.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
                 break;
             }
         } else if (this->PAUSE_THREADS) {
@@ -42,7 +42,7 @@ void BaseSink::sink() {
                 setDevice();
                 RELOADING = false;
                 READY = true;
-                info("{0:s} is reloaded.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is reloaded.", msvc_name);
             }
             continue;
         }

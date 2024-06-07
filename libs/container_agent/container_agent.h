@@ -29,6 +29,7 @@ ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json_path);
 ABSL_DECLARE_FLAG(uint16_t, port);
 ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
+ABSL_DECLARE_FLAG(uint16_t, logging_mode);
 ABSL_DECLARE_FLAG(std::string, log_dir);
 ABSL_DECLARE_FLAG(uint16_t, profiling_mode);
 
@@ -96,7 +97,7 @@ public:
         for (auto msvc: cont_msvcsList) {
             msvc->unpauseThread();
         }
-        spdlog::info("=========================================== STARTS ===========================================");
+        spdlog::get("container_agent")->info("=========================================== STARTS ===========================================");
     }
 
     void PROFILING_START(BatchSizeType batch) {
@@ -104,7 +105,7 @@ public:
             msvc->unpauseThread();
         }
 
-        spdlog::info(
+        spdlog::get("container_agent")->info(
                 "======================================= PROFILING MODEL BATCH {0:d} =======================================",
                 batch);
     }
@@ -122,7 +123,7 @@ public:
     }
 
     void dispatchMicroservices() {
-        for (auto msvc: cont_msvcsList) {
+        for (auto &msvc: cont_msvcsList) {
             msvc->dispatchThread();
         }
     }
@@ -245,6 +246,9 @@ protected:
 
     MetricsServerConfigs cont_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> cont_metricsServerConn = nullptr;
+
+    std::vector<spdlog::sink_ptr> cont_loggerSinks = {};
+    std::shared_ptr<spdlog::logger> cont_logger;    
 
 };
 

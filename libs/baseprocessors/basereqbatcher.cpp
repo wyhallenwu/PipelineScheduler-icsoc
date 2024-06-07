@@ -28,7 +28,7 @@ inline cv::cuda::GpuMat normalize(
     const std::vector<float>& divVals,
     const float normalized_scale
 ) {
-    trace("Going into {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Going into {0:s}", __func__);
     cv::cuda::GpuMat normalized;
     cv::Scalar subValsScalar = vectorToScalar(subVals);
     cv::Scalar divValsScalar = vectorToScalar(divVals);
@@ -45,7 +45,7 @@ inline cv::cuda::GpuMat normalize(
     }
 
     stream.waitForCompletion();
-    trace("Finished {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Finished {0:s}", __func__);
 
     return normalized;
 }
@@ -56,7 +56,7 @@ inline cv::cuda::GpuMat cvtHWCToCHW(
     uint8_t IMG_TYPE
 ) {
 
-    trace("Going into {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Going into {0:s}", __func__);
     uint16_t height = input.rows;
     uint16_t width = input.cols;
     /**
@@ -89,7 +89,7 @@ inline cv::cuda::GpuMat cvtHWCToCHW(
 
     stream.waitForCompletion();    
 
-    trace("Finished {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Finished {0:s}", __func__);
 
     return transposed;
 }
@@ -100,7 +100,7 @@ inline cv::cuda::GpuMat convertColor(
     uint8_t COLOR_CVT_TYPE,
     cv::cuda::Stream &stream
 ) {
-    trace("Going into {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Going into {0:s}", __func__);
     // If the image is grayscale, then the target image type should be 0
     uint16_t TARGET_IMG_TYPE;
     if (GRAYSCALE_CONVERSION_CODES.count(COLOR_CVT_TYPE)) {
@@ -113,7 +113,7 @@ inline cv::cuda::GpuMat convertColor(
     cv::cuda::cvtColor(input, color_cvt_image, COLOR_CVT_TYPE, 0, stream);
 
     stream.waitForCompletion();
-    trace("Finished {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Finished {0:s}", __func__);
 
     return color_cvt_image;
 }
@@ -138,7 +138,7 @@ inline cv::cuda::GpuMat resizePadRightBottom(
     uint8_t RESIZE_INTERPOL_TYPE
 
 ) {
-    trace("Going into {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Going into {0:s}", __func__);
 
     float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
@@ -151,7 +151,7 @@ inline cv::cuda::GpuMat resizePadRightBottom(
     resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
 
     stream.waitForCompletion();
-    trace("Finished {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Finished {0:s}", __func__);
 
     return out;
 }
@@ -248,7 +248,7 @@ void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
  */
 BaseReqBatcher::BaseReqBatcher(const json &jsonConfigs) : Microservice(jsonConfigs){
     loadConfigs(jsonConfigs);
-    info("{0:s} is created.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name); 
 }
 
 void BaseReqBatcher::batchRequests() {
@@ -290,12 +290,12 @@ void BaseReqBatcher::batchRequests() {
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
-    info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name); 
     cv::cuda::Stream *preProcStream;
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
-            info("{0:s} STOPS.", msvc_name);
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
@@ -320,7 +320,7 @@ void BaseReqBatcher::batchRequests() {
                 bufferData.clear();
                 prevData.clear();
 
-                info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
                 READY = true;
             }
@@ -331,9 +331,9 @@ void BaseReqBatcher::batchRequests() {
         if (msvc_InQueue.at(0)->getActiveQueueIndex() != msvc_activeInQueueIndex.at(0)) {
             if (msvc_InQueue.at(0)->size(msvc_activeInQueueIndex.at(0)) == 0) {
                 msvc_activeInQueueIndex.at(0) = msvc_InQueue.at(0)->getActiveQueueIndex();
-                trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+                spdlog::get("container_agent")->trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
             }
-            trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+            spdlog::get("container_agent")->trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
         }
         if (msvc_activeInQueueIndex.at(0) == 1) {
             currCPUReq = msvc_InQueue.at(0)->pop1();
@@ -380,8 +380,8 @@ void BaseReqBatcher::batchRequests() {
         currReq_batchSize = currReq.req_batchSize;
 
         outBatch_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
-        outBatch_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_containerName + "|" + std::to_string(msvc_inReqCount) + "]");
-        trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
+        outBatch_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_hostDevice + "|" + msvc_containerName + "|" + std::to_string(msvc_inReqCount));
+        spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
         msvc_onBufferBatchSize++;
         // Resize the incoming request image the padd with the grey color
@@ -390,7 +390,7 @@ void BaseReqBatcher::batchRequests() {
 
         prevData.emplace_back(currReq.req_data[0]);
 
-        trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
+        spdlog::get("container_agent")->trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
             msvc_name,
             currReq.req_data[0].data.rows,
             currReq.req_data[0].data.cols,
@@ -423,10 +423,10 @@ void BaseReqBatcher::batchRequests() {
 
         data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
-        trace("{0:s} finished resizing a frame", msvc_name);
+        spdlog::get("container_agent")->trace("{0:s} finished resizing a frame", msvc_name);
         data.shape = RequestDataShapeType({(this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
         bufferData.emplace_back(data);
-        trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
+        spdlog::get("container_agent")->trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
 
         // Consider this the moment the request preprocessed and is waiting to be batched
         timeNow = std::chrono::high_resolution_clock::now();
@@ -440,7 +440,7 @@ void BaseReqBatcher::batchRequests() {
          * Check if the profiling is to be stopped, if true, then send a signal to the downstream microservice to stop profiling
          */
         if (checkProfileEnd(currReq.req_travelPath[0])) {
-            spdlog::info("{0:s} is stopping profiling.", msvc_name);
+            spdlog::get("container_agent")->info("{0:s} is stopping profiling.", msvc_name);
             this->STOP_THREADS = true;
             msvc_OutQueue[0]->emplace(
                 Request<LocalGPUReqDataType>{
@@ -478,7 +478,7 @@ void BaseReqBatcher::batchRequests() {
 
             msvc_batchCount++;
 
-            trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
+            spdlog::get("container_agent")->trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
             msvc_OutQueue[0]->emplace(outReq);
             msvc_onBufferBatchSize = 0;
             outBatch_genTime.clear();
@@ -487,7 +487,7 @@ void BaseReqBatcher::batchRequests() {
             bufferData.clear();
             prevData.clear();
         }
-        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+        spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }
     msvc_logFile.close();
@@ -539,14 +539,14 @@ void BaseReqBatcher::batchRequestsProfiling() {
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
-    info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name); 
     cv::cuda::Stream *preProcStream;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
     while (true) {
         // Allowing this thread to naturally come to an end
         if (this->STOP_THREADS) {
-            info("{0:s} STOPS.", msvc_name);
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
         else if (this->PAUSE_THREADS) {
@@ -574,7 +574,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
 
                 this->RELOADING = false;
                 this->READY = true;
-                info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
@@ -583,10 +583,10 @@ void BaseReqBatcher::batchRequestsProfiling() {
         if (msvc_InQueue.at(0)->getActiveQueueIndex() != msvc_activeInQueueIndex.at(0)) {
             if (msvc_InQueue.at(0)->size(msvc_activeInQueueIndex.at(0)) == 0) {
                 msvc_activeInQueueIndex.at(0) = msvc_InQueue.at(0)->getActiveQueueIndex();
-                // trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+                // spdlog::get("container_agent")->trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
             }
         }
-        trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+        spdlog::get("container_agent")->trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
         if (msvc_activeInQueueIndex.at(0) == 1) {
             currCPUReq = msvc_InQueue.at(0)->pop1();
             if (!validateRequest<LocalCPUReqDataType>(currCPUReq)) {
@@ -611,7 +611,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
 
         currReq_batchSize = currReq.req_batchSize;
 
-        trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
+        spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
         // Resize the incoming request image the padd with the grey color
         // The resize image will be copied into a reserved buffer
@@ -619,7 +619,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
 
         prevData.emplace_back(currReq.req_data[0]);
 
-        trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
+        spdlog::get("container_agent")->trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
             msvc_name,
             currReq.req_data[0].data.rows,
             currReq.req_data[0].data.cols,
@@ -641,10 +641,10 @@ void BaseReqBatcher::batchRequestsProfiling() {
 
         data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
-        trace("{0:s} finished resizing a frame", msvc_name);
+        spdlog::get("container_agent")->trace("{0:s} finished resizing a frame", msvc_name);
         data.shape = RequestDataShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
         bufferData.emplace_back(data);
-        trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
+        spdlog::get("container_agent")->trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
 
 
         /**
@@ -688,7 +688,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
                 bufferData,
                 prevData
             };
-            trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
+            spdlog::get("container_agent")->trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
             msvc_OutQueue[0]->emplace(outReq);
             msvc_onBufferBatchSize = 0;
             outBatch_genTime.clear();
@@ -697,7 +697,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
             bufferData.clear();
             prevData.clear();
         }
-        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+        spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
     }
     msvc_logFile.close();
