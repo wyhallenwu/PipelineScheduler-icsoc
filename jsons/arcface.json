@@ -1,6 +1,6 @@
 {
     "container": {
-        "cont_pipeName": "traffic_pipeline",
+        "cont_pipeName": "traffic",
         "cont_taskName": "arcface",
         "cont_hostDevice": "server",
         "cont_name": "arcface_0",
@@ -174,7 +174,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/arcface_dynamic_3090_fp32_32_1.engine",
+                "path": "../models/arcface_dynamic_3090_fp32_64_1.engine",
                 "prec": 4
             },
             {
@@ -280,7 +280,7 @@
         "cont_allocationMode": 1
     },
     "profiling": {
-        "profile_minBatch": 64,
+        "profile_minBatch": 1,
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,

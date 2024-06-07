@@ -496,7 +496,7 @@ void ContainerAgent::collectRuntimeMetrics() {
             pqxx::work session(*cont_metricsServerConn);
             std::string modelName = cont_msvcsList[2]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
-                if (reportHwMetrics && !cont_hwMetrics.empty() && !cont_msvcsList[0]->STOP_THREADS) {
+                if (reportHwMetrics && !cont_hwMetrics.empty()) {
                     sql = "INSERT INTO " + cont_hwMetricsTableName +
                         " (timestamps, model_name, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
                     for (const auto &record: cont_hwMetrics) {
@@ -514,6 +514,12 @@ void ContainerAgent::collectRuntimeMetrics() {
                     sql += ";";
                     session.exec(sql.c_str());
                     cont_hwMetrics.clear();
+                }
+                if (cont_msvcsList[0]->STOP_THREADS) {
+                    for (auto msvc: cont_msvcsList) {
+                        msvc->STOP_THREADS = true;
+                    }
+                    run = false;
                 }
             }
             arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
