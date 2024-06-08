@@ -75,6 +75,7 @@ json loadRunArgs(int argc, char **argv) {
     containerConfigs["cont_metricsServerConfigs"] = metricsServerConfigs;
     if (containerConfigs["cont_taskName"] != "datasource") {
         containerConfigs["cont_inferModelName"] = splitString(containerConfigs.at("cont_pipeline")[2]["path"], "/").back();
+        containerConfigs["cont_inferModelName"] = splitString(containerConfigs["cont_inferModelName"], ".").front();
         // The maximum batch size supported by the model (for TensorRT)
         std::vector<std::string> modelOptions = splitString(containerConfigs["cont_inferModelName"], "_");
         BatchSizeType maxModelBatchSize = std::stoull(modelOptions[modelOptions.size() - 2]);
@@ -344,14 +345,14 @@ ContainerAgent::ContainerAgent(const json &configs) {
         // Create arrival table
         std::string sql_statement;
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
-            cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_arrival_table";
-            cont_processTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_process_table";
-            cont_hwMetricsTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_hwmetrics_table";
+            cont_arrivalTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arrival_table";
+            cont_processTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "__" + cont_inferModel + "__" + cont_hostDevice + "_process_table";
+            cont_hwMetricsTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hwmetrics_table";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
-            cont_arrivalTableName = cont_pipeName + "_" + cont_taskName + "_profile_arrival_table";
-            cont_processTableName = cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_profile_process_table";
+            cont_arrivalTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arrival_table";
+            cont_processTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "__" + cont_inferModel + "__" + cont_hostDevice + "_process_table";
             cont_hwMetricsTableName =
-                    cont_pipeName + "_" + cont_taskName + "_" + cont_hostDevice + "_profile_hwmetrics_table";
+                    cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hwmetrics_table";
 
             sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
             executeSQL(*cont_metricsServerConn, sql_statement);
@@ -363,9 +364,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                 "stream TEXT NOT NULL, "
                                                                                 "sender_host TEXT NOT NULL, "
                                                                                 "receiver_host TEXT NOT NULL, "
-                                                                                "transfer_duration INTEGER NOT NULL, "
-                                                                                "full_transfer_duration INTEGER NOT NULL, "
-                                                                                "rpc_batch_size INTEGER NOT NULL, "
+                                                                                "transfer_duration BIGINT NOT NULL, "
+                                                                                "full_transfer_duration BIGINT NOT NULL, "
+                                                                                "rpc_batch_size INT2 NOT NULL, "
                                                                                 "request_size INTEGER NOT NULL, "
                                                                                 "request_num INTEGER NOT NULL)";
 
@@ -392,7 +393,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                 "batch_duration INTEGER NOT NULL, "
                                                                                 "infer_duration INTEGER NOT NULL, "
                                                                                 "post_duration INTEGER NOT NULL, "
-                                                                                "infer_batch_size INTEGER NOT NULL, "
+                                                                                "infer_batch_size INT2 NOT NULL, "
                                                                                 "input_size INTEGER NOT NULL, "
                                                                                 "output_size INTEGER NOT NULL, "
                                                                                 "request_num INTEGER NOT NULL)";
@@ -413,11 +414,11 @@ ContainerAgent::ContainerAgent(const json &configs) {
                 sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
                                                                                     "   timestamps BIGINT NOT NULL,"
                                                                                     "   model_name TEXT NOT NULL,"
-                                                                                    "   batch_size INTEGER NOT NULL,"
-                                                                                    "   cpu_usage FLOAT NOT NULL,"
-                                                                                    "   mem_usage BIGINT NOT NULL,"
-                                                                                    "   gpu_usage INTEGER NOT NULL,"
-                                                                                    "   gpu_mem_usage BIGINT NOT NULL,"
+                                                                                    "   batch_size INT2 NOT NULL,"
+                                                                                    "   cpu_usage INT2 NOT NULL," // percentage (1-100)
+                                                                                    "   mem_usage INT2 NOT NULL," // Megabytes
+                                                                                    "   gpu_usage INT2 NOT NULL," // percentage (1-100)
+                                                                                    "   gpu_mem_usage INT2 NOT NULL," // Megabytes
                                                                                     "   PRIMARY KEY (timestamps)"
                                                                                     ");";
                 executeSQL(*cont_metricsServerConn, sql_statement);
@@ -428,14 +429,15 @@ ContainerAgent::ContainerAgent(const json &configs) {
                 sql_statement = "CREATE INDEX ON " + cont_hwMetricsTableName + " (model_name);";
                 sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
                 executeSQL(*cont_metricsServerConn, sql_statement);
+            } else {
+                // Delete entries about the model from the tables
+                sql_statement = "DELETE FROM " + cont_hwMetricsTableName + " WHERE ";
+                sql_statement += "'" + cont_inferModel + "' = model_name;";
+                executeSQL(*cont_metricsServerConn, sql_statement);
+                sql_statement = "DELETE FROM " + cont_processTableName + " WHERE ";
+                sql_statement += "'" + cont_inferModel + "' = model_name;";
+                executeSQL(*cont_metricsServerConn, sql_statement);
             }
-            // Delete entries about the model from the tables
-            sql_statement = "DELETE FROM " + cont_hwMetricsTableName + " WHERE ";
-            sql_statement += "'" + cont_inferModel + "' = model_name;";
-            executeSQL(*cont_metricsServerConn, sql_statement);
-            sql_statement = "DELETE FROM " + cont_processTableName + " WHERE ";
-            sql_statement += "'" + cont_inferModel + "' = model_name;";
-            executeSQL(*cont_metricsServerConn, sql_statement);
         }
         spdlog::get("container_agent")->info("{0:s} created arrival table and process table.", cont_name);
         spdlog::get("container_agent")->flush();
