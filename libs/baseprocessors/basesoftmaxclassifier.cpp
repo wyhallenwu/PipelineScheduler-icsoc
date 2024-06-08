@@ -150,6 +150,7 @@ void BaseSoftmaxClassifier::classify() {
             currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
 
             uint32_t totalInMem = currReq.upstreamReq_data[i].data.rows * currReq.upstreamReq_data[i].data.cols * currReq.upstreamReq_data[i].data.channels() * CV_ELEM_SIZE1(currReq.upstreamReq_data[i].data.type());
+            currReq.req_travelPath[i] += "|1|1|" + std::to_string(totalInMem) + "]";
 
             softmax(predictedLogits + i * msvc_numClasses, predictedProbs + i * msvc_numClasses, msvc_numClasses);
             predictedClass[i] = maxIndex(predictedProbs + i * msvc_numClasses, msvc_numClasses);

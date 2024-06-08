@@ -367,6 +367,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                 "transfer_duration BIGINT NOT NULL, "
                                                                                 "full_transfer_duration BIGINT NOT NULL, "
                                                                                 "rpc_batch_size INT2 NOT NULL, "
+                                                                                "total_package_size INTEGER NOT NULL, "
                                                                                 "request_size INTEGER NOT NULL, "
                                                                                 "request_num INTEGER NOT NULL)";
 
@@ -558,7 +559,7 @@ void ContainerAgent::collectRuntimeMetrics() {
 
                 sql = "INSERT INTO " + cont_arrivalTableName +
                       "(arrival_timestamps, stream, sender_host, receiver_host, transfer_duration, "
-                      "full_transfer_duration, rpc_batch_size, request_size, request_num) "
+                      "full_transfer_duration, rpc_batch_size, total_package_size, request_size, request_num) "
                       "VALUES ";
                 for (auto &record: arrivalRecords) {
                     sql += "(" + timePointToEpochString(record.arrivalTime) + ", ";
@@ -570,6 +571,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(
                             record.arrivalTime - record.prevPostProcTime).count()) + ", ";
                     sql += std::to_string(record.rpcBatchSize) + ", ";
+                    sql += "0, ";
                     sql += std::to_string(record.reqSize) + ", ";
                     sql += std::to_string(record.reqNum) + ")";
 

@@ -230,6 +230,7 @@ protected:
 
     struct PerQueueOutRequest {
         bool used = false;
+        uint32_t totalSize = 0;
         Request<LocalCPUReqDataType> cpuReq;
         Request<LocalGPUReqDataType> gpuReq;
     };

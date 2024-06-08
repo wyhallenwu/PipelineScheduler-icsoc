@@ -158,6 +158,7 @@ void BaseKPointExtractor::extractor() {
             currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
 
             uint32_t totalInMem = currReq.upstreamReq_data[i].data.rows * currReq.upstreamReq_data[i].data.cols * currReq.upstreamReq_data[i].data.channels() * CV_ELEM_SIZE1(currReq.upstreamReq_data[i].data.type());
+            currReq.req_travelPath[i] += "|1|1|" + std::to_string(totalInMem) + "]";
 
             if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(currReq.upstreamReq_data[i].data.size(), currReq.upstreamReq_data[i].data.type());

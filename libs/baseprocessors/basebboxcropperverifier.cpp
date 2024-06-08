@@ -211,7 +211,7 @@ void BaseBBoxCropperVerifier::cropping() {
             // We consider this when the request was received by the postprocessor
             currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
 
-            currReq_path = currReq.req_travelPath[i];
+            currReq_path = currReq.req_travelPath[i] + "|1|1";
 
             // If there is no object in frame, we don't have to do nothing.
             int numDetsInFrame = (int)num_detections[i];
@@ -225,6 +225,8 @@ void BaseBBoxCropperVerifier::cropping() {
 
             uint32_t totalInMem = imageList[i].data.channels() * imageList[i].data.rows * imageList[i].data.cols * CV_ELEM_SIZE1(imageList[i].data.type());
             uint32_t totalOutMem = 0;
+
+            currReq_path += "|" + std::to_string(totalInMem) + "]";
 
             if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(orig_h, orig_w, imageList[i].data.type());
@@ -261,7 +263,6 @@ void BaseBBoxCropperVerifier::cropping() {
                 spdlog::get("container_agent")->trace("{0:s} emplaced an image to GPU queue {2:d}.", msvc_name, bboxClass, queueIndex);
             }
 
-            totalOutMem += imageList[i].data.channels() * imageList[i].data.rows * imageList[i].data.cols * CV_ELEM_SIZE1(imageList[i].data.type());
 
             /**
              * @brief There are 7 important timestamps to be recorded:
