@@ -7,6 +7,8 @@
 #include <iostream>
 #include "../json/json.h"
 #include "spdlog/spdlog.h"
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include "opencv2/opencv.hpp"
 #include <unordered_set>
 #include <pqxx/pqxx>
