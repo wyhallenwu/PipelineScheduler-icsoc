@@ -1,6 +1,6 @@
 {
     "container": {
-        "cont_experimentName": "experiment",
+        "cont_experimentName": "ex1",
         "cont_pipeName": "pedestrian_security",
         "cont_taskName": "age",
         "cont_hostDevice": "server",
