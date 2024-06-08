@@ -54,7 +54,7 @@ struct Request {
     RequestSLOType req_e2eSLOLatency;
     /**
      * @brief The path that this request and its ancestors have travelled through.
-     * Template `[hostDeviceName|microserviceID|inReqNumber|totalNumberOfOutputs|NumberInOutputs|outPackageSize (in byte)]
+     * Template `[hostDeviceName|microserviceID|inReqNumber|totalNumberOfOutputs|NumberInOutputs|outPackageSize (in byte)]`
      * For instance, for a request from container with id of `YOLOv5_01` to container with id of `retinaface_02`
      * we may have a path that looks like this `[edge|YOLOv5_01|5|10|8|212072][server|retinaface_02|09|2|2|2343]`
      */
@@ -427,13 +427,14 @@ public:
     void addRecord(
         RequestTimeType timestamps,
         uint32_t rpcBatchSize,
+        uint32_t totalPkgSize,
         uint32_t requestSize,
         uint32_t reqNumber,
         std::string reqOrigin,
         std::string senderHost
     ) {
         std::unique_lock<std::mutex> lock(mutex);
-        records.push_back({timestamps[1], timestamps[2], timestamps[3], rpcBatchSize, requestSize, reqNumber, reqOrigin, senderHost});
+        records.push_back({timestamps[1], timestamps[2], timestamps[3], rpcBatchSize, totalPkgSize, requestSize, reqNumber, reqOrigin, senderHost});
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();

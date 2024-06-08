@@ -34,12 +34,14 @@ typedef std::vector<std::vector<int32_t>> RequestShapeType;
 typedef cv::cuda::GpuMat LocalGPUReqDataType;
 typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
+typedef uint32_t RequestMemSizeType;
 
 struct ArrivalRecord {
     ClockType prevPostProcTime;
     ClockType prevSenderTime;
     ClockType arrivalTime;
     uint32_t rpcBatchSize;
+    uint32_t totalPkgSize;
     uint32_t reqSize;
     uint32_t reqNum;
     std::string reqOriginStream;

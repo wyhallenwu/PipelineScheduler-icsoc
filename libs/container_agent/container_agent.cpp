@@ -571,7 +571,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                     sql += std::to_string(std::chrono::duration_cast<TimePrecisionType>(
                             record.arrivalTime - record.prevPostProcTime).count()) + ", ";
                     sql += std::to_string(record.rpcBatchSize) + ", ";
-                    sql += "0, ";
+                    sql += std::to_string(record.totalPkgSize) + ", ";
                     sql += std::to_string(record.reqSize) + ", ";
                     sql += std::to_string(record.reqNum) + ")";
 

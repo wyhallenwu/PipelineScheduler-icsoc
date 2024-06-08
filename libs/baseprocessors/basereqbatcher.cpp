@@ -359,6 +359,7 @@ void BaseReqBatcher::batchRequests() {
             msvc_arrivalRecords.addRecord(
                 currReq.req_origGenTime[0],
                 10,
+                getArrivalPkgSize(currReq.req_travelPath[0]),
                 requestSize,
                 msvc_inReqCount,
                 getOriginStream(currReq.req_travelPath[0]),

@@ -124,6 +124,21 @@ public:
         return msvc_arrivalRecords.getRecords();
     }
 
+    /**
+     * @brief Get the size of the arrival package which is recorded in the travel path
+     * 
+     * @param path 
+     * @return RequestSizeType 
+     */
+    RequestMemSizeType getArrivalPkgSize(const std::string& path) {
+        // Path looks like this
+        // [hostDeviceName|microserviceID|inReqNumber|totalNumberOfOutputs|NumberInOutputs|outPackageSize (in byte)]
+        // [edge|YOLOv5_01|05|05][server|retinaface_02|09|09]
+        std::string temp = splitString(path, "[").back();
+        temp = splitString(temp, "]").front();
+        return std::stoul(splitString(temp, "|").back());
+    }
+
 protected:
     // Record
     ArrivalReqRecords msvc_arrivalRecords;

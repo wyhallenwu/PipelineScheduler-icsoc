@@ -42,7 +42,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "0.0.0.0:55011"
+                            "0.0.0.0:55021"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "datasource",
@@ -257,7 +257,7 @@
                         "nb_classOfInterest": -1,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "localhost:55012"
+                            "localhost:55022"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "name",

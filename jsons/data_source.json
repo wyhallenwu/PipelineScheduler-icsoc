@@ -66,7 +66,7 @@
                         "nb_classOfInterest": -1,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "localhost:55011"
+                            "localhost:55021"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",
