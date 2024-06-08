@@ -1,6 +1,6 @@
 {
     "container": {
-        "cont_experimentName": "experiment",
+        "cont_experimentName": "ex1",
         "cont_pipeName": "videocall_pipeline",
         "cont_taskName": "emotionnet",
         "cont_hostDevice": "server",
