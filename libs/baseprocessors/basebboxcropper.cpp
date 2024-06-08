@@ -409,10 +409,14 @@ void BaseBBoxCropper::cropping() {
 
                         spdlog::get("container_agent")->trace("{0:s} emplaced a bbox of class {1:d} to CPU queue {2:d}.", msvc_name, bboxClass, qIndex);
                     } else {
-                        reqData = {
-                            bboxShape,
-                            singleImageBBoxList[j].clone()
-                        };
+                        cv::cuda::GpuMat out(singleImageBBoxList[j].size(), singleImageBBoxList[j].type());
+                        checkCudaErrorCode(cudaMemcpyAsync(
+                            out.cudaPtr(),
+                            singleImageBBoxList[j].cudaPtr(),
+                            singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type()),
+                            cudaMemcpyDeviceToDevice,
+                            postProcStream
+                        ), __func__);
 
                         outReqList.at(qIndex).gpuReq.req_origGenTime.emplace_back(RequestTimeType{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()});
                         outReqList.at(qIndex).gpuReq.req_e2eSLOLatency.emplace_back(currReq.req_e2eSLOLatency[i]);
