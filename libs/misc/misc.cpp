@@ -171,3 +171,26 @@ bool tableExists(pqxx::connection &conn, const std::string &tableName) {
     pqxx::result r = txn.exec(query);
     return r[0][0].as<bool>();
 }
+
+/**
+ * @brief Abbreviate a keyphrase using a predefined map of abbreviations
+ * If a word is not found in the map, only the first 4 characters of the word are accepted
+ * 
+ * @param keyphrase 
+ * @return std::string 
+ */
+std::string abbreviate(const std::string &keyphrase) {
+    std::vector<std::string> words = splitString(keyphrase, "_");
+    std::string abbr = "";
+    for (const auto &word : words) {
+        try {
+            abbr += keywordAbbrs.at(word);
+        } catch (const std::out_of_range &e) {
+            abbr += word.substr(0, 4);
+        }
+        if (word != words.back()) {
+            abbr += "_";
+        }
+    }
+    return abbr;
+}

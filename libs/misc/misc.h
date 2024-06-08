@@ -84,6 +84,28 @@ const std::vector<std::string> cocoClassNames = {
         "hair drier", "toothbrush"
 };
 
+const std::map<std::string, std::string> keywordAbbrs {
+    {"traffic", "trfc"},
+    {"building", "bldg"},
+    {"yolov5", "y5"},
+    {"yolov5n", "y5n"},
+    {"yolov5s", "y5s"},
+    {"yolov5m", "y5m"},
+    {"yolov5l", "y5l"},
+    {"yolov5x", "y5x"},
+    {"retina1face", "rt1f"},
+    {"arcface", "arcf"},
+    {"carbrand", "cbrd"},
+    {"gender", "gndr"},
+    {"emotion", "emtn"},
+    {"platedet", "pldt"},
+    {"dynamic", "dyn"},
+    {"3090", "39"}, // GPU name
+    {"fp32", "32"},
+    {"fp16", "16"},
+    {"int8", "8"}
+};
+
 struct MetricsServerConfigs {
     std::string ip = "localhost";
     uint64_t port = 60004;
@@ -228,5 +250,7 @@ void executeSQL(pqxx::connection &conn, const std::string &sql);
 bool isHypertable(pqxx::connection &conn, const std::string &tableName);
 
 bool tableExists(pqxx::connection &conn, const std::string &tableName);
+
+std::string abbreviate(const std::string &keyphrase);
 
 #endif

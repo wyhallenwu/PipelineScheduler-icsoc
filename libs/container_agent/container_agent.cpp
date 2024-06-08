@@ -283,12 +283,13 @@ ContainerAgent::ContainerAgent(const json &configs) {
     json containerConfigs = configs["container"];
     //std::cout << containerConfigs.dump(4) << std::endl;
 
-    cont_experimentName = containerConfigs["cont_experimentName"];
+    cont_experimentName = abbreviate(containerConfigs["cont_experimentName"].get<std::string>());
+    cont_name = abbreviate(containerConfigs["cont_name"].get<std::string>());
+    cont_pipeName = abbreviate(containerConfigs["cont_pipeName"].get<std::string>());
+    cont_taskName = abbreviate(containerConfigs["cont_taskName"].get<std::string>());
+    cont_hostDevice = abbreviate(containerConfigs["cont_hostDevice"].get<std::string>());
+
     cont_deviceIndex = containerConfigs["cont_device"];
-    cont_name = containerConfigs["cont_name"];
-    cont_pipeName = containerConfigs["cont_pipeName"];
-    cont_taskName = containerConfigs["cont_taskName"];
-    cont_hostDevice = containerConfigs["cont_hostDevice"];
 
     cont_RUNMODE = containerConfigs["cont_RUNMODE"];
 
@@ -336,7 +337,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
     arrivalRate = 0;
 
     if (cont_taskName != "datasource") {
-        cont_inferModel = containerConfigs["cont_inferModelName"];
+        cont_inferModel = abbreviate(containerConfigs["cont_inferModelName"].get<std::string>());
         cont_metricsServerConfigs.from_json(containerConfigs["cont_metricsServerConfigs"]);
         cont_metricsServerConfigs.user = "container_agent";
         cont_metricsServerConfigs.password = "agent";
