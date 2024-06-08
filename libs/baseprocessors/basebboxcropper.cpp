@@ -462,7 +462,6 @@ void BaseBBoxCropper::cropping() {
              * 7. When each request was completed by the postprocessor
              */
 
-            msvc_batchCount++;
             // If the number of warmup batches has been passed, we start to record the latency
             if (msvc_batchCount > msvc_numWarmupBatches) {
                 currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
@@ -477,7 +476,7 @@ void BaseBBoxCropper::cropping() {
         //     checkCudaErrorCode(cudaFree(currReq_data.at(i).data.cudaPtr()));
         // }
 
-
+        msvc_batchCount++;
         
         spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
         std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
