@@ -304,25 +304,14 @@ ContainerAgent::ContainerAgent(const json &configs) {
         std::filesystem::path(cont_logDir)
     );
 
-    std::string runlogPath = cont_logDir + "/" + "runlog.log";
-
-
-
-    if (containerConfigs["cont_loggingMode"] == 0 || containerConfigs["cont_loggingMode"] == 2) {
-        auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-        cont_loggerSinks.emplace_back(console_sink);
-    }
-    bool auto_flush = true;
-    if (containerConfigs["cont_loggingMode"] == 1 || containerConfigs["cont_loggingMode"] == 2) {
-        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(runlogPath, auto_flush);
-        cont_loggerSinks.emplace_back(file_sink);
-    }
-
-    cont_logger = std::make_shared<spdlog::logger>("container_agent", cont_loggerSinks.begin(), cont_loggerSinks.end());
-    spdlog::register_logger(cont_logger);
-
-    spdlog::get("container_agent")->set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
-    spdlog::get("container_agent")->set_level(spdlog::level::level_enum(containerConfigs["cont_logLevel"]));
+    setupLogger(
+        cont_logDir,
+        cont_name,
+        containerConfigs["cont_loggingMode"],
+        containerConfigs["cont_logLevel"],
+        cont_loggerSinks,
+        cont_logger
+    );
 
     // if (cont_RUNMODE == RUNMODE::EMPTY_PROFILING) {
     //     // Create the logDir for this container

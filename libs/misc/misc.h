@@ -231,6 +231,15 @@ public:
     }
 };
 
+void setupLogger(
+    const std::string &logPath,
+    const std::string &loggerName,
+    uint16_t loggingMode,
+    uint16_t verboseLevel,
+    std::vector<spdlog::sink_ptr> &loggerSinks,
+    std::shared_ptr<spdlog::logger> &logger
+);
+
 float fractionToFloat(const std::string& fraction);
 
 std::string removeSubstring(const std::string& str, const std::string& substring);

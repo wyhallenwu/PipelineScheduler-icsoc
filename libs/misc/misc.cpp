@@ -125,6 +125,35 @@ uint64_t getTimestamp() {
     return std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 }
 
+void setupLogger(
+    const std::string &logPath,
+    const std::string &loggerName,
+    uint16_t loggingMode,
+    uint16_t verboseLevel,
+    std::vector<spdlog::sink_ptr> &loggerSinks,
+    std::shared_ptr<spdlog::logger> &logger
+) {
+    std::string path = logPath + "/" + loggerName + ".log";
+
+
+
+    if (loggingMode == 0 || loggingMode == 2) {
+        auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        loggerSinks.emplace_back(console_sink);
+    }
+    bool auto_flush = true;
+    if (loggingMode == 1 || loggingMode == 2) {
+        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path, auto_flush);
+        loggerSinks.emplace_back(file_sink);
+    }
+
+    logger = std::make_shared<spdlog::logger>("container_agent", loggerSinks.begin(), loggerSinks.end());
+    spdlog::register_logger(logger);
+
+    spdlog::get(loggerName)->set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
+    spdlog::get(loggerName)->set_level(spdlog::level::level_enum(verboseLevel));
+}
+
 
 std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &metricsServerConfigs, const std::string &name) {
     try {
@@ -136,9 +165,9 @@ std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &m
         std::unique_ptr<pqxx::connection> metricsServerConn = std::make_unique<pqxx::connection>(conn_statement);
 
         if (metricsServerConn->is_open()) {
-            spdlog::get("container_agent")->info("{0:s} connected to database successfully: {1:s}", name, metricsServerConn->dbname());
+            spdlog::get("controller")->info("{0:s} connected to database successfully: {1:s}", name, metricsServerConn->dbname());
         } else {
-            spdlog::error("Metrics Server is not open.");
+            spdlog::get("controller")->error("Metrics Server is not open.");
         }
 
         return metricsServerConn;
@@ -153,7 +182,7 @@ void executeSQL(pqxx::connection &conn, const std::string &sql) {
         session.exec(sql.c_str());
         session.commit();
     } catch (const pqxx::sql_error &e) {
-        spdlog::error("{0:s} SQL Error: {1:s}", __func__, e.what());
+        spdlog::get("controller")->error("{0:s} SQL Error: {1:s}", __func__, e.what());
         exit(1);
     }
 }
