@@ -218,6 +218,10 @@ private:
     std::string ctrl_systemName;
     uint16_t ctrl_runtime;
 
+    std::string ctrl_logPath;
+    uint16_t ctrl_loggingMode;
+    uint16_t ctrl_verbose;
+
     std::map<std::string, NodeHandle> devices;
     std::map<std::string, TaskHandle> tasks;
     std::map<std::string, ContainerHandle> containers;
@@ -226,8 +230,11 @@ private:
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<ServerCompletionQueue> cq;
 
-    std::unique_ptr<pqxx::connection> ctl_metricsServerConn = nullptr;
+    std::unique_ptr<pqxx::connection> ctrl_metricsServerConn = nullptr;
     MetricsServerConfigs ctl_metricsServerConfigs;
+
+    std::vector<spdlog::sink_ptr> ctrl_loggerSinks = {};
+    std::shared_ptr<spdlog::logger> ctrl_logger;    
 };
 
 

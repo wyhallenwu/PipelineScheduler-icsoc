@@ -3,6 +3,7 @@
 ABSL_FLAG(std::string, ctrl_configPath, "../jsons/example_experiment.json", "Path to the configuration file for this experiment.");
 ABSL_FLAG(uint16_t, ctrl_verbose, 0, "Verbosity level of the controller.");
 ABSL_FLAG(uint16_t, ctrl_loggingMode, 0, "Logging mode of the controller. 0:stdout, 1:file, 2:both");
+ABSL_FLAG(std::string, ctrl_logPath, "../logs", "Path to the log dir for the controller.");
 
 void Controller::readConfigFile(const std::string &path) {
     std::ifstream file(path);
@@ -74,13 +75,27 @@ Controller::Controller(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
     readConfigFile(absl::GetFlag(FLAGS_ctrl_configPath));
 
+    ctrl_logPath = absl::GetFlag(FLAGS_ctrl_logPath);
+    ctrl_logPath += "/" + ctrl_experimentName + "/" + ctrl_systemName;
+    ctrl_verbose = absl::GetFlag(FLAGS_ctrl_verbose);
+    ctrl_loggingMode = absl::GetFlag(FLAGS_ctrl_loggingMode);
 
+    std::filesystem::create_directories(ctrl_logPath);
+
+    setupLogger(
+        ctrl_logPath,
+        "controller",
+        ctrl_loggingMode,
+        ctrl_verbose,
+        ctrl_loggerSinks,
+        ctrl_logger
+    );
 
     json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
     ctl_metricsServerConfigs.from_json(metricsCfgs);
     ctl_metricsServerConfigs.user = "controller";
     ctl_metricsServerConfigs.password = "agent";
-    ctl_metricsServerConn = connectToMetricsServer(ctl_metricsServerConfigs, "controller");
+    ctrl_metricsServerConn = connectToMetricsServer(ctl_metricsServerConfigs, "controller");
 
     running = true;
     devices = std::map<std::string, NodeHandle>();

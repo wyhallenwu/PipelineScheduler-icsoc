@@ -150,8 +150,8 @@ void setupLogger(
     logger = std::make_shared<spdlog::logger>("container_agent", loggerSinks.begin(), loggerSinks.end());
     spdlog::register_logger(logger);
 
-    spdlog::get(loggerName)->set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
-    spdlog::get(loggerName)->set_level(spdlog::level::level_enum(verboseLevel));
+    spdlog::get("container_agent")->set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
+    spdlog::get("container_agent")->set_level(spdlog::level::level_enum(verboseLevel));
 }
 
 
@@ -165,9 +165,9 @@ std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &m
         std::unique_ptr<pqxx::connection> metricsServerConn = std::make_unique<pqxx::connection>(conn_statement);
 
         if (metricsServerConn->is_open()) {
-            spdlog::get("controller")->info("{0:s} connected to database successfully: {1:s}", name, metricsServerConn->dbname());
+            spdlog::get("container_agent")->info("{0:s} connected to database successfully: {1:s}", name, metricsServerConn->dbname());
         } else {
-            spdlog::get("controller")->error("Metrics Server is not open.");
+            spdlog::get("container_agent")->error("Metrics Server is not open.");
         }
 
         return metricsServerConn;
@@ -182,7 +182,7 @@ void executeSQL(pqxx::connection &conn, const std::string &sql) {
         session.exec(sql.c_str());
         session.commit();
     } catch (const pqxx::sql_error &e) {
-        spdlog::get("controller")->error("{0:s} SQL Error: {1:s}", __func__, e.what());
+        spdlog::get("container_agent")->error("{0:s} SQL Error: {1:s}", __func__, e.what());
         exit(1);
     }
 }
