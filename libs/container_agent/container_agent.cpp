@@ -351,9 +351,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
             cont_hwMetricsTableName = cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
             cont_arrivalTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arrival_table";
-            cont_processTableName = cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
+            cont_processTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_hwMetricsTableName =
-                    cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
+                    cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
 
             sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
             executeSQL(*cont_metricsServerConn, sql_statement);
