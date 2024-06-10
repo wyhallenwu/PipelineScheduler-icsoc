@@ -261,6 +261,10 @@ int getContainerProcessPid(std::string container_name_or_id) {
     while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
         result += buffer.data();
     }
+    //Handle the case where the container is not running and the result has an error string instead of a number
+    if (result.find("Error") != std::string::npos) {
+        return 0;
+    }
     return std::stoi(result);
 }
 
