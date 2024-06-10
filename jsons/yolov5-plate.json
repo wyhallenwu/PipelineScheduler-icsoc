@@ -1,6 +1,6 @@
 {
     "container": {
-        "cont_experimentName": "ex1",
+        "cont_experimentName": "prof",
         "cont_systemName": "PPP",
         "cont_pipeName": "traffic",
         "cont_taskName": "yolov5_plate",
@@ -186,7 +186,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/yolov5n_224_224_dynamic_nms_3090_fp32_64_1.engine",
+                "path": "../models/platedet_dyn_nms_3090_fp32_64_1.engine",
                 "prec": 4,
                 "device": 0
             },

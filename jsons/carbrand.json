@@ -1,6 +1,6 @@
 {
     "container": {
-        "cont_experimentName": "ex1",
+        "cont_experimentName": "prof",
         "cont_systemName": "PPP",
         "cont_pipeName": "traffic",
         "cont_taskName": "carbrand",
@@ -43,7 +43,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 3,
                         "nb_link": [
-                            "0.0.0.0:55012"
+                            "0.0.0.0:55013"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",
