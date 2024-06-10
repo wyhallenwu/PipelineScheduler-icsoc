@@ -67,9 +67,8 @@ enum PipelineType {
 
 struct HardwareMetrics {
     ClockType timestamp;
-    float requestRate = 0; // TODOL Remove request rate. Keep for now for compatibility
-    double cpuUsage = 0;
-    long memUsage = 0;
+    int cpuUsage = 0;
+    int memUsage = 0;
     unsigned int gpuUsage = 0;
     unsigned int gpuMemUsage = 0;
 };

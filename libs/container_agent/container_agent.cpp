@@ -413,9 +413,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                     "   timestamps BIGINT NOT NULL,"
                                                                                     "   batch_size INT2 NOT NULL,"
                                                                                     "   cpu_usage INT2 NOT NULL," // percentage (1-100)
-                                                                                    "   mem_usage INT2 NOT NULL," // Megabytes
+                                                                                    "   mem_usage INT NOT NULL," // Megabytes
                                                                                     "   gpu_usage INT2 NOT NULL," // percentage (1-100)
-                                                                                    "   gpu_mem_usage INT2 NOT NULL," // Megabytes
+                                                                                    "   gpu_mem_usage INT NOT NULL," // Megabytes
                                                                                     "   PRIMARY KEY (timestamps)"
                                                                                     ");";
                 executeSQL(*cont_metricsServerConn, sql_statement);
@@ -506,7 +506,7 @@ void ContainerAgent::collectRuntimeMetrics() {
         if (startTime >= cont_metricsServerConfigs.nextHwMetricsScrapeTime) {
             if (reportHwMetrics && pid > 0) {
                 Profiler::sysStats stats = profiler->reportAtRuntime(getpid(), pid);
-                HardwareMetrics hwMetrics = {startTime, 0, stats.cpuUsage, stats.memoryUsage, stats.gpuUtilization,
+                HardwareMetrics hwMetrics = {startTime, stats.cpuUsage, stats.memoryUsage, stats.gpuUtilization,
                                              stats.gpuMemoryUsage};
                 cont_hwMetrics.emplace_back(hwMetrics);
                 cont_metricsServerConfigs.nextHwMetricsScrapeTime += std::chrono::milliseconds(

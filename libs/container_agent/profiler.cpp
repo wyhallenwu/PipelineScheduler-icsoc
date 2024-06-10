@@ -105,8 +105,8 @@ std::vector<Profiler::sysStats> Profiler::popStats(unsigned int pid) {
 
 Profiler::sysStats Profiler::reportAtRuntime(unsigned int cpu_pid, unsigned int gpu_pid) {
     sysStats value{};
-    value.cpuUsage = (float) getCPUInfo(cpu_pid);
-    value.memoryUsage = getMemoryInfo(cpu_pid) / 1000; // convert to MB
+    value.cpuUsage = getCPUInfo(cpu_pid);
+    value.memoryUsage = getMemoryInfo(cpu_pid);
     auto gpu = getGPUInfo(gpu_pid, pidOnDevices[gpu_pid]);
     value.gpuUtilization = gpu.gpuUtilization;
     value.gpuMemoryUsage = gpu.memoryUtilization;
@@ -125,7 +125,7 @@ void Profiler::collectStats() {
             sysStats systemInfo{
                     currentTime,
                     cpu,
-                    memory / 1000, // convert to MB
+                    memory, // convert to MB
                     gpu.gpuUtilization,
                     gpu.memoryUtilization,
                     (long) gpu.maxMemoryUsage / 1000000, // convert to MB
@@ -214,7 +214,7 @@ bool Profiler::cleanupNVML() {
     return true;
 }
 
-double Profiler::getCPUInfo(unsigned int pid) {
+int Profiler::getCPUInfo(unsigned int pid) {
     std::vector<std::string> timers;
     std::string timer, line, skip, utime, stime;
     std::ifstream stream("/proc/stat");
@@ -255,10 +255,10 @@ double Profiler::getCPUInfo(unsigned int pid) {
     if (std::isinf(cpuUsage) || std::isnan(cpuUsage)) {
         return 0.0;
     }
-    return cpuUsage;
+    return (int) cpuUsage;
 }
 
-long Profiler::getMemoryInfo(unsigned int pid) {
+int Profiler::getMemoryInfo(unsigned int pid) {
     std::string value = "0";
     bool search = true;
     std::string line;
@@ -276,7 +276,7 @@ long Profiler::getMemoryInfo(unsigned int pid) {
             }
         }
     }
-    return std::atoi(value.c_str());
+    return (int) std::atoi(value.c_str()) / 1000;
 }
 
 nvmlAccountingStats_t Profiler::getGPUInfo(unsigned int pid, nvmlDevice_t device) {
@@ -293,6 +293,11 @@ nvmlAccountingStats_t Profiler::getGPUInfo(unsigned int pid, nvmlDevice_t device
     if (result == NVML_SUCCESS) {
         gpu.gpuUtilization = util.gpu;
         gpu.memoryUtilization = util.memory;
+    }
+    nvmlMemory_t mem;
+    result = nvmlDeviceGetMemoryInfo(device, &mem);
+    if (result == NVML_SUCCESS) {
+        gpu.memoryUtilization = mem.used / 1000000;
     }
     return gpu;
 }
