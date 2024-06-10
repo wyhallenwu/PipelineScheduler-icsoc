@@ -231,7 +231,7 @@ private:
     std::unique_ptr<ServerCompletionQueue> cq;
 
     std::unique_ptr<pqxx::connection> ctrl_metricsServerConn = nullptr;
-    MetricsServerConfigs ctl_metricsServerConfigs;
+    MetricsServerConfigs ctrl_metricsServerConfigs;
 
     std::vector<spdlog::sink_ptr> ctrl_loggerSinks = {};
     std::shared_ptr<spdlog::logger> ctrl_logger;    

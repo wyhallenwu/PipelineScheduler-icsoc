@@ -97,10 +97,11 @@ Controller::Controller(int argc, char **argv) {
     );
 
     json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
-    ctl_metricsServerConfigs.from_json(metricsCfgs);
-    ctl_metricsServerConfigs.user = "controller";
-    ctl_metricsServerConfigs.password = "agent";
-    ctrl_metricsServerConn = connectToMetricsServer(ctl_metricsServerConfigs, "controller");
+    ctrl_metricsServerConfigs.from_json(metricsCfgs);
+    ctrl_metricsServerConfigs.schema = ctrl_experimentName + "_" + ctrl_systemName;
+    ctrl_metricsServerConfigs.user = "controller";
+    ctrl_metricsServerConfigs.password = "agent";
+    ctrl_metricsServerConn = connectToMetricsServer(ctrl_metricsServerConfigs, "controller");
 
     running = true;
     devices = std::map<std::string, NodeHandle>();

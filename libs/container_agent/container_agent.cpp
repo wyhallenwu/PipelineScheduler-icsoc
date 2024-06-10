@@ -332,16 +332,21 @@ ContainerAgent::ContainerAgent(const json &configs) {
     if (cont_taskName != "datasource") {
         cont_inferModel = abbreviate(containerConfigs["cont_inferModelName"].get<std::string>());
         cont_metricsServerConfigs.from_json(containerConfigs["cont_metricsServerConfigs"]);
+        cont_metricsServerConfigs.schema = cont_experimentName + "_" + cont_systemName;
         cont_metricsServerConfigs.user = "container_agent";
         cont_metricsServerConfigs.password = "agent";
 
         cont_metricsServerConn = connectToMetricsServer(cont_metricsServerConfigs, cont_name);
         // Create arrival table
         std::string sql_statement;
+
+        sql_statement = absl::StrFormat("CREATE SCHEMA IF NOT EXISTS %s;", cont_metricsServerConfigs.schema);
+        executeSQL(*cont_metricsServerConn, sql_statement);
+
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
-            cont_arrivalTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
-            cont_processTableName = cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
-            cont_hwMetricsTableName = cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
+            cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
+            cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
+            cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
             cont_arrivalTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arrival_table";
             cont_processTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";

@@ -110,6 +110,7 @@ struct MetricsServerConfigs {
     std::string ip = "localhost";
     uint64_t port = 60004;
     std::string DBName = "pipeline";
+    std::string schema = "public";
     std::string user = "container_agent";
     std::string password = "pipe";
     uint64_t hwMetricsScrapeIntervalMillisec = 50;
