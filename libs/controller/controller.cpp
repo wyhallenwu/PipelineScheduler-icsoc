@@ -76,11 +76,16 @@ Controller::Controller(int argc, char **argv) {
     readConfigFile(absl::GetFlag(FLAGS_ctrl_configPath));
 
     ctrl_logPath = absl::GetFlag(FLAGS_ctrl_logPath);
-    ctrl_logPath += "/" + ctrl_experimentName + "/" + ctrl_systemName;
+    ctrl_logPath += "/" + ctrl_experimentName;
+    std::filesystem::create_directories(
+        std::filesystem::path(ctrl_logPath)
+    );
+    ctrl_logPath += "/" + ctrl_systemName;
+    std::filesystem::create_directories(
+        std::filesystem::path(ctrl_logPath)
+    );
     ctrl_verbose = absl::GetFlag(FLAGS_ctrl_verbose);
     ctrl_loggingMode = absl::GetFlag(FLAGS_ctrl_loggingMode);
-
-    std::filesystem::create_directories(ctrl_logPath);
 
     setupLogger(
         ctrl_logPath,

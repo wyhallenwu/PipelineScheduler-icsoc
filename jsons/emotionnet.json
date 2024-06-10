@@ -1,6 +1,7 @@
 {
     "container": {
         "cont_experimentName": "ex1",
+        "cont_systemName": "PPP",
         "cont_pipeName": "videocall_pipeline",
         "cont_taskName": "emotionnet",
         "cont_hostDevice": "server",

@@ -57,6 +57,7 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_pipelineName = jsonConfigs.at("msvc_pipelineName");
     msvc_taskName = jsonConfigs.at("msvc_taskName");
     msvc_hostDevice = jsonConfigs.at("msvc_hostDevice");
+    msvc_systemName = jsonConfigs.at("msvc_systemName");
     msvc_idealBatchSize = configs.msvc_idealBatchSize;
 
     // Configurations

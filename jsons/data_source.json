@@ -1,6 +1,7 @@
 {
     "container": {
         "cont_experimentName": "ex1",
+        "cont_systemName": "PPP",
         "cont_pipeName": "every",
         "cont_taskName": "datasource",
         "cont_hostDevice": "server",

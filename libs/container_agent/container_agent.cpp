@@ -59,7 +59,20 @@ json loadRunArgs(int argc, char **argv) {
         logPath = "../model_profiles";
     }
 
-    
+    logPath += "/" + containerConfigs["cont_experimentName"].get<std::string>();
+    std::filesystem::create_directory(
+        std::filesystem::path(logPath)
+    );
+
+    logPath += "/" + containerConfigs["cont_systemName"].get<std::string>();
+    std::filesystem::create_directory(
+        std::filesystem::path(logPath)
+    );
+
+    logPath += "/" + containerConfigs["cont_pipeName"].get<std::string>() + "_" + name;
+    std::filesystem::create_directory(
+        std::filesystem::path(logPath)
+    );
 
     containerConfigs["cont_device"] = device;
     containerConfigs["cont_name"] = name;
@@ -88,12 +101,13 @@ json loadRunArgs(int argc, char **argv) {
 
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
         containerConfigs.at("cont_pipeline")[i]["msvc_experimentName"] = containerConfigs["cont_experimentName"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_systemName"] = containerConfigs["cont_systemName"];
         containerConfigs.at("cont_pipeline")[i]["msvc_contName"] = name;
         containerConfigs.at("cont_pipeline")[i]["msvc_pipelineName"] = containerConfigs["cont_pipeName"];
         containerConfigs.at("cont_pipeline")[i]["msvc_taskName"] = containerConfigs["cont_taskName"];
         containerConfigs.at("cont_pipeline")[i]["msvc_hostDevice"] = containerConfigs["cont_hostDevice"];
         containerConfigs.at("cont_pipeline")[i]["msvc_deviceIndex"] = device;
-        containerConfigs.at("cont_pipeline")[i]["msvc_containerLogPath"] = logPath + "/" + name;
+        containerConfigs.at("cont_pipeline")[i]["msvc_containerLogPath"] = containerConfigs["cont_logPath"].get<std::string>() + "/" + name;
         containerConfigs.at("cont_pipeline")[i]["msvc_RUNMODE"] = runmode;
         containerConfigs.at(
                 "cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs["metricsServer_metricsReportIntervalMillisec"];
@@ -288,21 +302,11 @@ ContainerAgent::ContainerAgent(const json &configs) {
     cont_pipeName = abbreviate(containerConfigs["cont_pipeName"].get<std::string>());
     cont_taskName = abbreviate(containerConfigs["cont_taskName"].get<std::string>());
     cont_hostDevice = abbreviate(containerConfigs["cont_hostDevice"].get<std::string>());
+    cont_systemName = containerConfigs["cont_systemName"].get<std::string>();
 
     cont_deviceIndex = containerConfigs["cont_device"];
 
     cont_RUNMODE = containerConfigs["cont_RUNMODE"];
-
-    // Create the logDir for this experiment run
-    cont_logDir = containerConfigs["cont_logPath"].get<std::string>() + "/" + cont_experimentName;
-    std::filesystem::create_directory(
-        std::filesystem::path(cont_logDir)
-    );
-
-    cont_logDir += "/" + cont_pipeName + "_" + cont_taskName;
-    std::filesystem::create_directory(
-        std::filesystem::path(cont_logDir)
-    );
 
     setupLogger(
         cont_logDir,

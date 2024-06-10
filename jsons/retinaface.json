@@ -2,6 +2,7 @@
     "pipeline_name": "traffic",
     "container" : {
         "cont_experimentName": "ex1",
+        "cont_systemName": "PPP",
         "cont_pipeName": "traffic_pipeline",
         "cont_taskName": "retinaface",
         "cont_hostDevice": "server",

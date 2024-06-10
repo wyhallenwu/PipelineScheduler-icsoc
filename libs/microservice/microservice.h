@@ -583,6 +583,9 @@ public:
     //
     std::string msvc_hostDevice;
 
+    // Name of the system (e.g., ours, SOTA1, SOTA2, etc.)
+    std::string msvc_systemName;
+
 
     void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue *> queue) {
         msvc_InQueue = std::move(queue);
