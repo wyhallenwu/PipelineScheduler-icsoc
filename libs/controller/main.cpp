@@ -1,7 +1,7 @@
 #include "controller.h"
 
-int main() {
-    auto controller = new Controller();
+int main(int argc, char **argv) {
+    auto controller = new Controller(argc, argv);
     std::thread receiver_thread(&Controller::HandleRecvRpcs, controller);
     receiver_thread.detach();
     std::thread scheduling_thread(&Controller::Scheduling, controller);

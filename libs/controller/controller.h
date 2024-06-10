@@ -28,6 +28,10 @@ using controlcommunication::ContainerInt;
 using controlcommunication::ContainerSignal;
 using EmptyMessage = google::protobuf::Empty;
 
+ABSL_DECLARE_FLAG(std::string, ctrl_configPath);
+ABSL_DECLARE_FLAG(uint16_t, ctrl_verbose);
+ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
+
 enum SystemDeviceType {
     Server,
     Edge
@@ -88,7 +92,7 @@ namespace TaskDescription {
 
 class Controller {
 public:
-    Controller();
+    Controller(int argc, char **argv);
 
     ~Controller();
 
@@ -140,7 +144,7 @@ private:
         std::vector<ContainerHandle *> downstreams;
     };
 
-    float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
+    void readConfigFile(const std::string &config_path);
 
     void UpdateLightMetrics();
 
@@ -210,6 +214,10 @@ private:
     Pipeline getModelsByPipelineType(PipelineType type);
 
     bool running;
+    std::string ctrl_experimentName;
+    std::string ctrl_systemName;
+    uint16_t ctrl_runtime;
+
     std::map<std::string, NodeHandle> devices;
     std::map<std::string, TaskHandle> tasks;
     std::map<std::string, ContainerHandle> containers;
