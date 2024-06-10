@@ -84,7 +84,7 @@ void GPUSender::Process() {
             msvc_OutQueue[0]->emplace(request);
             continue;
         }
-        int size = msvc_InQueue[0]->size();
+//        int size = msvc_InQueue[0]->size();
         elements = {request.req_data};
         /**
          * @brief An outgoing request should contain exactly 3 timestamps:
@@ -96,14 +96,14 @@ void GPUSender::Process() {
         timestamp[0].emplace_back(std::chrono::system_clock::now());
         path = {request.req_travelPath[0]};
         slo = {request.req_e2eSLOLatency[0]};
-        while (size-- > 0 && elements.size() < 10) {
-            request = msvc_InQueue[0]->pop2();
-            elements.push_back(request.req_data);
-            timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
-            timestamp[0].emplace_back(std::chrono::system_clock::now());
-            path.push_back(request.req_travelPath[0]);
-            slo.push_back(request.req_e2eSLOLatency[0]);
-        }
+//        while (size-- > 0  && elements.size() < 10) {
+//            request = msvc_InQueue[0]->pop1();
+//            elements.push_back(request.req_data);
+//            timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
+//            timestamp[0].emplace_back(std::chrono::system_clock::now());
+//            path.push_back(request.req_travelPath[0]);
+//            slo.push_back(request.req_e2eSLOLatency[0]);
+//        }
 
         SendGpuPointer(
                 elements,
@@ -111,7 +111,6 @@ void GPUSender::Process() {
                 path,
                 slo
         );
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     msvc_logFile.close();
 }
@@ -225,7 +224,7 @@ void LocalCPUSender::Process() {
             msvc_OutQueue[0]->emplace(request);
             continue;
         }
-        int size = msvc_InQueue[0]->size();
+//        int size = msvc_InQueue[0]->size();
         elements = {request.req_data};
         /**
          * @brief An outgoing request should contain exactly 3 timestamps:
@@ -237,14 +236,14 @@ void LocalCPUSender::Process() {
         timestamp[0].emplace_back(std::chrono::system_clock::now());
         path = {request.req_travelPath[0]};
         slo = {request.req_e2eSLOLatency[0]};
-        while (size-- > 0  && elements.size() < 10) {
-            request = msvc_InQueue[0]->pop1();
-            elements.push_back(request.req_data);
-            timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
-            timestamp[0].emplace_back(std::chrono::system_clock::now());
-            path.push_back(request.req_travelPath[0]);
-            slo.push_back(request.req_e2eSLOLatency[0]);
-        }
+//        while (size-- > 0  && elements.size() < 10) {
+//            request = msvc_InQueue[0]->pop1();
+//            elements.push_back(request.req_data);
+//            timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
+//            timestamp[0].emplace_back(std::chrono::system_clock::now());
+//            path.push_back(request.req_travelPath[0]);
+//            slo.push_back(request.req_e2eSLOLatency[0]);
+//        }
 
         SendSharedMemory(
                 elements,
@@ -252,7 +251,6 @@ void LocalCPUSender::Process() {
                 path,
                 slo
         );
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     msvc_logFile.close();
 }
@@ -334,7 +332,7 @@ void RemoteCPUSender::Process() {
             msvc_OutQueue[0]->emplace(request);
             continue;
         }
-        int size = msvc_InQueue[0]->size();
+//        int size = msvc_InQueue[0]->size();
         elements = {request.req_data};
         /**
          * @brief An outgoing request should contain exactly 3 timestamps:
@@ -346,14 +344,14 @@ void RemoteCPUSender::Process() {
         timestamp[0].emplace_back(std::chrono::system_clock::now());
         path = {request.req_travelPath[0]};
         slo = {request.req_e2eSLOLatency[0]};
-        while (size-- > 0  && elements.size() < msvc_idealBatchSize) {
-            request = msvc_InQueue[0]->pop1();
-            elements.push_back(request.req_data);
-            timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
-            timestamp[0].emplace_back(std::chrono::system_clock::now());
-            path.push_back(request.req_travelPath[0]);
-            slo.push_back(request.req_e2eSLOLatency[0]);
-        }
+//        while (size-- > 0  && elements.size() < 10) {
+//            request = msvc_InQueue[0]->pop1();
+//            elements.push_back(request.req_data);
+//            timestamp = {{request.req_origGenTime[0].front(), request.req_origGenTime[0].back()}};
+//            timestamp[0].emplace_back(std::chrono::system_clock::now());
+//            path.push_back(request.req_travelPath[0]);
+//            slo.push_back(request.req_e2eSLOLatency[0]);
+//        }
 
         SendSerializedData(
                 elements,
@@ -361,7 +359,6 @@ void RemoteCPUSender::Process() {
                 path,
                 slo
         );
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     msvc_logFile.close();
 }

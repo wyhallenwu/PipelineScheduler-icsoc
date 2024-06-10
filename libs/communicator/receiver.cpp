@@ -41,7 +41,6 @@ Receiver::Receiver(const json &jsonConfigs) : Microservice(jsonConfigs) {
 template<typename ReqDataType>
 void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
     BatchSizeType batchSize = timeReport.req_batchSize;
-    bool isProfileEnd = false;
 
     BatchSizeType numTimeStamps = (BatchSizeType) (timeReport.req_origGenTime.size() / batchSize);
     for (BatchSizeType i = 0; i < batchSize; i++) {
@@ -60,9 +59,6 @@ void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
         msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(
                 timeReport.req_origGenTime[(i + 1) * numTimeStamps - 1] -
                 timeReport.req_origGenTime[(i + 1) * numTimeStamps - 2]).count() << std::endl;
-    }
-    if (isProfileEnd) {
-        this->pauseThread();
     }
 }
 
