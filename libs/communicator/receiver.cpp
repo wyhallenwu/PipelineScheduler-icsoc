@@ -80,6 +80,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
         service->RequestGpuPointerTransfer(&ctx, &request, &responder, cq, cq,
                                            this);
     } else if (status == PROCESS) {
+        spdlog::get("container_agent")->trace("GpuPointerRequestHandler::{0:s} is processing request...", __func__);
         if (OutQueue->getActiveQueueIndex() != 2) OutQueue->setActiveQueueIndex(2);
         new GpuPointerRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
@@ -123,6 +124,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
                     elements
             };
             OutQueue->emplace(req);
+            spdlog::get("container_agent")->trace("GpuPointerRequestHandler::{0:s} emplaced request with path: {1:s}", __func__, el.path());
         }
 
         status = FINISH;
@@ -148,6 +150,7 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
         service->RequestSharedMemTransfer(&ctx, &request, &responder, cq, cq,
                                           this);
     } else if (status == PROCESS) {
+        spdlog::get("container_agent")->trace("SharedMemoryRequestHandler::{0:s} is processing request...", __func__);
         if (OutQueue->getActiveQueueIndex() != 1) OutQueue->setActiveQueueIndex(1);
         new SharedMemoryRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
@@ -179,6 +182,7 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
                     elements
             };
             OutQueue->emplace(req);
+            spdlog::get("container_agent")->trace("SharedMemoryRequestHandler::{0:s} emplaced request with path: {1:s}", __func__, el.path());
         }
 
         status = FINISH;
@@ -204,6 +208,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
         service->RequestSerializedDataTransfer(&ctx, &request, &responder, cq, cq,
                                                this);
     } else if (status == PROCESS) {
+        spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} is processing request...", __func__);
         if (OutQueue->getActiveQueueIndex() != 1) OutQueue->setActiveQueueIndex(1);
         new SerializedDataRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
@@ -243,6 +248,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
              * 
              */
             OutQueue->emplace(req);
+            spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} emplaced request with path: {1:s}", __func__, el.path());
             if (receiverInstance->checkProfileEnd(el.path())) {
                 receiverInstance->STOP_THREADS = true;
                 break;
