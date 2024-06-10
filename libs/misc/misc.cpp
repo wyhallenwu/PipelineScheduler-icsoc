@@ -165,7 +165,7 @@ std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &m
         std::unique_ptr<pqxx::connection> metricsServerConn = std::make_unique<pqxx::connection>(conn_statement);
 
         if (metricsServerConn->is_open()) {
-            spdlog::get("container_agent")->info("{0:s} connected to database successfully: {1:s}", name, metricsServerConn->dbname());
+            spdlog::info("{0:s} connected to database successfully: {1:s}", name, metricsServerConn->dbname());
         } else {
             spdlog::get("container_agent")->error("Metrics Server is not open.");
         }

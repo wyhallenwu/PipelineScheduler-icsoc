@@ -248,7 +248,7 @@ void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
  */
 BaseReqBatcher::BaseReqBatcher(const json &jsonConfigs) : Microservice(jsonConfigs){
     loadConfigs(jsonConfigs);
-    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name);
 }
 
 void BaseReqBatcher::batchRequests() {
@@ -290,7 +290,7 @@ void BaseReqBatcher::batchRequests() {
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
-    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name);
     cv::cuda::Stream *preProcStream;
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -540,7 +540,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
-    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name);
     cv::cuda::Stream *preProcStream;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
@@ -732,10 +732,14 @@ bool BaseReqBatcher::isTimeToBatch() {
  * @return false 
  */
 bool BaseReqBatcher::checkReqEligibility(std::vector<ClockType> &currReq_time) {
+    if (this->msvc_RUNMODE == RUNMODE::PROFILING){
+        return  true;
+    }
     auto now = std::chrono::high_resolution_clock::now();
     auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - currReq_time[0]).count();
     if (diff > this->msvc_svcLevelObjLatency) {
         this->droppedReqCount++;
+        spdlog::get("container_agent")->trace("{0:s} dropped the {1:d}th request.", msvc_name, this->droppedReqCount);
         return false;
     }
     // `currReq_recvTime` will also be used to measured how much for the req to sit in queue and

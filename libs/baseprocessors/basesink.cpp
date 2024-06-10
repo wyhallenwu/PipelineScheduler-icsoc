@@ -82,7 +82,6 @@ void BaseSink::sink() {
          * 
          */
         } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT || msvc_RUNMODE == RUNMODE::PROFILING) {
-            std::cout << inferTimeReport.req_travelPath[0] << std::endl;
             msvc_logFile << inferTimeReport.req_travelPath[0] << "|";
             for (unsigned int j = 0; j < inferTimeReport.req_origGenTime[0].size() - 1; j++) {
                 msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[0].at(j)) << ",";

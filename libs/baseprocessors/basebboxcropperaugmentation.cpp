@@ -352,14 +352,12 @@ void BaseBBoxCropperAugmentation::cropping() {
                     continue;
                 }
 
-                std::cout << "Generate a random box" << std::endl;
                 numDetsInFrame = 1;
                 singleImageBBoxList.emplace_back(
                     cv::cuda::GpuMat(64, 64, CV_8UC3)
                 );
                 nmsed_classes[i * maxNumDets] = 1;
             } else {
-                std::cout << "Working with a real box" << std::endl;
                 crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
                 spdlog::get("container_agent")->info("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
             }

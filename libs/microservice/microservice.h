@@ -812,6 +812,7 @@ protected:
             }
             return false;
         }
+        spdlog::info("Batch size increased to {}", msvc_idealBatchSize);
         return true;
     }
 

@@ -40,7 +40,7 @@ BaseBatchInferencer::BaseBatchInferencer(const json &jsonConfigs) : Microservice
     // msvc_engineInputBuffers = msvc_inferenceEngine->getInputBuffers();
     // msvc_engineOutputBuffers = msvc_inferenceEngine->getOutputBuffers();
 
-    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name);
 }
 
 void BaseBatchInferencer::inference() {
@@ -64,7 +64,7 @@ void BaseBatchInferencer::inference() {
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
-    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name);
 
     cudaStream_t inferenceStream;
 
@@ -326,7 +326,7 @@ void BaseBatchInferencer::inferenceProfiling() {
         for (std::size_t i = 0; i < currReq_batchSize; ++i) {
             trtInBuffer.emplace_back(currReq.req_data[i].data);
         }
-        spdlog::get("container_agent")->info("{0:s} extracts inference data from message. Run inference!", msvc_name);
+        spdlog::get("container_agent")->trace("{0:s} extracts inference data from message. Run inference!", msvc_name);
         msvc_inferenceEngine->runInference(trtInBuffer, trtOutBuffer, currReq_batchSize, inferenceStream);
         spdlog::get("container_agent")->trace("{0:s} finished INFERENCE.", msvc_name);
 
