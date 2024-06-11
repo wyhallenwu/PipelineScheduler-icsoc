@@ -346,7 +346,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
         std::string sql_statement;
 
         sql_statement = absl::StrFormat("CREATE SCHEMA IF NOT EXISTS %s;", cont_metricsServerConfigs.schema);
-        executeSQL(*cont_metricsServerConn, sql_statement);
+        pushSQL(*cont_metricsServerConn, sql_statement);
 
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
             queryProfileTable();
@@ -360,7 +360,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
                     cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
 
             sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
-            executeSQL(*cont_metricsServerConn, sql_statement);
+            pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
         if (!tableExists(*cont_metricsServerConn, cont_arrivalTableName)) {
@@ -376,17 +376,17 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                 "request_size INTEGER NOT NULL, "
                                                                                 "request_num INTEGER NOT NULL)";
 
-            executeSQL(*cont_metricsServerConn, sql_statement);
+            pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "SELECT create_hypertable('" + cont_arrivalTableName + "', 'arrival_timestamps', if_not_exists => TRUE);";
             
-            executeSQL(*cont_metricsServerConn, sql_statement);
+            pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (stream);";
             sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (sender_host);";
             sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (receiver_host);";
             
-            executeSQL(*cont_metricsServerConn, sql_statement);
+            pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
         if (!tableExists(*cont_metricsServerConn, cont_processTableName)) {
@@ -403,14 +403,14 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                 "output_size INTEGER NOT NULL, "
                                                                                 "request_num INTEGER NOT NULL)";
 
-            executeSQL(*cont_metricsServerConn, sql_statement);
+            pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "SELECT create_hypertable('" + cont_processTableName + "', 'postprocess_timestamps', if_not_exists => TRUE);";
-            executeSQL(*cont_metricsServerConn, sql_statement);
+            pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "CREATE INDEX ON " + cont_processTableName + " (stream);";
             sql_statement += "CREATE INDEX ON " + cont_processTableName + " (host);";
-            executeSQL(*cont_metricsServerConn, sql_statement);
+            pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
         if (cont_RUNMODE == RUNMODE::PROFILING) {
@@ -425,20 +425,19 @@ ContainerAgent::ContainerAgent(const json &configs) {
                                                                                           "   gpu_mem_usage INT NOT NULL," // Megabytes
                                                                                           "   PRIMARY KEY (timestamps)"
                                                                                           ");";
-                executeSQL(*cont_metricsServerConn, sql_statement);
+                pushSQL(*cont_metricsServerConn, sql_statement);
 
                 sql_statement = "SELECT create_hypertable('" + cont_hwMetricsTableName +
                                 "', 'timestamps', if_not_exists => TRUE);";
-                executeSQL(*cont_metricsServerConn, sql_statement);
+                pushSQL(*cont_metricsServerConn, sql_statement);
 
                 sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
-                executeSQL(*cont_metricsServerConn, sql_statement);
+                pushSQL(*cont_metricsServerConn, sql_statement);
             }
         } else {
 
         }
         spdlog::get("container_agent")->info("{0:s} created arrival table and process table.", cont_name);
-        spdlog::get("container_agent")->flush();
     }
 
 
@@ -535,7 +534,6 @@ void ContainerAgent::collectRuntimeMetrics() {
             }
             lateCount = cont_msvcsList[1]->GetDroppedReqCount();
 
-            pqxx::work session(*cont_metricsServerConn);
             std::string modelName = cont_msvcsList[2]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
                 if (reportHwMetrics && !cont_hwMetrics.empty()) {
@@ -554,7 +552,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                         }
                     }
                     sql += ";";
-                    session.exec(sql.c_str());
+                    pushSQL(*cont_metricsServerConn, sql.c_str());
                     cont_hwMetrics.clear();
                 }
                 if (cont_msvcsList[0]->STOP_THREADS) {
@@ -593,7 +591,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                         sql += ";";
                     }
                 }
-                session.exec(sql.c_str());
+                pushSQL(*cont_metricsServerConn, sql.c_str());
                 arrivalRecords.clear();
             }
 
@@ -627,10 +625,9 @@ void ContainerAgent::collectRuntimeMetrics() {
                         sql += ";";
                     }
                 }
-                session.exec(sql.c_str());
+                pushSQL(*cont_metricsServerConn, sql.c_str());
                 processRecords.clear();
             }
-            session.commit();
             cont_metricsServerConfigs.nextMetricsReportTime += std::chrono::milliseconds(
                     cont_metricsServerConfigs.metricsReportIntervalMillisec);
         }
@@ -686,12 +683,10 @@ void ContainerAgent::updateProfileTable() {
         batchInferProfile[batchSize].gpuMemUsage = row[5].as<GpuMemUsageType>();
     }
 
-    curl.commit();
-
     // Delete old profile entries
     if (tableExists(*cont_metricsServerConn, profileTableName)) {
         query = "DROP TABLE " + profileTableName + ";";
-        executeSQL(*cont_metricsServerConn, query);
+        pushSQL(*cont_metricsServerConn, query);
     }
     query = absl::StrFormat(
         "CREATE TABLE %s ("
@@ -704,7 +699,7 @@ void ContainerAgent::updateProfileTable() {
         "   gpu_mem_usage INT4 NOT NULL"
         ");", profileTableName
     );
-    executeSQL(*cont_metricsServerConn, query);
+    pushSQL(*cont_metricsServerConn, query);
 
     // Insert new profile entries
     query = absl::StrFormat(
@@ -719,7 +714,7 @@ void ContainerAgent::updateProfileTable() {
         );
     }
 
-    executeSQL(*cont_metricsServerConn, query.substr(0, query.size() - 1) + ";");
+    pushSQL(*cont_metricsServerConn, query.substr(0, query.size() - 1) + ";");
 }
 
 void ContainerAgent::queryProfileTable() {
@@ -740,7 +735,6 @@ void ContainerAgent::queryProfileTable() {
             row[6].as<GpuMemUsageType>()
         };
     }
-    curl.commit();
 }
 
 void ContainerAgent::HandleRecvRpcs() {

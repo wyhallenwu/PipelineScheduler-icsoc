@@ -176,16 +176,32 @@ std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &m
     }
 }
 
-void executeSQL(pqxx::connection &conn, const std::string &sql) {
+pqxx::result pushSQL(pqxx::connection &conn, const std::string &sql) {
+
     pqxx::work session(conn);
+    pqxx::result res;
     try {
-        session.exec(sql.c_str());
+        res = session.exec(sql.c_str());
         session.commit();
+        return res;
     } catch (const pqxx::sql_error &e) {
         spdlog::get("container_agent")->error("{0:s} SQL Error: {1:s}", __func__, e.what());
         exit(1);
     }
 }
+
+pqxx::result pullSQL(pqxx::connection &conn, const std::string &sql) {
+    pqxx::nontransaction session(conn);
+    pqxx::result res;
+    try {
+        res = session.exec(sql.c_str());
+        return res;
+    } catch (const pqxx::sql_error &e) {
+        spdlog::get("container_agent")->error("{0:s} SQL Error: {1:s}", __func__, e.what());
+        exit(1);
+    }
+}
+
 
 bool isHypertable(pqxx::connection &conn, const std::string &tableName) {
     pqxx::work txn(conn);

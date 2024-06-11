@@ -274,7 +274,9 @@ std::string getTimestampString();
 
 uint64_t getTimestamp();
 
-void executeSQL(pqxx::connection &conn, const std::string &sql);
+pqxx::result pushSQL(pqxx::connection &conn, const std::string &sql);
+
+pqxx::result pullSQL(pqxx::connection &conn, const std::string &sql);
 
 bool isHypertable(pqxx::connection &conn, const std::string &tableName);
 
