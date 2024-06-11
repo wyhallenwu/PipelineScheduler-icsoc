@@ -142,11 +142,15 @@ private:
     bool isEmpty;
 
 public:
-    ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi) : q_MaxSize(size), class_of_interest(coi) {}
+    ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi, std::string name) : q_MaxSize(size), class_of_interest(coi), q_name(name) {}
 
     ~ThreadSafeFixSizedDoubleQueue() {
         std::queue<Request<LocalGPUReqDataType>>().swap(q_gpuQueue);
         std::queue<Request<LocalCPUReqDataType>>().swap(q_cpuQueue);
+    }
+
+    std::string getName() const {
+        return q_name;
     }
 
     /**
@@ -599,9 +603,13 @@ public:
         return msvc_OutQueue;
     };
 
-    ThreadSafeFixSizedDoubleQueue *GetOutQueue(int coi) {
-        for (auto &queue: msvc_OutQueue) {
-            if (queue->getClassOfInterest() == coi) {
+    ThreadSafeFixSizedDoubleQueue *GetOutQueue(int queueIndex) {
+        return msvc_OutQueue[queueIndex];
+    };
+
+    ThreadSafeFixSizedDoubleQueue *GetOutQueue(std::string queueName) {
+        for (const auto &queue : msvc_OutQueue) {
+            if (queue->getName() == queueName) {
                 return queue;
             }
         }

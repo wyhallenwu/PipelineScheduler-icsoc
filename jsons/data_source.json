@@ -1,9 +1,9 @@
 {
     "container": {
         "cont_experimentName": "ex1",
-        "cont_systemName": "PPP",
+        "cont_systemName": "ppp",
         "cont_pipeName": "every",
-        "cont_taskName": "datasource",
+        "cont_taskName": "dsrc",
         "cont_hostDevice": "server",
         "cont_name": "data_source_0",
         "cont_pipeline": [

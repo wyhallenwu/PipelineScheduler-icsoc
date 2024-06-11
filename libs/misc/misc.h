@@ -103,6 +103,16 @@ const std::vector<std::string> cocoClassNames = {
 };
 
 const std::map<std::string, std::string> keywordAbbrs {
+    {"server", "serv"},
+    {"agx-xavier1", "agx1"},
+    {"orinano1", "orn1"},
+    {"orinano2", "orn2"},
+    {"orinano3", "orn3"},
+    {"xavier-nx1", "xnx1"},
+    {"xavier-nx2", "xnx2"},
+    {"xavier-nx3", "xnx3"},
+    {"xavier-nx4", "xnx4"},
+    {"xavier-nx5", "xnx5"},
     {"datasource", "dsrc"},
     {"traffic", "trfc"},
     {"building", "bldg"},
@@ -274,11 +284,13 @@ std::string getTimestampString();
 
 uint64_t getTimestamp();
 
-void executeSQL(pqxx::connection &conn, const std::string &sql);
+pqxx::result pushSQL(pqxx::connection &conn, const std::string &sql);
+
+pqxx::result pullSQL(pqxx::connection &conn, const std::string &sql);
 
 bool isHypertable(pqxx::connection &conn, const std::string &tableName);
 
-bool tableExists(pqxx::connection &conn, const std::string &tableName);
+bool tableExists(pqxx::connection &conn, const std::string &schemaName, const std::string &tableName);
 
 std::string abbreviate(const std::string &keyphrase);
 

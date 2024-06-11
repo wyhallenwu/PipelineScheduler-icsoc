@@ -2,7 +2,7 @@
     "pipeline_name": "traffic",
     "container" : {
         "cont_experimentName": "prof",
-        "cont_systemName": "PPP",
+        "cont_systemName": "ppp",
         "cont_pipeName": "traffic_pipeline",
         "cont_taskName": "retinaface",
         "cont_hostDevice": "server",
