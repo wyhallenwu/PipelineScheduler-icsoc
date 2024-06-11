@@ -734,7 +734,7 @@ protected:
     //type
     MicroserviceType msvc_type;
 
-    //
+    // in microseconds
     MsvcSLOType msvc_svcLevelObjLatency;
     //
     MsvcSLOType msvc_interReqTime = 1;

@@ -103,6 +103,9 @@ public:
 
     virtual void batchRequests();
     virtual void batchRequestsProfiling();
+    void executeBatch(ClockType time, BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
+                      std::vector<RequestData<LocalGPUReqDataType>> &buffer,
+                      std::vector<RequestData<LocalGPUReqDataType>> &prev);
 
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
@@ -153,6 +156,9 @@ protected:
     uint8_t msvc_imgType, msvc_colorCvtType, msvc_resizeInterpolType;
     float msvc_imgNormScale;
     std::vector<float> msvc_subVals, msvc_divVals;
+    BatchInferProfileListType msvc_batchInferProfileList;
+    ClockType oldestReqTime;
+    int timeout = 100;
 };
 
 

@@ -339,8 +339,6 @@ ContainerAgent::ContainerAgent(const json &configs) {
         cont_metricsServerConfigs.password = "agent";
 
         cont_metricsServerConn = connectToMetricsServer(cont_metricsServerConfigs, cont_name);
-        
-        queryProfileTable();
 
         // Create arrival table
         std::string sql_statement;
@@ -349,6 +347,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
         executeSQL(*cont_metricsServerConn, sql_statement);
 
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
+            queryProfileTable();
             cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
             cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
@@ -433,8 +432,6 @@ ContainerAgent::ContainerAgent(const json &configs) {
                 sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
                 executeSQL(*cont_metricsServerConn, sql_statement);
             }
-        } else {
-
         }
         spdlog::get("container_agent")->info("{0:s} created arrival table and process table.", cont_name);
         spdlog::get("container_agent")->flush();
@@ -495,6 +492,8 @@ void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
 
         collectRuntimeMetrics();
     }
+    sleep(1);
+    exit(0);
 }
 
 
@@ -557,11 +556,12 @@ void ContainerAgent::collectRuntimeMetrics() {
                     cont_hwMetrics.clear();
                 }
                 if (cont_msvcsList[0]->STOP_THREADS) {
+                    session.commit();
+                    // Summarizing the profiling results into a single table
+                    updateProfileTable();
                     for (auto msvc: cont_msvcsList) {
                         msvc->STOP_THREADS = true;
                     }
-                    // Summarizing the profiling results into a single table
-                    updateProfileTable();
                     run = false;
                 }
             }
