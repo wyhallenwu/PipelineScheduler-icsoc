@@ -422,7 +422,7 @@ void BaseBBoxCropper::cropping() {
                         outReqList.at(qIndex).gpuReq.req_e2eSLOLatency.emplace_back(currReq.req_e2eSLOLatency[i]);
                         outReqList.at(qIndex).gpuReq.req_travelPath.emplace_back(path);
                         outReqList.at(qIndex).gpuReq.req_data.emplace_back(reqData);
-                        outReqList.at(qIndex).cpuReq.req_batchSize = 1;
+                        outReqList.at(qIndex).gpuReq.req_batchSize = 1;
 
                         spdlog::get("container_agent")->trace("{0:s} emplaced a bbox of class {1:d} to GPU queue {2:d}.", msvc_name, bboxClass, qIndex);
                     }

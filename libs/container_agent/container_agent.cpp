@@ -143,7 +143,7 @@ json loadRunArgs(int argc, char **argv) {
     finalConfigs["container"] = containerConfigs;
     finalConfigs["profiling"] = profilingConfigs;
 
-    if (containerConfigs["cont_taskName"] != "datasource") {
+    if (containerConfigs["cont_taskName"] != "dsrc") {
         checkCudaErrorCode(cudaSetDevice(device), __func__);
     }
 
@@ -329,7 +329,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
     arrivalRate = 0;
 
-    if (cont_taskName != "datasource") {
+    if (cont_taskName != "dsrc") {
         cont_inferModel = abbreviate(containerConfigs["cont_inferModelName"].get<std::string>());
         cont_metricsServerConfigs.from_json(containerConfigs["cont_metricsServerConfigs"]);
         cont_metricsServerConfigs.schema = cont_experimentName + "_" + cont_systemName;
@@ -468,7 +468,7 @@ void ContainerAgent::ReportStart() {
     GPR_ASSERT(ok);
     pid = reply.pid();
     spdlog::get("container_agent")->info("Container Agent started with pid: {0:d}", pid);
-    if (cont_taskName != "datasource" && cont_taskName != "sink") {
+    if (cont_taskName != "dsrc" && cont_taskName != "sink") {
         profiler = new Profiler({pid});
         reportHwMetrics = true;
     }
@@ -496,7 +496,7 @@ void ContainerAgent::collectRuntimeMetrics() {
     ProcessRecordType processRecords;
     std::string sql;
     while (run) {
-        if (cont_taskName == "datasource") {
+        if (cont_taskName == "dsrc") {
             std::this_thread::sleep_for(std::chrono::milliseconds(10000));
             continue;
         }

@@ -85,6 +85,7 @@ const std::vector<std::string> cocoClassNames = {
 };
 
 const std::map<std::string, std::string> keywordAbbrs {
+    {"datasource", "dsrc"},
     {"traffic", "trfc"},
     {"building", "bldg"},
     {"yolov5", "y5"},

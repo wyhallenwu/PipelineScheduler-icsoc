@@ -69,7 +69,7 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_deviceIndex = configs.msvc_deviceIndex;
     msvc_RUNMODE = configs.msvc_RUNMODE;
 
-    if (jsonConfigs.at("msvc_taskName") != "datasource") {
+    if (msvc_taskName != "datasource") {
         msvc_maxBatchSize = jsonConfigs.at("msvc_maxBatchSize");
         msvc_allocationMode = static_cast<AllocationMode>(jsonConfigs.at("msvc_allocationMode"));
     }
