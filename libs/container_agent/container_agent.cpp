@@ -86,7 +86,7 @@ json loadRunArgs(int argc, char **argv) {
     json metricsServerConfigs = json::parse(metricsServerCfgsFile);
 
     containerConfigs["cont_metricsServerConfigs"] = metricsServerConfigs;
-    if (containerConfigs["cont_taskName"] != "datasource") {
+    if (containerConfigs["cont_taskName"] != "dsrc") {
         containerConfigs["cont_inferModelName"] = splitString(containerConfigs.at("cont_pipeline")[2]["path"], "/").back();
         containerConfigs["cont_inferModelName"] = splitString(containerConfigs["cont_inferModelName"], ".").front();
         // The maximum batch size supported by the model (for TensorRT)
@@ -112,7 +112,7 @@ json loadRunArgs(int argc, char **argv) {
         containerConfigs.at(
                 "cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs["metricsServer_metricsReportIntervalMillisec"];
         containerConfigs.at("cont_pipeline")[i]["msvc_numWarmUpBatches"] = containerConfigs.at("cont_numWarmUpBatches");
-        if (containerConfigs["cont_taskName"] != "datasource") {
+        if (containerConfigs["cont_taskName"] != "dsrc") {
             containerConfigs.at("cont_pipeline")[i]["msvc_maxBatchSize"] = containerConfigs.at("cont_maxBatchSize");
             containerConfigs.at("cont_pipeline")[i]["msvc_allocationMode"] = containerConfigs.at("cont_allocationMode");
         }
@@ -143,7 +143,7 @@ json loadRunArgs(int argc, char **argv) {
     finalConfigs["container"] = containerConfigs;
     finalConfigs["profiling"] = profilingConfigs;
 
-    if (containerConfigs["cont_taskName"] != "datasource") {
+    if (containerConfigs["cont_taskName"] != "dsrc") {
         checkCudaErrorCode(cudaSetDevice(device), __func__);
     }
 
