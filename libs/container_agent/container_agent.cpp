@@ -339,6 +339,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
         cont_metricsServerConfigs.password = "agent";
 
         cont_metricsServerConn = connectToMetricsServer(cont_metricsServerConfigs, cont_name);
+        
+        queryProfileTable();
+
         // Create arrival table
         std::string sql_statement;
 
@@ -711,6 +714,27 @@ void ContainerAgent::updateProfileTable() {
     }
 
     executeSQL(*cont_metricsServerConn, query.substr(0, query.size() - 1) + ";");
+}
+
+void ContainerAgent::queryProfileTable() {
+    std::string profileTableName = abbreviate("prof__" + cont_inferModel + "__" + cont_hostDevice);
+    pqxx::nontransaction curl(*cont_metricsServerConn);
+    std::string query = absl::StrFormat(
+        "SELECT * FROM %s;", profileTableName
+    );
+    pqxx::result res = curl.exec(query);
+    for (const auto& row : res) {
+        BatchSizeType batchSize = row[0].as<BatchSizeType>();
+        cont_batchInferProfileList[batchSize] = {
+            row[1].as<uint64_t>(),
+            row[2].as<CpuUtilType>(),
+            row[3].as<MemUsageType>(),
+            row[4].as<MemUsageType>(),
+            row[5].as<GpuUtilType>(),
+            row[6].as<GpuMemUsageType>()
+        };
+    }
+    curl.commit();
 }
 
 void ContainerAgent::HandleRecvRpcs() {

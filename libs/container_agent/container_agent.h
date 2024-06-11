@@ -136,6 +136,8 @@ protected:
 
     void updateProfileTable();
 
+    void queryProfileTable();
+
     uint8_t deviceIndex = -1;
 
     void ReportStart();
@@ -244,6 +246,7 @@ protected:
     bool reportHwMetrics;
     std::string cont_hwMetricsTableName;
     HardwareMetricsRecords cont_hwMetrics;
+    BatchInferProfileListType cont_batchInferProfileList;
 
     std::string cont_arrivalTableName;
     std::string cont_processTableName;
