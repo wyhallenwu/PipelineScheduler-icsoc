@@ -69,6 +69,7 @@ struct HardwareMetrics {
     ClockType timestamp;
     int cpuUsage = 0;
     int memUsage = 0;
+    int rssMemUsage = 0;
     unsigned int gpuUsage = 0;
     unsigned int gpuMemUsage = 0;
 };

@@ -69,7 +69,7 @@ public:
                          std::vector<std::string> &path, std::vector<uint32_t> &slo);
 
     std::string SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                         std::vector<std::string> &path, std::vector<uint32_t> &slo) final {};
+                         std::vector<std::string> &path, std::vector<uint32_t> &slo) final {return "";};
 
 private:
 

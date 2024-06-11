@@ -792,7 +792,7 @@ protected:
     // Get the frame ID from the path of travel of this request
     inline uint64_t getFrameID(const std::string &path) {
         std::string temp = splitString(path, "]")[0];
-        temp = splitString(temp, "|").back();
+        temp = splitString(temp, "|")[2];
         return std::stoull(temp);
     }
 

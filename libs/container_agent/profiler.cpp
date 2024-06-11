@@ -106,7 +106,10 @@ std::vector<Profiler::sysStats> Profiler::popStats(unsigned int pid) {
 Profiler::sysStats Profiler::reportAtRuntime(unsigned int cpu_pid, unsigned int gpu_pid) {
     sysStats value{};
     value.cpuUsage = getCPUInfo(cpu_pid);
-    value.memoryUsage = getMemoryInfo(cpu_pid);
+    auto mem = getMemoryInfo(cpu_pid);
+    value.memoryUsage = mem.first;
+    value.memoryUsage = mem.second;
+
     auto gpu = getGPUInfo(gpu_pid, pidOnDevices[gpu_pid]);
     value.gpuUtilization = gpu.gpuUtilization;
     value.gpuMemoryUsage = gpu.memoryUtilization;
@@ -125,7 +128,8 @@ void Profiler::collectStats() {
             sysStats systemInfo{
                     currentTime,
                     cpu,
-                    memory, // convert to MB
+                    memory.first,
+                    memory.second,
                     gpu.gpuUtilization,
                     gpu.memoryUtilization,
                     (long) gpu.maxMemoryUsage / 1000000, // convert to MB
@@ -258,8 +262,9 @@ int Profiler::getCPUInfo(unsigned int pid) {
     return (int) cpuUsage;
 }
 
-int Profiler::getMemoryInfo(unsigned int pid) {
-    std::string value = "0";
+std::pair<int, int> Profiler::getMemoryInfo(unsigned int pid) {
+    std::string mem = "0";
+    std::string rss = "0";
     bool search = true;
     std::string line;
     std::string tmp;
@@ -271,12 +276,16 @@ int Profiler::getMemoryInfo(unsigned int pid) {
             linestream >> tmp;
             if(tmp == "VmSize:") {
                 linestream >> tmp;
-                value = tmp;
+                mem = tmp;
+            }
+            if(tmp == "VmRSS:") {
+                linestream >> tmp;
+                rss = tmp;
                 search = false;
             }
         }
     }
-    return (int) std::atoi(value.c_str()) / 1000;
+    return std::pair((int) std::atoi(mem.c_str()) / 1000, (int) std::atoi(rss.c_str()) / 1000); //convert to MB
 }
 
 nvmlAccountingStats_t Profiler::getGPUInfo(unsigned int pid, nvmlDevice_t device) {
