@@ -65,7 +65,8 @@ int main(int argc, char **argv) {
                 spdlog::get("container_agent")->info("Remote CPU Sender");
                 msvcsList.push_back(new RemoteCPUSender(pipeConfigs[i]));
             }
-            msvcsList[i]->SetInQueue({msvcsList[3]->GetOutQueue(pipeConfigs[3].at("msvc_dnstreamMicroservices")[i-4].at("nb_classOfInterest"))});
+            std::string name = msvcsList[i]->msvc_name;
+            msvcsList[i]->SetInQueue({msvcsList[3]->GetOutQueue(i-4)});
         }
     }
     agent->addMicroservice(msvcsList);

@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
         receiver.dispatchThread();
         run_receiver(receiver, false, size);
     } else {
-        auto *queue = new ThreadSafeFixSizedDoubleQueue(100, -1);
+        auto *queue = new ThreadSafeFixSizedDoubleQueue(100, -1, "sender");
         Sender *sender;
         bool gpu = false;
         if (type == "gpu-sender") {

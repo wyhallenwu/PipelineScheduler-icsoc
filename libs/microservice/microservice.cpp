@@ -100,7 +100,7 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         msvc_outReqShape = {};
 
         for (auto it = configs.msvc_dnstreamMicroservices.begin(); it != configs.msvc_dnstreamMicroservices.end(); ++it) {
-            msvc_OutQueue.emplace_back(new ThreadSafeFixSizedDoubleQueue(configs.msvc_maxQueueSize, it->classOfInterest));
+            msvc_OutQueue.emplace_back(new ThreadSafeFixSizedDoubleQueue(configs.msvc_maxQueueSize, it->classOfInterest, it->name));
             // Create downstream neigbor config and push that into a list for information later
             // Local microservice supposedly has only 1 downstream but `receiver` microservices could have multiple senders.
             NeighborMicroservice dnStreamMsvc = NeighborMicroservice(*it, nummsvc_dnstreamMicroservices);
