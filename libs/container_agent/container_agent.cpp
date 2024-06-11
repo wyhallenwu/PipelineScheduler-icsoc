@@ -143,7 +143,7 @@ json loadRunArgs(int argc, char **argv) {
     finalConfigs["container"] = containerConfigs;
     finalConfigs["profiling"] = profilingConfigs;
 
-    if (containerConfigs["cont_taskName"] != "dsrc") {
+    if (containerConfigs["cont_taskName"] != "datasource") {
         checkCudaErrorCode(cudaSetDevice(device), __func__);
     }
 
@@ -412,22 +412,26 @@ ContainerAgent::ContainerAgent(const json &configs) {
         if (cont_RUNMODE == RUNMODE::PROFILING) {
             if (!tableExists(*cont_metricsServerConn, cont_hwMetricsTableName)) {
                 sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
-                                                                                    "   timestamps BIGINT NOT NULL,"
-                                                                                    "   batch_size INT2 NOT NULL,"
-                                                                                    "   cpu_usage INT2 NOT NULL," // percentage (1-100)
-                                                                                    "   mem_usage INT NOT NULL," // Megabytes
-                                                                                    "   gpu_usage INT2 NOT NULL," // percentage (1-100)
-                                                                                    "   gpu_mem_usage INT NOT NULL," // Megabytes
-                                                                                    "   PRIMARY KEY (timestamps)"
-                                                                                    ");";
+                                                                                          "   timestamps BIGINT NOT NULL,"
+                                                                                          "   batch_size INT2 NOT NULL,"
+                                                                                          "   cpu_usage INT2 NOT NULL," // percentage (1-100)
+                                                                                          "   mem_usage INT NOT NULL," // Megabytes
+                                                                                          "   rss_mem_usage INT NOT NULL," // Megabytes
+                                                                                          "   gpu_usage INT2 NOT NULL," // percentage (1-100)
+                                                                                          "   gpu_mem_usage INT NOT NULL," // Megabytes
+                                                                                          "   PRIMARY KEY (timestamps)"
+                                                                                          ");";
                 executeSQL(*cont_metricsServerConn, sql_statement);
 
-                sql_statement = "SELECT create_hypertable('" + cont_hwMetricsTableName + "', 'timestamps', if_not_exists => TRUE);";
+                sql_statement = "SELECT create_hypertable('" + cont_hwMetricsTableName +
+                                "', 'timestamps', if_not_exists => TRUE);";
                 executeSQL(*cont_metricsServerConn, sql_statement);
 
                 sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
                 executeSQL(*cont_metricsServerConn, sql_statement);
             }
+        } else {
+
         }
         spdlog::get("container_agent")->info("{0:s} created arrival table and process table.", cont_name);
         spdlog::get("container_agent")->flush();
@@ -508,7 +512,7 @@ void ContainerAgent::collectRuntimeMetrics() {
         if (startTime >= cont_metricsServerConfigs.nextHwMetricsScrapeTime) {
             if (reportHwMetrics && pid > 0) {
                 Profiler::sysStats stats = profiler->reportAtRuntime(getpid(), pid);
-                HardwareMetrics hwMetrics = {startTime, stats.cpuUsage, stats.memoryUsage, stats.gpuUtilization,
+                HardwareMetrics hwMetrics = {startTime, stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
                                              stats.gpuMemoryUsage};
                 cont_hwMetrics.emplace_back(hwMetrics);
                 cont_metricsServerConfigs.nextHwMetricsScrapeTime += std::chrono::milliseconds(
@@ -524,20 +528,21 @@ void ContainerAgent::collectRuntimeMetrics() {
         if (startTime >= cont_metricsServerConfigs.nextMetricsReportTime) {
             for (auto msvc: cont_msvcsList) {
                 queueSizes.push_back(msvc->GetOutQueueSize(0));
-                lateCount = cont_msvcsList[1]->GetDroppedReqCount();
             }
+            lateCount = cont_msvcsList[1]->GetDroppedReqCount();
 
             pqxx::work session(*cont_metricsServerConn);
             std::string modelName = cont_msvcsList[2]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
                 if (reportHwMetrics && !cont_hwMetrics.empty()) {
                     sql = "INSERT INTO " + cont_hwMetricsTableName +
-                        " (timestamps, batch_size, cpu_usage, mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
+                        " (timestamps, batch_size, cpu_usage, mem_usage, rss_mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
                     for (const auto &record: cont_hwMetrics) {
                         sql += "(" + timePointToEpochString(record.timestamp) + ", ";
                         sql += std::to_string(cont_msvcsList[1]->msvc_idealBatchSize) + ", ";
                         sql += std::to_string(record.cpuUsage) + ", ";
                         sql += std::to_string(record.memUsage) + ", ";
+                        sql += std::to_string(record.rssMemUsage) + ", ";
                         sql += std::to_string(record.gpuUsage) + ", ";
                         sql += std::to_string(record.gpuMemUsage) + ")";
                         if (&record != &cont_hwMetrics.back()) {

@@ -52,6 +52,7 @@ public:
         uint64_t timestamp = 0;
         int cpuUsage = 0;
         int memoryUsage = 0;
+        int rssMemory = 0;
         unsigned int gpuUtilization = 0;
         unsigned int gpuMemoryUsage = 0;
         long maxGpuMemoryUsage = 0;
@@ -83,7 +84,7 @@ private:
 
     int getCPUInfo(unsigned int pid);
 
-    int getMemoryInfo(unsigned int pid);
+    std::pair<int, int> getMemoryInfo(unsigned int pid);
 
     nvmlAccountingStats_t getGPUInfo(unsigned int pid, nvmlDevice_t device);
 
