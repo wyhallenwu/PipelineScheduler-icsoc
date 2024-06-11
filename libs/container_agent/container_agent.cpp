@@ -339,8 +339,8 @@ ContainerAgent::ContainerAgent(const json &configs) {
         cont_metricsServerConfigs.password = "agent";
 
         cont_metricsServerConn = connectToMetricsServer(cont_metricsServerConfigs, cont_name);
-        
-        queryProfileTable();
+
+        cont_logger->info("{0:s} connected to metrics server.", cont_name);
 
         // Create arrival table
         std::string sql_statement;
@@ -349,6 +349,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
         executeSQL(*cont_metricsServerConn, sql_statement);
 
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
+            queryProfileTable();
             cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
             cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
