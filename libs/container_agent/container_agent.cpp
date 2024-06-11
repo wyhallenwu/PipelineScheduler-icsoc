@@ -552,6 +552,8 @@ void ContainerAgent::collectRuntimeMetrics() {
                     for (auto msvc: cont_msvcsList) {
                         msvc->STOP_THREADS = true;
                     }
+                    // Summarizing the profiling results into a single table
+                    updateProfileTable();
                     run = false;
                 }
             }
@@ -630,6 +632,85 @@ void ContainerAgent::collectRuntimeMetrics() {
                 cont_metricsServerConfigs.metricsReportIntervalMillisec - (scrapeLatency + reportLatency) / 1000);
         std::this_thread::sleep_for(sleepPeriod);
     }
+
+}
+
+void ContainerAgent::updateProfileTable() {
+    std::string profileTableName = abbreviate("prof__" + cont_inferModel + "__" + cont_hostDevice);
+    std::string procTableName = profileTableName + "_proc";
+    std::string hwTableName = profileTableName + "_hw";
+    
+    BatchInferProfileListType batchInferProfile;
+
+    pqxx::nontransaction curl(*cont_metricsServerConn);
+    std::string query = absl::StrFormat(
+        "SELECT "
+        "   infer_batch_size, "
+        "   percentile_disc(0.95) WITHIN GROUP (ORDER BY infer_duration) AS p95_infer_duration "
+        "FROM %s "
+        "GROUP BY infer_batch_size", procTableName
+    );
+    pqxx::result res = curl.exec(query);
+    for (const auto& row : res) {
+        BatchSizeType batchSize = row[0].as<BatchSizeType>();
+        batchInferProfile[batchSize].p95inferLat = (uint64_t)(row[1].as<uint64_t>() / batchSize);
+    }
+
+    query = absl::StrFormat(
+        "SELECT "
+        "   batch_size, "
+        "   MAX(cpu_usage) AS cpu_usage, "
+        "   MAX(mem_usage) AS mem_usage, "
+        "   MAX(rss_mem_usage) AS rss_mem_usage, "
+        "   MAX(gpu_usage) AS gpu_usage, "
+        "   MAX(gpu_mem_usage) AS gpu_mem_usage "
+        "FROM %s "
+        "GROUP BY batch_size", hwTableName
+    );
+    res =  curl.exec(query);
+    for (const auto& row : res) {
+        BatchSizeType batchSize = row[0].as<BatchSizeType>();
+        batchInferProfile[batchSize].cpuUtil = row[1].as<CpuUtilType>();
+        batchInferProfile[batchSize].memUsage = row[2].as<MemUsageType>();
+        batchInferProfile[batchSize].rssMemUsage = row[3].as<MemUsageType>();
+        batchInferProfile[batchSize].gpuUtil = row[4].as<GpuUtilType>();
+        batchInferProfile[batchSize].gpuMemUsage = row[5].as<GpuMemUsageType>();
+    }
+
+    curl.commit();
+
+    // Delete old profile entries
+    if (tableExists(*cont_metricsServerConn, profileTableName)) {
+        query = "DROP TABLE " + profileTableName + ";";
+        executeSQL(*cont_metricsServerConn, query);
+    }
+    query = absl::StrFormat(
+        "CREATE TABLE %s ("
+        "   infer_batch_size INT PRIMARY KEY, "
+        "   p95_infer_duration BIGINT NOT NULL, "
+        "   cpu_usage INT2 NOT NULL, "
+        "   mem_usage INT4 NOT NULL, "
+        "   rss_mem_usage INT4 NOT NULL, "
+        "   gpu_usage INT2 NOT NULL, "
+        "   gpu_mem_usage INT4 NOT NULL"
+        ");", profileTableName
+    );
+    executeSQL(*cont_metricsServerConn, query);
+
+    // Insert new profile entries
+    query = absl::StrFormat(
+        "INSERT INTO %s (infer_batch_size, p95_infer_duration, cpu_usage, mem_usage, rss_mem_usage, gpu_usage, gpu_mem_usage) "
+        "VALUES ", profileTableName
+    );
+    for (const auto& [batchSize, profile] : batchInferProfile) {
+        query += absl::StrFormat(
+            "(%d,%d,%d,%ld,%ld, %d,%ld),",
+            batchSize, profile.p95inferLat, (int) profile.cpuUtil,
+            profile.memUsage, profile.rssMemUsage, profile.gpuUtil, profile.gpuMemUsage
+        );
+    }
+
+    executeSQL(*cont_metricsServerConn, query.substr(0, query.size() - 1) + ";");
 }
 
 void ContainerAgent::HandleRecvRpcs() {

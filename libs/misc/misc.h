@@ -36,6 +36,24 @@ typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
 typedef uint32_t RequestMemSizeType;
 
+// Hw Metrics
+typedef int CpuUtilType;
+typedef unsigned int GpuUtilType;
+typedef int MemUsageType;
+typedef unsigned int GpuMemUsageType;
+
+struct BatchInferProfile {
+    uint64_t p95inferLat;
+    
+    CpuUtilType cpuUtil;
+    MemUsageType memUsage;
+    MemUsageType rssMemUsage;
+    GpuUtilType gpuUtil;
+    GpuMemUsageType gpuMemUsage;
+};
+
+typedef std::map<BatchSizeType, BatchInferProfile> BatchInferProfileListType;
+
 struct ArrivalRecord {
     ClockType prevPostProcTime;
     ClockType prevSenderTime;

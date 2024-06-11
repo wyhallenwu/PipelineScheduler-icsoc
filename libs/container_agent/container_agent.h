@@ -133,6 +133,9 @@ public:
     void runService(const json &pipeConfigs, const json &configs);
 
 protected:
+
+    void updateProfileTable();
+
     uint8_t deviceIndex = -1;
 
     void ReportStart();
