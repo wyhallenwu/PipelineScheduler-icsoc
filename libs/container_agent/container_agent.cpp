@@ -354,16 +354,17 @@ ContainerAgent::ContainerAgent(const json &configs) {
             cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
-            cont_arrivalTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arrival_table";
+            cont_arrivalTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
             cont_processTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_hwMetricsTableName =
                     cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
+            cont_metricsServerConfigs.schema = "public";
 
             sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
             pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
-        if (!tableExists(*cont_metricsServerConn, cont_arrivalTableName)) {
+        if (!tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, cont_arrivalTableName)) {
             sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_arrivalTableName + " ("
                                                                                 "arrival_timestamps BIGINT NOT NULL, "
                                                                                 "stream TEXT NOT NULL, "
@@ -389,7 +390,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
             pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
-        if (!tableExists(*cont_metricsServerConn, cont_processTableName)) {
+        if (!tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, cont_processTableName)) {
             sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_processTableName + " ("
                                                                                 "postprocess_timestamps BIGINT NOT NULL, "
                                                                                 "stream TEXT NOT NULL, "
@@ -414,7 +415,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
         }
 
         if (cont_RUNMODE == RUNMODE::PROFILING) {
-            if (!tableExists(*cont_metricsServerConn, cont_hwMetricsTableName)) {
+            if (!tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, cont_hwMetricsTableName)) {
                 sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_hwMetricsTableName + " ("
                                                                                           "   timestamps BIGINT NOT NULL,"
                                                                                           "   batch_size INT2 NOT NULL,"
@@ -684,7 +685,7 @@ void ContainerAgent::updateProfileTable() {
     }
 
     // Delete old profile entries
-    if (tableExists(*cont_metricsServerConn, profileTableName)) {
+    if (tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, profileTableName)) {
         query = "DROP TABLE " + profileTableName + ";";
         pushSQL(*cont_metricsServerConn, query);
     }

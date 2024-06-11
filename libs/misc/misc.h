@@ -280,7 +280,7 @@ pqxx::result pullSQL(pqxx::connection &conn, const std::string &sql);
 
 bool isHypertable(pqxx::connection &conn, const std::string &tableName);
 
-bool tableExists(pqxx::connection &conn, const std::string &tableName);
+bool tableExists(pqxx::connection &conn, const std::string &schemaName, const std::string &tableName);
 
 std::string abbreviate(const std::string &keyphrase);
 
