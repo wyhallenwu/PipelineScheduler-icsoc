@@ -308,6 +308,8 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
     cont_RUNMODE = containerConfigs["cont_RUNMODE"];
 
+    cont_logDir = containerConfigs["cont_logPath"].get<std::string>();
+
     setupLogger(
         cont_logDir,
         cont_name,
