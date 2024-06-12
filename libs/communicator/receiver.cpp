@@ -6,7 +6,7 @@ ReceiverConfigs Receiver::loadConfigsFromJson(const json &jsonConfigs) {
 }
 
 void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
-    spdlog::trace("{0:s} is LOANDING configs...", __func__);
+    spdlog::get("container_agent")->trace("{0:s} is LOANDING configs...", __func__);
 
     if (!isConstructing) { // If this is not called from the constructor, then we are loading configs from a file for Microservice class
         Microservice::loadConfigs(jsonConfigs);
@@ -30,18 +30,17 @@ void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         server = builder.BuildAndStart();
         msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
     }
-    spdlog::trace("{0:s} FINISHED loading configs...", __func__);
+    spdlog::get("container_agent")->trace("{0:s} FINISHED loading configs...", __func__);
 }
 
 Receiver::Receiver(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
-    spdlog::info("{0:s} is created.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name); 
 }
 
 template<typename ReqDataType>
 void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
     BatchSizeType batchSize = timeReport.req_batchSize;
-    bool isProfileEnd = false;
 
     BatchSizeType numTimeStamps = (BatchSizeType) (timeReport.req_origGenTime.size() / batchSize);
     for (BatchSizeType i = 0; i < batchSize; i++) {
@@ -61,9 +60,6 @@ void Receiver::processInferTimeReport(Request<ReqDataType> &timeReport) {
                 timeReport.req_origGenTime[(i + 1) * numTimeStamps - 1] -
                 timeReport.req_origGenTime[(i + 1) * numTimeStamps - 2]).count() << std::endl;
     }
-    if (isProfileEnd) {
-        this->pauseThread();
-    }
 }
 
 Receiver::GpuPointerRequestHandler::GpuPointerRequestHandler(
@@ -80,6 +76,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
         service->RequestGpuPointerTransfer(&ctx, &request, &responder, cq, cq,
                                            this);
     } else if (status == PROCESS) {
+        spdlog::get("container_agent")->trace("GpuPointerRequestHandler::{0:s} is processing request...", __func__);
         if (OutQueue->getActiveQueueIndex() != 2) OutQueue->setActiveQueueIndex(2);
         new GpuPointerRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
@@ -123,6 +120,7 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
                     elements
             };
             OutQueue->emplace(req);
+            spdlog::get("container_agent")->trace("GpuPointerRequestHandler::{0:s} emplaced request with path: {1:s}", __func__, el.path());
         }
 
         status = FINISH;
@@ -148,6 +146,7 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
         service->RequestSharedMemTransfer(&ctx, &request, &responder, cq, cq,
                                           this);
     } else if (status == PROCESS) {
+        spdlog::get("container_agent")->trace("SharedMemoryRequestHandler::{0:s} is processing request...", __func__);
         if (OutQueue->getActiveQueueIndex() != 1) OutQueue->setActiveQueueIndex(1);
         new SharedMemoryRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
@@ -179,6 +178,7 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
                     elements
             };
             OutQueue->emplace(req);
+            spdlog::get("container_agent")->trace("SharedMemoryRequestHandler::{0:s} emplaced request with path: {1:s}", __func__, el.path());
         }
 
         status = FINISH;
@@ -204,6 +204,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
         service->RequestSerializedDataTransfer(&ctx, &request, &responder, cq, cq,
                                                this);
     } else if (status == PROCESS) {
+        spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} is processing request...", __func__);
         if (OutQueue->getActiveQueueIndex() != 1) OutQueue->setActiveQueueIndex(1);
         new SerializedDataRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
@@ -243,6 +244,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
              * 
              */
             OutQueue->emplace(req);
+            spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} emplaced request with path: {1:s}", __func__, el.path());
             if (receiverInstance->checkProfileEnd(el.path())) {
                 receiverInstance->STOP_THREADS = true;
                 break;
@@ -268,11 +270,11 @@ void Receiver::HandleRpcs() {
     READY = true;
     while (true) {
         if (this->STOP_THREADS) {
-            spdlog::info("{0:s} STOPS.", msvc_name);
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         } else if (this->PAUSE_THREADS) {
             if (RELOADING) {
-                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
                 /*void* target;
                 auto test = cv::cuda::GpuMat(1, 1, CV_8UC3);
@@ -286,7 +288,7 @@ void Receiver::HandleRpcs() {
                     setDevice();
                 }*/
                 RELOADING = false;
-                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
             //spdlog::info("{0:s} is being PAUSED.", msvc_name);
             continue;

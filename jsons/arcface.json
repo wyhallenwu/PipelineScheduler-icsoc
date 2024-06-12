@@ -1,6 +1,8 @@
 {
     "container": {
-        "cont_pipeName": "traffic_pipeline",
+        "cont_experimentName": "ex1",
+        "cont_systemName": "ppp",
+        "cont_pipeName": "traffic",
         "cont_taskName": "arcface",
         "cont_hostDevice": "server",
         "cont_name": "arcface_0",
@@ -41,7 +43,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 3,
                         "nb_link": [
-                            "0.0.0.0:55015"
+                            "0.0.0.0:55011"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "arcface",
@@ -174,7 +176,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/arcface_dynamic_3090_fp32_32_1.engine",
+                "path": "../models/arcface_dynamic_3090_fp32_64_1.engine",
                 "prec": 4
             },
             {
@@ -280,7 +282,7 @@
         "cont_allocationMode": 1
     },
     "profiling": {
-        "profile_minBatch": 64,
+        "profile_minBatch": 1,
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,

@@ -29,6 +29,7 @@ ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json_path);
 ABSL_DECLARE_FLAG(uint16_t, port);
 ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
+ABSL_DECLARE_FLAG(uint16_t, logging_mode);
 ABSL_DECLARE_FLAG(std::string, log_dir);
 ABSL_DECLARE_FLAG(uint16_t, profiling_mode);
 
@@ -96,7 +97,7 @@ public:
         for (auto msvc: cont_msvcsList) {
             msvc->unpauseThread();
         }
-        spdlog::info("=========================================== STARTS ===========================================");
+        spdlog::get("container_agent")->info("=========================================== STARTS ===========================================");
     }
 
     void PROFILING_START(BatchSizeType batch) {
@@ -104,7 +105,7 @@ public:
             msvc->unpauseThread();
         }
 
-        spdlog::info(
+        spdlog::get("container_agent")->info(
                 "======================================= PROFILING MODEL BATCH {0:d} =======================================",
                 batch);
     }
@@ -122,7 +123,7 @@ public:
     }
 
     void dispatchMicroservices() {
-        for (auto msvc: cont_msvcsList) {
+        for (auto &msvc: cont_msvcsList) {
             msvc->dispatchThread();
         }
     }
@@ -132,6 +133,11 @@ public:
     void runService(const json &pipeConfigs, const json &configs);
 
 protected:
+
+    void updateProfileTable();
+
+    void queryProfileTable();
+
     uint8_t deviceIndex = -1;
 
     void ReportStart();
@@ -207,6 +213,8 @@ protected:
 
     void HandleRecvRpcs();
 
+    std::string cont_experimentName;
+    std::string cont_systemName;
     std::string cont_name;
     std::vector<Microservice *> cont_msvcsList;
     std::string cont_pipeName;
@@ -238,12 +246,16 @@ protected:
     bool reportHwMetrics;
     std::string cont_hwMetricsTableName;
     HardwareMetricsRecords cont_hwMetrics;
+    BatchInferProfileListType cont_batchInferProfileList;
 
     std::string cont_arrivalTableName;
     std::string cont_processTableName;
 
     MetricsServerConfigs cont_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> cont_metricsServerConn = nullptr;
+
+    std::vector<spdlog::sink_ptr> cont_loggerSinks = {};
+    std::shared_ptr<spdlog::logger> cont_logger;    
 
 };
 

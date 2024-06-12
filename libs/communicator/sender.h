@@ -20,11 +20,14 @@ class Sender : public Microservice {
 public:
     Sender(const json &jsonConfigs);
 
-    virtual void Process() = 0;
+    void Process();
 
     SenderConfigs loadConfigsFromJson(const json &jsonConfigs);
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
+
+    virtual std::string SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
+                         std::vector<std::string> &path, std::vector<uint32_t> &slo) = 0;
 
 protected:
     static inline std::mt19937 &generator() {
@@ -55,59 +58,50 @@ class GPUSender : public Sender {
 public:
     explicit GPUSender(const json &jsonConfigs);
 
-    void Process() final;
+    void Process();
 
     void dispatchThread() {
         std::thread sender(&GPUSender::Process, this);
         sender.detach();
     }
 
-    std::string SendGpuPointer(
-            std::vector<std::vector<RequestData<LocalGPUReqDataType>>> &elements,
-            std::vector<RequestTimeType> &timestamp, std::vector<std::string> &path, std::vector<uint32_t> &slo);
+    std::string SendData(std::vector<RequestData<LocalGPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
+                         std::vector<std::string> &path, std::vector<uint32_t> &slo);
+
+    std::string SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
+                         std::vector<std::string> &path, std::vector<uint32_t> &slo) final {return "";};
 
 private:
-    std::string HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
-                           EmptyMessage &reply, Status &status, void *tag);
 
     void serializeIpcMemHandle(const cudaIpcMemHandle_t& handle, char* buffer) {
         memcpy(buffer, &handle, sizeof(cudaIpcMemHandle_t));
     }
-
-    std::map<void *, std::vector<std::vector<RequestData<LocalGPUReqDataType>>> *> tagToGpuPointer;
 };
 
 class LocalCPUSender : public Sender {
 public:
     LocalCPUSender(const json &jsonConfigs);
 
-    void Process() final;
-
     void dispatchThread() final {
         std::thread sender(&LocalCPUSender::Process, this);
         sender.detach();
     }
 
-    std::string
-    SendSharedMemory(
-            std::vector<std::vector<RequestData<LocalCPUReqDataType>>> &elements,
-            std::vector<RequestTimeType> &timestamp, std::vector<std::string> &path, std::vector<uint32_t> &slo);
+    std::string SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
+                         std::vector<std::string> &path, std::vector<uint32_t> &slo) final;
 };
 
 class RemoteCPUSender : public Sender {
 public:
     RemoteCPUSender(const json &jsonConfigs);
 
-    void Process() final;
-
     void dispatchThread() final {
         std::thread sender(&RemoteCPUSender::Process, this);
         sender.detach();
     }
 
-    std::string SendSerializedData(
-            std::vector<std::vector<RequestData<LocalCPUReqDataType>>> &elements,
-            std::vector<RequestTimeType> &timestamp, std::vector<std::string> &path, std::vector<uint32_t> &slo);
+    std::string SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
+                         std::vector<std::string> &path, std::vector<uint32_t> &slo) final;
 };
 
 #endif //PIPEPLUSPLUS_SENDER_H

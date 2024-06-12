@@ -28,6 +28,10 @@ using controlcommunication::ContainerInt;
 using controlcommunication::ContainerSignal;
 using EmptyMessage = google::protobuf::Empty;
 
+ABSL_DECLARE_FLAG(std::string, ctrl_configPath);
+ABSL_DECLARE_FLAG(uint16_t, ctrl_verbose);
+ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
+
 enum SystemDeviceType {
     Server,
     Edge
@@ -63,9 +67,9 @@ enum PipelineType {
 
 struct HardwareMetrics {
     ClockType timestamp;
-    float requestRate = 0; // TODOL Remove request rate. Keep for now for compatibility
-    double cpuUsage = 0;
-    long memUsage = 0;
+    int cpuUsage = 0;
+    int memUsage = 0;
+    int rssMemUsage = 0;
     unsigned int gpuUsage = 0;
     unsigned int gpuMemUsage = 0;
 };
@@ -88,7 +92,7 @@ namespace TaskDescription {
 
 class Controller {
 public:
-    Controller();
+    Controller(int argc, char **argv);
 
     ~Controller();
 
@@ -140,7 +144,7 @@ private:
         std::vector<ContainerHandle *> downstreams;
     };
 
-    float queryRequestRateInPeriod(const std::string &name, const uint32_t &period);
+    void readConfigFile(const std::string &config_path);
 
     void UpdateLightMetrics();
 
@@ -210,6 +214,14 @@ private:
     Pipeline getModelsByPipelineType(PipelineType type);
 
     bool running;
+    std::string ctrl_experimentName;
+    std::string ctrl_systemName;
+    uint16_t ctrl_runtime;
+
+    std::string ctrl_logPath;
+    uint16_t ctrl_loggingMode;
+    uint16_t ctrl_verbose;
+
     std::map<std::string, NodeHandle> devices;
     std::map<std::string, TaskHandle> tasks;
     std::map<std::string, ContainerHandle> containers;
@@ -218,8 +230,11 @@ private:
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<ServerCompletionQueue> cq;
 
-    std::unique_ptr<pqxx::connection> ctl_metricsServerConn = nullptr;
-    MetricsServerConfigs ctl_metricsServerConfigs;
+    std::unique_ptr<pqxx::connection> ctrl_metricsServerConn = nullptr;
+    MetricsServerConfigs ctrl_metricsServerConfigs;
+
+    std::vector<spdlog::sink_ptr> ctrl_loggerSinks = {};
+    std::shared_ptr<spdlog::logger> ctrl_logger;    
 };
 
 

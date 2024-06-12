@@ -103,15 +103,18 @@ public:
 
     virtual void batchRequests();
     virtual void batchRequestsProfiling();
+    void executeBatch(ClockType time, BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
+                      std::vector<RequestData<LocalGPUReqDataType>> &buffer,
+                      std::vector<RequestData<LocalGPUReqDataType>> &prev);
 
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            spdlog::get("container_agent")->trace("{0:s} dispatching profiling thread.", __func__);
             std::thread batcher(&BaseReqBatcher::batchRequestsProfiling, this);
             batcher.detach();
             return;
         }
-        spdlog::trace("{0:s} dispatching batching thread.", __func__);
+        spdlog::get("container_agent")->trace("{0:s} dispatching batching thread.", __func__);
         std::thread batcher(&BaseReqBatcher::batchRequests, this);
         batcher.detach();
     }
@@ -122,6 +125,21 @@ public:
 
     virtual ArrivalRecordType getArrivalRecords() override {
         return msvc_arrivalRecords.getRecords();
+    }
+
+    /**
+     * @brief Get the size of the arrival package which is recorded in the travel path
+     * 
+     * @param path 
+     * @return RequestSizeType 
+     */
+    RequestMemSizeType getArrivalPkgSize(const std::string& path) {
+        // Path looks like this
+        // [hostDeviceName|microserviceID|inReqNumber|totalNumberOfOutputs|NumberInOutputs|outPackageSize (in byte)]
+        // [edge|YOLOv5_01|05|05][server|retinaface_02|09|09]
+        std::string temp = splitString(path, "[").back();
+        temp = splitString(temp, "]").front();
+        return std::stoul(splitString(temp, "|").back());
     }
 
 protected:
@@ -138,6 +156,9 @@ protected:
     uint8_t msvc_imgType, msvc_colorCvtType, msvc_resizeInterpolType;
     float msvc_imgNormScale;
     std::vector<float> msvc_subVals, msvc_divVals;
+    BatchInferProfileListType msvc_batchInferProfileList;
+    ClockType oldestReqTime;
+    int timeout = 100;
 };
 
 
@@ -155,12 +176,12 @@ public:
 
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            spdlog::get("container_agent")->trace("{0:s} dispatching profiling thread.", __func__);
             std::thread inferencer(&BaseBatchInferencer::inferenceProfiling, this);
             inferencer.detach();
             return;
         }
-        spdlog::trace("{0:s} dispatching inference thread.", __func__);
+        spdlog::get("container_agent")->trace("{0:s} dispatching inference thread.", __func__);
         std::thread inferencer(&BaseBatchInferencer::inference, this);
         inferencer.detach();
     }
@@ -227,6 +248,13 @@ public:
     }
 protected:
     ProcessReqRecords msvc_processRecords;
+
+    struct PerQueueOutRequest {
+        bool used = false;
+        uint32_t totalSize = 0;
+        Request<LocalCPUReqDataType> cpuReq;
+        Request<LocalGPUReqDataType> gpuReq;
+    };
 };
 
 class BaseBBoxCropper : public BasePostprocessor {
@@ -248,12 +276,12 @@ public:
 
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            spdlog::get("container_agent")->trace("{0:s} dispatching profiling thread.", __func__);
             std::thread postprocessor(&BaseBBoxCropper::cropProfiling, this);
             postprocessor.detach();
             return;
         }
-        spdlog::trace("{0:s} dispatching cropping thread.", __func__);
+        spdlog::get("container_agent")->trace("{0:s} dispatching cropping thread.", __func__);
         std::thread postprocessor(&BaseBBoxCropper::cropping, this);
         postprocessor.detach();
     }
@@ -280,12 +308,12 @@ public:
 
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            spdlog::get("container_agent")->trace("{0:s} dispatching profiling thread.", __func__);
             std::thread postprocessor(&BaseBBoxCropperAugmentation::cropProfiling, this);
             postprocessor.detach();
             return;
         }
-        spdlog::trace("{0:s} dispatching cropping thread.", __func__);
+        spdlog::get("container_agent")->trace("{0:s} dispatching cropping thread.", __func__);
         std::thread postprocessor(&BaseBBoxCropperAugmentation::cropping, this);
         postprocessor.detach();
     }
@@ -304,7 +332,7 @@ public:
 
     virtual void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            spdlog::get("container_agent")->trace("{0:s} dispatching profiling thread.", __func__);
             std::thread postprocessor(&BaseBBoxCropperVerifier::cropProfiling, this);
             postprocessor.detach();
             return;
@@ -327,7 +355,7 @@ public:
 
     virtual void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            spdlog::get("container_agent")->trace("{0:s} dispatching profiling thread.", __func__);
             std::thread classifier(&BaseClassifier::classifyProfiling, this);
             classifier.detach();
             return;
@@ -365,7 +393,7 @@ public:
 
     virtual void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            spdlog::get("container_agent")->trace("{0:s} dispatching profiling thread.", __func__);
             std::thread extractor(&BaseKPointExtractor::extractorProfiling, this);
             extractor.detach();
             return;
@@ -390,7 +418,7 @@ public:
 
     virtual void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-            spdlog::trace("{0:s} dispatching profiling thread.", __func__);
+            spdlog::get("container_agent")->trace("{0:s} dispatching profiling thread.", __func__);
             std::thread sinker(&BaseSink::sink, this);
             sinker.detach();
             return;

@@ -1,5 +1,8 @@
 {
     "container": {
+        "cont_experimentName": "ex1",
+        "cont_systemName": "ppp",
+
         "cont_pipeName": "pedestrian_security",
         "cont_taskName": "age",
         "cont_hostDevice": "server",

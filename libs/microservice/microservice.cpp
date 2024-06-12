@@ -53,9 +53,11 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     // Identifiers
     msvc_name = configs.msvc_name;
     msvc_containerName = configs.msvc_contName;
+    msvc_experimentName = jsonConfigs.at("msvc_experimentName");
     msvc_pipelineName = jsonConfigs.at("msvc_pipelineName");
     msvc_taskName = jsonConfigs.at("msvc_taskName");
     msvc_hostDevice = jsonConfigs.at("msvc_hostDevice");
+    msvc_systemName = jsonConfigs.at("msvc_systemName");
     msvc_idealBatchSize = configs.msvc_idealBatchSize;
 
     // Configurations
@@ -67,7 +69,7 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_deviceIndex = configs.msvc_deviceIndex;
     msvc_RUNMODE = configs.msvc_RUNMODE;
 
-    if (jsonConfigs.at("msvc_taskName") != "datasource") {
+    if (msvc_taskName != "dsrc") {
         msvc_maxBatchSize = jsonConfigs.at("msvc_maxBatchSize");
         msvc_allocationMode = static_cast<AllocationMode>(jsonConfigs.at("msvc_allocationMode"));
     }
@@ -98,7 +100,7 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         msvc_outReqShape = {};
 
         for (auto it = configs.msvc_dnstreamMicroservices.begin(); it != configs.msvc_dnstreamMicroservices.end(); ++it) {
-            msvc_OutQueue.emplace_back(new ThreadSafeFixSizedDoubleQueue(configs.msvc_maxQueueSize, it->classOfInterest));
+            msvc_OutQueue.emplace_back(new ThreadSafeFixSizedDoubleQueue(configs.msvc_maxQueueSize, it->classOfInterest, it->name));
             // Create downstream neigbor config and push that into a list for information later
             // Local microservice supposedly has only 1 downstream but `receiver` microservices could have multiple senders.
             NeighborMicroservice dnStreamMsvc = NeighborMicroservice(*it, nummsvc_dnstreamMicroservices);

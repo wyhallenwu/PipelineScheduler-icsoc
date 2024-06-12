@@ -1,6 +1,8 @@
 {
     "container": {
-        "cont_pipeName": "traffic_pipeline",
+        "cont_experimentName": "prof",
+        "cont_systemName": "ppp",
+        "cont_pipeName": "traffic",
         "cont_taskName": "yolov5_plate",
         "cont_hostDevice": "server",
         "cont_name": "yolov5_plate_0",
@@ -12,7 +14,7 @@
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
@@ -39,9 +41,9 @@
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 2,
                         "nb_link": [
-                            "0.0.0.0:55012"
+                            "0.0.0.0:55022"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",
@@ -90,7 +92,7 @@
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
@@ -184,7 +186,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/yolov5n_224_224_dynamic_nms_3090_fp32_32_1.engine",
+                "path": "../models/platedet_dyn_nms_3090_fp32_64_1.engine",
                 "prec": 4,
                 "device": 0
             },
@@ -301,7 +303,7 @@
         "cont_allocationMode": 1
     },
     "profiling": {
-        "profile_minBatch": 64,
+        "profile_minBatch": 1,
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,

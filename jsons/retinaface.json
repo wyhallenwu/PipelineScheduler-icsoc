@@ -1,6 +1,8 @@
 {
-    "pipeline_name": "traffic_pipeline",
+    "pipeline_name": "traffic",
     "container" : {
+        "cont_experimentName": "prof",
+        "cont_systemName": "ppp",
         "cont_pipeName": "traffic_pipeline",
         "cont_taskName": "retinaface",
         "cont_hostDevice": "server",
@@ -42,7 +44,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 3,
                         "nb_link": [
-                            "0.0.0.0:55014"
+                            "0.0.0.0:55012"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",
@@ -186,7 +188,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/retina_single_face_3090_fp32_32_1.engine",
+                "path": "../models/retina1face_3090_fp32_64_1.engine",
                 "prec": 4
             },
             {
@@ -302,7 +304,7 @@
         "cont_allocationMode": 1
     },
     "profiling": {
-        "profile_minBatch": 64,
+        "profile_minBatch": 1,
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,

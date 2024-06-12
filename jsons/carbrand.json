@@ -1,6 +1,8 @@
 {
     "container": {
-        "cont_pipeName": "traffic_pipeline",
+        "cont_experimentName": "prof",
+        "cont_systemName": "ppp",
+        "cont_pipeName": "traffic",
         "cont_taskName": "carbrand",
         "cont_hostDevice": "server",
         "cont_name": "carbrand_0",
@@ -174,7 +176,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/carbrand_dynamic_3090_fp32_32_1.engine",
+                "path": "../models/carbrand_dynamic_3090_fp32_64_1.engine",
                 "prec": 4
             },
             {
@@ -280,7 +282,7 @@
         "cont_allocationMode": 1
     },
     "profiling": {
-        "profile_minBatch": 64,
+        "profile_minBatch": 1,
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,

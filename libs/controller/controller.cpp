@@ -1,5 +1,20 @@
 #include "controller.h"
 
+ABSL_FLAG(std::string, ctrl_configPath, "../jsons/example_experiment.json", "Path to the configuration file for this experiment.");
+ABSL_FLAG(uint16_t, ctrl_verbose, 0, "Verbosity level of the controller.");
+ABSL_FLAG(uint16_t, ctrl_loggingMode, 0, "Logging mode of the controller. 0:stdout, 1:file, 2:both");
+ABSL_FLAG(std::string, ctrl_logPath, "../logs", "Path to the log dir for the controller.");
+
+void Controller::readConfigFile(const std::string &path) {
+    std::ifstream file(path);
+    json j = json::parse(file);
+
+    ctrl_experimentName = j["ctrl_expName"];
+    ctrl_systemName = j["ctrl_systemName"];
+    ctrl_runtime = j["ctrl_runtime"];
+
+}
+
 std::map<ModelType, std::vector<std::string>> MODEL_INFO = {
         {DataSource,        {":datasource",         "./Container_DataSource"}},
         {Sink,              {":basesink",           "./runSink"}},
@@ -41,27 +56,52 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
  * @param time_period 
  * @return uint64_t 
  */
-float Controller::queryRequestRateInPeriod(const std::string &name, const uint32_t &period) {
-    std::string query = absl::StrFormat("SELECT COUNT (*) FROM %s WHERE to_timestamp(arrival_timestamps / 1000000.0) >= NOW() - INTERVAL '", name);
-    query += std::to_string(period) + " seconds';";
+// float Controller::queryRequestRateInPeriod(const std::string &name, const uint32_t &period) {
+//     std::string query = absl::StrFormat("SELECT COUNT (*) FROM %s WHERE to_timestamp(arrival_timestamps / 1000000.0) >= NOW() - INTERVAL '", name);
+//     query += std::to_string(period) + " seconds';";
 
-    pqxx::nontransaction session(*ctl_metricsServerConn);
-    pqxx::result res = session.exec(query);
+//     pqxx::nontransaction session(*ctl_metricsServerConn);
+//     pqxx::result res = session.exec(query);
 
-    int count = 0;
-    for (const auto& row : res) {
-        count = row[0].as<int>();
-    }
+//     int count = 0;
+//     for (const auto& row : res) {
+//         count = row[0].as<int>();
+//     }
 
-    return (float) count / period;
-}
+//     return (float) count / period;
+// }
 
-Controller::Controller() {
+Controller::Controller(int argc, char **argv) {
+    absl::ParseCommandLine(argc, argv);
+    readConfigFile(absl::GetFlag(FLAGS_ctrl_configPath));
+
+    ctrl_logPath = absl::GetFlag(FLAGS_ctrl_logPath);
+    ctrl_logPath += "/" + ctrl_experimentName;
+    std::filesystem::create_directories(
+        std::filesystem::path(ctrl_logPath)
+    );
+    ctrl_logPath += "/" + ctrl_systemName;
+    std::filesystem::create_directories(
+        std::filesystem::path(ctrl_logPath)
+    );
+    ctrl_verbose = absl::GetFlag(FLAGS_ctrl_verbose);
+    ctrl_loggingMode = absl::GetFlag(FLAGS_ctrl_loggingMode);
+
+    setupLogger(
+        ctrl_logPath,
+        "controller",
+        ctrl_loggingMode,
+        ctrl_verbose,
+        ctrl_loggerSinks,
+        ctrl_logger
+    );
+
     json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
-    ctl_metricsServerConfigs.from_json(metricsCfgs);
-    ctl_metricsServerConfigs.user = "controller";
-    ctl_metricsServerConfigs.password = "agent";
-    ctl_metricsServerConn = connectToMetricsServer(ctl_metricsServerConfigs, "controller");
+    ctrl_metricsServerConfigs.from_json(metricsCfgs);
+    ctrl_metricsServerConfigs.schema = ctrl_experimentName + "_" + ctrl_systemName;
+    ctrl_metricsServerConfigs.user = "controller";
+    ctrl_metricsServerConfigs.password = "agent";
+    ctrl_metricsServerConn = connectToMetricsServer(ctrl_metricsServerConfigs, "controller");
 
     running = true;
     devices = std::map<std::string, NodeHandle>();
