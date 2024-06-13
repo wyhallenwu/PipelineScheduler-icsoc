@@ -2,7 +2,7 @@
 
 Profiler::Profiler(const std::vector<unsigned int> &pids) {
     if (!initializeNVML()) {
-        std::cerr << "Failed to initialize NVML" << std::endl;
+        spdlog::get("container_agent")->error("Failed to initialize NVML");
         return;
     }
     pidOnDevices = std::map<unsigned int, nvmlDevice_t>();
@@ -20,7 +20,7 @@ Profiler::~Profiler() {
 
     if (nvmlInitialized) {
         if (!cleanupNVML()) {
-            std::cerr << "Failed to shutdown NVML" << std::endl;
+            spdlog::get("container_agent")->error("Failed to shutdown NVML");
         }
     }
 }
@@ -67,7 +67,7 @@ int Profiler::getGpuCount() {
     unsigned int device_count;
     nvmlReturn_t result = nvmlDeviceGetCount(&device_count);
     if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to get device count: " << nvmlErrorString(result) << std::endl;
+        spdlog::get("container_agent")->error("Failed to get device count: {}", nvmlErrorString(result));
         return -1;
     }
     return device_count;
@@ -79,13 +79,13 @@ std::vector<long> Profiler::getGpuMemory(int device_count) {
         nvmlDevice_t device;
         nvmlReturn_t result = nvmlDeviceGetHandleByIndex(i, &device);
         if (result != NVML_SUCCESS) {
-            std::cerr << "Failed to get handle for device " << i << ": " << nvmlErrorString(result) << std::endl;
+            spdlog::get("container_agent")->error("Failed to get handle for device {}: {}", i, nvmlErrorString(result));
             return {-1};
         }
         nvmlMemory_t memory;
         result = nvmlDeviceGetMemoryInfo(device, &memory);
         if (result != NVML_SUCCESS) {
-            std::cerr << "Failed to get memory info for device " << i << ": " << nvmlErrorString(result) << std::endl;
+            spdlog::get("container_agent")->error("Failed to get memory info for device {}: {}", i, nvmlErrorString(result));
             return {-1};
         }
         totalMemory.push_back((long) memory.total / 1000000); // convert to MB
@@ -144,7 +144,7 @@ void Profiler::collectStats() {
 bool Profiler::initializeNVML() {
     nvmlReturn_t result = nvmlInit();
     if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to initialize NVML: " << nvmlErrorString(result) << std::endl;
+        spdlog::get("container_agent")->error("Failed to initialize NVML: {}", nvmlErrorString(result));
         return false;
     }
     return true;
@@ -154,13 +154,13 @@ bool Profiler::setAccounting(nvmlDevice_t device) {
     nvmlEnableState_t state;
     nvmlReturn_t result = nvmlDeviceGetAccountingMode(device, &state);
     if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to get accounting mode: " << nvmlErrorString(result) << std::endl;
+        spdlog::get("container_agent")->error("Failed to get accounting mode: {}", nvmlErrorString(result));
         return false;
     }
     if (state == NVML_FEATURE_DISABLED) {
         result = nvmlDeviceSetAccountingMode(device, NVML_FEATURE_ENABLED);
         if (result != NVML_SUCCESS) {
-            std::cerr << "Failed to enable accounting mode: " << nvmlErrorString(result) << std::endl;
+            spdlog::get("container_agent")->error("Failed to enable accounting mode: {}", nvmlErrorString(result));
             return false;
         }
     }
@@ -172,14 +172,14 @@ std::vector<nvmlDevice_t> Profiler::getDevices() {
     unsigned int deviceCount;
     nvmlReturn_t result = nvmlDeviceGetCount(&deviceCount);
     if (NVML_SUCCESS != result) {
-        std::cerr << "Failed to query device count: " << nvmlErrorString(result) << std::endl;
+        spdlog::get("container_agent")->error("Failed to query device count: {}", nvmlErrorString(result));
         return std::vector<nvmlDevice_t> ();
     }
     for (unsigned int i = 0; i < deviceCount; i++) {
         nvmlDevice_t device;
         result = nvmlDeviceGetHandleByIndex(i, &device);
         if (NVML_SUCCESS != result) {
-            std::cerr << "Failed to get handle for device " << i << ": " << nvmlErrorString(result) << std::endl;
+            spdlog::get("container_agent")->error("Failed to get handle for device {}: {}", i, nvmlErrorString(result));
             return std::vector<nvmlDevice_t>();
         }
         setAccounting(device);
@@ -194,7 +194,7 @@ void Profiler::setPidOnDevices(unsigned int pid, std::vector<nvmlDevice_t> devic
         unsigned int infoCount = 64;
         nvmlReturn_t result = nvmlDeviceGetComputeRunningProcesses(device, &infoCount, processes);
         if (NVML_SUCCESS != result) {
-            std::cerr << "Failed to get compute running processes for a device: " << nvmlErrorString(result) << std::endl;
+            spdlog::get("container_agent")->error("Failed to get compute running processes for a device: {}", nvmlErrorString(result));
             break;
         }
         for (unsigned int j = 0; j < infoCount; j++) {
@@ -211,7 +211,7 @@ bool Profiler::cleanupNVML() {
     for (const auto &[pid, device]: pidOnDevices) {
         nvmlReturn_t result = nvmlDeviceClearAccountingPids(device);
         if (result != NVML_SUCCESS) {
-            std::cerr << "Failed to clear accounting PIDs: " << nvmlErrorString(result) << std::endl;
+            spdlog::get("container_agent")->error("Failed to clear accounting PIDs: {}", nvmlErrorString(result));
             return false;
         }
     }
@@ -270,7 +270,7 @@ std::pair<int, int> Profiler::getMemoryInfo(unsigned int pid) {
     std::string tmp;
     std::ifstream stream("/proc/" + std::to_string(pid) + "/status");
     if(stream.is_open()) {
-        while(search == true && stream.peek() != EOF) {
+        while(search && stream.peek() != EOF) {
             std::getline(stream, line);
             std::istringstream linestream(line);
             linestream >> tmp;
@@ -292,7 +292,7 @@ nvmlAccountingStats_t Profiler::getGPUInfo(unsigned int pid, nvmlDevice_t device
     nvmlAccountingStats_t gpu;
     nvmlReturn_t result = nvmlDeviceGetAccountingStats(device, pid, &gpu);
     if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to get GPU Accounting Stats: " << nvmlErrorString(result) << std::endl;
+        //spdlog::get("container_agent")->error("Failed to get GPU Accounting Stats: {}", nvmlErrorString(result));
         gpu.gpuUtilization = 0;
         gpu.memoryUtilization = 0;
         gpu.maxMemoryUsage = 0;
@@ -315,7 +315,7 @@ unsigned int Profiler::getPcieInfo(nvmlDevice_t device) {
     unsigned int pcie;
     nvmlReturn_t result = nvmlDeviceGetPcieThroughput(device, NVML_PCIE_UTIL_COUNT, &pcie);
     if (result != NVML_SUCCESS) {
-        std::cerr << "Failed to get PCIe throughput: " << nvmlErrorString(result) << std::endl;
+        spdlog::get("container_agent")->error("Failed to get PCIe throughput: {}", nvmlErrorString(result));
         pcie = 0;
     }
     return pcie;

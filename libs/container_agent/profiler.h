@@ -13,6 +13,7 @@
 #include <queue>
 #include <unistd.h>
 #include <nvml.h>
+#include <spdlog/spdlog.h>
 
 class LimitedPairQueue {
 public:

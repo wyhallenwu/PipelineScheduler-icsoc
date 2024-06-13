@@ -224,7 +224,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 
             auto timestamps = std::vector<ClockType>();
             for (auto ts: el.timestamp()) {
-                timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(ts)));
+                timestamps.emplace_back(TimePrecisionType(ts));
             }
             timestamps.push_back(std::chrono::system_clock::now());
 
