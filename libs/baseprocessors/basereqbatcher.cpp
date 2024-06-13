@@ -338,12 +338,14 @@ void BaseReqBatcher::batchRequests() {
         if (msvc_activeInQueueIndex.at(0) == 1) {
             currCPUReq = msvc_InQueue.at(0)->pop1(timeout);
             if (!validateRequest<LocalCPUReqDataType>(currCPUReq)) {
+                executeBatch(timeNow, outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
                 continue;
             }
             currReq = uploadReq(currCPUReq);
         } else if (msvc_activeInQueueIndex.at(0) == 2) {
             currReq = msvc_InQueue.at(0)->pop2(timeout);
             if (!validateRequest<LocalGPUReqDataType>(currReq)) {
+                executeBatch(timeNow, outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
                 continue;
             }
         }

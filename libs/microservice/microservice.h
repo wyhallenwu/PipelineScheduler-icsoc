@@ -676,7 +676,7 @@ public:
         msvc_microserviceLogPath = dirPath + "/" + msvc_name;
     }
 
-    virtual void dispatchThread() {};
+    virtual void ydispatchThread() {};
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false);
 
