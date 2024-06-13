@@ -269,10 +269,10 @@ void Receiver::HandleRpcs() {
     bool ok;
     READY = true;
     while (true) {
-        if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
-        } else if (this->PAUSE_THREADS) {
+        } else if (checkPause()) {
             if (RELOADING) {
                 spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();
@@ -290,7 +290,7 @@ void Receiver::HandleRpcs() {
                 RELOADING = false;
                 spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
-            //spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
         GPR_ASSERT(cq->Next(&tag, &ok));

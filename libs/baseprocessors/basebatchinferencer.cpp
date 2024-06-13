@@ -117,7 +117,6 @@ void BaseBatchInferencer::inference() {
                 RELOADING = false;
                 READY = true;
             }
-            //spdlog::info("{0:s} is being PAUSED.", msvc_name);
             std::this_thread::sleep_for(std::chrono::milliseconds(300));
             continue;
         }

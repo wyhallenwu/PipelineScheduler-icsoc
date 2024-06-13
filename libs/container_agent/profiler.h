@@ -31,8 +31,9 @@ public:
         unsigned int gpuMemoryUsage = 0;
     };
 
-    static int getGpuCount() { return 1; };
-    static std::vector<unsigned int> getGpuMemory() { return {0}; };
+    int getGpuCount() { return 1; };
+    std::vector<unsigned int> getGpuMemory() { return {0}; };
+
     sysStats reportAtRuntime(unsigned int pid) {
         std::lock_guard<std::mutex> lock(m); return stats; };
 

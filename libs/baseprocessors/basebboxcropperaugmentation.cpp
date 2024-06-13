@@ -258,7 +258,7 @@ void BaseBBoxCropperAugmentation::cropping() {
                 READY = true;
                 spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
-            //info("{0:s} is being PAUSED.", msvc_name);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
         // Processing the next incoming request

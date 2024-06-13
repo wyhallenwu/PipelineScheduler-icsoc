@@ -56,7 +56,7 @@ void Sender::Process() {
                 RELOADING = false;
                 spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
-            ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
         auto request = msvc_InQueue[0]->pop1();
@@ -111,7 +111,7 @@ void GPUSender::Process() {
                 RELOADING = false;
                 spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
-            ///spdlog::info("{0:s} is being PAUSED.", msvc_name);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
         auto request = msvc_InQueue[0]->pop2();

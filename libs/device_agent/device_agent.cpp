@@ -72,6 +72,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     }
 
     Ready(name, getHostIP(), type);
+    spdlog::info("Device agent {} is ready!", name);
 }
 
 bool DeviceAgent::CreateContainer(
@@ -190,9 +191,10 @@ void DeviceAgent::Ready(const std::string &name, const std::string &ip, SystemDe
     request.set_device_type(type);
     request.set_ip_address(ip);
     if (type == SystemDeviceType::Server) {
-        processing_units = Profiler::getGpuCount();
+        Profiler p = Profiler({});
+        processing_units = p.getGpuCount();
         request.set_processors(processing_units);
-        for (auto &mem: Profiler::getGpuMemory(processing_units)) {
+        for (auto &mem: p.getGpuMemory()) {
             request.add_memory(mem);
         }
     } else {

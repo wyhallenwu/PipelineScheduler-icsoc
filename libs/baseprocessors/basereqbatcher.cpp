@@ -322,7 +322,7 @@ void BaseReqBatcher::batchRequests() {
                 RELOADING = false;
                 READY = true;
             }
-            //info("{0:s} is being PAUSED.", msvc_name);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
         // Processing the next incoming request
@@ -596,7 +596,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
                 this->READY = true;
                 spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
-            //info("{0:s} is being PAUSED.", msvc_name);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
         // Processing the next incoming request
@@ -739,9 +739,10 @@ bool BaseReqBatcher::isTimeToBatch() {
         if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
             return true;
         }
-        int diff = msvc_svcLevelObjLatency - std::chrono::duration_cast<TimePrecisionType>(
+        /*int diff = msvc_svcLevelObjLatency - std::chrono::duration_cast<TimePrecisionType>(
                 std::chrono::high_resolution_clock::now() - oldestReqTime).count() -
-                   msvc_batchInferProfileList.at(msvc_onBufferBatchSize).p95inferLat * msvc_onBufferBatchSize;
+                   msvc_batchInferProfileList.at(msvc_onBufferBatchSize).p95inferLat * msvc_onBufferBatchSize;*/
+        int diff = 100;
         if (diff < 10) {
             return true;
         }

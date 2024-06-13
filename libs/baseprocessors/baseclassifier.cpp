@@ -92,7 +92,7 @@ void BaseClassifier::classify() {
                 RELOADING = false;
                 READY = true;
             }
-            //info("{0:s} is being PAUSED.", msvc_name);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
 

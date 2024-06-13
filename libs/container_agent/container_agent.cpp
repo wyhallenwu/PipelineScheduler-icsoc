@@ -112,7 +112,7 @@ json loadRunArgs(int argc, char **argv) {
         containerConfigs.at(
                 "cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs["metricsServer_metricsReportIntervalMillisec"];
         containerConfigs.at("cont_pipeline")[i]["msvc_numWarmUpBatches"] = containerConfigs.at("cont_numWarmUpBatches");
-        if (containerConfigs["cont_taskName"] != "datasource") {
+        if (containerConfigs["cont_taskName"] != "dsrc") {
             containerConfigs.at("cont_pipeline")[i]["msvc_maxBatchSize"] = containerConfigs.at("cont_maxBatchSize");
             containerConfigs.at("cont_pipeline")[i]["msvc_allocationMode"] = containerConfigs.at("cont_allocationMode");
         }
@@ -349,7 +349,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
         pushSQL(*cont_metricsServerConn, sql_statement);
 
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
-            queryProfileTable();
+            //queryProfileTable();
             cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
             cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
@@ -772,7 +772,7 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
         new UpdateSenderRequestHandler(service, cq, msvcs);
         // TODO: Handle reconfiguration by restarting sender
         // pause processing except senders to clear out the queues
-        for (auto msvc: *msvcs) {
+        /*for (auto msvc: *msvcs) {
             if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
                 continue;
             }
@@ -811,7 +811,7 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
                 continue;
             }
             msvc->unpauseThread();
-        }
+        }*/
 
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
