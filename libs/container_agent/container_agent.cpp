@@ -738,7 +738,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 }
 
                 sql += ", p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b) VALUES (";
-                sql += std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + ", '" + reqOriginStream + "'";
+                sql += timePointToEpochString(std::chrono::high_resolution_clock::now()) + ", '" + reqOriginStream + "'";
 
                 // Calculate the throughput rates for the configured periods
                 std::vector<float> throughputRates = getRatesInPeriods(records.postEndTime, cont_metricsServerConfigs.queryArrivalPeriodMillisec);
