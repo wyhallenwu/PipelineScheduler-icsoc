@@ -189,11 +189,10 @@ void DeviceAgent::Ready(const std::string &name, const std::string &ip, SystemDe
     request.set_device_name(name);
     request.set_device_type(type);
     request.set_ip_address(ip);
-    Profiler *profiler = new Profiler({});
     if (type == SystemDeviceType::Server) {
-        processing_units = profiler->getGpuCount();
+        processing_units = Profiler::getGpuCount();
         request.set_processors(processing_units);
-        for (auto &mem: profiler->getGpuMemory(processing_units)) {
+        for (auto &mem: Profiler::getGpuMemory(processing_units)) {
             request.add_memory(mem);
         }
     } else {

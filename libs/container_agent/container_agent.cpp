@@ -126,7 +126,7 @@ json loadRunArgs(int argc, char **argv) {
          */
         if (profiling_mode == 1) {
             addProfileConfigs(containerConfigs.at("cont_pipeline")[i], profilingConfigs);
-            
+
         } else if (profiling_mode == 2) {
             containerConfigs.at("cont_pipeline")[i].at("msvc_idealBatchSize") = minBatch;
             if (i == 0) {
@@ -479,7 +479,6 @@ void ContainerAgent::ReportStart() {
     if (cont_taskName != "dsrc" && cont_taskName != "sink") {
         profiler = new Profiler({pid});
         reportHwMetrics = true;
-        profiler->run();
     }
 }
 
@@ -517,10 +516,8 @@ void ContainerAgent::collectRuntimeMetrics() {
         if (startTime >= cont_metricsServerConfigs.nextHwMetricsScrapeTime) {
             if (reportHwMetrics && pid > 0) {
                 Profiler::sysStats stats = profiler->reportAtRuntime(pid);
-                //std::cout << stats.cpuUtilization << ", "
-                //          << stats.processMemoryUsage << ", " << stats.gpuUtilization << ", " << stats.processGpuMemoryUsage << std::endl;
-                HardwareMetrics hwMetrics = {startTime, stats.cpuUtilization, stats.processMemoryUsage, stats.processMemoryUsage, stats.gpuUtilization,
-                                             stats.processGpuMemoryUsage};
+                HardwareMetrics hwMetrics = {startTime, stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
+                                             stats.gpuMemoryUsage};
                 cont_hwMetrics.emplace_back(hwMetrics);
                 cont_metricsServerConfigs.nextHwMetricsScrapeTime += std::chrono::milliseconds(
                         cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
@@ -538,7 +535,6 @@ void ContainerAgent::collectRuntimeMetrics() {
             }
             lateCount = cont_msvcsList[1]->GetDroppedReqCount();
 
-            std::string modelName = cont_msvcsList[2]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
                 if (reportHwMetrics && !cont_hwMetrics.empty()) {
                     sql = "INSERT INTO " + cont_hwMetricsTableName +
@@ -560,7 +556,6 @@ void ContainerAgent::collectRuntimeMetrics() {
                     cont_hwMetrics.clear();
                 }
                 if (cont_msvcsList[0]->STOP_THREADS) {
-                    session.commit();
                     // Summarizing the profiling results into a single table
                     updateProfileTable();
                     for (auto msvc: cont_msvcsList) {

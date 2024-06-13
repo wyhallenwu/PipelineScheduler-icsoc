@@ -21,30 +21,26 @@ public:
     ~Profiler();
 
     void run();
-    void addPid(unsigned int pid);
 
     struct sysStats {
         uint64_t timestamp = 0;
-        double cpuUtilization = 0;
-        double processMemoryUsage = 0;
-        double processGpuMemoryUsage = 0;
-        double gpuUtilization = 0;
-        double totalGpuRamUsage = 0;
-        double totalCpuRamUsage = 0;
-        double maxRamCapacity = 0;
+        int cpuUsage = 0;
+        int memoryUsage = 0;
+        int rssMemory = 0;
+        unsigned int gpuUtilization = 0;
+        unsigned int gpuMemoryUsage = 0;
     };
 
-    static int getGpuCount();
-    std::vector<unsigned int> getGpuMemory(int processing_units);
-    //uint64_t getGpuMemory(int device_count);
-    long getMemoryUsageForPID(unsigned int pid);
-    sysStats reportAtRuntime(unsigned int pid);
+    static int getGpuCount() { return 1; };
+    static std::vector<unsigned int> getGpuMemory() { return {0}; };
+    sysStats reportAtRuntime(unsigned int pid) {
+        std::lock_guard<std::mutex> lock(m); return stats; };
 
 private:
-    void collectStats();
-
-    bool running;
-    std::map<unsigned int, std::vector<sysStats>> stats;
+    void jtop(const std::string &cmd);
+    std::thread t;
+    std::mutex m;
+    sysStats stats;
 };
 
 
