@@ -438,9 +438,9 @@ public:
         std::string originDevice
     ) {
         std::unique_lock<std::mutex> lock(mutex);
-        ArrivalRecord * record = &records[{reqOriginStream, originDevice}];
+        ArrivalRecord * record = &records[{reqOriginStream, abbreviate(originDevice)}];
         record->transferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
-        record->fullTransferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[1]).count());
+        record->outQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
         record->queueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
         record->arrivalTime.emplace_back(timestamps[2]);
         record->totalPkgSize.emplace_back(totalPkgSize); //Byte

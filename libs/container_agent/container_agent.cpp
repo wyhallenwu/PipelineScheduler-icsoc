@@ -355,15 +355,15 @@ ContainerAgent::ContainerAgent(const json &configs) {
             cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
             cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
-            cont_arrivalTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
+            cont_arrivalTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_" +  "_arr";
             cont_processTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_batchInferTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
             cont_hwMetricsTableName =
                     cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
             cont_metricsServerConfigs.schema = "public";
 
-            sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
-            pushSQL(*cont_metricsServerConn, sql_statement);
+            // sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
+            // pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
         /**
@@ -375,8 +375,10 @@ ContainerAgent::ContainerAgent(const json &configs) {
             sql_statement = "CREATE TABLE IF NOT EXISTS " + tableName + " (arrival_timestamps BIGINT NOT NULL, "
                                                                                 "stream TEXT NOT NULL, "
                                                                                 "sender_host TEXT NOT NULL, "
+                                                                                "receiver_host TEXT NOT NULL, "
+                                                                                "out_queueing_duration_us BIGINT NOT NULL, "
                                                                                 "transfer_duration_us BIGINT NOT NULL, "
-                                                                                "full_transfer_duration_us BIGINT NOT NULL, "
+                                                                                "queueing_duration_us BIGINT NOT NULL, "
                                                                                 "total_package_size_b INTEGER NOT NULL, "
                                                                                 "request_size_b INTEGER NOT NULL)";
 
@@ -386,9 +388,16 @@ ContainerAgent::ContainerAgent(const json &configs) {
             
             pushSQL(*cont_metricsServerConn, sql_statement);
 
-            sql_statement = "CREATE INDEX ON " + tableName + " (stream);";
-            sql_statement += "CREATE INDEX ON " + tableName + " (sender_host);";
+            sql_statement = "CREATE INDEX ON " + tableName + " (arrival_timestamps);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
             
+            sql_statement = "CREATE INDEX ON " + tableName + " (stream);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "CREATE INDEX ON " + tableName + " (sender_host);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "CREATE INDEX ON " + tableName + " (receiver_host);";
             pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
@@ -404,8 +413,10 @@ ContainerAgent::ContainerAgent(const json &configs) {
             }
             sql_statement += "stream TEXT NOT NULL, "
                              "sender_host TEXT NOT NULL, "
+                             "receiver_host TEXT NOT NULL, "
+                             "p95_out_queueing_duration_us BIGINT NOT NULL, "
                              "p95_transfer_duration_us BIGINT NOT NULL, "
-                             "p95_full_transfer_duration_us BIGINT NOT NULL, "
+                             "p95_queueing_duration_us BIGINT NOT NULL, "
                              "p95_total_package_size_b INTEGER NOT NULL)";
 
             pushSQL(*cont_metricsServerConn, sql_statement);
@@ -413,8 +424,16 @@ ContainerAgent::ContainerAgent(const json &configs) {
             sql_statement = "SELECT create_hypertable('" + cont_arrivalTableName + "', 'timestamps', if_not_exists => TRUE);";
             pushSQL(*cont_metricsServerConn, sql_statement);
 
+            sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (timestamps);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
             sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (stream);";
-            sql_statement += "CREATE INDEX ON " + cont_arrivalTableName + " (sender_host);";
+            pushSQL(*cont_metricsServerConn, sql_statement);            
+
+            sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (sender_host);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (receiver_host);";
             pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
@@ -439,8 +458,11 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
             sql_statement = "SELECT create_hypertable('" + tableName + "', 'postprocess_timestamps', if_not_exists => TRUE);";
             pushSQL(*cont_metricsServerConn, sql_statement);
+            
+            sql_statement = "CREATE INDEX ON " + tableName + " (postprocess_timestamps);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
 
-            sql_statement = "CREATE INDEX ON " + tableName + " (stream);";
+            sql_statement += "CREATE INDEX ON " + tableName + " (stream);";
             pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
@@ -463,6 +485,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
             pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "SELECT create_hypertable('" + cont_processTableName + "', 'timestamps', if_not_exists => TRUE);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "CREATE INDEX ON " + cont_processTableName + " (timestamps);";
             pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "CREATE INDEX ON " + cont_processTableName + " (stream);";
@@ -501,6 +526,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
                 sql_statement = "SELECT create_hypertable('" + cont_hwMetricsTableName +
                                 "', 'timestamps', if_not_exists => TRUE);";
+                pushSQL(*cont_metricsServerConn, sql_statement);
+
+                sql_statement = "CREATE INDEX ON " + cont_hwMetricsTableName + " (timestamps);";
                 pushSQL(*cont_metricsServerConn, sql_statement);
 
                 sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
@@ -699,23 +727,25 @@ void ContainerAgent::collectRuntimeMetrics() {
                     std::vector<uint8_t> percentiles = {95};
                     std::map<uint8_t, PercentilesArrivalRecord> percentilesRecord = records.findPercentileAll(percentiles);
 
-                    sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, sender_host, ", cont_arrivalTableName);
+                    sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, sender_host, receiver_host, ", cont_arrivalTableName);
 
                     for (auto &period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) {
                         sql += "arrival_rate_" + std::to_string(period/1000) + "s, ";
                     }
                     std::vector<float> requestRates = getRatesInPeriods(records.arrivalTime, cont_metricsServerConfigs.queryArrivalPeriodMillisec);
-                    sql += absl::StrFormat("p95_transfer_duration_us, p95_full_transfer_duration_us, p95_total_package_size_b) "
-                                           "VALUES ('%s', '%s', '%s'",
+                    sql += absl::StrFormat("p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b) "
+                                           "VALUES ('%s', '%s', '%s', '%s'",
                                            timePointToEpochString(std::chrono::system_clock::now()), 
                                            stream,
-                                           senderHost);
+                                           senderHost,
+                                           cont_hostDevice);
                     for (auto &rate: requestRates) {
                         sql += ", " + std::to_string(rate);
                     }
-                    sql += absl::StrFormat(", %ld, %ld, %d);",
+                    sql += absl::StrFormat(", %ld, %ld, %ld, %d);",
+                                           percentilesRecord[95].outQueueingDuration,
                                            percentilesRecord[95].transferDuration,
-                                           percentilesRecord[95].fullTransferDuration,
+                                           percentilesRecord[95].queueingDuration,
                                            percentilesRecord[95].totalPkgSize);
                     pushSQL(*cont_metricsServerConn, sql.c_str());
 
