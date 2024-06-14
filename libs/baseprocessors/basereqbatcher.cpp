@@ -741,13 +741,13 @@ bool BaseReqBatcher::isTimeToBatch() {
         if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
             return true;
         }
-        int diff = msvc_svcLevelObjLatency - std::chrono::duration_cast<TimePrecisionType>(
-                std::chrono::high_resolution_clock::now() - oldestReqTime).count() -
-                   msvc_batchInferProfileList.at(msvc_onBufferBatchSize).p95inferLat * msvc_onBufferBatchSize;
-        if (diff < 10) {
-            return true;
-        }
-        timeout = diff - 5;
+        // int diff = msvc_svcLevelObjLatency - std::chrono::duration_cast<TimePrecisionType>(
+        //         std::chrono::high_resolution_clock::now() - oldestReqTime).count() -
+        //            msvc_batchInferProfileList.at(msvc_onBufferBatchSize).p95inferLat * msvc_onBufferBatchSize;
+        // if (diff < 10) {
+        //     return true;
+        // }
+        // timeout = diff - 5;
     } else {
         if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
             return true;
