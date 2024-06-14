@@ -79,7 +79,7 @@ void Sender::Process() {
          * 3. The time this request is sent, which is right about now().
          */
         auto t = std::chrono::system_clock::now();
-        for (auto ts: request.req_origGenTime) {
+        for (auto &ts: request.req_origGenTime) {
             ts.emplace_back(t);
         }
 
@@ -135,7 +135,7 @@ void GPUSender::Process() {
          * 3. The time this request is sent, which is right about now().
          */
         auto t = std::chrono::system_clock::now();
-        for (auto ts: request.req_origGenTime) {
+        for (auto &ts: request.req_origGenTime) {
             ts.emplace_back(t);
         }
 
