@@ -441,6 +441,7 @@ public:
         ArrivalRecord * record = &records[{reqOriginStream, originDevice}];
         record->transferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
         record->fullTransferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[1]).count());
+        record->queueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
         record->arrivalTime.emplace_back(timestamps[2]);
         record->totalPkgSize.emplace_back(totalPkgSize); //Byte
         record->reqSize.emplace_back(requestSize); //Byte

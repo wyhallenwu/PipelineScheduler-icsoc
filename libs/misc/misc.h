@@ -66,6 +66,7 @@ struct Record {
 struct PercentilesArrivalRecord {
     uint64_t transferDuration;
     uint64_t fullTransferDuration;
+    uint64_t queueingDuration;
     uint32_t totalPkgSize;
 };
 
@@ -77,6 +78,7 @@ struct PercentilesArrivalRecord {
 struct ArrivalRecord : public Record {
     std::vector<uint64_t> transferDuration; //arrivalTime - prevSenderTime
     std::vector<uint64_t> fullTransferDuration; //arrivalTime - prevPostProcTime
+    std::vector<uint64_t> queueingDuration; //batcher's pop time - arrivalTime
     std::vector<ClockType> arrivalTime;
     std::vector<uint32_t> totalPkgSize;
     std::vector<uint32_t> reqSize;
@@ -87,6 +89,7 @@ struct ArrivalRecord : public Record {
             results[percent] = {
                 findPercentile<uint64_t>(transferDuration, percent),
                 findPercentile<uint64_t>(fullTransferDuration, percent), 
+                findPercentile<uint64_t>(queueingDuration, percent),
                 findPercentile<uint32_t>(reqSize, percent)
             };
         }
