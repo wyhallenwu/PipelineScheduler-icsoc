@@ -583,7 +583,7 @@ void ContainerAgent::ReportStart() {
     GPR_ASSERT(ok);
     pid = reply.pid();
     spdlog::get("container_agent")->info("Container Agent started with pid: {0:d}", pid);
-    if (cont_taskName != "dsrc" && cont_taskName != "sink") {
+    if (cont_taskName != "dsrc" && cont_taskName != "sink" && cont_RUNMODE == RUNMODE::PROFILING) {
         profiler = new Profiler({pid});
         reportHwMetrics = true;
     }
