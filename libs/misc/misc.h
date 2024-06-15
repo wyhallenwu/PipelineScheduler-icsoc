@@ -229,12 +229,6 @@ struct MetricsServerConfigs {
         j.at("metricsServer_hwMetricsScrapeIntervalMillisec").get_to(hwMetricsScrapeIntervalMillisec);
         j.at("metricsServer_metricsReportIntervalMillisec").get_to(metricsReportIntervalMillisec);
 
-        // If the period we want to measure is larger than `metricsReportIntervalMillisec`
-        // then its value cannot be reliably measured
-        while (queryArrivalPeriodMillisec.back() > metricsReportIntervalMillisec) {
-            queryArrivalPeriodMillisec.pop_back();
-        }
-
         nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(4 * hwMetricsScrapeIntervalMillisec);
         nextMetricsReportTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(metricsReportIntervalMillisec);
     }

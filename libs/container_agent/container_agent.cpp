@@ -657,6 +657,18 @@ void ContainerAgent::collectRuntimeMetrics() {
         // Set the next hardware metrics scrape time to the the life beyond
         cont_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::time_point::max();
     }
+
+    auto timeNow = std::chrono::system_clock::now();
+    if (timeNow > cont_metricsServerConfigs.nextMetricsReportTime) {
+        cont_metricsServerConfigs.nextMetricsReportTime = timeNow + std::chrono::milliseconds(
+                cont_metricsServerConfigs.metricsReportIntervalMillisec);
+    }
+
+    if (timeNow > cont_metricsServerConfigs.nextHwMetricsScrapeTime) {
+        cont_metricsServerConfigs.nextHwMetricsScrapeTime = timeNow + std::chrono::milliseconds(
+                cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
+    }
+
     while (run) {
         if (cont_taskName == "dsrc") {
             std::this_thread::sleep_for(std::chrono::milliseconds(10000));
@@ -665,19 +677,18 @@ void ContainerAgent::collectRuntimeMetrics() {
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
         auto startTime = metricsStopwatch.getStartTime();
-        if (startTime >= cont_metricsServerConfigs.nextHwMetricsScrapeTime) {
-            if (reportHwMetrics && pid > 0) {
+        if (reportHwMetrics) {
+            if (startTime >= cont_metricsServerConfigs.nextHwMetricsScrapeTime && pid > 0) {
                 Profiler::sysStats stats = profiler->reportAtRuntime(getpid(), pid);
                 HardwareMetrics hwMetrics = {startTime, stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
                                              stats.gpuMemoryUsage};
                 cont_hwMetrics.emplace_back(hwMetrics);
-                cont_metricsServerConfigs.nextHwMetricsScrapeTime += std::chrono::milliseconds(
-                        cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
             }
         }
-
         metricsStopwatch.stop();
         auto scrapeLatency = metricsStopwatch.elapsed_microseconds();
+        cont_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + 
+            std::chrono::milliseconds(cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec - scrapeLatency);
 
         metricsStopwatch.start();
         startTime = metricsStopwatch.getStartTime();
@@ -804,20 +815,20 @@ void ContainerAgent::collectRuntimeMetrics() {
         }
         metricsStopwatch.stop();
         auto reportLatency = metricsStopwatch.elapsed_microseconds();
-
-        ClockType nextTime = std::min(cont_metricsServerConfigs.nextMetricsReportTime,
-                                      cont_metricsServerConfigs.nextHwMetricsScrapeTime);
-
-        uint64_t timeConsumed = (scrapeLatency + reportLatency) / 1000;
-        std::cout << "Time consumed: " << timeConsumed << " milliseconds" << std::endl;
+        ClockType nextTime;
+        if (reportHwMetrics){
+            nextTime = std::min(cont_metricsServerConfigs.nextMetricsReportTime,
+                                cont_metricsServerConfigs.nextHwMetricsScrapeTime);
+        } else {
+            nextTime = cont_metricsServerConfigs.nextMetricsReportTime;
+        }
 
         std::chrono::milliseconds sleepPeriod(
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 nextTime - std::chrono::high_resolution_clock::now()).count() - (scrapeLatency + reportLatency
             ) / 1000
         );
-        std::cout << "Sleeping for " << sleepPeriod.count() << " milliseconds" << std::endl;
-        spdlog::get("container_agent")->info("{0:s} container agnet sleeps for {0:d} milliseconds {1:d}", cont_name, sleepPeriod.count());
+        spdlog::get("container_agent")->info("{0:s} Container Agent's Metric Reporter sleeps for {1:d} milliseconds.", cont_name, sleepPeriod.count());
         std::this_thread::sleep_for(sleepPeriod);
     }
 
