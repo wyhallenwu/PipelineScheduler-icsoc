@@ -72,6 +72,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     }
 
     Ready(name, getHostIP(), type);
+    spdlog::info("Device agent {} is ready!", name);
 }
 
 bool DeviceAgent::CreateContainer(
@@ -143,7 +144,7 @@ bool DeviceAgent::CreateContainer(
                             new CompletionQueue(), 0};
         return true;
     } catch (std::exception &e) {
-        std::cerr << "Error creating container: " << e.what() << std::endl;
+        spdlog::error("Error creating container: {}", e.what());
         return false;
     }
 }
@@ -189,17 +190,17 @@ void DeviceAgent::Ready(const std::string &name, const std::string &ip, SystemDe
     request.set_device_name(name);
     request.set_device_type(type);
     request.set_ip_address(ip);
-    Profiler *profiler = new Profiler({});
     if (type == SystemDeviceType::Server) {
-        processing_units = profiler->getGpuCount();
+        Profiler p = Profiler({});
+        processing_units = p.getGpuCount();
         request.set_processors(processing_units);
-        for (auto &mem: profiler->getGpuMemory(processing_units)) {
+        for (auto &mem: p.getGpuMemory()) {
             request.add_memory(mem);
         }
     } else {
         struct sysinfo sys_info;
         if (sysinfo(&sys_info) != 0) {
-            std::cerr << "sysinfo call failed!" << std::endl;
+            spdlog::error("sysinfo call failed!");
             exit(1);
         }
         processing_units = 1;
@@ -217,7 +218,7 @@ void DeviceAgent::Ready(const std::string &name, const std::string &ip, SystemDe
     GPR_ASSERT(controller_sending_cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
     if (!status.ok()) {
-        std::cerr << "Ready RPC failed" << status.error_code() << ": " << status.error_message() << std::endl;
+        spdlog::error("Ready RPC failed with code: {} and message: {}", status.error_code(), status.error_message());
         exit(1);
     }
 }
@@ -261,7 +262,11 @@ int getContainerProcessPid(std::string container_name_or_id) {
     while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
         result += buffer.data();
     }
-    return std::stoi(result);
+    try {
+        return std::stoi(result);
+    } catch (std::exception &e) {
+        return 0;
+    }
 }
 
 void DeviceAgent::ReportStartRequestHandler::Proceed() {
@@ -273,7 +278,7 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
 
         int pid = getContainerProcessPid(request.msvc_name());
         device_agent->containers[request.msvc_name()].pid = pid;
-        std::cout << "Received start report from " << request.msvc_name() << " with pid: " << pid << std::endl;
+        spdlog::info("Received start report from {} with pid: {}", request.msvc_name(), pid);
 
         reply.set_pid(pid);
         status = FINISH;

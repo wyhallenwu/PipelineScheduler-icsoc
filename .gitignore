@@ -22,6 +22,7 @@ __pycache__/
 *.o
 metricsserver*
 build
+build_host
 runs
 abseil-cpp/
 tensorrt-cpp-api/

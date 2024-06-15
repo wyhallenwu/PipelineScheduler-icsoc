@@ -119,22 +119,17 @@ endif ()
 
 find_package(spdlog REQUIRED)
 
-find_package(PostgreSQL REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBPQXX REQUIRED libpqxx)
-
 # Manually specify the path to the protobufprotocols
 set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
 
 add_subdirectory(libs/misc)
 add_subdirectory(libs/microservice)
-add_subdirectory(libs/protobufprotocols)
-add_subdirectory(libs/controller)
-add_subdirectory(libs/communicator)
-add_subdirectory(libs/container_agent)
 add_subdirectory(libs/trtengine)
 add_subdirectory(libs/onnx2trt)
 add_subdirectory(libs/baseprocessors)
+add_subdirectory(libs/protobufprotocols)
+add_subdirectory(libs/communicator)
+add_subdirectory(libs/container_agent)
 add_subdirectory(libs/data_source)
 add_subdirectory(libs/yolov5)
 add_subdirectory(libs/yolov5-plate)
@@ -145,6 +140,7 @@ add_subdirectory(libs/emotionnet)
 add_subdirectory(libs/gender)
 add_subdirectory(libs/age)
 add_subdirectory(libs/carbrand)
+add_subdirectory(libs/controller)
 add_subdirectory(libs/device_agent)
 
 add_library(PipePlusPlusSink
@@ -173,13 +169,13 @@ target_link_libraries(PipePlusPlusSink PUBLIC
 add_executable(runSink src/main.cpp)
 target_link_libraries(runSink PipePlusPlusSink)
 
-add_executable(Communicator libs/communicator/main.cpp)
+add_executable(Communicator libs/communicator/communicator.cpp)
 target_link_libraries(Communicator communicator)
 
-add_executable(DeviceAgent libs/device_agent/main.cpp)
-target_link_libraries(DeviceAgent device_agent)
+# add_executable(DeviceAgent libs/device_agent/device_agent.cpp)
+# target_link_libraries(DeviceAgent device_agent)
 
-add_executable(Controller libs/controller/main.cpp)
+add_executable(Controller libs/controller/controller.cpp)
 target_link_libraries(Controller controller)
 
 add_executable(Container_DataSource libs/data_source/data_source.cpp)
@@ -191,8 +187,8 @@ target_link_libraries(Container_Yolov5 yolov5)
 add_executable(Container_Yolov5-plate libs/yolov5-plate/yolov5-plate.cpp)
 target_link_libraries(Container_Yolov5-plate yolov5-plate)
 
-add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
-target_link_libraries(convert_onnx2trt onnx2trt)
+# add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
+# target_link_libraries(convert_onnx2trt onnx2trt)
 
 add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
 target_link_libraries(Container_RetinaFace retinaface)
@@ -214,3 +210,6 @@ target_link_libraries(Container_Age age)
 
 add_executable(Container_CarBrand libs/carbrand/carbrand.cpp)
 target_link_libraries(Container_CarBrand carbrand)
+
+add_executable(Profiler libs/device_agent/profiler.cpp)
+target_link_libraries(Profiler device_agent)

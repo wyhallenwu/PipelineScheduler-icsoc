@@ -1,8 +1,10 @@
 {
     "container": {
-        "cont_pipeName": "pedestrian_security",
+        "cont_experimentName": "prof",
+        "cont_systemName": "ppp",
+        "cont_pipeName": "pedestrian",
         "cont_taskName": "age",
-        "cont_hostDevice": "server",
+        "cont_hostDevice": "agx",
         "cont_name": "age_0",
         "cont_pipeline": [
             {
@@ -41,7 +43,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "localhost:55011"
+                            "0.0.0.0:55055"
                         ],
                         "nb_maxQueueSize": 10,
                         "nb_name": "datasource_0",
@@ -174,7 +176,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/age_dynamic_3090_fp32_20_1.engine",
+                "path": "../models/age_dynamic_Xavier_fp32_16_1.engine",
                 "prec": 4
             },
             {
@@ -276,11 +278,12 @@
             }
         ],
         "cont_metricServerConfigs": "../jsons/metricsserver.json",
-        "cont_numWarmUpBatches": 15
+        "cont_numWarmUpBatches": 15,
+        "cont_allocationMode": 1
     },
     "profiling": {
-        "profile_minBatch": 64,
-        "profile_maxBatch": 64,
+        "profile_minBatch": 1,
+        "profile_maxBatch": 16,
         "profile_stepMode": 1,
         "profile_step": 1,
         "profile_templateModelPath": "../models/age_dynamic_3090_fp32_[batch]_1.engine",

@@ -1,9 +1,11 @@
 {
-    "pipeline_name": "traffic_pipeline",
+    "pipeline_name": "traffic",
     "container" : {
-        "cont_pipeName": "traffic_pipeline",
+        "cont_experimentName": "prof",
+        "cont_systemName": "ppp",
+        "cont_pipeName": "traffic",
         "cont_taskName": "retinaface",
-        "cont_hostDevice": "server",
+        "cont_hostDevice": "agx",
         "cont_name": "retinaface_0",
         "cont_pipeline": [
             {
@@ -13,7 +15,7 @@
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
@@ -40,9 +42,9 @@
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 2,
                         "nb_link": [
-                            "0.0.0.0:55014"
+                            "0.0.0.0:55055"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",
@@ -186,7 +188,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/retina_single_face_3090_fp32_32_1.engine",
+                "path": "../models/retina1face_Xavier_fp32_16_1.engine",
                 "prec": 4
             },
             {
@@ -298,11 +300,12 @@
             }
         ],
         "cont_metricServerConfigs": "../jsons/metricsserver.json",
-        "cont_numWarmUpBatches": 15
+        "cont_numWarmUpBatches": 15,
+        "cont_allocationMode": 1
     },
     "profiling": {
-        "profile_minBatch": 64,
-        "profile_maxBatch": 64,
+        "profile_minBatch": 1,
+        "profile_maxBatch": 16,
         "profile_stepMode": 1,
         "profile_step": 1,
         "profile_templateModelPath": "../models/retina_single_face_3090_fp32_[batch]_1.engine",

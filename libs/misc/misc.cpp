@@ -125,6 +125,35 @@ uint64_t getTimestamp() {
     return std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 }
 
+void setupLogger(
+    const std::string &logPath,
+    const std::string &loggerName,
+    uint16_t loggingMode,
+    uint16_t verboseLevel,
+    std::vector<spdlog::sink_ptr> &loggerSinks,
+    std::shared_ptr<spdlog::logger> &logger
+) {
+    std::string path = logPath + "/" + loggerName + ".log";
+
+
+
+    if (loggingMode == 0 || loggingMode == 2) {
+        auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        loggerSinks.emplace_back(console_sink);
+    }
+    bool auto_flush = true;
+    if (loggingMode == 1 || loggingMode == 2) {
+        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path, auto_flush);
+        loggerSinks.emplace_back(file_sink);
+    }
+
+    logger = std::make_shared<spdlog::logger>("container_agent", loggerSinks.begin(), loggerSinks.end());
+    spdlog::register_logger(logger);
+
+    spdlog::get("container_agent")->set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
+    spdlog::get("container_agent")->set_level(spdlog::level::level_enum(verboseLevel));
+}
+
 
 std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &metricsServerConfigs, const std::string &name) {
     try {
@@ -138,7 +167,7 @@ std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &m
         if (metricsServerConn->is_open()) {
             spdlog::info("{0:s} connected to database successfully: {1:s}", name, metricsServerConn->dbname());
         } else {
-            spdlog::error("Metrics Server is not open.");
+            spdlog::get("container_agent")->error("Metrics Server is not open.");
         }
 
         return metricsServerConn;
@@ -147,20 +176,69 @@ std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &m
     }
 }
 
-void executeSQL(pqxx::connection &conn, const std::string &sql) {
+pqxx::result pushSQL(pqxx::connection &conn, const std::string &sql) {
+
     pqxx::work session(conn);
+    pqxx::result res;
     try {
-        session.exec(sql.c_str());
+        res = session.exec(sql.c_str());
         session.commit();
+        return res;
     } catch (const pqxx::sql_error &e) {
-        spdlog::error("{0:s} SQL Error: {1:s}", __func__, e.what());
+        spdlog::get("container_agent")->error("{0:s} SQL Error: {1:s}", __func__, e.what());
         exit(1);
     }
 }
+
+pqxx::result pullSQL(pqxx::connection &conn, const std::string &sql) {
+    pqxx::nontransaction session(conn);
+    pqxx::result res;
+    try {
+        res = session.exec(sql.c_str());
+        return res;
+    } catch (const pqxx::sql_error &e) {
+        spdlog::get("container_agent")->error("{0:s} SQL Error: {1:s}", __func__, e.what());
+        exit(1);
+    }
+}
+
 
 bool isHypertable(pqxx::connection &conn, const std::string &tableName) {
     pqxx::work txn(conn);
     std::string query = "SELECT EXISTS (SELECT 1 FROM timescaledb_information.hypertables WHERE hypertable_name = '" + tableName + "');";
     pqxx::result r = txn.exec(query);
     return r[0][0].as<bool>();
+}
+
+bool tableExists(pqxx::connection &conn, const std::string &schemaName, const std::string &tableName) {
+    pqxx::work txn(conn);
+    std::string name = splitString(tableName, ".").back();
+    std::string query = 
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = " + txn.quote(schemaName) + 
+        " AND table_name = " + txn.quote(name) + ");";
+    pqxx::result r = txn.exec(query);
+    return r[0][0].as<bool>();
+}
+
+/**
+ * @brief Abbreviate a keyphrase using a predefined map of abbreviations
+ * If a word is not found in the map, only the first 4 characters of the word are accepted
+ * 
+ * @param keyphrase 
+ * @return std::string 
+ */
+std::string abbreviate(const std::string &keyphrase) {
+    std::vector<std::string> words = splitString(keyphrase, "_");
+    std::string abbr = "";
+    for (const auto &word : words) {
+        try {
+            abbr += keywordAbbrs.at(word);
+        } catch (const std::out_of_range &e) {
+            abbr += word.substr(0, 4);
+        }
+        if (word != words.back()) {
+            abbr += "_";
+        }
+    }
+    return abbr;
 }

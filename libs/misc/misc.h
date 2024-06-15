@@ -7,6 +7,8 @@
 #include <iostream>
 #include "../json/json.h"
 #include "spdlog/spdlog.h"
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include "opencv2/opencv.hpp"
 #include <unordered_set>
 #include <pqxx/pqxx>
@@ -32,12 +34,32 @@ typedef std::vector<std::vector<int32_t>> RequestShapeType;
 typedef cv::cuda::GpuMat LocalGPUReqDataType;
 typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
+typedef uint32_t RequestMemSizeType;
+
+// Hw Metrics
+typedef int CpuUtilType;
+typedef unsigned int GpuUtilType;
+typedef int MemUsageType;
+typedef unsigned int GpuMemUsageType;
+
+struct BatchInferProfile {
+    uint64_t p95inferLat;
+    
+    CpuUtilType cpuUtil;
+    MemUsageType memUsage;
+    MemUsageType rssMemUsage;
+    GpuUtilType gpuUtil;
+    GpuMemUsageType gpuMemUsage;
+};
+
+typedef std::map<BatchSizeType, BatchInferProfile> BatchInferProfileListType;
 
 struct ArrivalRecord {
     ClockType prevPostProcTime;
     ClockType prevSenderTime;
     ClockType arrivalTime;
     uint32_t rpcBatchSize;
+    uint32_t totalPkgSize;
     uint32_t reqSize;
     uint32_t reqNum;
     std::string reqOriginStream;
@@ -80,10 +102,44 @@ const std::vector<std::string> cocoClassNames = {
         "hair drier", "toothbrush"
 };
 
+const std::map<std::string, std::string> keywordAbbrs {
+    {"server", "serv"},
+    {"agx-xavier1", "agx1"},
+    {"orinano1", "orn1"},
+    {"orinano2", "orn2"},
+    {"orinano3", "orn3"},
+    {"xavier-nx1", "xnx1"},
+    {"xavier-nx2", "xnx2"},
+    {"xavier-nx3", "xnx3"},
+    {"xavier-nx4", "xnx4"},
+    {"xavier-nx5", "xnx5"},
+    {"datasource", "dsrc"},
+    {"traffic", "trfc"},
+    {"building", "bldg"},
+    {"yolov5", "y5"},
+    {"yolov5n", "y5n"},
+    {"yolov5s", "y5s"},
+    {"yolov5m", "y5m"},
+    {"yolov5l", "y5l"},
+    {"yolov5x", "y5x"},
+    {"retina1face", "rt1f"},
+    {"arcface", "arcf"},
+    {"carbrand", "cbrd"},
+    {"gender", "gndr"},
+    {"emotion", "emtn"},
+    {"platedet", "pldt"},
+    {"dynamic", "dyn"},
+    {"3090", "39"}, // GPU name
+    {"fp32", "32"},
+    {"fp16", "16"},
+    {"int8", "8"}
+};
+
 struct MetricsServerConfigs {
     std::string ip = "localhost";
     uint64_t port = 60004;
     std::string DBName = "pipeline";
+    std::string schema = "public";
     std::string user = "container_agent";
     std::string password = "pipe";
     uint64_t hwMetricsScrapeIntervalMillisec = 50;
@@ -205,6 +261,15 @@ public:
     }
 };
 
+void setupLogger(
+    const std::string &logPath,
+    const std::string &loggerName,
+    uint16_t loggingMode,
+    uint16_t verboseLevel,
+    std::vector<spdlog::sink_ptr> &loggerSinks,
+    std::shared_ptr<spdlog::logger> &logger
+);
+
 float fractionToFloat(const std::string& fraction);
 
 std::string removeSubstring(const std::string& str, const std::string& substring);
@@ -219,8 +284,14 @@ std::string getTimestampString();
 
 uint64_t getTimestamp();
 
-void executeSQL(pqxx::connection &conn, const std::string &sql);
+pqxx::result pushSQL(pqxx::connection &conn, const std::string &sql);
+
+pqxx::result pullSQL(pqxx::connection &conn, const std::string &sql);
 
 bool isHypertable(pqxx::connection &conn, const std::string &tableName);
+
+bool tableExists(pqxx::connection &conn, const std::string &schemaName, const std::string &tableName);
+
+std::string abbreviate(const std::string &keyphrase);
 
 #endif

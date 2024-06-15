@@ -54,9 +54,9 @@ struct Request {
     RequestSLOType req_e2eSLOLatency;
     /**
      * @brief The path that this request and its ancestors have travelled through.
-     * Template `[hostDeviceName|microserviceID|inReqNumber|outReqNumber]
+     * Template `[hostDeviceName|microserviceID|inReqNumber|totalNumberOfOutputs|NumberInOutputs|outPackageSize (in byte)]`
      * For instance, for a request from container with id of `YOLOv5_01` to container with id of `retinaface_02`
-     * we may have a path that looks like this `[edge|YOLOv5_01|05|05][server|retinaface_02|09|09]`
+     * we may have a path that looks like this `[edge|YOLOv5_01|5|10|8|212072][server|retinaface_02|09|2|2|2343]`
      */
 
     RequestPathType req_travelPath;
@@ -142,11 +142,15 @@ private:
     bool isEmpty;
 
 public:
-    ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi) : q_MaxSize(size), class_of_interest(coi) {}
+    ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi, std::string name) : q_MaxSize(size), class_of_interest(coi), q_name(name) {}
 
     ~ThreadSafeFixSizedDoubleQueue() {
         std::queue<Request<LocalGPUReqDataType>>().swap(q_gpuQueue);
         std::queue<Request<LocalCPUReqDataType>>().swap(q_cpuQueue);
+    }
+
+    std::string getName() const {
+        return q_name;
     }
 
     /**
@@ -161,7 +165,6 @@ public:
         //}
         q_cpuQueue.emplace(request);
         q_condition.notify_one();
-        q_mutex.unlock();
     }
 
     /**
@@ -176,7 +179,6 @@ public:
         //}
         q_gpuQueue.emplace(request);
         q_condition.notify_one();
-        q_mutex.unlock();
     }
 
     /**
@@ -199,7 +201,6 @@ public:
         } else {
             request.req_travelPath = {"empty"};
         }
-        q_mutex.unlock();
         return request;
     }
 
@@ -219,8 +220,6 @@ public:
         if (!isEmpty) {
             request = q_gpuQueue.front();
             q_gpuQueue.pop();
-            q_mutex.unlock();
-            return request;
         } else {
             request.req_travelPath = {"empty"};
         }
@@ -228,10 +227,12 @@ public:
     }
 
     void setQueueSize(uint32_t queueSize) {
+        std::unique_lock<std::mutex> lock(q_mutex);
         q_MaxSize = queueSize;
     }
 
     int32_t size() {
+        std::unique_lock<std::mutex> lock(q_mutex);
         if (activeQueueIndex == 1) {
             return q_cpuQueue.size();
         } //else if (activeQueueIndex == 2) {
@@ -240,6 +241,7 @@ public:
     }
 
     int32_t size(uint8_t queueIndex) {
+        std::unique_lock<std::mutex> lock(q_mutex);
         if (queueIndex == 1) {
             return q_cpuQueue.size();
         } //else if (activeQueueIndex == 2) {
@@ -248,18 +250,22 @@ public:
     }
 
     void setActiveQueueIndex(uint8_t index) {
+        std::unique_lock<std::mutex> lock(q_mutex);
         activeQueueIndex = index;
     }
 
     uint8_t getActiveQueueIndex() {
+        std::unique_lock<std::mutex> lock(q_mutex);
         return activeQueueIndex;
     }
 
     void setClassOfInterest(int16_t classOfInterest) {
+        std::unique_lock<std::mutex> lock(q_mutex);
         class_of_interest = classOfInterest;
     }
 
     int16_t getClassOfInterest() {
+        std::unique_lock<std::mutex> lock(q_mutex);
         return class_of_interest;
     }
 };
@@ -285,6 +291,13 @@ enum RUNMODE {
     DEPLOYMENT,
     PROFILING,
     EMPTY_PROFILING
+};
+
+enum class AllocationMode {
+    //Conservative mode: the microservice will allocate only the amount of memory calculated based on the ideal batch size
+    Conservative, 
+    //Aggressive mode: the microservice will allocate the maximum amount of memory possible
+    Aggressive
 };
 
 namespace msvcconfigs {
@@ -418,17 +431,17 @@ public:
     void addRecord(
         RequestTimeType timestamps,
         uint32_t rpcBatchSize,
+        uint32_t totalPkgSize,
         uint32_t requestSize,
         uint32_t reqNumber,
         std::string reqOrigin,
         std::string senderHost
     ) {
         std::unique_lock<std::mutex> lock(mutex);
-        records.push_back({timestamps[1], timestamps[2], timestamps[3], rpcBatchSize, requestSize, reqNumber, reqOrigin, senderHost});
+        records.push_back({timestamps[1], timestamps[2], timestamps[3], rpcBatchSize, totalPkgSize, requestSize, reqNumber, reqOrigin, senderHost});
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();
-        mutex.unlock();
     }
 
     void clearOldRecords() {
@@ -451,10 +464,10 @@ public:
         ArrivalRecordType temp = records;
         records.clear();
         currNumEntries = 0;
-        mutex.unlock();
         return temp;
     }
     void setKeepLength(uint64_t keepLength) {
+        std::unique_lock<std::mutex> lock(mutex);
         this->keepLength = std::chrono::milliseconds(keepLength);
     }
 
@@ -508,7 +521,6 @@ public:
         currNumEntries++;
         totalNumEntries++;
         clearOldRecords();
-        mutex.unlock();
     }
 
     void clearOldRecords() {
@@ -531,10 +543,10 @@ public:
         ProcessRecordType temp = records;
         records.clear();
         currNumEntries = 0;
-        mutex.unlock();
         return temp;
     }
     void setKeepLength(uint64_t keepLength) {
+        std::unique_lock<std::mutex> lock(mutex);
         this->keepLength = std::chrono::milliseconds(keepLength);
     }
 
@@ -557,6 +569,7 @@ public:
 
     virtual ~Microservice() = default;
 
+    std::string msvc_experimentName;
     // Name Identifier assigned to the microservice in the format of `type_of_msvc-number`.
     // For instance, an object detector could be named `YOLOv5s-01`.
     // Another example is the
@@ -574,6 +587,9 @@ public:
     //
     std::string msvc_hostDevice;
 
+    // Name of the system (e.g., ours, SOTA1, SOTA2, etc.)
+    std::string msvc_systemName;
+
 
     void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue *> queue) {
         msvc_InQueue = std::move(queue);
@@ -587,9 +603,13 @@ public:
         return msvc_OutQueue;
     };
 
-    ThreadSafeFixSizedDoubleQueue *GetOutQueue(int coi) {
-        for (auto &queue: msvc_OutQueue) {
-            if (queue->getClassOfInterest() == coi) {
+    ThreadSafeFixSizedDoubleQueue *GetOutQueue(int queueIndex) {
+        return msvc_OutQueue[queueIndex];
+    };
+
+    ThreadSafeFixSizedDoubleQueue *GetOutQueue(std::string queueName) {
+        for (const auto &queue : msvc_OutQueue) {
+            if (queue->getName() == queueName) {
                 return queue;
             }
         }
@@ -613,10 +633,12 @@ public:
     void pauseThread() {
         PAUSE_THREADS = true;
         READY = false;
+        spdlog::get("container_agent")->trace("Paused Microservice: {0:s}", msvc_name);
     }
 
     void unpauseThread() {
         PAUSE_THREADS = false;
+        spdlog::get("container_agent")->trace("Unpaused Microservice: {0:s}", msvc_name);
     }
 
     bool checkReady() {
@@ -696,6 +718,8 @@ public:
     virtual std::string getModelName() {return "model";}
 
 protected:
+    AllocationMode msvc_allocationMode = AllocationMode::Conservative;
+
     std::vector<ThreadSafeFixSizedDoubleQueue *> msvc_InQueue, msvc_OutQueue;
     //
     std::vector<uint8_t> msvc_activeInQueueIndex = {}, msvc_activeOutQueueIndex = {};
@@ -720,7 +744,7 @@ protected:
     //type
     MicroserviceType msvc_type;
 
-    //
+    // in microseconds
     MsvcSLOType msvc_svcLevelObjLatency;
     //
     MsvcSLOType msvc_interReqTime = 1;
@@ -778,7 +802,7 @@ protected:
     // Get the frame ID from the path of travel of this request
     inline uint64_t getFrameID(const std::string &path) {
         std::string temp = splitString(path, "]")[0];
-        temp = splitString(temp, "|").back();
+        temp = splitString(temp, "|")[2];
         return std::stoull(temp);
     }
 
@@ -798,6 +822,7 @@ protected:
             }
             return false;
         }
+        spdlog::info("Batch size increased to {}", msvc_idealBatchSize);
         return true;
     }
 
@@ -813,7 +838,7 @@ protected:
         bool reset = false;
         if (msvc_RUNMODE == RUNMODE::PROFILING) {
             // This case the video has been reset, which means the profiling for this current batch size is completed
-            if (msvc_currFrameID > req_currFrameID && req_currFrameID == 0) {
+            if (msvc_currFrameID > req_currFrameID && req_currFrameID == 1) {
                 reset = true;
             }
             msvc_currFrameID = req_currFrameID;
