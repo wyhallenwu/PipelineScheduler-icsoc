@@ -355,15 +355,21 @@ ContainerAgent::ContainerAgent(const json &configs) {
             cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
             cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
-            cont_arrivalTableName = cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_" +  "_arr";
+            cont_arrivalTableName = cont_experimentName + "_" + cont_taskName + "_" +  "_arr";
             cont_processTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_batchInferTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
             cont_hwMetricsTableName =
                     cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
             cont_metricsServerConfigs.schema = "public";
 
-            // sql_statement = "DROP TABLE IF EXISTS " + cont_arrivalTableName + ";";
-            // pushSQL(*cont_metricsServerConn, sql_statement);
+            sql_statement = "DROP TABLE IF EXISTS " + cont_processTableName + ";";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "DROP TABLE IF EXISTS " + cont_batchInferTableName + ";";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "DROP TABLE IF EXISTS " + cont_hwMetricsTableName + ";";
+            pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
         /**
@@ -373,6 +379,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
         std::string tableName = cont_arrivalTableName + "_f";
         if (!tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, tableName)) {
             sql_statement = "CREATE TABLE IF NOT EXISTS " + tableName + " (arrival_timestamps BIGINT NOT NULL, "
+                                                                                "model_name TEXT NOT NULL, "
                                                                                 "stream TEXT NOT NULL, "
                                                                                 "sender_host TEXT NOT NULL, "
                                                                                 "receiver_host TEXT NOT NULL, "
@@ -412,6 +419,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
                 sql_statement += "arrival_rate_" + std::to_string(period/1000) + "s FLOAT, ";
             }
             sql_statement += "stream TEXT NOT NULL, "
+                             "model_name TEXT NOT NULL, "
                              "sender_host TEXT NOT NULL, "
                              "receiver_host TEXT NOT NULL, "
                              "p95_out_queueing_duration_us BIGINT NOT NULL, "
