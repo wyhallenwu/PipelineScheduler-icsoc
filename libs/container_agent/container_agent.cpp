@@ -731,46 +731,45 @@ void ContainerAgent::collectRuntimeMetrics() {
                 }
             }
 
-            if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
-                arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
-                // Keys value here is an std::pair<std::string, std::string> for stream and sender_host
-                for (auto &[keys, records]: arrivalRecords) {
-                    uint32_t numEntries = records.arrivalTime.size();
-                    if (numEntries == 0) {
-                        continue;
-                    }
-
-                    std::string stream = keys.first;
-                    std::string senderHost = keys.second;
-                    
-                    std::vector<uint8_t> percentiles = {95};
-                    std::map<uint8_t, PercentilesArrivalRecord> percentilesRecord = records.findPercentileAll(percentiles);
-
-                    sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, sender_host, receiver_host, ", cont_arrivalTableName);
-
-                    for (auto &period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) {
-                        sql += "arrival_rate_" + std::to_string(period/1000) + "s, ";
-                    }
-                    std::vector<float> requestRates = getRatesInPeriods(records.arrivalTime, cont_metricsServerConfigs.queryArrivalPeriodMillisec);
-                    sql += absl::StrFormat("p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b) "
-                                           "VALUES ('%s', '%s', '%s', '%s'",
-                                           timePointToEpochString(std::chrono::system_clock::now()), 
-                                           stream,
-                                           senderHost,
-                                           cont_hostDevice);
-                    for (auto &rate: requestRates) {
-                        sql += ", " + std::to_string(rate);
-                    }
-                    sql += absl::StrFormat(", %ld, %ld, %ld, %d);",
-                                           percentilesRecord[95].outQueueingDuration,
-                                           percentilesRecord[95].transferDuration,
-                                           percentilesRecord[95].queueingDuration,
-                                           percentilesRecord[95].totalPkgSize);
-                    pushSQL(*cont_metricsServerConn, sql.c_str());
-
+            arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
+            // Keys value here is an std::pair<std::string, std::string> for stream and sender_host
+            for (auto &[keys, records]: arrivalRecords) {
+                uint32_t numEntries = records.arrivalTime.size();
+                if (numEntries == 0) {
+                    continue;
                 }
-                arrivalRecords.clear();
+
+                std::string stream = keys.first;
+                std::string senderHost = keys.second;
+                
+                std::vector<uint8_t> percentiles = {95};
+                std::map<uint8_t, PercentilesArrivalRecord> percentilesRecord = records.findPercentileAll(percentiles);
+
+                sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, sender_host, receiver_host, ", cont_arrivalTableName);
+
+                for (auto &period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) {
+                    sql += "arrival_rate_" + std::to_string(period/1000) + "s, ";
+                }
+                std::vector<float> requestRates = getRatesInPeriods(records.arrivalTime, cont_metricsServerConfigs.queryArrivalPeriodMillisec);
+                sql += absl::StrFormat("p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b) "
+                                        "VALUES ('%s', '%s', '%s', '%s'",
+                                        timePointToEpochString(std::chrono::system_clock::now()), 
+                                        stream,
+                                        senderHost,
+                                        cont_hostDevice);
+                for (auto &rate: requestRates) {
+                    sql += ", " + std::to_string(rate);
+                }
+                sql += absl::StrFormat(", %ld, %ld, %ld, %d);",
+                                        percentilesRecord[95].outQueueingDuration,
+                                        percentilesRecord[95].transferDuration,
+                                        percentilesRecord[95].queueingDuration,
+                                        percentilesRecord[95].totalPkgSize);
+                pushSQL(*cont_metricsServerConn, sql.c_str());
+
             }
+            arrivalRecords.clear();
+
             processRecords = cont_msvcsList[3]->getProcessRecords();
             for (auto& [reqOriginStream, records] : processRecords) {
                 uint32_t numEntries = records.postEndTime.size();
