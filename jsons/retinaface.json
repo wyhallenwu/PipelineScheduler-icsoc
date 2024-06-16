@@ -188,7 +188,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/retina1face_Xavier_fp32_16_1.engine",
+                "path": "../models/retina1face_agx_fp32_16_1.engine",
                 "prec": 4
             },
             {

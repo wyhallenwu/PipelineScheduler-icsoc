@@ -186,7 +186,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/platedet_dyn_nms_Xavier_fp32_16_1.engine",
+                "path": "../models/platedet_dyn_nms_agx_fp32_16_1.engine",
                 "prec": 4,
                 "device": 0
             },

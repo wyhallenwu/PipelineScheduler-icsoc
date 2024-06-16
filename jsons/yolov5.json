@@ -186,7 +186,7 @@
                 "cbs":1,
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/yolov5n_dynamic_nms_Xavier_fp32_16_1.engine",
+                "path": "../models/yolov5n_dynamic_nms_agx_fp32_16_1.engine",
                 "prec": 4,
                 "device": 0
             },
@@ -308,7 +308,7 @@
         "profile_maxBatch": 16,
         "profile_stepMode": 1,
         "profile_step": 1,
-        "profile_templateModelPath": "../models/yolov5n_dynamic_nms_Xavier_fp32_16_1.engine",
+        "profile_templateModelPath": "../models/yolov5n_dynamic_nms_agx_fp32_16_1.engine",
         "profile_inputRandomizeScheme": 0,
         "profile_numWarmUpBatches": 10,
         "profile_numProfileBatches": 100,
