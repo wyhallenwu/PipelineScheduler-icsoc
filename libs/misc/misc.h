@@ -359,4 +359,6 @@ bool tableExists(pqxx::connection &conn, const std::string &schemaName, const st
 
 std::string abbreviate(const std::string &keyphrase);
 
+bool confirmIntention(const std::string& message, const std::string& magicPhrase);
+
 #endif

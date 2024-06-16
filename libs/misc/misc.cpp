@@ -245,3 +245,27 @@ std::string abbreviate(const std::string &keyphrase) {
     }
     return abbr;
 }
+
+bool confirmIntention(const std::string &message, const std::string &magicPhrase) {
+
+    std::cout << message << std::endl;
+    std::cout << "Please enter \"" << magicPhrase << "\" to confirm, or \"exit\" to cancel: ";
+
+    std::string userInput;
+
+    while (true) {
+        std::getline(std::cin, userInput);
+
+        if (userInput == magicPhrase) {
+            std::cout << "Correct phrase entered. Proceeding...\n";
+            break;
+        } else if (userInput == "exit") {
+            std::cout << "Exiting...\n";
+            return false;
+        } else {
+            std::cout << "Incorrect phrase. Please try again: ";
+        }
+    }
+
+    return true;
+}
