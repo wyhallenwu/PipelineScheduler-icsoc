@@ -497,10 +497,9 @@ public:
         std::string reqOrigin = "stream"
     ) {
         std::unique_lock<std::mutex> lock(mutex);
-        batchInferRecords[inferBatchSize].emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
         processRecords[reqOrigin].prepDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
         processRecords[reqOrigin].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
-        processRecords[reqOrigin].inferDuration.emplace_back(batchInferRecords[inferBatchSize].back());
+        processRecords[reqOrigin].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
         processRecords[reqOrigin].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[6] - timestamps[5]).count());
         processRecords[reqOrigin].postEndTime.emplace_back(timestamps[6]);
         processRecords[reqOrigin].inputSize.emplace_back(inputSize);
@@ -517,12 +516,7 @@ public:
             temp[record.first] = record.second;
         }
 
-        BatchInferRecordType tempBatch;
-        for (auto &record: batchInferRecords) {
-            tempBatch[record.first] = record.second;
-        }
         processRecords.clear();
-        batchInferRecords.clear();
         currNumEntries = 0;
         return temp;
     }
@@ -534,7 +528,6 @@ public:
 private:
     std::mutex mutex;
     ProcessRecordType processRecords;
-    BatchInferRecordType batchInferRecords;
     std::chrono::milliseconds keepLength;
     uint64_t totalNumEntries = 0, currNumEntries = 0;
 };

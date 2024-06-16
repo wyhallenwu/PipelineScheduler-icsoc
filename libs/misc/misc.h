@@ -100,11 +100,10 @@ struct ArrivalRecord : public Record {
 //<reqOriginStream, SenderHost>, Record>>
 typedef std::map<std::pair<std::string, std::string>, ArrivalRecord> ArrivalRecordType;
 
-//<Batchsize, BatchInferLatency>
-typedef std::map<BatchSizeType, std::vector<uint64_t>> BatchInferRecordType;
-
 struct PercentilesProcessRecord {
     uint64_t prepDuration;
+    uint64_t batchDuration;
+    uint64_t inferDuration;
     uint64_t postDuration;
     uint32_t inputSize;
     uint32_t outputSize;
@@ -129,6 +128,8 @@ struct ProcessRecord : public Record {
         for (uint8_t percent : percentiles) {
             results[percent] = {
                 findPercentile<uint64_t>(prepDuration, percent),
+                findPercentile<uint64_t>(batchDuration, percent),
+                findPercentile<uint64_t>(inferDuration, percent),
                 findPercentile<uint64_t>(postDuration, percent),
                 findPercentile<uint32_t>(inputSize, percent),
                 findPercentile<uint32_t>(outputSize, percent)

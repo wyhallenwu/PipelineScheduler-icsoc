@@ -72,10 +72,10 @@ std::string removeSubstring(const std::string& str, const std::string& substring
 
 
 std::string timePointToEpochString(const std::chrono::system_clock::time_point& tp) {
-    // Convert time_point to nanoseconds
+    // Convert time_point to microseconds
     TimePrecisionType ns = std::chrono::duration_cast<TimePrecisionType>(tp.time_since_epoch());
 
-    // Convert nanoseconds to string
+    // Convert microseconds to string
     std::stringstream ss;
     ss << ns.count();
     return ss.str();
@@ -196,6 +196,9 @@ pqxx::result pullSQL(pqxx::connection &conn, const std::string &sql) {
     try {
         res = session.exec(sql.c_str());
         return res;
+    } catch (const pqxx::undefined_table &e) {
+        spdlog::get("container_agent")->error("{0:s} Undefined table {1:s}", __func__, e.what());
+        return {};
     } catch (const pqxx::sql_error &e) {
         spdlog::get("container_agent")->error("{0:s} SQL Error: {1:s}", __func__, e.what());
         exit(1);
