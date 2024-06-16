@@ -765,6 +765,7 @@ bool BaseReqBatcher::isTimeToBatch() {
  */
 bool BaseReqBatcher::checkReqEligibility(std::vector<ClockType> &currReq_time) {
     if (this->msvc_RUNMODE == RUNMODE::PROFILING) {
+        currReq_time.emplace_back(std::chrono::high_resolution_clock::now()); // SECOND_TIMESTAMP
         return true;
     }
     auto now = std::chrono::high_resolution_clock::now();
