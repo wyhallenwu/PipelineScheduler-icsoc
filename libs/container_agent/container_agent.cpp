@@ -362,14 +362,24 @@ ContainerAgent::ContainerAgent(const json &configs) {
                     cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
             cont_metricsServerConfigs.schema = "public";
 
-            sql_statement = "DROP TABLE IF EXISTS " + cont_processTableName + ";";
-            pushSQL(*cont_metricsServerConn, sql_statement);
+            std::string question = absl::StrFormat("Do you want to remove old profile entries of %s?", cont_inferModel);
 
-            sql_statement = "DROP TABLE IF EXISTS " + cont_batchInferTableName + ";";
-            pushSQL(*cont_metricsServerConn, sql_statement);
+            if (!confirmIntention(question, "yes")) {
+                spdlog::get("container_agent")->info("Profile entries of {0:s} will NOT BE REMOVED.", cont_inferModel);
+            } else {
+                spdlog::get("container_agent")->info("Profile entries of {0:s} will BE REMOVED.", cont_inferModel);
+                sql_statement = "DELETE FROM " + cont_arrivalTableName + " WHERE model_name = '" + cont_inferModel + "'";
+                pushSQL(*cont_metricsServerConn, sql_statement);
 
-            sql_statement = "DROP TABLE IF EXISTS " + cont_hwMetricsTableName + ";";
-            pushSQL(*cont_metricsServerConn, sql_statement);
+                sql_statement = "DROP TABLE IF EXISTS " + cont_processTableName + ";";
+                pushSQL(*cont_metricsServerConn, sql_statement);
+
+                sql_statement = "DROP TABLE IF EXISTS " + cont_batchInferTableName + ";";
+                pushSQL(*cont_metricsServerConn, sql_statement);
+
+                sql_statement = "DROP TABLE IF EXISTS " + cont_hwMetricsTableName + ";";
+                pushSQL(*cont_metricsServerConn, sql_statement);
+            }
         }
 
         /**
@@ -535,6 +545,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
         spdlog::get("container_agent")->info("{0:s} created arrival table and process table.", cont_name);
     }
 
+    setenv("GRPC_DNS_RESOLVER", "native", 1);
 
     int own_port = containerConfigs.at("cont_port");
 
