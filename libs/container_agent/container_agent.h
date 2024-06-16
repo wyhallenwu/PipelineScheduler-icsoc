@@ -75,6 +75,8 @@ json loadRunArgs(int argc, char **argv);
 
 void addProfileConfigs(json &msvcConfigs, const json &profileConfigs);
 
+std::vector<float> getRatesInPeriods(const std::vector<ClockType> &timestamps, const std::vector<uint32_t> &periodMillisec);
+
 
 class ContainerAgent {
 public:
@@ -215,6 +217,7 @@ protected:
 
     std::string cont_experimentName;
     std::string cont_systemName;
+    std::string cont_batchInferTableName;
     std::string cont_name;
     std::vector<Microservice *> cont_msvcsList;
     std::string cont_pipeName;

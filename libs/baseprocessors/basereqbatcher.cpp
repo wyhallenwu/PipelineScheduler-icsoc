@@ -338,12 +338,14 @@ void BaseReqBatcher::batchRequests() {
         if (msvc_activeInQueueIndex.at(0) == 1) {
             currCPUReq = msvc_InQueue.at(0)->pop1(timeout);
             if (!validateRequest<LocalCPUReqDataType>(currCPUReq)) {
+                executeBatch(timeNow, outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
                 continue;
             }
             currReq = uploadReq(currCPUReq);
         } else if (msvc_activeInQueueIndex.at(0) == 2) {
             currReq = msvc_InQueue.at(0)->pop2(timeout);
             if (!validateRequest<LocalGPUReqDataType>(currReq)) {
+                executeBatch(timeNow, outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
                 continue;
             }
         }
@@ -739,14 +741,13 @@ bool BaseReqBatcher::isTimeToBatch() {
         if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
             return true;
         }
-        /*int diff = msvc_svcLevelObjLatency - std::chrono::duration_cast<TimePrecisionType>(
-                std::chrono::high_resolution_clock::now() - oldestReqTime).count() -
-                   msvc_batchInferProfileList.at(msvc_onBufferBatchSize).p95inferLat * msvc_onBufferBatchSize;*/
-        int diff = 100;
-        if (diff < 10) {
-            return true;
-        }
-        timeout = diff - 5;
+        // int diff = msvc_svcLevelObjLatency - std::chrono::duration_cast<TimePrecisionType>(
+        //         std::chrono::high_resolution_clock::now() - oldestReqTime).count() -
+        //            msvc_batchInferProfileList.at(msvc_onBufferBatchSize).p95inferLat * msvc_onBufferBatchSize;
+        // if (diff < 10) {
+        //     return true;
+        // }
+        // timeout = diff - 5;
     } else {
         if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
             return true;
@@ -764,6 +765,7 @@ bool BaseReqBatcher::isTimeToBatch() {
  */
 bool BaseReqBatcher::checkReqEligibility(std::vector<ClockType> &currReq_time) {
     if (this->msvc_RUNMODE == RUNMODE::PROFILING) {
+        currReq_time.emplace_back(std::chrono::high_resolution_clock::now()); // SECOND_TIMESTAMP
         return true;
     }
     auto now = std::chrono::high_resolution_clock::now();

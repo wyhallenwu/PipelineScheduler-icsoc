@@ -434,34 +434,28 @@ public:
         uint32_t totalPkgSize,
         uint32_t requestSize,
         uint32_t reqNumber,
-        std::string reqOrigin,
-        std::string senderHost
+        std::string reqOriginStream,
+        std::string originDevice
     ) {
         std::unique_lock<std::mutex> lock(mutex);
-        records.push_back({timestamps[1], timestamps[2], timestamps[3], rpcBatchSize, totalPkgSize, requestSize, reqNumber, reqOrigin, senderHost});
+        ArrivalRecord * record = &records[{reqOriginStream, abbreviate(originDevice)}];
+        record->transferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
+        record->outQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
+        record->queueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
+        record->arrivalTime.emplace_back(timestamps[2]);
+        record->totalPkgSize.emplace_back(totalPkgSize); //Byte
+        record->reqSize.emplace_back(requestSize); //Byte
         currNumEntries++;
         totalNumEntries++;
-        clearOldRecords();
     }
 
-    void clearOldRecords() {
-        std::chrono::milliseconds timePassed;
-        auto timeNow = std::chrono::high_resolution_clock::now();
-        auto it = records.begin();
-        while (it != records.end()) {
-            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - it->arrivalTime);
-            if (timePassed > keepLength) {
-                it = records.erase(it);
-                currNumEntries--;
-            } else {
-                break;
-            }
-        }
-    }
 
     ArrivalRecordType getRecords() {
         std::unique_lock<std::mutex> lock(mutex);
-        ArrivalRecordType temp = records;
+        ArrivalRecordType temp;
+        for (auto &record: records) {
+            temp[record.first] = record.second;
+        }
         records.clear();
         currNumEntries = 0;
         return temp;
@@ -503,45 +497,26 @@ public:
         std::string reqOrigin = "stream"
     ) {
         std::unique_lock<std::mutex> lock(mutex);
-        records.push_back(
-            {
-                timestamps[1],
-                timestamps[2],
-                timestamps[3],
-                timestamps[4],
-                timestamps[5],
-                timestamps[6],
-                inferBatchSize,
-                inputSize,
-                outputSize,
-                reqNumber,
-                reqOrigin
-            }
-        );
+        processRecords[reqOrigin].prepDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
+        processRecords[reqOrigin].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
+        processRecords[reqOrigin].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
+        processRecords[reqOrigin].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[6] - timestamps[5]).count());
+        processRecords[reqOrigin].postEndTime.emplace_back(timestamps[6]);
+        processRecords[reqOrigin].inputSize.emplace_back(inputSize);
+        processRecords[reqOrigin].outputSize.emplace_back(outputSize);
+
         currNumEntries++;
         totalNumEntries++;
-        clearOldRecords();
-    }
-
-    void clearOldRecords() {
-        std::chrono::milliseconds timePassed;
-        auto timeNow = std::chrono::high_resolution_clock::now();
-        auto it = records.begin();
-        while (it != records.end()) {
-            timePassed = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow - it->postEndTime);
-            if (timePassed > keepLength) {
-                it = records.erase(it);
-                currNumEntries--;
-            } else {
-                break;
-            }
-        }
     }
 
     ProcessRecordType getRecords() {
         std::unique_lock<std::mutex> lock(mutex);
-        ProcessRecordType temp = records;
-        records.clear();
+        ProcessRecordType temp;
+        for (auto &record: processRecords) {
+            temp[record.first] = record.second;
+        }
+
+        processRecords.clear();
         currNumEntries = 0;
         return temp;
     }
@@ -552,7 +527,7 @@ public:
 
 private:
     std::mutex mutex;
-    ProcessRecordType records;
+    ProcessRecordType processRecords;
     std::chrono::milliseconds keepLength;
     uint64_t totalNumEntries = 0, currNumEntries = 0;
 };
