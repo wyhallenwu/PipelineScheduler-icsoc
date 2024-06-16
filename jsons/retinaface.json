@@ -5,7 +5,7 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "retinaface",
-        "cont_hostDevice": "agx",
+        "cont_hostDevice": "nx",
         "cont_name": "retinaface_0",
         "cont_pipeline": [
             {
@@ -188,7 +188,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/retina1face_Xavier_fp32_16_1.engine",
+                "path": "../models/retina1face_nx_fp32_8_1.engine",
                 "prec": 4
             },
             {
@@ -305,7 +305,7 @@
     },
     "profiling": {
         "profile_minBatch": 1,
-        "profile_maxBatch": 16,
+        "profile_maxBatch": 8,
         "profile_stepMode": 1,
         "profile_step": 1,
         "profile_templateModelPath": "../models/retina_single_face_3090_fp32_[batch]_1.engine",

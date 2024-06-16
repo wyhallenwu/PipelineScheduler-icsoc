@@ -4,7 +4,7 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "yolov5_plate",
-        "cont_hostDevice": "agx",
+        "cont_hostDevice": "nx",
         "cont_name": "yolov5_plate_0",
         "cont_pipeline": [
             {
@@ -186,7 +186,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/platedet_dyn_nms_Xavier_fp32_16_1.engine",
+                "path": "../models/platedet_dyn_nms_nx_fp32_8_1.engine",
                 "prec": 4,
                 "device": 0
             },
@@ -304,7 +304,7 @@
     },
     "profiling": {
         "profile_minBatch": 1,
-        "profile_maxBatch": 16,
+        "profile_maxBatch": 8,
         "profile_stepMode": 1,
         "profile_step": 1,
         "profile_templateModelPath": "../models/yolov5n_224_224_dynamic_nms_3090_fp32_[batch]_1.engine",

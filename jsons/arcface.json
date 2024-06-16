@@ -4,7 +4,7 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "arcface",
-        "cont_hostDevice": "agx",
+        "cont_hostDevice": "nx",
         "cont_name": "arcface_0",
         "cont_pipeline": [
             {
@@ -176,7 +176,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/arcface_dynamic_Xavier_fp32_16_1.engine",
+                "path": "../models/arcface_dynamic_nx_fp32_8_1.engine",
                 "prec": 4
             },
             {
@@ -283,7 +283,7 @@
     },
     "profiling": {
         "profile_minBatch": 1,
-        "profile_maxBatch": 16,
+        "profile_maxBatch": 8,
         "profile_stepMode": 1,
         "profile_step": 1,
         "profile_templateModelPath": "../models/arcface_dynamic_3090_fp32_[batch]_1.engine",
