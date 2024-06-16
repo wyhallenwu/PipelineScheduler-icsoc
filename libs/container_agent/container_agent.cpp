@@ -368,8 +368,11 @@ ContainerAgent::ContainerAgent(const json &configs) {
                 spdlog::get("container_agent")->info("Profile entries of {0:s} will NOT BE REMOVED.", cont_inferModel);
             } else {
                 spdlog::get("container_agent")->info("Profile entries of {0:s} will BE REMOVED.", cont_inferModel);
-                sql_statement = "DELETE FROM " + cont_arrivalTableName + " WHERE model_name = '" + cont_inferModel + "'";
-                pushSQL(*cont_metricsServerConn, sql_statement);
+
+                if (tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, cont_arrivalTableName)) {
+                    sql_statement = "DELETE FROM " + cont_arrivalTableName + " WHERE model_name = '" + cont_inferModel + "'";
+                    pushSQL(*cont_metricsServerConn, sql_statement);
+                }
 
                 sql_statement = "DROP TABLE IF EXISTS " + cont_processTableName + ";";
                 pushSQL(*cont_metricsServerConn, sql_statement);
