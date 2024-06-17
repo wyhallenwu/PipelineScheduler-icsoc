@@ -86,7 +86,8 @@ find_package(CUDAToolkit REQUIRED)
 # find_package(LightGBM REQUIRED)
 
 # Manually specify the path to Python
-find_package(PythonLibs 3 REQUIRED)
+set(PYTHON_INCLUDE_DIR "/usr/include/python3.8")
+include_directories(${PYTHON_INCLUDE_DIR})
 
 # Find Protobuf installation
 option(protobuf_MODULE_COMPATIBLE TRUE)
@@ -105,6 +106,9 @@ endif ()
 find_package(Boost REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
+
+# Set the path to the gRPC installation
+set(CMAKE_PREFIX_PATH "/grpc" ${CMAKE_PREFIX_PATH})
 # Find gRPC installation
 # Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
 find_package(gRPC CONFIG REQUIRED)
@@ -214,3 +218,4 @@ target_link_libraries(Container_Age age)
 
 add_executable(Container_CarBrand libs/carbrand/carbrand.cpp)
 target_link_libraries(Container_CarBrand carbrand)
+
