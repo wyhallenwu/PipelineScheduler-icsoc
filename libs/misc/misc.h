@@ -140,6 +140,26 @@ struct ProcessRecord : public Record {
     }
 };
 
+struct PercentilesBatchInferRecord {
+    uint64_t inferDuration;
+};
+
+struct BatchInferRecord : public Record {
+    std::vector<uint64_t> inferDuration;
+
+    std::map<uint8_t, PercentilesBatchInferRecord> findPercentileAll(const std::vector<uint8_t>& percentiles) {
+        std::map<uint8_t, PercentilesBatchInferRecord> results;
+        for (uint8_t percent : percentiles) {
+            results[percent] = {
+                findPercentile<uint64_t>(inferDuration, percent)
+            };
+        }
+        return results;
+    }
+};
+
+typedef std::map<std::pair<std::string, BatchSizeType>, BatchInferRecord> BatchInferRecordType;
+
 //<reqOriginStream, Record>
 // Since each stream's content is unique, which causes unique process behaviors, 
 // we can use the stream name as the key to store the process records
