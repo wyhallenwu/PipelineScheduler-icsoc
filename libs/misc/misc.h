@@ -122,6 +122,7 @@ struct ProcessRecord : public Record {
     std::vector<uint32_t> inputSize;
     std::vector<uint32_t> outputSize;
     std::vector<ClockType> postEndTime;
+    std::vector<BatchSizeType> inferBatchSize;
 
     std::map<uint8_t, PercentilesProcessRecord> findPercentileAll(const std::vector<uint8_t>& percentiles) {
         std::map<uint8_t, PercentilesProcessRecord> results;

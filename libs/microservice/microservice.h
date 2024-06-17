@@ -501,6 +501,7 @@ public:
         processRecords[reqOrigin].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
         processRecords[reqOrigin].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
         processRecords[reqOrigin].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[6] - timestamps[5]).count());
+        processRecords[reqOrigin].inferBatchSize.emplace_back(inferBatchSize);
         processRecords[reqOrigin].postEndTime.emplace_back(timestamps[6]);
         processRecords[reqOrigin].inputSize.emplace_back(inputSize);
         processRecords[reqOrigin].outputSize.emplace_back(outputSize);
