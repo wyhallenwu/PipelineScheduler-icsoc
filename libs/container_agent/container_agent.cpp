@@ -817,7 +817,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 pushSQL(*cont_metricsServerConn, sql.c_str());
             }
             arrivalRecords.clear();
-            spdlog::get("container_agent")->info("{0:s} pushed arrival metrics to the database.", cont_name);
+            spdlog::get("container_agent")->trace("{0:s} pushed arrival metrics to the database.", cont_name);
 
             processRecords = cont_msvcsList[3]->getProcessRecords();
             for (auto& [reqOriginStream, records] : processRecords) {
@@ -850,7 +850,7 @@ void ContainerAgent::collectRuntimeMetrics() {
 
                 // pushSQL(*cont_metricsServerConn, sql.c_str());
 
-                // spdlog::get("container_agent")->info("{0:s} pushed FULL PROCESS METRICS to the database.", cont_name);
+                // spdlog::get("container_agent")->trace("{0:s} pushed FULL PROCESS METRICS to the database.", cont_name);
 
                 // Construct the SQL statement
                 sql = absl::StrFormat("INSERT INTO %s (timestamps, stream", cont_processTableName);
@@ -883,7 +883,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 pushSQL(*cont_metricsServerConn, sql.c_str());
             }            
             processRecords.clear();
-            spdlog::get("container_agent")->info("{0:s} pushed PROCESS METRICS to the database.", cont_name);
+            spdlog::get("container_agent")->trace("{0:s} pushed PROCESS METRICS to the database.", cont_name);
 
             // batchInferRecords = cont_msvcsList[3]->getBatchInferRecords();
             // for (auto& [keys, records] : batchInferRecords) {
@@ -914,8 +914,8 @@ void ContainerAgent::collectRuntimeMetrics() {
 
             pushMetricsStopWatch.stop();
             auto pushMetricsLatencyMillisec = (uint64_t) std::ceil(pushMetricsStopWatch.elapsed_microseconds() / 1000.f);
-            spdlog::get("container_agent")->info("{0:s} pushed BATCH INFER METRICS to the database", cont_name);
-            spdlog::get("container_agent")->info("{0:s} pushed ALL METRICS to the database. Latency {1:d}ms. Next push in {2:d}ms",
+            spdlog::get("container_agent")->trace("{0:s} pushed BATCH INFER METRICS to the database", cont_name);
+            spdlog::get("container_agent")->trace("{0:s} pushed ALL METRICS to the database. Latency {1:d}ms. Next push in {2:d}ms",
                                                  cont_name,
                                                  pushMetricsLatencyMillisec, 
                                                  cont_metricsServerConfigs.metricsReportIntervalMillisec - pushMetricsLatencyMillisec);
@@ -933,7 +933,7 @@ void ContainerAgent::collectRuntimeMetrics() {
         }
         timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - std::chrono::high_resolution_clock::now()).count();
         std::chrono::milliseconds sleepPeriod(timeDiff - (reportLatencyMillisec) + 2);
-        spdlog::get("container_agent")->info("{0:s} Container Agent's Metric Reporter sleeps for {1:d} milliseconds.", cont_name, sleepPeriod.count());
+        spdlog::get("container_agent")->trace("{0:s} Container Agent's Metric Reporter sleeps for {1:d} milliseconds.", cont_name, sleepPeriod.count());
         std::this_thread::sleep_for(sleepPeriod);
     }
 
