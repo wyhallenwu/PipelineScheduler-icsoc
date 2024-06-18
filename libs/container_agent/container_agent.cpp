@@ -885,32 +885,32 @@ void ContainerAgent::collectRuntimeMetrics() {
             processRecords.clear();
             spdlog::get("container_agent")->trace("{0:s} pushed PROCESS METRICS to the database.", cont_name);
 
-            // batchInferRecords = cont_msvcsList[3]->getBatchInferRecords();
-            // for (auto& [keys, records] : batchInferRecords) {
-            //     uint32_t numEntries = records.inferDuration.size();
-            //     // Check if there are any records
-            //     if (numEntries == 0) {
-            //         continue;
-            //     }
+            batchInferRecords = cont_msvcsList[3]->getBatchInferRecords();
+            for (auto& [keys, records] : batchInferRecords) {
+                uint32_t numEntries = records.inferDuration.size();
+                // Check if there are any records
+                if (numEntries == 0) {
+                    continue;
+                }
 
-            //     std::string reqOriginStream = keys.first;
-            //     BatchSizeType inferBatchSize = keys.second;
+                std::string reqOriginStream = keys.first;
+                BatchSizeType inferBatchSize = keys.second;
 
-            //     std::map<uint8_t, PercentilesBatchInferRecord> percentilesRecord = records.findPercentileAll({95});
+                std::map<uint8_t, PercentilesBatchInferRecord> percentilesRecord = records.findPercentileAll({95});
 
-            //     // Construct the SQL statement
-            //     sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, infer_batch_size, p95_infer_duration_us) "
-            //                           "VALUES (%s, '%s', %d, %ld)",
-            //                           cont_batchInferTableName,
-            //                           timePointToEpochString(std::chrono::high_resolution_clock::now()),
-            //                           reqOriginStream,
-            //                           inferBatchSize,
-            //                           percentilesRecord[95].inferDuration);
+                // Construct the SQL statement
+                sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, infer_batch_size, p95_infer_duration_us) "
+                                      "VALUES (%s, '%s', %d, %ld)",
+                                      cont_batchInferTableName,
+                                      timePointToEpochString(std::chrono::high_resolution_clock::now()),
+                                      reqOriginStream,
+                                      inferBatchSize,
+                                      percentilesRecord[95].inferDuration);
 
-            //     // Push the SQL statement
-            //     pushSQL(*cont_metricsServerConn, sql.c_str());
-            // }
-            // batchInferRecords.clear();
+                // Push the SQL statement
+                pushSQL(*cont_metricsServerConn, sql.c_str());
+            }
+            batchInferRecords.clear();
 
             pushMetricsStopWatch.stop();
             auto pushMetricsLatencyMillisec = (uint64_t) std::ceil(pushMetricsStopWatch.elapsed_microseconds() / 1000.f);
