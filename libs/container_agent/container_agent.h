@@ -54,6 +54,9 @@ enum TransferMethod {
     GPU
 };
 
+std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::milliseconds> timePointCastMillisecond(
+    std::chrono::system_clock::time_point tp);
+
 namespace msvcconfigs {
 
     std::tuple<json, json> loadJson();
@@ -248,7 +251,7 @@ protected:
 
     bool reportHwMetrics;
     std::string cont_hwMetricsTableName;
-    HardwareMetricsRecords cont_hwMetrics;
+    SummarizedHardwareMetrics cont_hwMetrics;
     BatchInferProfileListType cont_batchInferProfileList;
 
     std::string cont_arrivalTableName;

@@ -501,9 +501,12 @@ public:
         processRecords[reqOrigin].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
         processRecords[reqOrigin].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
         processRecords[reqOrigin].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[6] - timestamps[5]).count());
+        processRecords[reqOrigin].inferBatchSize.emplace_back(inferBatchSize);
         processRecords[reqOrigin].postEndTime.emplace_back(timestamps[6]);
         processRecords[reqOrigin].inputSize.emplace_back(inputSize);
         processRecords[reqOrigin].outputSize.emplace_back(outputSize);
+
+        batchInferRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
 
         currNumEntries++;
         totalNumEntries++;
@@ -520,6 +523,19 @@ public:
         currNumEntries = 0;
         return temp;
     }
+
+    BatchInferRecordType getBatchInferRecords() {
+        std::unique_lock<std::mutex> lock(mutex);
+        BatchInferRecordType temp;
+        for (auto &record: batchInferRecords) {
+            temp[record.first] = record.second;
+        }
+
+        batchInferRecords.clear();
+        currNumEntries = 0;
+        return temp;
+    }
+
     void setKeepLength(uint64_t keepLength) {
         std::unique_lock<std::mutex> lock(mutex);
         this->keepLength = std::chrono::milliseconds(keepLength);
@@ -528,6 +544,7 @@ public:
 private:
     std::mutex mutex;
     ProcessRecordType processRecords;
+    BatchInferRecordType batchInferRecords;
     std::chrono::milliseconds keepLength;
     uint64_t totalNumEntries = 0, currNumEntries = 0;
 };
@@ -681,6 +698,10 @@ public:
     }
 
     virtual ProcessRecordType getProcessRecords() {
+        return {};
+    }
+
+    virtual BatchInferRecordType getBatchInferRecords() {
         return {};
     }
 
