@@ -14,6 +14,12 @@ ABSL_FLAG(uint16_t, profiling_mode, 0,
           "flag to make the model running in profiling mode 0:deployment, 1:profiling, 2:empty_profiling");
 
 
+std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::milliseconds> timePointCastMillisecond(
+    std::chrono::system_clock::time_point tp) {
+    return std::chrono::time_point_cast<std::chrono::milliseconds>(tp);
+}
+
+
 void addProfileConfigs(json &msvcConfigs, const json &profileConfigs) {
     msvcConfigs["profile_inputRandomizeScheme"] = profileConfigs.at("profile_inputRandomizeScheme");
     msvcConfigs["profile_stepMode"] = profileConfigs.at("profile_stepMode");
@@ -715,50 +721,51 @@ void ContainerAgent::collectRuntimeMetrics() {
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
         auto startTime = metricsStopwatch.getStartTime();
+        uint64_t scrapeLatencyMillisec = 0;
+        uint64_t timeDiff;
         if (reportHwMetrics) {
-            if (startTime >= cont_metricsServerConfigs.nextHwMetricsScrapeTime && pid > 0) {
+            if (timePointCastMillisecond(startTime) >= timePointCastMillisecond(cont_metricsServerConfigs.nextHwMetricsScrapeTime) && pid > 0) {
                 Profiler::sysStats stats = profiler->reportAtRuntime(getpid(), pid);
-                HardwareMetrics hwMetrics = {startTime, stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
+                cont_hwMetrics = {stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
                                              stats.gpuMemoryUsage};
-                cont_hwMetrics.emplace_back(hwMetrics);
+
+                metricsStopwatch.stop();
+                scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);  
+                cont_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + 
+                    std::chrono::milliseconds(cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec - scrapeLatencyMillisec);
+                spdlog::get("container_agent")->trace("{0:s} SCRAPE hardware metrics. Latency {1:d}ms.",
+                                                     cont_name,
+                                                     scrapeLatencyMillisec);
+                metricsStopwatch.start();
             }
         }
-        metricsStopwatch.stop();
-        auto scrapeLatency = metricsStopwatch.elapsed_microseconds();
-        cont_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + 
-            std::chrono::milliseconds(cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec - scrapeLatency);
 
-        metricsStopwatch.start();
-        startTime = metricsStopwatch.getStartTime();
-        if (startTime >= cont_metricsServerConfigs.nextMetricsReportTime) {
+        startTime = std::chrono::high_resolution_clock::now();
+        if (timePointCastMillisecond(startTime) >= 
+                timePointCastMillisecond(cont_metricsServerConfigs.nextMetricsReportTime)) {
+            Stopwatch pushMetricsStopWatch;
+            pushMetricsStopWatch.start();
             for (auto msvc: cont_msvcsList) {
                 queueSizes.push_back(msvc->GetOutQueueSize(0));
             }
             lateCount = cont_msvcsList[1]->GetDroppedReqCount();
 
-            Stopwatch pushMetricsStopWatch;
-            pushMetricsStopWatch.start();
             std::string modelName = cont_msvcsList[2]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
-                if (reportHwMetrics && !cont_hwMetrics.empty()) {
+                if (reportHwMetrics && cont_hwMetrics.metricsAvailable) {
                     sql = "INSERT INTO " + cont_hwMetricsTableName +
                         " (timestamps, batch_size, cpu_usage, mem_usage, rss_mem_usage, gpu_usage, gpu_mem_usage) VALUES ";
-                    for (const auto &record: cont_hwMetrics) {
-                        sql += "(" + timePointToEpochString(record.timestamp) + ", ";
-                        sql += std::to_string(cont_msvcsList[1]->msvc_idealBatchSize) + ", ";
-                        sql += std::to_string(record.cpuUsage) + ", ";
-                        sql += std::to_string(record.memUsage) + ", ";
-                        sql += std::to_string(record.rssMemUsage) + ", ";
-                        sql += std::to_string(record.gpuUsage) + ", ";
-                        sql += std::to_string(record.gpuMemUsage) + ")";
-                        if (&record != &cont_hwMetrics.back()) {
-                            sql += ", ";
-                        }
-                    }
+                    sql += "(" + timePointToEpochString(std::chrono::high_resolution_clock::now()) + ", ";
+                    sql += std::to_string(cont_msvcsList[1]->msvc_idealBatchSize) + ", ";
+                    sql += std::to_string(cont_hwMetrics.cpuUsage) + ", ";
+                    sql += std::to_string(cont_hwMetrics.memUsage) + ", ";
+                    sql += std::to_string(cont_hwMetrics.rssMemUsage) + ", ";
+                    sql += std::to_string(cont_hwMetrics.gpuUsage) + ", ";
+                    sql += std::to_string(cont_hwMetrics.gpuMemUsage) + ")";
                     sql += ";";
                     pushSQL(*cont_metricsServerConn, sql.c_str());
                     cont_hwMetrics.clear();
-                    spdlog::get("container_agent")->info("{0:s} pushed hardware metrics to the database.", cont_name);
+                    spdlog::get("container_agent")->trace("{0:s} pushed hardware metrics to the database.", cont_name);
                 }
                 if (cont_msvcsList[0]->STOP_THREADS) {
                     // Summarizing the profiling results into a single table
@@ -808,10 +815,9 @@ void ContainerAgent::collectRuntimeMetrics() {
 
                 std::cout << sql << std::endl;
                 pushSQL(*cont_metricsServerConn, sql.c_str());
-                spdlog::get("container_agent")->info("{0:s} pushed arrival metrics to the database.", cont_name);
-
             }
             arrivalRecords.clear();
+            spdlog::get("container_agent")->info("{0:s} pushed arrival metrics to the database.", cont_name);
 
             processRecords = cont_msvcsList[3]->getProcessRecords();
             for (auto& [reqOriginStream, records] : processRecords) {
@@ -877,41 +883,47 @@ void ContainerAgent::collectRuntimeMetrics() {
                 pushSQL(*cont_metricsServerConn, sql.c_str());
             }            
             processRecords.clear();
+            spdlog::get("container_agent")->info("{0:s} pushed PROCESS METRICS to the database.", cont_name);
 
-            batchInferRecords = cont_msvcsList[3]->getBatchInferRecords();
-            for (auto& [keys, records] : batchInferRecords) {
-                uint32_t numEntries = records.inferDuration.size();
-                // Check if there are any records
-                if (numEntries == 0) {
-                    continue;
-                }
+            // batchInferRecords = cont_msvcsList[3]->getBatchInferRecords();
+            // for (auto& [keys, records] : batchInferRecords) {
+            //     uint32_t numEntries = records.inferDuration.size();
+            //     // Check if there are any records
+            //     if (numEntries == 0) {
+            //         continue;
+            //     }
 
-                std::string reqOriginStream = keys.first;
-                BatchSizeType inferBatchSize = keys.second;
+            //     std::string reqOriginStream = keys.first;
+            //     BatchSizeType inferBatchSize = keys.second;
 
-                std::map<uint8_t, PercentilesBatchInferRecord> percentilesRecord = records.findPercentileAll({95});
+            //     std::map<uint8_t, PercentilesBatchInferRecord> percentilesRecord = records.findPercentileAll({95});
 
-                // Construct the SQL statement
-                sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, infer_batch_size, p95_infer_duration_us) "
-                                      "VALUES (%s, '%s', %d, %ld)",
-                                      cont_batchInferTableName,
-                                      timePointToEpochString(std::chrono::high_resolution_clock::now()),
-                                      reqOriginStream,
-                                      inferBatchSize,
-                                      percentilesRecord[95].inferDuration);
+            //     // Construct the SQL statement
+            //     sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, infer_batch_size, p95_infer_duration_us) "
+            //                           "VALUES (%s, '%s', %d, %ld)",
+            //                           cont_batchInferTableName,
+            //                           timePointToEpochString(std::chrono::high_resolution_clock::now()),
+            //                           reqOriginStream,
+            //                           inferBatchSize,
+            //                           percentilesRecord[95].inferDuration);
 
-                // Push the SQL statement
-                pushSQL(*cont_metricsServerConn, sql.c_str());
-            }
-            batchInferRecords.clear();
+            //     // Push the SQL statement
+            //     pushSQL(*cont_metricsServerConn, sql.c_str());
+            // }
+            // batchInferRecords.clear();
 
             pushMetricsStopWatch.stop();
-            auto pushMetricsLatency = pushMetricsStopWatch.elapsed_microseconds();
+            auto pushMetricsLatencyMillisec = (uint64_t) std::ceil(pushMetricsStopWatch.elapsed_microseconds() / 1000.f);
+            spdlog::get("container_agent")->info("{0:s} pushed BATCH INFER METRICS to the database", cont_name);
+            spdlog::get("container_agent")->info("{0:s} pushed ALL METRICS to the database. Latency {1:d}ms. Next push in {2:d}ms",
+                                                 cont_name,
+                                                 pushMetricsLatencyMillisec, 
+                                                 cont_metricsServerConfigs.metricsReportIntervalMillisec - pushMetricsLatencyMillisec);
             cont_metricsServerConfigs.nextMetricsReportTime += std::chrono::milliseconds(
-                    cont_metricsServerConfigs.metricsReportIntervalMillisec - pushMetricsLatency / 1000);
+                    cont_metricsServerConfigs.metricsReportIntervalMillisec - pushMetricsLatencyMillisec);
         }
         metricsStopwatch.stop();
-        auto reportLatency = metricsStopwatch.elapsed_microseconds();
+        auto reportLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
         ClockType nextTime;
         if (reportHwMetrics){
             nextTime = std::min(cont_metricsServerConfigs.nextMetricsReportTime,
@@ -919,12 +931,8 @@ void ContainerAgent::collectRuntimeMetrics() {
         } else {
             nextTime = cont_metricsServerConfigs.nextMetricsReportTime;
         }
-
-        std::chrono::milliseconds sleepPeriod(
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                nextTime - std::chrono::high_resolution_clock::now()).count() - (scrapeLatency + reportLatency
-            ) / 1000
-        );
+        timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - std::chrono::high_resolution_clock::now()).count();
+        std::chrono::milliseconds sleepPeriod(timeDiff - (reportLatencyMillisec) + 2);
         spdlog::get("container_agent")->info("{0:s} Container Agent's Metric Reporter sleeps for {1:d} milliseconds.", cont_name, sleepPeriod.count());
         std::this_thread::sleep_for(sleepPeriod);
     }
