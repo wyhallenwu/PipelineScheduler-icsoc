@@ -439,7 +439,17 @@ public:
     ) {
         std::unique_lock<std::mutex> lock(mutex);
         ArrivalRecord * record = &records[{reqOriginStream, abbreviate(originDevice)}];
-        record->transferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
+        auto transferDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count();
+        // If transfer latency is 0 or negative, which only happens when time between devices are not properly synchronized
+        if (timestamps[3] <= timestamps[2]) {
+            if (record->transferDuration.empty() || lastTransferDuration == -1){
+                transferDuration = 0;
+            } else {
+                transferDuration = record->transferDuration.back();
+            }
+        }
+        record->transferDuration.emplace_back(transferDuration);
+        lastTransferDuration = transferDuration;
         record->outQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
         record->queueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
         record->arrivalTime.emplace_back(timestamps[2]);
@@ -467,6 +477,7 @@ public:
 
 private:
     std::mutex mutex;
+    int64_t lastTransferDuration = -1;
     ArrivalRecordType records;
     std::chrono::milliseconds keepLength;
     uint64_t totalNumEntries = 0, currNumEntries = 0;
