@@ -54,6 +54,9 @@ enum TransferMethod {
     GPU
 };
 
+std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::milliseconds> timePointCastMillisecond(
+    std::chrono::system_clock::time_point tp);
+
 namespace msvcconfigs {
 
     std::tuple<json, json> loadJson();
@@ -74,6 +77,8 @@ struct contRunArgs {
 json loadRunArgs(int argc, char **argv);
 
 void addProfileConfigs(json &msvcConfigs, const json &profileConfigs);
+
+std::vector<float> getRatesInPeriods(const std::vector<ClockType> &timestamps, const std::vector<uint32_t> &periodMillisec);
 
 
 class ContainerAgent {
@@ -215,6 +220,7 @@ protected:
 
     std::string cont_experimentName;
     std::string cont_systemName;
+    std::string cont_batchInferTableName;
     std::string cont_name;
     std::vector<Microservice *> cont_msvcsList;
     std::string cont_pipeName;
@@ -245,7 +251,7 @@ protected:
 
     bool reportHwMetrics;
     std::string cont_hwMetricsTableName;
-    HardwareMetricsRecords cont_hwMetrics;
+    SummarizedHardwareMetrics cont_hwMetrics;
     BatchInferProfileListType cont_batchInferProfileList;
 
     std::string cont_arrivalTableName;

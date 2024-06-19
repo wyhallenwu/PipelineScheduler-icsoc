@@ -243,6 +243,11 @@ public:
     virtual ProcessRecordType getProcessRecords() override {
         return msvc_processRecords.getRecords();
     }
+
+    virtual BatchInferRecordType getBatchInferRecords() override {
+        return msvc_processRecords.getBatchInferRecords();
+    }
+
     virtual void addToPath(RequestPathType &path, uint64_t reqNum) {
         
     }

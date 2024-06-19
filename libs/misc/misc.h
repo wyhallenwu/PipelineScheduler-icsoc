@@ -54,33 +54,117 @@ struct BatchInferProfile {
 
 typedef std::map<BatchSizeType, BatchInferProfile> BatchInferProfileListType;
 
-struct ArrivalRecord {
-    ClockType prevPostProcTime;
-    ClockType prevSenderTime;
-    ClockType arrivalTime;
-    uint32_t rpcBatchSize;
-    uint32_t totalPkgSize;
-    uint32_t reqSize;
-    uint32_t reqNum;
-    std::string reqOriginStream;
-    std::string originDevice;
+struct Record {
+    template<typename T>
+    T findPercentile(const std::vector<T> &vector, uint8_t &percentile) {
+        std::vector<T> vectorCopy = vector;
+        std::sort(vectorCopy.begin(), vectorCopy.end());
+        return vectorCopy[vectorCopy.size() * percentile / 100];
+    }
 };
-typedef std::vector<ArrivalRecord> ArrivalRecordType;
 
-struct ProcessRecord {
-    ClockType preStartTime;
-    ClockType preEndTime;
-    ClockType batchingEndTime;
-    ClockType batchInferenceTime;
-    ClockType postStartTime;
-    ClockType postEndTime;
-    uint32_t inferBatchSize;
+struct PercentilesArrivalRecord {
+    uint64_t outQueueingDuration;
+    uint64_t transferDuration;
+    uint64_t queueingDuration;
+    uint32_t totalPkgSize;
+};
+
+/**
+ * @brief Arrival record structure
+ * The point of this is to quickly summarize the arrival records collected during the last period
+ * 
+ */
+struct ArrivalRecord : public Record {
+    std::vector<uint64_t> outQueueingDuration; //prevPostProcTime - postproc's outqueue time
+    std::vector<uint64_t> transferDuration; //arrivalTime - prevSenderTime
+    std::vector<uint64_t> queueingDuration; //batcher's pop time - arrivalTime
+    std::vector<ClockType> arrivalTime;
+    std::vector<uint32_t> totalPkgSize;
+    std::vector<uint32_t> reqSize;
+
+    std::map<uint8_t, PercentilesArrivalRecord> findPercentileAll(const std::vector<uint8_t>& percentiles) {
+        std::map<uint8_t, PercentilesArrivalRecord> results;
+        for (uint8_t percent : percentiles) {
+            results[percent] = {
+                findPercentile<uint64_t>(outQueueingDuration, percent), 
+                findPercentile<uint64_t>(transferDuration, percent),
+                findPercentile<uint64_t>(queueingDuration, percent),
+                findPercentile<uint32_t>(reqSize, percent)
+            };
+        }
+        return results;
+    }
+};
+
+//<reqOriginStream, SenderHost>, Record>>
+typedef std::map<std::pair<std::string, std::string>, ArrivalRecord> ArrivalRecordType;
+
+struct PercentilesProcessRecord {
+    uint64_t prepDuration;
+    uint64_t batchDuration;
+    uint64_t inferDuration;
+    uint64_t postDuration;
     uint32_t inputSize;
     uint32_t outputSize;
-    uint32_t reqNum;
-    std::string reqOriginStream;
 };
-typedef std::vector<ProcessRecord> ProcessRecordType;
+
+/**
+ * @brief Process record structure
+ * The point of this is to quickly summarize the records collected during the last period
+ * 
+ */
+struct ProcessRecord : public Record {
+    std::vector<uint64_t> prepDuration;
+    std::vector<uint64_t> batchDuration;
+    std::vector<uint64_t> inferDuration;
+    std::vector<uint64_t> postDuration;
+    std::vector<uint32_t> inputSize;
+    std::vector<uint32_t> outputSize;
+    std::vector<ClockType> postEndTime;
+    std::vector<BatchSizeType> inferBatchSize;
+
+    std::map<uint8_t, PercentilesProcessRecord> findPercentileAll(const std::vector<uint8_t>& percentiles) {
+        std::map<uint8_t, PercentilesProcessRecord> results;
+        for (uint8_t percent : percentiles) {
+            results[percent] = {
+                findPercentile<uint64_t>(prepDuration, percent),
+                findPercentile<uint64_t>(batchDuration, percent),
+                findPercentile<uint64_t>(inferDuration, percent),
+                findPercentile<uint64_t>(postDuration, percent),
+                findPercentile<uint32_t>(inputSize, percent),
+                findPercentile<uint32_t>(outputSize, percent)
+            };
+        }
+        return results;
+    }
+};
+
+struct PercentilesBatchInferRecord {
+    uint64_t inferDuration;
+};
+
+struct BatchInferRecord : public Record {
+    std::vector<uint64_t> inferDuration;
+
+    std::map<uint8_t, PercentilesBatchInferRecord> findPercentileAll(const std::vector<uint8_t>& percentiles) {
+        std::map<uint8_t, PercentilesBatchInferRecord> results;
+        for (uint8_t percent : percentiles) {
+            results[percent] = {
+                findPercentile<uint64_t>(inferDuration, percent)
+            };
+        }
+        return results;
+    }
+};
+
+typedef std::map<std::pair<std::string, BatchSizeType>, BatchInferRecord> BatchInferRecordType;
+
+//<reqOriginStream, Record>
+// Since each stream's content is unique, which causes unique process behaviors, 
+// we can use the stream name as the key to store the process records
+typedef std::map<std::string, ProcessRecord> ProcessRecordType;
+
 typedef std::chrono::microseconds TimePrecisionType;
 
 const std::unordered_set<uint16_t> GRAYSCALE_CONVERSION_CODES = {6, 7, 10, 11};
@@ -104,15 +188,18 @@ const std::vector<std::string> cocoClassNames = {
 
 const std::map<std::string, std::string> keywordAbbrs {
     {"server", "serv"},
-    {"agx-xavier1", "agx1"},
+    {"agxaviver", "agx"},
+    {"agxavier1", "agx1"},
+    {"orinano", "orn"},
     {"orinano1", "orn1"},
     {"orinano2", "orn2"},
     {"orinano3", "orn3"},
-    {"xavier-nx1", "xnx1"},
-    {"xavier-nx2", "xnx2"},
-    {"xavier-nx3", "xnx3"},
-    {"xavier-nx4", "xnx4"},
-    {"xavier-nx5", "xnx5"},
+    {"nxavier", "nx"},
+    {"nxavier1", "nx1"},
+    {"nxxavier", "nx2"},
+    {"nxavier3", "nx3"},
+    {"nxavier4", "nx4"},
+    {"nxavier5", "nx5"},
     {"datasource", "dsrc"},
     {"traffic", "trfc"},
     {"building", "bldg"},
@@ -144,6 +231,7 @@ struct MetricsServerConfigs {
     std::string password = "pipe";
     uint64_t hwMetricsScrapeIntervalMillisec = 50;
     uint64_t metricsReportIntervalMillisec = 60000;
+    std::vector<uint64_t> queryArrivalPeriodMillisec;
     ClockType nextHwMetricsScrapeTime;
     ClockType nextMetricsReportTime;
 
@@ -151,9 +239,6 @@ struct MetricsServerConfigs {
         std::ifstream file(path);
         nlohmann::json j = nlohmann::json::parse(file);
         from_json(j);
-
-        nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(4 * hwMetricsScrapeIntervalMillisec);
-        nextMetricsReportTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(metricsReportIntervalMillisec);
 
     }
 
@@ -165,8 +250,12 @@ struct MetricsServerConfigs {
         j.at("metricsServer_DBName").get_to(DBName);
         j.at("metricsServer_user").get_to(user);
         j.at("metricsServer_password").get_to(password);
+        j.at("metricsServer_queryArrivalPeriodMillisec").get_to(queryArrivalPeriodMillisec);
         j.at("metricsServer_hwMetricsScrapeIntervalMillisec").get_to(hwMetricsScrapeIntervalMillisec);
         j.at("metricsServer_metricsReportIntervalMillisec").get_to(metricsReportIntervalMillisec);
+
+        nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(4 * hwMetricsScrapeIntervalMillisec);
+        nextMetricsReportTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(metricsReportIntervalMillisec);
     }
 };
 
@@ -248,7 +337,7 @@ public:
         running = false;
     }
 
-    uint64_t elapsed_seconds() const {
+    uint64_t elapsed_microseconds() const {
         if (running) {
             return std::chrono::duration_cast<TimePrecisionType>(std::chrono::high_resolution_clock::now() - start_time).count();
         } else {
@@ -293,5 +382,7 @@ bool isHypertable(pqxx::connection &conn, const std::string &tableName);
 bool tableExists(pqxx::connection &conn, const std::string &schemaName, const std::string &tableName);
 
 std::string abbreviate(const std::string &keyphrase);
+
+bool confirmIntention(const std::string& message, const std::string& magicPhrase);
 
 #endif

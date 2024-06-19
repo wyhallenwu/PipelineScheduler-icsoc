@@ -67,14 +67,42 @@ enum PipelineType {
 
 struct HardwareMetrics {
     ClockType timestamp;
-    int cpuUsage = 0;
-    int memUsage = 0;
-    int rssMemUsage = 0;
-    unsigned int gpuUsage = 0;
-    unsigned int gpuMemUsage = 0;
+    float requestRate = 0; // TODOL Remove request rate. Keep for now for compatibility
+    CpuUtilType cpuUsage = 0;
+    MemUsageType memUsage = 0;
+    MemUsageType rssMemUsage = 0;
+    GpuUtilType gpuUsage = 0;
+    GpuMemUsageType gpuMemUsage = 0;
 };
 
-typedef std::vector<HardwareMetrics> HardwareMetricsRecords;
+struct SummarizedHardwareMetrics {
+    CpuUtilType cpuUsage = 0;
+    MemUsageType memUsage = 0;
+    MemUsageType rssMemUsage = 0;
+    GpuUtilType gpuUsage = 0;
+    GpuMemUsageType gpuMemUsage = 0;
+
+    bool metricsAvailable = false;
+
+    SummarizedHardwareMetrics& operator= (const SummarizedHardwareMetrics &metrics) {
+        metricsAvailable = true;
+        cpuUsage = std::max(metrics.cpuUsage, cpuUsage);
+        memUsage = std::max(metrics.memUsage, memUsage);
+        rssMemUsage = std::max(metrics.rssMemUsage, rssMemUsage);
+        gpuUsage = std::max(metrics.gpuUsage, gpuUsage);
+        gpuMemUsage = std::max(metrics.gpuMemUsage, gpuMemUsage);
+        return *this;
+    }
+
+    void clear() {
+        metricsAvailable = false;
+        cpuUsage = 0;
+        memUsage = 0;
+        rssMemUsage = 0;
+        gpuUsage = 0;
+        gpuMemUsage = 0;
+    }
+};
 
 namespace TaskDescription {
     struct TaskStruct {
