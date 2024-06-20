@@ -17,8 +17,10 @@ DataSourceAgent::DataSourceAgent(
 ) : ContainerAgent(configs) {
     json pipeConfigs = configs["container"]["cont_pipeline"];
     cont_msvcsList.push_back(new DataReader(pipeConfigs[0]));
-    cont_msvcsList.push_back(new RemoteCPUSender(pipeConfigs[1]));
-    cont_msvcsList[1]->SetInQueue(cont_msvcsList[0]->GetOutQueue());
+    for (int i = 1; i < pipeConfigs.size(); i++) {
+        cont_msvcsList.push_back(new RemoteCPUSender(pipeConfigs[i]));
+        cont_msvcsList[i]->SetInQueue(cont_msvcsList[0]->GetOutQueue());
+    }
 }
 
 int main(int argc, char **argv) {
