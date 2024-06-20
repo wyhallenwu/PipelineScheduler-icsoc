@@ -1,5 +1,29 @@
 #include "data_reader.h"
 
+inline cv::Mat resizePadRightBottom(
+        const cv::Mat &input,
+        const size_t height,
+        const size_t width,
+        const std::vector<float> &bgcolor,
+        uint8_t RESIZE_INTERPOL_TYPE
+) {
+    spdlog::get("container_agent")->trace("Going into {0:s}", __func__);
+
+    float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
+    int unpad_w = r * input.cols;
+    int unpad_h = r * input.rows;
+    // Create a new Mat
+    cv::Mat resized;
+    cv::resize(input, resized, cv::Size(unpad_w, unpad_h), 0, 0, RESIZE_INTERPOL_TYPE);
+    cv::Mat out = cv::Mat(height, width, input.type(), cv::Scalar(bgcolor[0], bgcolor[1], bgcolor[2]));
+    // Copy resized image to output Mat
+    resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)));
+
+    spdlog::get("container_agent")->trace("Finished {0:s}", __func__);
+
+    return out;
+}
+
 DataReader::DataReader(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
 };
@@ -24,19 +48,17 @@ void DataReader::Process() {
         cv::Mat frame;
         source >> frame;
         if (frame.empty()) {
-            std::cout << "No more frames to read, restarting the video" << std::endl;
-            source.set(cv::CAP_PROP_POS_FRAMES, 0);
-            source >> frame;
-            if (frame.empty()) {
-                std::cout << "No more frames to read" << std::endl;
-                return;
-            }
+            std::cout << "No more frames to read, exiting Video Processing." << std::endl;
+            return;
         }
         if (frame_count > 1 && i++ >= frame_count) {
             i = 1;
         } else {
             // two `time`s is not necessary, but it follows the format set for the downstreams.
             int frameNum = (int) source.get(cv::CAP_PROP_POS_FRAMES);
+            std::cout << "Frame Number: " << frameNum << std::endl;
+            frame = resizePadRightBottom(frame, msvc_dataShape[0][1], msvc_dataShape[0][2],
+                                         {128, 128, 128}, cv::INTER_AREA);
             RequestMemSizeType frameMemSize = frame.channels() * frame.rows * frame.cols * CV_ELEM_SIZE1(frame.type());
             Request<LocalCPUReqDataType> req = {{{time, time}}, {msvc_svcLevelObjLatency},
                                                 {"[" + msvc_hostDevice + "|" + link + "|" +
@@ -44,7 +66,9 @@ void DataReader::Process() {
                                                  "|1|1|" + std::to_string(frameMemSize)  + "]"}, 1,
                                                 {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols},
                                                                                   frame}}};
-            msvc_OutQueue[0]->emplace(req);
+            for (auto q: msvc_OutQueue) {
+                q->emplace(req);
+            }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
     }

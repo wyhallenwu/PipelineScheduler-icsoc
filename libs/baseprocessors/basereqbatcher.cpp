@@ -414,16 +414,19 @@ void BaseReqBatcher::batchRequests() {
 
         // Only resize if the output shape is not the same as the input shape
         if (this->msvc_outReqShape.at(0)[0][1] != 0 && this->msvc_outReqShape.at(0)[0][2] != 0) {
-            data.data = resizePadRightBottom(
-                    data.data,
-                    (this->msvc_outReqShape.at(0))[0][1],
-                    (this->msvc_outReqShape.at(0))[0][2],
-                    {128, 128, 128},
-                    *preProcStream,
-                    msvc_imgType,
-                    msvc_colorCvtType,
-                    msvc_resizeInterpolType
-            );
+            if (data.data.rows != (this->msvc_outReqShape.at(0))[0][1] ||
+                data.data.cols != (this->msvc_outReqShape.at(0))[0][2]) {
+                data.data = resizePadRightBottom(
+                        data.data,
+                        (this->msvc_outReqShape.at(0))[0][1],
+                        (this->msvc_outReqShape.at(0))[0][2],
+                        {128, 128, 128},
+                        *preProcStream,
+                        msvc_imgType,
+                        msvc_colorCvtType,
+                        msvc_resizeInterpolType
+                );
+            }
         }
 
         data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
