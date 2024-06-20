@@ -397,14 +397,6 @@ void BaseReqBatcher::batchRequests() {
 
         prevData.emplace_back(currReq.req_data[0]);
 
-        spdlog::get("container_agent")->trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
-                                              msvc_name,
-                                              currReq.req_data[0].data.rows,
-                                              currReq.req_data[0].data.cols,
-                                              (this->msvc_outReqShape.at(0))[0][1],
-                                              (this->msvc_outReqShape.at(0))[0][2]
-        );
-
         data.data = convertColor(
                 currReq.req_data[0].data,
                 msvc_imgType,
@@ -426,6 +418,13 @@ void BaseReqBatcher::batchRequests() {
                         msvc_colorCvtType,
                         msvc_resizeInterpolType
                 );
+                spdlog::get("container_agent")->trace("{0:s} resized a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
+                                        msvc_name,
+                                        currReq.req_data[0].data.rows,
+                                        currReq.req_data[0].data.cols,
+                                        (this->msvc_outReqShape.at(0))[0][1],
+                                        (this->msvc_outReqShape.at(0))[0][2]
+        );
             }
         }
 
@@ -433,7 +432,6 @@ void BaseReqBatcher::batchRequests() {
 
         data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
-        spdlog::get("container_agent")->trace("{0:s} finished resizing a frame", msvc_name);
         data.shape = RequestDataShapeType({(this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][1],
                                            (this->msvc_outReqShape.at(0))[0][2]});
         bufferData.emplace_back(data);
