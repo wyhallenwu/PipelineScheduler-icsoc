@@ -160,6 +160,22 @@ struct BatchInferRecord : public Record {
 
 typedef std::map<std::pair<std::string, BatchSizeType>, BatchInferRecord> BatchInferRecordType;
 
+/**
+ * @brief 
+ * 
+ */
+struct PercentilesNetworkRecord {
+    uint32_t totalPkgSize = -1;
+    uint64_t transferDuration = -1;
+};
+
+/**
+ * @brief <<sender, receiver>, Record>
+ */
+typedef std::map<std::string, PercentilesNetworkRecord> NetworkRecordType;
+
+
+
 //<reqOriginStream, Record>
 // Since each stream's content is unique, which causes unique process behaviors, 
 // we can use the stream name as the key to store the process records

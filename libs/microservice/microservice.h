@@ -470,6 +470,7 @@ public:
         currNumEntries = 0;
         return temp;
     }
+
     void setKeepLength(uint64_t keepLength) {
         std::unique_lock<std::mutex> lock(mutex);
         this->keepLength = std::chrono::milliseconds(keepLength);

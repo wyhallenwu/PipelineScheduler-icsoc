@@ -355,17 +355,19 @@ ContainerAgent::ContainerAgent(const json &configs) {
         pushSQL(*cont_metricsServerConn, sql_statement);
 
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
-            queryProfileTable();
+            // queryProfileTable();
             cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
             cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
             cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
+            cont_networkTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" + cont_hostDevice + "_netw";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
             cont_arrivalTableName = cont_experimentName + "_" + cont_taskName +  "_arr";
             cont_processTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_batchInferTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
             cont_hwMetricsTableName =
                     cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
+            cont_networkTableName = cont_experimentName + "_" + cont_hostDevice + "_netw";
             cont_metricsServerConfigs.schema = "public";
 
             std::string question = absl::StrFormat("Do you want to remove old profile entries of %s?", cont_inferModel);
@@ -429,6 +431,29 @@ ContainerAgent::ContainerAgent(const json &configs) {
         //     sql_statement = "CREATE INDEX ON " + tableName + " (receiver_host);";
         //     pushSQL(*cont_metricsServerConn, sql_statement);
         // }
+
+        /**
+         * @brief Table for network metrics, which will be used to estimate network latency
+         * 
+         */
+        if (!tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, cont_networkTableName)) {
+            sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_networkTableName + " ("
+                                                                                    "timestamps BIGINT NOT NULL, "
+                                                                                    "sender_host TEXT NOT NULL, "
+                                                                                    "p95_transfer_duration_us BIGINT NOT NULL, "
+                                                                                    "p95_total_package_size_b INTEGER NOT NULL)";
+
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "SELECT create_hypertable('" + cont_networkTableName + "', 'timestamps', if_not_exists => TRUE);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "CREATE INDEX ON " + cont_networkTableName + " (timestamps);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "CREATE INDEX ON " + cont_networkTableName + " (sender_host);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+        }
 
         /**
          * @brief Table for summarized arrival records
@@ -779,6 +804,7 @@ void ContainerAgent::collectRuntimeMetrics() {
 
             arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
             // Keys value here is an std::pair<std::string, std::string> for stream and sender_host
+            NetworkRecordType networkRecords;
             for (auto &[keys, records]: arrivalRecords) {
                 uint32_t numEntries = records.arrivalTime.size();
                 if (numEntries == 0) {
@@ -813,9 +839,32 @@ void ContainerAgent::collectRuntimeMetrics() {
                                         percentilesRecord[95].queueingDuration,
                                         percentilesRecord[95].totalPkgSize);
 
-                std::cout << sql << std::endl;
                 pushSQL(*cont_metricsServerConn, sql.c_str());
+
+                if (networkRecords.find(senderHost) == networkRecords.end()) {
+                    networkRecords[senderHost] = {
+                        percentilesRecord[95].totalPkgSize,
+                        percentilesRecord[95].transferDuration
+                    };
+                } else {
+                    networkRecords[senderHost] = {
+                        std::max(percentilesRecord[95].totalPkgSize, networkRecords[senderHost].totalPkgSize),
+                        std::max(percentilesRecord[95].transferDuration, networkRecords[senderHost].transferDuration)
+                    };
+                }
             }
+            for (auto &[senderHost, record]: networkRecords) {
+                sql = absl::StrFormat("INSERT INTO %s (timestamps, sender_host, p95_transfer_duration_us, p95_total_package_size_b) "
+                                      "VALUES ('%s', '%s', %ld, %d);",
+                                      cont_networkTableName,
+                                      timePointToEpochString(std::chrono::system_clock::now()),
+                                      senderHost,
+                                      record.transferDuration,
+                                      record.totalPkgSize);
+                pushSQL(*cont_metricsServerConn, sql.c_str());
+                spdlog::get("container_agent")->trace("{0:s} pushed NETWORK METRICS to the database.", cont_name);
+            }
+
             arrivalRecords.clear();
             spdlog::get("container_agent")->trace("{0:s} pushed arrival metrics to the database.", cont_name);
 

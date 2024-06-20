@@ -220,7 +220,6 @@ protected:
 
     std::string cont_experimentName;
     std::string cont_systemName;
-    std::string cont_batchInferTableName;
     std::string cont_name;
     std::vector<Microservice *> cont_msvcsList;
     std::string cont_pipeName;
@@ -254,8 +253,10 @@ protected:
     SummarizedHardwareMetrics cont_hwMetrics;
     BatchInferProfileListType cont_batchInferProfileList;
 
+    std::string cont_batchInferTableName;
     std::string cont_arrivalTableName;
     std::string cont_processTableName;
+    std::string cont_networkTableName;
 
     MetricsServerConfigs cont_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> cont_metricsServerConn = nullptr;
