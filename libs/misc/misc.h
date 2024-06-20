@@ -174,6 +174,43 @@ struct PercentilesNetworkRecord {
  */
 typedef std::map<std::string, PercentilesNetworkRecord> NetworkRecordType;
 
+uint64_t estimateNetworkLatency(pqxx::result &res, const uint32_t &totalPkgSize);
+
+// Arrival rate coming to a certain model in the pipeline
+
+// Network profile between two devices
+struct NetworkProfile {
+    uint64_t p95OutQueueingDuration; // out queue before sender of the last container
+    uint64_t p95TransferDuration;
+    uint64_t p95QueueingDuration; // in queue of batcher of this container
+    uint32_t p95PackageSize;
+};
+
+// Device to device network profile
+typedef std::map<std::pair<std::string, std::string>, NetworkProfile> D2DNetworkProfile;
+
+// Arrival profile of a certain model
+struct ModelArrivalProfile {
+    // Network profile between two devices, one of which is the receiver host that runs the model
+    D2DNetworkProfile d2dNetworkProfile;
+    float arrivalRates;
+};
+
+// <<pipelineName, modelName>, ModelArrivalProfile>
+typedef std::map<std::pair<std::string, std::string>, ModelArrivalProfile> ModelArrivalProfileList;
+
+struct ModelProfile {
+    // p95 latency of preprocessing per query
+    uint64_t p95prepLat;
+    // p95 latency of batch inference per query
+    BatchInferProfileListType batchInfer;
+    // p95 latency of postprocessing per query
+    uint64_t p95postLat;
+    // Average size of incoming queries
+    int p95InputSize = 1; // bytes
+    // Average total size of outgoing queries
+    int p95OutputSize = 1; // bytes
+};
 
 
 //<reqOriginStream, Record>
@@ -400,5 +437,27 @@ bool tableExists(pqxx::connection &conn, const std::string &schemaName, const st
 std::string abbreviate(const std::string &keyphrase);
 
 bool confirmIntention(const std::string& message, const std::string& magicPhrase);
+
+ModelArrivalProfile queryModelArrivalProfile(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::string &modelName,
+    const std::string &senderHost,
+    const std::string &receiverHost,
+    const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
+);
+ModelProfile queryModelProfile(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName
+);
 
 #endif

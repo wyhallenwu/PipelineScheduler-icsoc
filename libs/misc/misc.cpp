@@ -1,5 +1,291 @@
 #include "misc.h"
 
+/**
+ * @brief Estimate network latency of a package of size `totalPkgSize` using linear interpolation
+ * 
+ * @param res contains packge size and latency data of sample packages in res[:]["p95_total_package_size_b"] and res[:]["p95_transfer_duration_us"]
+ * @param totalPkgSize 
+ * @return uint64_t 
+ */
+uint64_t estimateNetworkLatency(pqxx::result &res, const uint32_t &totalPkgSize) {
+    if (res.empty()) {
+        throw std::invalid_argument("The result set is empty.");
+    }
+    for (size_t i = 0; i < res.size() - 1; ++i) {
+        uint32_t pkgSize1 = res[i]["p95_total_package_size_b"].as<uint32_t>();
+        uint32_t pkgSize2 = res[i + 1]["p95_total_package_size_b"].as<uint32_t>();
+        uint64_t latency1 = res[i]["p95_transfer_duration_us"].as<uint64_t>();
+        uint64_t latency2 = res[i + 1]["p95_transfer_duration_us"].as<uint64_t>();
+
+        if (totalPkgSize >= pkgSize1 && totalPkgSize <= pkgSize2) {
+            // Linear interpolation formula
+            double t = (double)(totalPkgSize - pkgSize1) / (pkgSize2 - pkgSize1);
+            return latency1 + t * (latency2 - latency1);
+        }
+    }
+}
+
+/**
+ * @brief 
+ * 
+ * @param pipelineName 
+ * @param streamName 
+ * @param taskName 
+ * @param periods 
+ * @return float 
+ */
+ModelArrivalProfile queryModelArrivalProfile(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::string &modelName,
+    const std::string &senderHost,
+    const std::string &receiverHost,
+    const std::vector<uint8_t> &periods //seconds
+) {
+    ModelArrivalProfile arrivalProfile;
+
+    std::string senderHostAbbr = abbreviate(senderHost);
+    std::string receiverHostAbbr = abbreviate(receiverHost);
+
+    std::string schemaName = abbreviate(experimentName + "_" + systemName);
+    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
+   
+    std::string periodQuery;
+    for (const auto &period: periods) {
+        periodQuery += absl::StrFormat("recent_data.arrival_rate_%ds,", period);
+    }
+    periodQuery.pop_back();
+
+    std::string query = "WITH recent_data AS ("
+                        "   SELECT * "
+                        "   FROM %s "
+                        "   WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
+                        "   LIMIT 1"
+                        "), "
+                        "arrival_rate AS ("
+                        "  SELECT GREATEST(%s) AS max_rate "
+                        "  FROM recent_data "
+                        "  WHERE stream = '%s' "
+                        ") "
+                        "SELECT MAX(max_rate) AS max_arrival_rate "
+                        "FROM arrival_rate;";
+    query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, periodQuery, streamName);
+    std::cout << query << std::endl;
+    
+    pqxx::result res = pullSQL(metricsConn, query);
+    if (res[0][0].is_null()) {
+        // If there is no historical data, we look for the rate of the most recent profiled data
+        std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
+        query = "WITH recent_data AS ("
+                "   SELECT * "
+                "   FROM %s "
+                "   LIMIT 10 "
+                "), "
+                "arrival_rate AS ("
+                "  SELECT GREATEST(%s) AS max_rate "
+                "  FROM recent_data "
+                ") "
+                "SELECT MAX(max_rate) AS max_arrival_rate "
+                "FROM arrival_rate;";
+        query = absl::StrFormat(query.c_str(), profileTableName, periodQuery);
+        res = pullSQL(metricsConn, query);
+    }
+    arrivalProfile.arrivalRates = res[0]["max_arrival_rate"].as<float>();
+
+    NetworkProfile *d2dNetworkProfile = &(arrivalProfile.d2dNetworkProfile[{senderHostAbbr, receiverHostAbbr}]);
+
+    /**
+     * @brief Querying for the network profile from the data in the last 120 seconds.
+     * 
+     */
+    query = "WITH recent_data AS ("
+            "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
+            "   FROM %s "
+            "   WHERE stream = '%s' AND sender_host = '%s' AND receiver_host = '%s' AND timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
+            "   LIMIT 100"
+            ") "
+            "SELECT "
+            "   MAX(p95_out_queueing_duration_us) AS p95_out_queueing_duration_us, "
+            "   MAX(p95_transfer_duration_us) AS p95_transfer_duration_us, "
+            "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
+            "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
+            "FROM recent_data;";
+    query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, streamName, senderHostAbbr, receiverHostAbbr);
+    res = pullSQL(metricsConn, query);
+
+    // if there are most current entries, then great, we update the profile and that's that
+    if (!res[0]["p95_transfer_duration_us"].is_null()) {
+        d2dNetworkProfile->p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
+        d2dNetworkProfile->p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
+        d2dNetworkProfile->p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
+        d2dNetworkProfile->p95TransferDuration = res[0]["p95_transfer_duration_us"].as<uint64_t>();
+    // If there is no historical data, we look for the rate of the most recent profiled data
+    } else {
+        std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
+        query = "WITH recent_data AS ("
+        "   SELECT p95_out_queueing_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
+        "   FROM %s "
+        "   WHERE stream = '%s' AND sender_host = '%s' AND receiver_host = '%s'"
+        "   LIMIT 100"
+        ") "
+        "SELECT "
+        "   MAX(p95_out_queueing_duration_us) AS p95_out_queueing_duration_us, "
+        "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
+        "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
+        "FROM recent_data;";
+        query = absl::StrFormat(query.c_str(), profileTableName, streamName, senderHostAbbr, receiverHostAbbr);
+        res = pullSQL(metricsConn, query);
+
+        d2dNetworkProfile->p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
+        d2dNetworkProfile->p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
+        d2dNetworkProfile->p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
+
+        std::string networkTableName = abbreviate("prof_" + receiverHost + "_netw");
+        query = "SELECT p95_transfer_duration_us, p95_total_package_size_b "
+                "FROM %s "
+                "WHERE sender_host = '%s' "
+                "LIMIT 100;";
+        query = absl::StrFormat(query.c_str(), networkTableName, senderHostAbbr);
+        res = pullSQL(metricsConn, query);
+        // Estimate the upperbound of the transfer duration
+        d2dNetworkProfile->p95TransferDuration = estimateNetworkLatency(res, d2dNetworkProfile->p95PackageSize);
+    }
+    return arrivalProfile;
+}
+
+/**
+ * @brief 
+ * 
+ * @param experimentName 
+ * @param pipelineName 
+ * @param streamName 
+ * @param deviceName 
+ * @param modelName 
+ * @return ModelProfile 
+ */
+ModelProfile queryModelProfile(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName
+) {
+    std::string tableName = "prof__" + modelName + "__" + deviceName;
+    tableName = abbreviate(tableName);
+    ModelProfile profile;
+
+    // // Query batch inference profilectrl_systemName;
+    // std::string query = absl::StrFormat(
+    //     "SELECT infer_batch_size, p95_infer_duration, cpu_usage, mem_usage, rss_mem_usage, gpu_usage, gpu_mem_usage "
+    //     "FROM %s;", tableName
+    // );
+    // pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
+
+    // for (const auto& row : res) {
+    //     BatchSizeType batchSize = row[0].as<BatchSizeType>();
+    //     profile.batchInfer[batchSize].p95inferLat = row[1].as<uint64_t>() / batchSize;
+    //     profile.batchInfer[batchSize].cpuUtil = row[2].as<CpuUtilType>();
+    //     profile.batchInfer[batchSize].memUsage = row[3].as<MemUsageType>();
+    //     profile.batchInfer[batchSize].rssMemUsage = row[4].as<MemUsageType>();
+    //     profile.batchInfer[batchSize].gpuUtil = row[5].as<GpuUtilType>();
+    //     profile.batchInfer[batchSize].gpuMemUsage = row[6].as<GpuMemUsageType>();
+    // }
+
+    /**
+     * @brief Query pre, post processing profile
+     * 
+     */
+    std::string schemaName = abbreviate(experimentName + "_" + systemName);
+
+
+    tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName + "_proc");
+    std::string query = absl::StrFormat("WITH recent_data AS ("
+            "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
+            "FROM %s "
+            "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
+            ")"
+            "SELECT "
+            "   MAX(p95_prep_duration_us) AS p95_prep_duration_us_all, "
+            "   MAX(p95_post_duration_us) AS p95_post_duration_us_all, "
+            "   MAX(p95_input_size_b) AS p95_input_size_b_all, "
+            "   MAX(p95_output_size_b) AS p95_output_size_b_all "
+            "FROM recent_data;", tableName, streamName);
+
+
+    pqxx::result res = pullSQL(metricsConn, query);
+    // If most current historical data is not available, we query profiled data
+    if (res[0][0].is_null()) {
+        tableName = abbreviate("prof__" + modelName +  "__" + deviceName + "_proc");
+        query = absl::StrFormat("WITH recent_data AS ("
+                                "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
+                                "FROM %s "
+                                "LIMIT 100 "
+                                ") "
+                                "SELECT "
+                                "   MAX(p95_prep_duration_us) AS p95_prep_duration_us_all, "
+                                "   MAX(p95_post_duration_us) AS p95_post_duration_us_all, "
+                                "   MAX(p95_input_size_b) AS p95_input_size_b_all, "
+                                "   MAX(p95_output_size_b) AS p95_output_size_b_all "
+                                "FROM recent_data;", tableName);
+        res = pullSQL(metricsConn, query);
+    }
+    for (const auto& row : res) {
+        profile.p95prepLat = (uint64_t) row[0].as<double>();
+        profile.p95postLat = (uint64_t) row[1].as<double>();
+        profile.p95InputSize = (uint32_t) row[2].as<float>();
+        profile.p95OutputSize = (uint32_t) row[3].as<float>();
+    }
+
+    /**
+     * @brief Query the batch inference profile
+     * 
+     */
+    tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName)  + "_batch";
+    query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
+                            "FROM %s "
+                            "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
+                            "GROUP BY infer_batch_size;", tableName, streamName);
+    
+    res = pullSQL(metricsConn, query);
+    if (res[0][0].is_null()) {
+        tableName = abbreviate("prof__" + modelName + "__" + deviceName) + "_batch";
+        query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
+                                "FROM %s "
+                                "GROUP BY infer_batch_size", tableName);
+        res = pullSQL(metricsConn, query);
+    }
+    for (const auto& row : res) {
+        BatchSizeType batchSize = row[0].as<BatchSizeType>();
+        profile.batchInfer[batchSize].p95inferLat = row[1].as<uint64_t>() / batchSize;
+    }
+
+    /**
+     * @brief Query the batch resource consumptions
+     * 
+     */
+    tableName = abbreviate("prof__" + modelName + "__" + deviceName + "_hw");
+    query = absl::StrFormat("SELECT batch_size, MAX(cpu_usage), MAX(mem_usage), MAX(rss_mem_usage), MAX(gpu_usage), MAX(gpu_mem_usage) "
+                            "FROM %s "
+                            "GROUP BY batch_size;", tableName);
+
+    res = pullSQL(metricsConn, query);
+    for (const auto& row : res) {
+        BatchSizeType batchSize = row[0].as<BatchSizeType>();
+        profile.batchInfer[batchSize].cpuUtil = row[1].as<CpuUtilType>();
+        profile.batchInfer[batchSize].memUsage = row[2].as<MemUsageType>();
+        profile.batchInfer[batchSize].rssMemUsage = row[3].as<MemUsageType>();
+        profile.batchInfer[batchSize].gpuUtil = row[4].as<GpuUtilType>();
+        profile.batchInfer[batchSize].gpuMemUsage = row[5].as<GpuMemUsageType>();
+    }
+    return profile;
+}
+
 void trt::to_json(nlohmann::json &j, const trt::TRTConfigs &val) {
     j["path"] = val.path;
     j["prec"] = val.precision;
