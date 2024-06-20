@@ -450,6 +450,36 @@ ModelArrivalProfile queryModelArrivalProfile(
     const std::string &receiverHost,
     const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
 );
+
+void queryBatchInferLatency(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName,
+    ModelProfile &profile
+);
+
+void queryPrePostLatency(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName,
+    ModelProfile &profile
+);
+
+void queryResourceRequirements(
+    pqxx::connection &metricsConn,
+    const std::string &deviceName,
+    const std::string &modelName,
+    ModelProfile &profile
+);
+
 ModelProfile queryModelProfile(
     pqxx::connection &metricsConn,
     const std::string &experimentName,

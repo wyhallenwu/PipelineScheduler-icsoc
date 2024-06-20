@@ -158,6 +158,140 @@ ModelArrivalProfile queryModelArrivalProfile(
 }
 
 /**
+ * @brief Query pre and post processing latency
+ * 
+ * @param metricsConn 
+ * @param tableName 
+ * @param streamName 
+ * @param deviceName 
+ * @param modelName 
+ * @param profile 
+ */
+void queryPrePostLatency(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName,
+    ModelProfile &profile
+) {
+    std::string schemaName = abbreviate(experimentName + "_" + systemName);
+    std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName + "_proc");
+    std::string query = absl::StrFormat("WITH recent_data AS ("
+            "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
+            "FROM %s "
+            "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
+            ")"
+            "SELECT "
+            "   MAX(p95_prep_duration_us) AS p95_prep_duration_us_all, "
+            "   MAX(p95_post_duration_us) AS p95_post_duration_us_all, "
+            "   MAX(p95_input_size_b) AS p95_input_size_b_all, "
+            "   MAX(p95_output_size_b) AS p95_output_size_b_all "
+            "FROM recent_data;", tableName, streamName);
+
+
+    pqxx::result res = pullSQL(metricsConn, query);
+    // If most current historical data is not available, we query profiled data
+    if (res[0][0].is_null()) {
+        std::string profileTableName = abbreviate("prof__" + modelName +  "__" + deviceName + "_proc");
+        query = absl::StrFormat("WITH recent_data AS ("
+                                "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
+                                "FROM %s "
+                                "LIMIT 100 "
+                                ") "
+                                "SELECT "
+                                "   MAX(p95_prep_duration_us) AS p95_prep_duration_us_all, "
+                                "   MAX(p95_post_duration_us) AS p95_post_duration_us_all, "
+                                "   MAX(p95_input_size_b) AS p95_input_size_b_all, "
+                                "   MAX(p95_output_size_b) AS p95_output_size_b_all "
+                                "FROM recent_data;", profileTableName);
+        res = pullSQL(metricsConn, query);
+    }
+    for (const auto& row : res) {
+        profile.p95prepLat = (uint64_t) row[0].as<double>();
+        profile.p95postLat = (uint64_t) row[1].as<double>();
+        profile.p95InputSize = (uint32_t) row[2].as<float>();
+        profile.p95OutputSize = (uint32_t) row[3].as<float>();
+    }
+}
+
+/**
+ * @brief Query batch inference latency
+ * 
+ * @param metricsConn 
+ * @param tableName 
+ * @param streamName 
+ * @param deviceName 
+ * @param modelName 
+ * @param modelProfile 
+ */
+void queryBatchInferLatency(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName,
+    ModelProfile &profile
+) {
+    std::string schemaName = abbreviate(experimentName + "_" + systemName);
+    std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName)  + "_batch";
+    std::string query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
+                            "FROM %s "
+                            "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
+                            "GROUP BY infer_batch_size;", tableName, streamName);
+    
+    pqxx::result res = pullSQL(metricsConn, query);
+    if (res[0][0].is_null()) {
+        std::string profileTableName = abbreviate("prof__" + modelName + "__" + deviceName) + "_batch";
+        query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
+                                "FROM %s "
+                                "GROUP BY infer_batch_size", profileTableName);
+        res = pullSQL(metricsConn, query);
+    }
+    for (const auto& row : res) {
+        BatchSizeType batchSize = row[0].as<BatchSizeType>();
+        profile.batchInfer[batchSize].p95inferLat = row[1].as<uint64_t>() / batchSize;
+    }
+}
+
+/**
+ * @brief 
+ * 
+ * @param metricsConn 
+ * @param tableName 
+ * @param streamName 
+ * @param deviceName 
+ * @param modelName 
+ * @param profile 
+ */
+void queryResourceRequirements(
+    pqxx::connection &metricsConn,
+    const std::string &deviceName,
+    const std::string &modelName,
+    ModelProfile &profile
+) {
+    std::string tableName = abbreviate("prof__" + modelName + "__" + deviceName + "_hw");
+    std::string query = absl::StrFormat("SELECT batch_size, MAX(cpu_usage), MAX(mem_usage), MAX(rss_mem_usage), MAX(gpu_usage), MAX(gpu_mem_usage) "
+                            "FROM %s "
+                            "GROUP BY batch_size;", tableName);
+
+    pqxx::result res = pullSQL(metricsConn, query);
+    for (const auto& row : res) {
+        BatchSizeType batchSize = row[0].as<BatchSizeType>();
+        profile.batchInfer[batchSize].cpuUtil = row[1].as<CpuUtilType>();
+        profile.batchInfer[batchSize].memUsage = row[2].as<MemUsageType>();
+        profile.batchInfer[batchSize].rssMemUsage = row[3].as<MemUsageType>();
+        profile.batchInfer[batchSize].gpuUtil = row[4].as<GpuUtilType>();
+        profile.batchInfer[batchSize].gpuMemUsage = row[5].as<GpuMemUsageType>();
+    }
+}
+
+
+/**
  * @brief 
  * 
  * @param experimentName 
@@ -176,8 +310,6 @@ ModelProfile queryModelProfile(
     const std::string &deviceName,
     const std::string &modelName
 ) {
-    std::string tableName = "prof__" + modelName + "__" + deviceName;
-    tableName = abbreviate(tableName);
     ModelProfile profile;
 
     // // Query batch inference profilectrl_systemName;
@@ -201,88 +333,19 @@ ModelProfile queryModelProfile(
      * @brief Query pre, post processing profile
      * 
      */
-    std::string schemaName = abbreviate(experimentName + "_" + systemName);
-
-
-    tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName + "_proc");
-    std::string query = absl::StrFormat("WITH recent_data AS ("
-            "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
-            "FROM %s "
-            "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
-            ")"
-            "SELECT "
-            "   MAX(p95_prep_duration_us) AS p95_prep_duration_us_all, "
-            "   MAX(p95_post_duration_us) AS p95_post_duration_us_all, "
-            "   MAX(p95_input_size_b) AS p95_input_size_b_all, "
-            "   MAX(p95_output_size_b) AS p95_output_size_b_all "
-            "FROM recent_data;", tableName, streamName);
-
-
-    pqxx::result res = pullSQL(metricsConn, query);
-    // If most current historical data is not available, we query profiled data
-    if (res[0][0].is_null()) {
-        tableName = abbreviate("prof__" + modelName +  "__" + deviceName + "_proc");
-        query = absl::StrFormat("WITH recent_data AS ("
-                                "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
-                                "FROM %s "
-                                "LIMIT 100 "
-                                ") "
-                                "SELECT "
-                                "   MAX(p95_prep_duration_us) AS p95_prep_duration_us_all, "
-                                "   MAX(p95_post_duration_us) AS p95_post_duration_us_all, "
-                                "   MAX(p95_input_size_b) AS p95_input_size_b_all, "
-                                "   MAX(p95_output_size_b) AS p95_output_size_b_all "
-                                "FROM recent_data;", tableName);
-        res = pullSQL(metricsConn, query);
-    }
-    for (const auto& row : res) {
-        profile.p95prepLat = (uint64_t) row[0].as<double>();
-        profile.p95postLat = (uint64_t) row[1].as<double>();
-        profile.p95InputSize = (uint32_t) row[2].as<float>();
-        profile.p95OutputSize = (uint32_t) row[3].as<float>();
-    }
+    queryPrePostLatency(metricsConn, experimentName, systemName, pipelineName, streamName, deviceName, modelName, profile);
 
     /**
      * @brief Query the batch inference profile
      * 
      */
-    tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName)  + "_batch";
-    query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
-                            "FROM %s "
-                            "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
-                            "GROUP BY infer_batch_size;", tableName, streamName);
-    
-    res = pullSQL(metricsConn, query);
-    if (res[0][0].is_null()) {
-        tableName = abbreviate("prof__" + modelName + "__" + deviceName) + "_batch";
-        query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
-                                "FROM %s "
-                                "GROUP BY infer_batch_size", tableName);
-        res = pullSQL(metricsConn, query);
-    }
-    for (const auto& row : res) {
-        BatchSizeType batchSize = row[0].as<BatchSizeType>();
-        profile.batchInfer[batchSize].p95inferLat = row[1].as<uint64_t>() / batchSize;
-    }
+    queryBatchInferLatency(metricsConn, experimentName, systemName, pipelineName, streamName, deviceName, modelName, profile);
 
     /**
      * @brief Query the batch resource consumptions
      * 
      */
-    tableName = abbreviate("prof__" + modelName + "__" + deviceName + "_hw");
-    query = absl::StrFormat("SELECT batch_size, MAX(cpu_usage), MAX(mem_usage), MAX(rss_mem_usage), MAX(gpu_usage), MAX(gpu_mem_usage) "
-                            "FROM %s "
-                            "GROUP BY batch_size;", tableName);
-
-    res = pullSQL(metricsConn, query);
-    for (const auto& row : res) {
-        BatchSizeType batchSize = row[0].as<BatchSizeType>();
-        profile.batchInfer[batchSize].cpuUtil = row[1].as<CpuUtilType>();
-        profile.batchInfer[batchSize].memUsage = row[2].as<MemUsageType>();
-        profile.batchInfer[batchSize].rssMemUsage = row[3].as<MemUsageType>();
-        profile.batchInfer[batchSize].gpuUtil = row[4].as<GpuUtilType>();
-        profile.batchInfer[batchSize].gpuMemUsage = row[5].as<GpuMemUsageType>();
-    }
+    queryResourceRequirements(metricsConn, deviceName, modelName, profile);
     return profile;
 }
 
