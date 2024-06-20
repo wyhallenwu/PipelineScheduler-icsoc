@@ -462,6 +462,16 @@ void queryBatchInferLatency(
     ModelProfile &profile
 );
 
+BatchInferProfileListType queryBatchInferLatency(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName
+);
+
 void queryPrePostLatency(
     pqxx::connection &metricsConn,
     const std::string &experimentName,

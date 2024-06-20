@@ -355,7 +355,15 @@ ContainerAgent::ContainerAgent(const json &configs) {
         pushSQL(*cont_metricsServerConn, sql_statement);
 
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
-            // queryProfileTable();
+            cont_batchInferProfileList = queryBatchInferLatency(
+                *cont_metricsServerConn,
+                cont_experimentName,
+                cont_systemName,
+                cont_pipeName,
+                cont_inferModel,
+                cont_hostDevice,
+                cont_inferModel
+            );
             cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
             cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
             cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";

@@ -237,6 +237,7 @@ void queryBatchInferLatency(
     const std::string &modelName,
     ModelProfile &profile
 ) {
+    BatchInferProfileListType batchInferProfile;
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName)  + "_batch";
     std::string query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
@@ -254,8 +255,32 @@ void queryBatchInferLatency(
     }
     for (const auto& row : res) {
         BatchSizeType batchSize = row[0].as<BatchSizeType>();
-        profile.batchInfer[batchSize].p95inferLat = row[1].as<uint64_t>() / batchSize;
+        batchInferProfile[batchSize].p95inferLat = row[1].as<uint64_t>() / batchSize;
     }
+    profile.batchInfer = batchInferProfile;
+}
+
+BatchInferProfileListType queryBatchInferLatency(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName
+) {
+    ModelProfile modelProfile;
+    queryBatchInferLatency(
+        metricsConn,
+        experimentName,
+        systemName,
+        pipelineName,
+        streamName,
+        deviceName,
+        modelName,
+        modelProfile
+    );
+    return modelProfile.batchInfer;
 }
 
 /**
