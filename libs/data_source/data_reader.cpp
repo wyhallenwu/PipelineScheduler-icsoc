@@ -44,6 +44,18 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 void DataReader::Process() {
     int i = 1;
     while (true) {
+        if (this->STOP_THREADS) {
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
+            break;
+        }
+        else if (this->PAUSE_THREADS) {
+            if (RELOADING) {
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
+                RELOADING = false;
+                READY = true;
+            }
+            continue;
+        }
         ClockType time = std::chrono::system_clock::now();
         cv::Mat frame;
         source >> frame;
