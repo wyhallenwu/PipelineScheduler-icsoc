@@ -8,7 +8,7 @@
         "cont_name": "carbrand_0",
         "cont_pipeline": [
             {
-                "msvc_name": "::receiver",
+                "msvc_name": "receiver",
                 "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "../jsons/carbrand_receiver.json",
                 "msvc_dnstreamMicroservices": [
@@ -19,7 +19,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::preprocessor",
+                        "nb_name": "preprocessor",
                         "nb_expectedShape": [
                             [
                                 -1,
@@ -43,7 +43,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 3,
                         "nb_link": [
-                            "0.0.0.0:55013"
+                            "0.0.0.0:55023"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",
@@ -60,7 +60,7 @@
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
             },
             {
-                "msvc_name": "::preprocessor",
+                "msvc_name": "preprocessor",
                 "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "../jsons/carbrand_preproc.json",
                 "msvc_dnstreamMicroservices": [
@@ -71,7 +71,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::inference",
+                        "nb_name": "inference",
                         "nb_expectedShape": [
                             [
                                 3,
@@ -97,7 +97,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::receiver",
+                        "nb_name": "receiver",
                         "nb_expectedShape": [
                             [
                                 -1,
@@ -124,7 +124,7 @@
                 ]
             },
             {
-                "msvc_name": "::inference",
+                "msvc_name": "inference",
                 "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "../jsons/carbrand_trt.json",
                 "msvc_dnstreamMicroservices": [
@@ -135,7 +135,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::postprocessor",
+                        "nb_name": "postprocessor",
                         "nb_expectedShape": [
                             [
                                 9
@@ -159,7 +159,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::preprocessor",
+                        "nb_name": "preprocessor",
                         "nb_expectedShape": [
                             [
                                 -1,
@@ -180,7 +180,7 @@
                 "prec": 4
             },
             {
-                "msvc_name": "::postprocessor",
+                "msvc_name": "postprocessor",
                 "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
@@ -191,7 +191,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::sender",
+                        "nb_name": "sender",
                         "nb_expectedShape": [
                             [
                                 -1,
@@ -215,7 +215,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::inference",
+                        "nb_name": "inference",
                         "nb_expectedShape": [
                             [
                                 -1,
@@ -228,7 +228,7 @@
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
             },
             {
-                "msvc_name": "::sender",
+                "msvc_name": "sender",
                 "msvc_idealBatchSize": 4,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
@@ -264,7 +264,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::postprocessor",
+                        "nb_name": "postprocessor",
                         "nb_expectedShape": [
                             [
                                 -1,
