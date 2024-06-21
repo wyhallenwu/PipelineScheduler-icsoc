@@ -10,6 +10,7 @@ service ControlCommunication {
   rpc AdvertiseToController(ConnectionConfigs) returns (google.protobuf.Empty) {}
   rpc StartContainer(ContainerConfig) returns (google.protobuf.Empty) {}
   rpc UpdateDownstream(ContainerLink) returns (google.protobuf.Empty) {}
+  rpc SyncDatasource(ContainerLink) returns (google.protobuf.Empty) {}
   rpc UpdateBatchSize(ContainerInt) returns (google.protobuf.Empty) {}
   rpc StopContainer(ContainerSignal) returns (google.protobuf.Empty) {}
 }
@@ -30,14 +31,16 @@ message Neighbor {
 }
 
 message ContainerConfig {
-  string name = 1;
+  string pipeline_name = 1;
   int32 model = 2;
   int32 batch_size = 3;
-  int32 recv_port = 4;
-  int32 slo = 5;
+  int32 replica_id = 4;
+  bool allocation_mode = 5;
   int32 device = 6;
-  repeated Neighbor upstream = 7;
-  repeated Neighbor downstream = 8;
+  int32 slo = 7;
+  repeated uint32 input_dimensions = 8;
+  repeated Neighbor upstream = 9;
+  repeated Neighbor downstream = 10;
 }
 
 message ContainerLink {

@@ -17,7 +17,7 @@
 
 class LimitedPairQueue {
 public:
-    LimitedPairQueue(int limit = 10) : limit(limit) {}
+    LimitedPairQueue(unsigned int limit = 10) : limit(limit) {}
 
     void push(std::pair<long, long> value) {
         if (q.size() == limit) q.pop();
@@ -30,7 +30,7 @@ public:
 
 private:
     std::queue<std::pair<long, long>> q;
-    int limit;
+    unsigned int limit;
 };
 
 class Profiler {

@@ -247,9 +247,6 @@ bool Engine::build() {
         builderConfig->setFlag((BuilderFlag::kINT8));
 
         const auto input = network->getInput(0);
-        // TODO: remove potentially unused variables
-        const auto inputName = input->getName();
-        const auto inputDims = input->getDimensions();
         const auto calibrationFileName = m_engineName + ".calibration";
     }
 

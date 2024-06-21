@@ -41,13 +41,11 @@ enum ModelType {
     DataSource,
     Sink,
     Yolov5, // = Yolov5n
-    Yolov5n320,
-    Yolov5s,
-    Yolov5m,
-    Yolov5Datasource,
+    Yolov5Dsrc,
     Arcface,
     Retinaface,
-    Yolov5_Plate,
+    RetinafaceDsrc,
+    PlateDet,
     Movenet,
     Emotionnet,
     Gender,
@@ -57,7 +55,7 @@ enum ModelType {
 
 typedef std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> Pipeline;
 
-extern std::map<ModelType, std::vector<std::string>> MODEL_INFO;
+extern std::map<ModelType, std::pair<std::vector<int>, std::vector<std::string>>> MODEL_INFO;
 
 enum PipelineType {
     Traffic,
@@ -67,7 +65,6 @@ enum PipelineType {
 
 struct HardwareMetrics {
     ClockType timestamp;
-    float requestRate = 0; // TODOL Remove request rate. Keep for now for compatibility
     CpuUtilType cpuUsage = 0;
     MemUsageType memUsage = 0;
     MemUsageType rssMemUsage = 0;
@@ -113,8 +110,6 @@ namespace TaskDescription {
         std::string device;
     };
 
-    void to_json(nlohmann::json &j, const TaskStruct &val);
-
     void from_json(const nlohmann::json &j, TaskStruct &val);
 }
 
@@ -127,6 +122,8 @@ public:
     void HandleRecvRpcs();
 
     void Scheduling();
+
+    void Init() { for (auto &t: initialTasks) AddTask(t); }
 
     void AddTask(const TaskDescription::TaskStruct &task);
 
@@ -150,33 +147,35 @@ private:
     };
 
     struct TaskHandle {
-        int last_latency;
-        int slo;
+        std::string name;
         PipelineType type;
+        std::string source;
+        int slo;
+        ClockType start_time;
+        int last_latency;
         std::map<std::string, ContainerHandle *> subtasks;
     };
 
     struct ContainerHandle {
         std::string name;
+        int class_of_interest;
         ModelType model;
+        bool mergable;
+        std::vector<int> dimensions;
+
+        int replicas;
+        std::vector<int> batch_size;
+        std::vector<int> cuda_device;
+        std::vector<int> recv_port;
+
+        HardwareMetrics metrics;
         NodeHandle *device_agent;
         TaskHandle *task;
-        int batch_size;
-        int replicas;
-        std::vector<int> cuda_device;
-        int class_of_interest;
-        int recv_port;
-        HardwareMetrics metrics;
-        google::protobuf::RepeatedField<int32_t> queue_lengths;
         std::vector<ContainerHandle *> upstreams;
         std::vector<ContainerHandle *> downstreams;
     };
 
     void readConfigFile(const std::string &config_path);
-
-    void UpdateLightMetrics();
-
-    void UpdateFullMetrics();
 
     double LoadTimeEstimator(const char *model_path, double input_mem_size);
     int InferTimeEstimator(ModelType model, int batch_size);
@@ -221,13 +220,15 @@ private:
     };
 
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
-                        std::string source = "", int replica = 1);
+                        std::string source, int replica = 1, bool easy_allocation = true);
 
-    void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
+    void MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device = 0, int replica = 1);
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
 
-    void AdjustBatchSize(ContainerHandle *msvc, int new_bs);
+    static void SyncDatasource(Controller::ContainerHandle *prev, Controller::ContainerHandle *curr);
+
+    void AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica = 1);
 
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 
@@ -244,6 +245,7 @@ private:
     bool running;
     std::string ctrl_experimentName;
     std::string ctrl_systemName;
+    std::vector<TaskDescription::TaskStruct> initialTasks;
     uint16_t ctrl_runtime;
 
     std::string ctrl_logPath;
@@ -262,7 +264,7 @@ private:
     MetricsServerConfigs ctrl_metricsServerConfigs;
 
     std::vector<spdlog::sink_ptr> ctrl_loggerSinks = {};
-    std::shared_ptr<spdlog::logger> ctrl_logger;    
+    std::shared_ptr<spdlog::logger> ctrl_logger;
 };
 
 

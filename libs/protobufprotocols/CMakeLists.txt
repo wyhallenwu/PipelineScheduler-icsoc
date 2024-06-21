@@ -3,14 +3,14 @@ cmake_minimum_required(VERSION 3.18)
 project(protobufprotocols)
 
 ##################################################################### data_grpc_proto
-get_filename_component(data_proto "pipelinescheduler.proto" ABSOLUTE)
+get_filename_component(data_proto "dataexchange.proto" ABSOLUTE)
 get_filename_component(data_proto_path "${data_proto}" PATH)
 
 # Generated sources
-set(data_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/pipelinescheduler.pb.cc")
-set(data_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/pipelinescheduler.pb.h")
-set(data_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/pipelinescheduler.grpc.pb.cc")
-set(data_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/pipelinescheduler.grpc.pb.h")
+set(data_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/dataexchange.pb.cc")
+set(data_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/dataexchange.pb.h")
+set(data_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/dataexchange.grpc.pb.cc")
+set(data_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/dataexchange.grpc.pb.h")
 add_custom_command(
         OUTPUT "${data_proto_srcs}" "${data_proto_hdrs}" "${data_grpc_srcs}" "${data_grpc_hdrs}"
         COMMAND ${_PROTOBUF_PROTOC}

@@ -9,7 +9,7 @@ inline cv::Mat resizePadRightBottom(
 ) {
     spdlog::get("container_agent")->trace("Going into {0:s}", __func__);
 
-    float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
+    float r = std::min((float) width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
     int unpad_h = r * input.rows;
     // Create a new Mat
@@ -35,8 +35,9 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 
     link = jsonConfigs.at("msvc_upstreamMicroservices")[0].at("nb_link")[0];
     source = cv::VideoCapture(link);
+    msvc_currFrameID = 0;
     wait_time_ms = 1000 / jsonConfigs.at("msvc_idealBatchSize").get<int>();
-    frame_count = (jsonConfigs.at("msvc_idealBatchSize").get<int>() == 30) ? 1 :
+    skip_count = (jsonConfigs.at("msvc_idealBatchSize").get<int>() == 30) ? 1 :
             30 / (30 - jsonConfigs.at("msvc_idealBatchSize").get<int>());
     link = link.substr(link.find_last_of('/') + 1);
 };
@@ -44,16 +45,15 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 void DataReader::Process() {
     int i = 1;
     while (true) {
-        if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
-        }
-        else if (this->PAUSE_THREADS) {
+        } else if (PAUSE_THREADS) {
             if (RELOADING) {
-                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
-                READY = true;
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
+            source.set(cv::CAP_PROP_POS_FRAMES, msvc_currFrameID);
             continue;
         }
         ClockType time = std::chrono::system_clock::now();
@@ -63,18 +63,18 @@ void DataReader::Process() {
             std::cout << "No more frames to read, exiting Video Processing." << std::endl;
             return;
         }
-        if (frame_count > 1 && i++ >= frame_count) {
+        if (skip_count > 1 && i++ >= skip_count) {
             i = 1;
         } else {
             // two `time`s is not necessary, but it follows the format set for the downstreams.
-            int frameNum = (int) source.get(cv::CAP_PROP_POS_FRAMES);
-            std::cout << "Frame Number: " << frameNum << std::endl;
+            msvc_currFrameID = (int) source.get(cv::CAP_PROP_POS_FRAMES);
+            std::cout << "Frame Number: " << msvc_currFrameID << std::endl;
             frame = resizePadRightBottom(frame, msvc_dataShape[0][1], msvc_dataShape[0][2],
                                          {128, 128, 128}, cv::INTER_AREA);
             RequestMemSizeType frameMemSize = frame.channels() * frame.rows * frame.cols * CV_ELEM_SIZE1(frame.type());
             Request<LocalCPUReqDataType> req = {{{time, time}}, {msvc_svcLevelObjLatency},
                                                 {"[" + msvc_hostDevice + "|" + link + "|" +
-                                                 std::to_string(frameNum) + 
+                                                 std::to_string(msvc_currFrameID) +
                                                  "|1|1|" + std::to_string(frameMemSize)  + "]"}, 1,
                                                 {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols},
                                                                                   frame}}};

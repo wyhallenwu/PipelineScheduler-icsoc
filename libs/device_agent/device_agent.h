@@ -32,6 +32,7 @@ typedef std::tuple<
 struct ContainerHandle {
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     CompletionQueue *cq;
+    int port;
     unsigned int pid;
 };
 
@@ -60,19 +61,21 @@ public:
 private:
     bool CreateContainer(
             ModelType model,
-            std::string name,
+            std::string pipe_name,
             BatchSizeType batch_size,
+            std::vector<int> input_dims,
+            int replica_id,
+            int allocation_mode,
             int device,
             const MsvcSLOType &slo,
             const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
             const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
     );
 
-    static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
+    static int runDocker(const std::string &executable, const std::string &cont_name, const std::string &start_string,
                          const int &device, const int &port) {
         std::string command;
-        std::string container_name = name;
-        std::replace(container_name.begin(), container_name.end(), ':', '-');
+        std::string docker_name = cont_name;
         command =
                 "docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/app/data/  "
                 "-v /ssd0/tung/PipePlusPlus/logs/:/app/logs/ -v /ssd0/tung/PipePlusPlus/models/:/app/models/ "
@@ -80,7 +83,7 @@ private:
                 "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
                 R"(%s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs ')",
-                container_name, executable, name, start_string, device, port);
+                docker_name, executable, cont_name, start_string, device, port);
                 // + "| ./outputbuffer.pl --lines 50";
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -89,10 +92,12 @@ private:
 
     static void StopContainer(const ContainerHandle &container, bool forced = false);
 
-    void UpdateContainerSender(const std::string &name, const std::string &dwnstr, const std::string &ip,
+    void UpdateContainerSender(const std::string &cont_name, const std::string &dwnstr, const std::string &ip,
                                const int &port);
 
-    void Ready(const std::string &name, const std::string &ip, SystemDeviceType type);
+    void SyncDatasources(const std::string &cont_name, const std::string &dsrc);
+
+    void Ready(const std::string &cont_name, const std::string &ip, SystemDeviceType type);
 
     void HandleDeviceRecvRpcs();
 
@@ -199,6 +204,22 @@ private:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
+    class SyncDatasourceRequestHandler : public ControlRequestHandler {
+    public:
+        SyncDatasourceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                       DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        ContainerLink request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+    };
+
     class UpdateBatchsizeRequestHandler : public ControlRequestHandler {
     public:
         UpdateBatchsizeRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
@@ -215,14 +236,21 @@ private:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
+    // Basic information
     std::string name;
     bool running;
-    int processing_units;
-    std::vector<double> utilization;
-    std::vector<double> mem_utilization;
+    std::string experiment_name;
+    std::string system_name;
+
+    // Runtime variables
     std::map<std::string, ContainerHandle> containers;
     std::vector<std::thread> threads;
 
+    // Profiling
+    std::vector<double> utilization;
+    std::vector<double> mem_utilization;
+
+    // Communication
     std::unique_ptr<ServerCompletionQueue> device_cq;
     std::unique_ptr<grpc::Server> device_server;
     InDeviceCommunication::AsyncService device_service;

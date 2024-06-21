@@ -335,8 +335,6 @@ ContainerAgent::ContainerAgent(const json &configs) {
     //     cont_logDir = (std::string) containerConfigs["cont_logPath"];
     // }
 
-    arrivalRate = 0;
-
     if (cont_taskName != "dsrc") {
         cont_inferModel = abbreviate(containerConfigs["cont_inferModelName"].get<std::string>());
         cont_metricsServerConfigs.from_json(containerConfigs["cont_metricsServerConfigs"]);
@@ -442,7 +440,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
         /**
          * @brief Table for network metrics, which will be used to estimate network latency
-         * 
+         *
          */
         if (!tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, cont_networkTableName)) {
             sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_networkTableName + " ("
@@ -713,7 +711,7 @@ std::vector<float> getRatesInPeriods(const std::vector<ClockType> &timestamps, c
         counts[periodIndex] = counts[periodIndex - 1];
     }
 
-    for (int i = 0; i < counts.size(); i++) {
+    for (unsigned int i = 0; i < counts.size(); i++) {
         rates[i] = counts[i] * 1000.f / periodMillisec[i] + 1;
     }
 
@@ -731,7 +729,7 @@ void ContainerAgent::collectRuntimeMetrics() {
 
     // If we are not running in profiling mode, container_agent should not collect hardware metrics
     if (cont_RUNMODE != RUNMODE::PROFILING) {
-        // Set the next hardware metrics scrape time to the the life beyond
+        // Set the next hardware metrics scrape time to the life beyond
         cont_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::time_point::max();
     }
 
@@ -811,7 +809,7 @@ void ContainerAgent::collectRuntimeMetrics() {
             }
 
             arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
-            // Keys value here is an std::pair<std::string, std::string> for stream and sender_host
+            // Keys value here is std::pair<std::string, std::string> for stream and sender_host
             NetworkRecordType networkRecords;
             for (auto &[keys, records]: arrivalRecords) {
                 uint32_t numEntries = records.arrivalTime.size();
@@ -1072,30 +1070,11 @@ void ContainerAgent::updateProfileTable() {
     pushSQL(*cont_metricsServerConn, query.substr(0, query.size() - 1) + ";");
 }
 
-void ContainerAgent::queryProfileTable() {
-    std::string profileTableName = abbreviate("prof__" + cont_inferModel + "__" + cont_hostDevice);
-    pqxx::nontransaction curl(*cont_metricsServerConn);
-    std::string query = absl::StrFormat(
-        "SELECT * FROM %s;", profileTableName
-    );
-    pqxx::result res = curl.exec(query);
-    for (const auto& row : res) {
-        BatchSizeType batchSize = row[0].as<BatchSizeType>();
-        cont_batchInferProfileList[batchSize] = {
-            row[1].as<uint64_t>(),
-            row[2].as<CpuUtilType>(),
-            row[3].as<MemUsageType>(),
-            row[4].as<MemUsageType>(),
-            row[5].as<GpuUtilType>(),
-            row[6].as<GpuMemUsageType>()
-        };
-    }
-}
-
 void ContainerAgent::HandleRecvRpcs() {
     new StopRequestHandler(&service, server_cq.get(), &run);
     new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
+    new SyncDatasourcesRequestHandler(&service, server_cq.get(), this);
     void *tag;
     bool ok;
     while (run) {
@@ -1125,7 +1104,6 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
         service->RequestUpdateSender(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new UpdateSenderRequestHandler(service, cq, msvcs);
-        // TODO: Handle reconfiguration by restarting sender
         // pause processing except senders to clear out the queues
         for (auto msvc: *msvcs) {
             if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
@@ -1182,10 +1160,45 @@ void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
         service->RequestUpdateBatchSize(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new UpdateBatchSizeRequestHandler(service, cq, msvcs);
-        // adjust batch size
-//        for (auto msvc : *msvcs) {
-//            msvc->setBatchSize(request.batch_size());
-//        }
+        for (auto msvc : *msvcs) {
+            msvc->msvc_idealBatchSize = request.value();
+        }
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void ContainerAgent::transferFrameID(std::string url) {
+    indevicecommunication::Int32 request;
+    EmptyMessage reply;
+    ClientContext context;
+    Status status;
+    auto dsrc_stub = InDeviceCommunication::NewStub(grpc::CreateChannel(url, grpc::InsecureChannelCredentials()));
+    auto dsrc_cq = new CompletionQueue();
+    cont_msvcsList[0]->pauseThread();
+    request.set_value(cont_msvcsList[0]->msvc_currFrameID);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            dsrc_stub->AsyncSyncDatasources(&context, request, dsrc_cq));
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(dsrc_cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+    run = false;
+    for (auto msvc: cont_msvcsList) {
+        msvc->stopThread();
+    }
+}
+
+void ContainerAgent::SyncDatasourcesRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestSyncDatasources(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        containerAgent->transferFrameID(absl::StrFormat("localhost:%d/", request.value()));
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -1214,7 +1227,7 @@ bool ContainerAgent::checkPause() {
  * 
  */
 void ContainerAgent::waitPause() {
-    bool paused = false;
+    bool paused;
     while (true) {
         paused = true;
         spdlog::get("container_agent")->trace("{0:s} waiting for all microservices to be paused.", __func__);

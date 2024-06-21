@@ -57,7 +57,7 @@ void BaseBBoxCropperVerifier::cropping() {
     cudaStream_t postProcStream;
 
     // Height and width of the image used for inference
-    int orig_h, orig_w, infer_h, infer_w;
+    int orig_h, orig_w;
 
     /**
      * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
@@ -93,11 +93,11 @@ void BaseBBoxCropperVerifier::cropping() {
 
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
-        else if (this->PAUSE_THREADS) {
+        else if (PAUSE_THREADS) {
             if (RELOADING){
                 spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 READY = false;
@@ -166,8 +166,8 @@ void BaseBBoxCropperVerifier::cropping() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
         currReq_batchSize = currReq.req_batchSize;
         spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
@@ -175,7 +175,7 @@ void BaseBBoxCropperVerifier::cropping() {
         currReq_data = currReq.req_data;
 
         for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
-            bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
+            bufferSize = msvc_modelDataType * (size_t)currReq_batchSize;
             RequestDataShapeType shape = currReq_data[i].shape;
             for (uint8_t j = 0; j < shape.size(); ++j) {
                 bufferSize *= shape[j];
@@ -228,7 +228,7 @@ void BaseBBoxCropperVerifier::cropping() {
 
             currReq_path += "|" + std::to_string(totalInMem) + "]";
 
-            if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
+            if (msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(orig_h, orig_w, imageList[i].data.type());
                 checkCudaErrorCode(cudaMemcpyAsync(
                     out.ptr(),
@@ -295,7 +295,7 @@ void BaseBBoxCropperVerifier::cropping() {
 
         
         spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
         // Synchronize the cuda stream
     }
 
@@ -341,9 +341,6 @@ void BaseBBoxCropperVerifier::cropProfiling() {
 
     cudaStream_t postProcStream;
 
-    // Height and width of the image used for inference
-    int orig_h, orig_w, infer_h, infer_w;
-
     /**
      * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
      * as well as the images from which bounding boxes will be cropped.
@@ -383,11 +380,11 @@ void BaseBBoxCropperVerifier::cropProfiling() {
 
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
-        else if (this->PAUSE_THREADS) {
+        else if (PAUSE_THREADS) {
             if (RELOADING){
                 spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 READY = false;
@@ -444,8 +441,8 @@ void BaseBBoxCropperVerifier::cropProfiling() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
         currReq_batchSize = inferTimeReportReq.req_batchSize;
         spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
@@ -453,7 +450,7 @@ void BaseBBoxCropperVerifier::cropProfiling() {
         currReq_data = inferTimeReportReq.req_data;
 
         for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
-            bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
+            bufferSize = msvc_modelDataType * (size_t)currReq_batchSize;
             RequestDataShapeType shape = currReq_data[i].shape;
             for (uint8_t j = 0; j < shape.size(); ++j) {
                 bufferSize *= shape[j];
@@ -494,11 +491,6 @@ void BaseBBoxCropperVerifier::cropProfiling() {
             // If there is no object in frame, we don't have to do nothing.
             int numDetsInFrame = (int)num_detections[i];
 
-            // Otherwise, we need to do some cropping.
-            orig_h = imageList[i].shape[1];
-            orig_w = imageList[i].shape[2];
-
-            // crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes[i][0], singleImageBBoxList);
             spdlog::get("container_agent")->trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             /**
@@ -539,8 +531,7 @@ void BaseBBoxCropperVerifier::cropProfiling() {
         inferTimeReportData.clear();
         
         spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
-        // Synchronize the cuda stream
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
     }
 
 

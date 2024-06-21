@@ -3,7 +3,7 @@
 ABSL_FLAG(std::string, device_type, "", "string that identifies the device type");
 ABSL_FLAG(std::string, controller_url, "", "string that identifies the controller url without port!");
 
-const unsigned long CONTAINER_BASE_PORT = 50001;
+const int CONTAINER_BASE_PORT = 50001;
 
 std::string getHostIP() {
     struct ifaddrs *ifAddrStruct = nullptr;
@@ -18,12 +18,12 @@ std::string getHostIP() {
         }
         // check it is IP4
         if (ifa->ifa_addr->sa_family == AF_INET) {
-            tmpAddrPtr = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+            tmpAddrPtr = &((struct sockaddr_in *) ifa->ifa_addr)->sin_addr;
             char addressBuffer[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, tmpAddrPtr, addressBuffer, INET_ADDRSTRLEN);
             if (std::strcmp(ifa->ifa_name, "lo") != 0) { // exclude loopback
                 freeifaddrs(ifAddrStruct);
-                return std::string(addressBuffer);
+                return {addressBuffer};
             }
         }
     }
@@ -33,7 +33,6 @@ std::string getHostIP() {
 
 DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type) {
     name = n;
-    processing_units = 0;
     utilization = {};
     mem_utilization = {};
 
@@ -76,42 +75,68 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
 
 bool DeviceAgent::CreateContainer(
         ModelType model,
-        std::string name,
+        std::string pipe_name,
         BatchSizeType batch_size,
+        std::vector<int> input_dims,
+        int replica_id,
+        int allocation_mode,
         int device,
         const MsvcSLOType &slo,
         const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
         const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
 ) {
     try {
-        std::string executable = MODEL_INFO[model][1];
+        std::string cont_name = abbreviate(pipe_name + "_" + MODEL_INFO[model].second[0] + "_" + std::to_string(replica_id));
+        std::cout << "Creating container: " << cont_name << std::endl;
+        std::string executable = MODEL_INFO[model].second[1];
+        json start_config;
         if (model == ModelType::Sink) {
-            runDocker(executable, name, "", device, 0);
+            start_config["experimentName"] = experiment_name;
+            start_config["systemName"] = system_name;
+            start_config["pipelineName"] = pipe_name;
+            runDocker(executable, cont_name, to_string(start_config), device, 0);
             return true;
         }
 
-        std::ifstream file("../jsons/" + MODEL_INFO[model][0].substr(1) + ".json");
-        json start_config = json::parse(file);
+        std::ifstream file("../jsons/" + MODEL_INFO[model].second[0] + ".json");
+        start_config = json::parse(file);
+
+        // adjust container configs
+        start_config["container"]["cont_experimentName"] = experiment_name;
+        start_config["container"]["cont_systemName"] = system_name;
+        start_config["container"]["cont_pipeName"] = pipe_name;
+        start_config["container"]["cont_hostDevice"] = name;
+        start_config["container"]["cont_name"] = cont_name;
+        start_config["container"]["cont_allocationMode"] = allocation_mode;
+
         json base_config = start_config["container"]["cont_pipeline"];
         file.close();
 
-        //adjust configs themselves
+        // adjust pipeline configs
         for (auto &j: base_config) {
-            j["msvc_name"] = name + j["msvc_name"].get<std::string>();
             j["msvc_idealBatchSize"] = batch_size;
             j["msvc_svcLevelObjLatency"] = slo;
         }
+        if (model == ModelType::DataSource) {
+            base_config[0]["msvc_dataShape"] = {input_dims};
+        } else if (model == ModelType::Yolov5Dsrc || model == ModelType::RetinafaceDsrc) {
+            base_config[0]["msvc_dataShape"] = {input_dims};
+            base_config[0]["msvc_type"] = 500;
+        } else {
+            base_config[1]["msvc_dnstreamMicroservices"]["nb_expectedShape"] = {input_dims};
+        }
 
-        //adjust receiver upstreams
+
+        // adjust receiver upstreams
         base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = upstreams.at(0).name();
         base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {upstreams.at(0).ip()};
         if (upstreams.at(0).gpu_connection()) {
             base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
         } else {
-            base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localCPU;
+            base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
         }
 
-        //adjust sender downstreams
+        // adjust sender downstreams
         json sender = base_config.back();
         json *postprocessor = &base_config[base_config.size() - 2];
         json post_down = base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"][0];
@@ -125,8 +150,10 @@ bool DeviceAgent::CreateContainer(
             post_down["nb_name"] = sender["msvc_name"];
             if (d.gpu_connection()) {
                 post_down["nb_commMethod"] = CommMethod::localGPU;
+                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
             } else {
                 post_down["nb_commMethod"] = CommMethod::localCPU;
+                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
             }
             post_down["nb_classOfInterest"] = d.class_of_interest();
 
@@ -134,13 +161,14 @@ bool DeviceAgent::CreateContainer(
             base_config.push_back(sender);
         }
 
+        // start container
         start_config["container"]["cont_pipeline"] = base_config;
         int control_port = CONTAINER_BASE_PORT + containers.size();
-        runDocker(executable, name, to_string(start_config), device, control_port);
+        runDocker(executable, cont_name, to_string(start_config), device, control_port);
         std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
-        containers[name] = {InDeviceCommunication::NewStub(
-                                    grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
-                            new CompletionQueue(), 0};
+        containers[cont_name] = {InDeviceCommunication::NewStub(
+                grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
+                                 new CompletionQueue(), control_port, 0};
         return true;
     } catch (std::exception &e) {
         spdlog::error("Error creating container: {}", e.what());
@@ -163,7 +191,7 @@ void DeviceAgent::StopContainer(const ContainerHandle &container, bool forced) {
     GPR_ASSERT(ok);
 }
 
-void DeviceAgent::UpdateContainerSender(const std::string &name, const std::string &dwnstr, const std::string &ip,
+void DeviceAgent::UpdateContainerSender(const std::string &cont_name, const std::string &dwnstr, const std::string &ip,
                                         const int &port) {
     Connection request;
     EmptyMessage reply;
@@ -173,20 +201,36 @@ void DeviceAgent::UpdateContainerSender(const std::string &name, const std::stri
     request.set_ip(ip);
     request.set_port(port);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            containers[name].stub->AsyncUpdateSender(&context, request, containers[name].cq));
+            containers[cont_name].stub->AsyncUpdateSender(&context, request, containers[cont_name].cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
     bool ok = false;
-    GPR_ASSERT(containers[name].cq->Next(&got_tag, &ok));
+    GPR_ASSERT(containers[cont_name].cq->Next(&got_tag, &ok));
     GPR_ASSERT(ok);
 }
 
-void DeviceAgent::Ready(const std::string &name, const std::string &ip, SystemDeviceType type) {
+void DeviceAgent::SyncDatasources(const std::string &cont_name, const std::string &dsrc) {
+    indevicecommunication::Int32 request;
+    EmptyMessage reply;
+    ClientContext context;
+    Status status;
+    request.set_value(containers[dsrc].port);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            containers[cont_name].stub->AsyncSyncDatasources(&context, request, containers[cont_name].cq));
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(containers[cont_name].cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+}
+
+void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, SystemDeviceType type) {
     ConnectionConfigs request;
     EmptyMessage reply;
     ClientContext context;
     Status status;
-    request.set_device_name(name);
+    int processing_units;
+    request.set_device_name(cont_name);
     request.set_device_type(type);
     request.set_ip_address(ip);
     Profiler *profiler = new Profiler({});
@@ -250,7 +294,6 @@ void DeviceAgent::HandleControlRecvRpcs() {
 }
 
 int getContainerProcessPid(std::string container_name_or_id) {
-    std::replace(container_name_or_id.begin(), container_name_or_id.end(), ':', '-');
     std::string cmd = "docker inspect --format '{{.State.Pid}}' " + container_name_or_id;
     std::array<char, 128> buffer;
     std::string result;
@@ -294,9 +337,14 @@ void DeviceAgent::StartContainerRequestHandler::Proceed() {
         service->RequestStartContainer(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new StartContainerRequestHandler(service, cq, device_agent);
-        bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.name(),
-                                                     request.batch_size(), request.device(), request.slo(),
-                                                     request.upstream(), request.downstream());
+        std::vector<int> input_dims;
+        for (auto &dim: request.input_dimensions()) {
+            input_dims.push_back(dim);
+        }
+        bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.pipeline_name(),
+                                                     request.batch_size(), input_dims, request.replica_id(),
+                                                     request.allocation_mode(), request.device(),
+                                                     request.slo(), request.upstream(), request.downstream());
         if (!success) {
             status = FINISH;
             responder.Finish(reply, Status::CANCELLED, this);
@@ -345,6 +393,21 @@ void DeviceAgent::UpdateDownstreamRequestHandler::Proceed() {
     }
 }
 
+void DeviceAgent::SyncDatasourceRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestSyncDatasource(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new SyncDatasourceRequestHandler(service, cq, device_agent);
+        device_agent->SyncDatasources(request.name(), request.downstream_name());
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
 void DeviceAgent::UpdateBatchsizeRequestHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
@@ -353,10 +416,11 @@ void DeviceAgent::UpdateBatchsizeRequestHandler::Proceed() {
         new UpdateBatchsizeRequestHandler(service, cq, device_agent);
         ClientContext context;
         Status state;
-        indevicecommunication::BatchSize bs;
-        bs.set_size(request.value());
+        indevicecommunication::Int32 bs;
+        bs.set_value(request.value());
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-                device_agent->containers[request.name()].stub->AsyncUpdateBatchSize(&context, bs, device_agent->containers[request.name()].cq));
+                device_agent->containers[request.name()].stub->AsyncUpdateBatchSize(&context, bs,
+                                                                                    device_agent->containers[request.name()].cq));
         rpc->Finish(&reply, &state, (void *) 1);
         void *got_tag;
         bool ok = false;

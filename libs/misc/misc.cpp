@@ -469,12 +469,13 @@ std::string replaceSubstring(const std::string& input, const std::string& toRepl
 
 std::vector<std::string> splitString(const std::string& str, const std::string& delimiter) {
     std::vector<std::string> result;
-    size_t start = 0, end = str.find(delimiter);
+    size_t start = 0;
+    size_t end = str.find_first_of(delimiter, start);
 
     while (end != std::string::npos) {
         result.push_back(str.substr(start, end - start));
-        start = end + delimiter.length();
-        end = str.find(delimiter, start);
+        start = end + 1;
+        end = str.find_first_of(delimiter, start);
     }
 
     result.push_back(str.substr(start));

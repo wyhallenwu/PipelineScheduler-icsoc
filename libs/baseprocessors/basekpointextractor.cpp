@@ -74,11 +74,11 @@ void BaseKPointExtractor::extractor() {
 
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
-        else if (this->PAUSE_THREADS) {
+        else if (PAUSE_THREADS) {
             if (RELOADING) {
                 /**
                  * @brief Opening a new log file
@@ -129,8 +129,8 @@ void BaseKPointExtractor::extractor() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
 
         currReq_batchSize = currReq.req_batchSize;
@@ -138,7 +138,7 @@ void BaseKPointExtractor::extractor() {
 
         currReq_data = currReq.req_data;
 
-        bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
+        bufferSize = msvc_modelDataType * (size_t)currReq_batchSize;
         shape = currReq_data[0].shape;
         for (uint8_t j = 0; j < shape.size(); ++j) {
             bufferSize *= shape[j];
@@ -160,7 +160,7 @@ void BaseKPointExtractor::extractor() {
             uint32_t totalInMem = currReq.upstreamReq_data[i].data.rows * currReq.upstreamReq_data[i].data.cols * currReq.upstreamReq_data[i].data.channels() * CV_ELEM_SIZE1(currReq.upstreamReq_data[i].data.type());
             currReq.req_travelPath[i] += "|1|1|" + std::to_string(totalInMem) + "]";
 
-            if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
+            if (msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(currReq.upstreamReq_data[i].data.size(), currReq.upstreamReq_data[i].data.type());
                 checkCudaErrorCode(cudaMemcpyAsync(
                     out.ptr(),
@@ -221,7 +221,7 @@ void BaseKPointExtractor::extractor() {
         msvc_batchCount++;
 
         spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
 
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
@@ -277,11 +277,11 @@ void BaseKPointExtractor::extractorProfiling() {
 
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
-        else if (this->PAUSE_THREADS) {
+        else if (PAUSE_THREADS) {
             if (RELOADING) {
                 /**
                  * @brief Opening a new log file
@@ -318,8 +318,8 @@ void BaseKPointExtractor::extractorProfiling() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
 
         currReq_batchSize = currReq.req_batchSize;
@@ -327,7 +327,7 @@ void BaseKPointExtractor::extractorProfiling() {
 
         currReq_data = currReq.req_data;
 
-        bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
+        bufferSize = msvc_modelDataType * (size_t)currReq_batchSize;
         shape = currReq_data[0].shape;
         for (uint8_t j = 0; j < shape.size(); ++j) {
             bufferSize *= shape[j];
@@ -360,7 +360,7 @@ void BaseKPointExtractor::extractorProfiling() {
         );
 
         spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
 
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);

@@ -240,6 +240,7 @@ const std::vector<std::string> cocoClassNames = {
 };
 
 const std::map<std::string, std::string> keywordAbbrs {
+    {"batch", "batch"},
     {"server", "serv"},
     {"agxaviver", "agx"},
     {"agxavier1", "agx1"},
@@ -267,6 +268,7 @@ const std::map<std::string, std::string> keywordAbbrs {
     {"carbrand", "cbrd"},
     {"gender", "gndr"},
     {"emotion", "emtn"},
+    {"emotionnet", "emtn"},
     {"platedet", "pldt"},
     {"dynamic", "dyn"},
     {"3090", "39"}, // GPU name
