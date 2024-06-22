@@ -112,10 +112,10 @@ void Controller::Scheduling() {
 
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
-    tasks.insert({t.name, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
-    TaskHandle *task = &tasks[t.name];
-    NodeHandle *device = &devices[t.device];
-    auto models = getModelsByPipelineType(t.type);
+    // tasks.insert({t.name, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
+    // TaskHandle *task = &tasks[t.name];
+    // NodeHandle *device = &devices[t.device];
+    // auto models = getModelsByPipelineType(t.type);
 
     // std::string tmp = t.name;
     // containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {0}}});
@@ -162,7 +162,8 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         new DeviseAdvertisementHandler(service, cq, controller);
         std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), 60002);
         controller->devices.insert({request.device_name(),
-                                    {request.ip_address(),
+                                    {request.device_name(),
+                                     request.ip_address(),
                                      ControlCommunication::NewStub(
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
                                      new CompletionQueue(),
@@ -290,7 +291,7 @@ void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_dev
     old_device->containers.erase(msvc->name);
 }
 
-void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr, Controller::NodeHandle *new_device,
+void Controller::AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *new_device,
                                 const std::string &dwnstr) {
     ContainerLink request;
     ClientContext context;
@@ -309,7 +310,7 @@ void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr, Co
     GPR_ASSERT(ok);
 }
 
-void Controller::SyncDatasource(Controller::ContainerHandle *prev, Controller::ContainerHandle *curr) {
+void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
     ContainerLink request;
     ClientContext context;
     EmptyMessage reply;
@@ -325,7 +326,7 @@ void Controller::SyncDatasource(Controller::ContainerHandle *prev, Controller::C
     GPR_ASSERT(ok);
 }
 
-void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs, int replica) {
+void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica) {
     msvc->batch_size[replica - 1] = new_bs;
     ContainerInt request;
     ClientContext context;

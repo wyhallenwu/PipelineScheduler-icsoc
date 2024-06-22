@@ -32,7 +32,7 @@ typedef std::tuple<
     QueueLengthType
 > MsvcConfigTupleType;
 
-struct ContainerHandle {
+struct DevContainerHandle {
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     CompletionQueue *cq;
     int port;
@@ -102,7 +102,7 @@ private:
         return system(command.c_str());
     };
 
-    static void StopContainer(const ContainerHandle &container, bool forced = false);
+    static void StopContainer(const DevContainerHandle &container, bool forced = false);
 
     void UpdateContainerSender(const std::string &cont_name, const std::string &dwnstr, const std::string &ip,
                                const int &port);
@@ -262,7 +262,7 @@ private:
     std::string system_name;
 
     // Runtime variables
-    std::map<std::string, ContainerHandle> containers;
+    std::map<std::string, DevContainerHandle> containers;
     std::vector<std::thread> threads;
 
     // Profiling

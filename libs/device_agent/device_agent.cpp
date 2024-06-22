@@ -94,7 +94,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     controller_sending_cq = new CompletionQueue();
 
     running = true;
-    containers = std::map<std::string, ContainerHandle>();
+    containers = std::map<std::string, DevContainerHandle>();
     threads = std::vector<std::thread>();
     threads.emplace_back(&DeviceAgent::HandleDeviceRecvRpcs, this);
     threads.emplace_back(&DeviceAgent::HandleControlRecvRpcs, this);
@@ -206,7 +206,7 @@ bool DeviceAgent::CreateContainer(
     }
 }
 
-void DeviceAgent::StopContainer(const ContainerHandle &container, bool forced) {
+void DeviceAgent::StopContainer(const DevContainerHandle &container, bool forced) {
     indevicecommunication::Signal request;
     EmptyMessage reply;
     ClientContext context;

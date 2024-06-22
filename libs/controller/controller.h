@@ -34,6 +34,102 @@ ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
 
 typedef std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> Pipeline;
 
+
+struct ContainerHandle;
+
+struct TaskHandle {
+    std::string name;
+    PipelineType type;
+    std::string source;
+    int slo;
+    ClockType start_time;
+    int last_latency;
+    std::map<std::string, ContainerHandle *> subtasks;
+};
+
+struct NodeHandle {
+    std::string name;
+    std::string ip;
+    std::shared_ptr<ControlCommunication::Stub> stub;
+    CompletionQueue *cq;
+    SystemDeviceType type;
+    int num_processors; // number of processing units, 1 for Edge or # GPUs for server
+    std::vector<double> processors_utilization; // utilization per pu
+    std::vector<unsigned long> mem_size; // memory size in MB
+    std::vector<double> mem_utilization; // memory utilization per pu
+    int next_free_port;
+    std::map<std::string, ContainerHandle *> containers;
+};
+
+struct ContainerHandle {
+    std::string name;
+    int class_of_interest;
+    ModelType model;
+    bool mergable;
+    std::vector<int> dimensions;
+
+    uint32_t inference_deadline;
+
+    float arrival_rate;
+
+    int num_replicas;
+    std::vector<int> batch_size;
+    std::vector<int> cuda_device;
+    std::vector<int> recv_port;
+
+    HardwareMetrics metrics;
+    NodeHandle *device_agent;
+    TaskHandle *task;
+    std::vector<ContainerHandle *> upstreams;
+    std::vector<ContainerHandle *> downstreams;
+};
+
+struct PipelineModel {
+    std::string device;
+    // Whether the upstream is on another device
+    bool isSplitPoint;
+    //
+    ModelArrivalProfile arrivalProfile;
+    // Latency profile of preprocessor, batch inferencer and postprocessor
+    ModelProfile processProfile;
+    // The downstream models and their classes of interest
+    std::vector<std::pair<ModelType, int>> downstreams;
+    std::vector<std::pair<ModelType, int>> upstreams;
+    // The batch size of the model
+    BatchSizeType batchSize;
+    // The number of replicas of the model
+    uint8_t numReplicas;
+    // Average latency to query to reach from the upstream
+    uint64_t expectedTransmitLatency;
+    // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
+    uint64_t expectedQueueingLatency;
+    // Average latency to process each query
+    uint64_t expectedAvgPerQueryLatency;
+    // Maximum latency to process each query as ones that come later have to wait to be processed in batch
+    uint64_t expectedMaxProcessLatency;
+    // Latency from the start of the pipeline until the end of this model
+    uint64_t expectedStart2HereLatency = -1;
+    // The estimated cost per query processed by this model
+    uint64_t estimatedPerQueryCost = 0;
+    // The estimated latency of the model
+    uint64_t estimatedStart2HereCost = 0;
+};
+
+// Arrival rates during different periods (e.g., last 1 second, last 3 seconds, etc.)
+typedef std::map<int, float> ArrivalRateType;
+// Scale factors for different periods
+typedef std::map<int, float> ScaleFactorType;
+
+typedef std::map<BatchSizeType, uint64_t> BatchLatencyProfileType;
+
+typedef int BandwidthType;
+
+
+// Structure that whole information about the pipeline used for scheduling
+typedef std::map<ModelType, PipelineModel> PipelineModelListType;
+
+
+
 namespace TaskDescription {
     struct TaskStruct {
         std::string name;
@@ -65,48 +161,6 @@ public:
     void Stop() { running = false; };
 
 private:
-    struct ContainerHandle;
-    struct NodeHandle {
-        std::string ip;
-        std::shared_ptr<ControlCommunication::Stub> stub;
-        CompletionQueue *cq;
-        SystemDeviceType type;
-        int num_processors; // number of processing units, 1 for Edge or # GPUs for server
-        std::vector<double> processors_utilization; // utilization per pu
-        std::vector<unsigned long> mem_size; // memory size in MB
-        std::vector<double> mem_utilization; // memory utilization per pu
-        int next_free_port;
-        std::map<std::string, ContainerHandle *> containers;
-    };
-
-    struct TaskHandle {
-        std::string name;
-        PipelineType type;
-        std::string source;
-        int slo;
-        ClockType start_time;
-        int last_latency;
-        std::map<std::string, ContainerHandle *> subtasks;
-    };
-
-    struct ContainerHandle {
-        std::string name;
-        int class_of_interest;
-        ModelType model;
-        bool mergable;
-        std::vector<int> dimensions;
-
-        int replicas;
-        std::vector<int> batch_size;
-        std::vector<int> cuda_device;
-        std::vector<int> recv_port;
-
-        HardwareMetrics metrics;
-        NodeHandle *device_agent;
-        TaskHandle *task;
-        std::vector<ContainerHandle *> upstreams;
-        std::vector<ContainerHandle *> downstreams;
-    };
 
     void readConfigFile(const std::string &config_path);
 
@@ -159,7 +213,7 @@ private:
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
 
-    static void SyncDatasource(Controller::ContainerHandle *prev, Controller::ContainerHandle *curr);
+    static void SyncDatasource(ContainerHandle *prev, ContainerHandle *curr);
 
     void AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica = 1);
 
@@ -173,7 +227,7 @@ private:
             const Pipeline &models, int slo,
             int nObjects);
 
-    Pipeline getModelsByPipelineType(PipelineType type);
+    PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice);
 
     bool running;
     std::string ctrl_experimentName;
