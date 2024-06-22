@@ -423,29 +423,172 @@ std::map<ModelType, int> Controller::getInitialBatchSizes(
     return batch_sizes;
 }
 
-Pipeline Controller::getModelsByPipelineType(PipelineType type) {
+PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice) {
     switch (type) {
         case PipelineType::Traffic:
-            return {{ModelType::Yolov5n,       {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::PlateDet, 2}}},
-                    {ModelType::Retinaface,   {{ModelType::Arcface,    0}}},
-                    {ModelType::Arcface,      {{ModelType::Sink,       -1}}},
-                    {ModelType::CarBrand,     {{ModelType::Sink,       -1}}},
-                    {ModelType::PlateDet, {{ModelType::Sink,       -1}}},
-                    {ModelType::Sink,     {}}};
+            return {
+                {
+                    ModelType::DataSource, 
+                    {startDevice, true, {}, {}, {{ModelType::Yolov5n, 0}}}
+                },
+                {
+                    ModelType::Yolov5n,
+                    {
+                        "server", true, {}, {},       
+                        {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::PlateDet, 2}},
+                        {{ModelType::DataSource, -1}}
+                    },
+                },
+                {
+                    ModelType::Retinaface, 
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Arcface,    -1}},
+                        {{ModelType::Yolov5n, -1}}
+                    }
+                },
+                {
+                    ModelType::Arcface,
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Sink,   -1}},
+                        {{ModelType::Retinaface, -1}}
+                    }
+                },
+                {
+                    ModelType::CarBrand,
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Sink,   -1}},
+                        {{ModelType::Yolov5n, -1}}
+                    }
+                },
+                {
+                    ModelType::PlateDet,
+                    {
+                        "server", false, {}, {}, {{ModelType::Sink,   -1}},
+                        {{ModelType::Yolov5n, -1}}
+                    }
+                },
+                {
+                    ModelType::Sink,
+                    {
+                        "server", false, {}, {},
+                        {},
+                        {{ModelType::Arcface, -1}, {ModelType::CarBrand, -1}, {ModelType::PlateDet, -1}}
+                    }
+                }
+            };
         case PipelineType::Video_Call:
-            return {{ModelType::Retinaface, {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}},
-                    {ModelType::Gender,     {{ModelType::Sink,       -1}}},
-                    {ModelType::Age,        {{ModelType::Sink,       -1}}},
-                    {ModelType::Emotionnet, {{ModelType::Sink,       -1}}},
-                    {ModelType::Arcface,    {{ModelType::Sink,       -1}}},
-                    {ModelType::Sink,       {}}};
+            return {
+                {
+                    ModelType::DataSource,
+                    {startDevice, true, {}, {}, {{ModelType::Retinaface, 0}}}
+                },
+                {
+                    ModelType::Retinaface,
+                    {
+                        "server", true, {}, {},
+                        {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}},
+                        {{ModelType::DataSource, -1}}
+                    }
+                },
+                {
+                    ModelType::Gender,
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Sink,   -1}},
+                        {{ModelType::Retinaface, -1}}
+                    }
+                },
+                {
+                    ModelType::Age,
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Sink,   -1}},
+                        {{ModelType::Retinaface, -1}}
+                    }
+                },
+                {
+                    ModelType::Emotionnet,
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Sink,   -1}},
+                        {{ModelType::Retinaface, -1}}
+                    }
+                },
+                {
+                    ModelType::Arcface,
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Sink,   -1}},
+                        {{ModelType::Retinaface, -1}}
+                    }
+                },
+                {
+                    ModelType::Sink,
+                    {
+                        "server", false, {}, {},
+                        {},
+                        {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}
+                    }
+                }
+            };
         case PipelineType::Building_Security:
-            return {{ModelType::Yolov5n,     {{ModelType::Retinaface, 0}, {ModelType::Movenet, 0}}},
-                    {ModelType::Retinaface, {{ModelType::Gender,     0}, {ModelType::Age, 0}}},
-                    {ModelType::Movenet,    {{ModelType::Sink,       -1}}},
-                    {ModelType::Gender,     {{ModelType::Sink,       -1}}},
-                    {ModelType::Age,        {{ModelType::Sink,       -1}}},
-                    {ModelType::Sink,       {}}};
+            return {
+                {
+                    ModelType::DataSource,
+                    {startDevice, true, {}, {}, {{ModelType::Yolov5n, 0}}}
+                },
+                {
+                    ModelType::Yolov5n,
+                    {
+                        "server", true, {}, {},
+                        {{ModelType::Retinaface, 0}},
+                        {{ModelType::DataSource, -1}}
+                    }
+                },
+                {
+                    ModelType::Retinaface,
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Gender,     -1}, {ModelType::Age, -1}},
+                        {{ModelType::Yolov5n, -1}}
+                    }
+                },
+                {
+                    ModelType::Movenet,
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Sink,   -1}},
+                        {{ModelType::Yolov5n, -1}}
+                    }
+                },
+                {
+                    ModelType::Gender,
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Sink,   -1}},
+                        {{ModelType::Retinaface, -1}}
+                    }
+                },
+                {
+                    ModelType::Age,
+                    {
+                        "server", false, {}, {},
+                        {{ModelType::Sink,   -1}},
+                        {{ModelType::Retinaface, -1}}
+                    }
+                },
+                {
+                    ModelType::Sink,
+                    {
+                        "server", false, {}, {},
+                        {},
+                        {{ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Movenet, -1}}
+                    }
+                }
+            };
         default:
             return {};
     }
