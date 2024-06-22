@@ -32,36 +32,8 @@ ABSL_DECLARE_FLAG(std::string, ctrl_configPath);
 ABSL_DECLARE_FLAG(uint16_t, ctrl_verbose);
 ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
 
-enum SystemDeviceType {
-    Server,
-    Edge
-};
-
-enum ModelType {
-    DataSource,
-    Sink,
-    Yolov5, // = Yolov5n
-    Yolov5Dsrc,
-    Arcface,
-    Retinaface,
-    RetinafaceDsrc,
-    PlateDet,
-    Movenet,
-    Emotionnet,
-    Gender,
-    Age,
-    CarBrand
-};
-
 typedef std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> Pipeline;
 
-extern std::map<ModelType, std::pair<std::vector<int>, std::vector<std::string>>> MODEL_INFO;
-
-enum PipelineType {
-    Traffic,
-    Video_Call,
-    Building_Security
-};
 
 struct HardwareMetrics {
     ClockType timestamp;
@@ -252,6 +224,7 @@ private:
     uint16_t ctrl_loggingMode;
     uint16_t ctrl_verbose;
 
+    ContainerLibType ctrl_containerLib;
     std::map<std::string, NodeHandle> devices;
     std::map<std::string, TaskHandle> tasks;
     std::map<std::string, ContainerHandle> containers;

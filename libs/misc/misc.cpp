@@ -1,5 +1,7 @@
 #include "misc.h"
 
+using json = nlohmann::json;
+
 /**
  * @brief Estimate network latency of a package of size `totalPkgSize` using linear interpolation
  * 
@@ -643,4 +645,31 @@ bool confirmIntention(const std::string &message, const std::string &magicPhrase
     }
 
     return true;
+}
+
+std::map<SystemDeviceType, std::string> SystemDeviceTypeList = {
+    {Server, "Server"},
+    {NXXavier, "NXXavier"},
+    {AGXXavier, "AGXXavier"},
+    {OrinNano, "OrinNano"}
+};
+
+std::map<ModelType, std::string> ModelTypeList = {
+    {DataSource, "DataSource"},
+    {Sink, "Sink"},
+    {Yolov5n, "Yolov5n"},
+    {Yolov5s, "Yolov5s"},
+    {Yolov5m, "Yolov5m"},
+    {Yolov5nDsrc, "Yolov5nDsrc"},
+    {Arcface, "Arcface"},
+    {Retinaface, "Retinaface"},
+    {RetinafaceDsrc, "RetinafaceDsrc"},
+    {PlateDet, "PlateDet"},
+    {Movenet, "Movenet"},
+    {Emotionnet, "Emotionnet"},
+    {Gender, "Gender"},
+    {Age, "Age"},
+    {CarBrand, "CarBrand"}
+};
+
 }

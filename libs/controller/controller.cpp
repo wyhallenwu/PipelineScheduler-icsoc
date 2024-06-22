@@ -17,22 +17,6 @@ void Controller::readConfigFile(const std::string &path) {
 
 }
 
-std::map<ModelType, std::pair<std::vector<int>, std::vector<std::string>>> MODEL_INFO = {
-        {DataSource,     {{3, 640, 640}, {"datasource",  "./Container_DataSource"}}},
-        {Sink,           {{0},           {"sink",        "./runSink"}}},
-        {Yolov5,         {{3, 640, 640}, {"yolov5",      "./Container_Yolov5"}}},
-        {Yolov5Dsrc,     {{3, 640, 640}, {"yolov5",      "./Container_Yolov5"}}},
-        {Retinaface,     {{3, 288, 320}, {"retina1face", "./Container_RetinaFace"}}},
-        {RetinafaceDsrc, {{3, 288, 320}, {"retina1face", "./Container_RetinaFace"}}},
-        {PlateDet,       {{3, 244, 244}, {"platedet",    "./Container_PlateDet"}}},
-        {Movenet,        {{3, 192, 192}, {"movenet",     "./Container_MoveNet"}}},
-        {Emotionnet,     {{3, 64,  64},  {"emotionnet",  "./Container_EmotionNet"}}},
-        {Arcface,        {{3, 112, 112}, {"arcface",     "./Container_ArcFace"}}},
-        {Age,            {{3, 244, 244}, {"age",         "./Container_Age"}}},
-        {Gender,         {{3, 244, 244}, {"gender",      "./Container_Gender"}}},
-        {CarBrand,       {{3, 244, 244}, {"carbrand",    "./Container_CarBrand"}}},
-};
-
 void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskStruct &val) {
     j.at("pipeline_name").get_to(val.name);
     j.at("pipeline_target_slo").get_to(val.slo);
@@ -253,7 +237,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
         dwn->set_class_of_interest(-1);
         dwn->set_gpu_connection(false);
     }
-    if (container.second->model == DataSource || container.second->model == Yolov5Dsrc || container.second->model == RetinafaceDsrc) {
+    if (container.second->model == DataSource || container.second->model == Yolov5nDsrc || container.second->model == RetinafaceDsrc) {
         Neighbor *up = request.add_upstream();
         up->set_name("video_source");
         up->set_ip(source);
@@ -290,8 +274,8 @@ void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_dev
         device = msvc->upstreams[0]->device_agent;
         if (msvc->mergable) {
             merge_dsrc = true;
-            if (msvc->model == Yolov5) {
-                msvc->model = Yolov5Dsrc;
+            if (msvc->model == Yolov5n) {
+                msvc->model = Yolov5nDsrc;
             } else if (msvc->model == Retinaface) {
                 msvc->model = RetinafaceDsrc;
             }
@@ -300,8 +284,8 @@ void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_dev
         device = &devices["server"];
         if (msvc->mergable) {
             start_dsrc = true;
-            if (msvc->model == Yolov5Dsrc) {
-                msvc->model = Yolov5;
+            if (msvc->model == Yolov5nDsrc) {
+                msvc->model = Yolov5n;
             } else if (msvc->model == RetinafaceDsrc) {
                 msvc->model = Retinaface;
             }
@@ -464,12 +448,12 @@ std::map<ModelType, int> Controller::getInitialBatchSizes(
 Pipeline Controller::getModelsByPipelineType(PipelineType type) {
     switch (type) {
         case PipelineType::Traffic:
-            return {{ModelType::Yolov5,     {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::PlateDet, 2}}},
-                    {ModelType::Retinaface, {{ModelType::Arcface,    0}}},
-                    {ModelType::Arcface,    {{ModelType::Sink,       -1}}},
-                    {ModelType::CarBrand,   {{ModelType::Sink,       -1}}},
-                    {ModelType::PlateDet,   {{ModelType::Sink,       -1}}},
-                    {ModelType::Sink,       {}}};
+            return {{ModelType::Yolov5n,       {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::PlateDet, 2}}},
+                    {ModelType::Retinaface,   {{ModelType::Arcface,    0}}},
+                    {ModelType::Arcface,      {{ModelType::Sink,       -1}}},
+                    {ModelType::CarBrand,     {{ModelType::Sink,       -1}}},
+                    {ModelType::PlateDet, {{ModelType::Sink,       -1}}},
+                    {ModelType::Sink,     {}}};
         case PipelineType::Video_Call:
             return {{ModelType::Retinaface, {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}},
                     {ModelType::Gender,     {{ModelType::Sink,       -1}}},
@@ -478,8 +462,8 @@ Pipeline Controller::getModelsByPipelineType(PipelineType type) {
                     {ModelType::Arcface,    {{ModelType::Sink,       -1}}},
                     {ModelType::Sink,       {}}};
         case PipelineType::Building_Security:
-            return {{ModelType::Yolov5,     {{ModelType::Retinaface, 0}, {ModelType::Movenet, 0}}},
-                    {ModelType::Retinaface, {{ModelType::Gender,     0}, {ModelType::Age,     0}}},
+            return {{ModelType::Yolov5n,     {{ModelType::Retinaface, 0}, {ModelType::Movenet, 0}}},
+                    {ModelType::Retinaface, {{ModelType::Gender,     0}, {ModelType::Age, 0}}},
                     {ModelType::Movenet,    {{ModelType::Sink,       -1}}},
                     {ModelType::Gender,     {{ModelType::Sink,       -1}}},
                     {ModelType::Age,        {{ModelType::Sink,       -1}}},

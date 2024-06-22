@@ -316,11 +316,57 @@ struct MetricsServerConfigs {
 
 std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &metricsServerConfigs, const std::string &name);
 
+enum SystemDeviceType {
+    Server,
+    NXXavier,
+    AGXXavier,
+    OrinNano
+};
+
+typedef std::map<SystemDeviceType, std::string> DeviceInfoType;
+
+enum PipelineType {
+    Traffic,
+    Video_Call,
+    Building_Security
+};
+
 enum MODEL_DATA_TYPE {
     int8 = sizeof(uint8_t),
     fp16 = int(sizeof(float) / 2),
     fp32 = sizeof(float)
 };
+
+enum ModelType {
+    DataSource,
+    Sink,
+    Yolov5n, // = Yolov5n
+    Yolov5s,
+    Yolov5m,
+    Yolov5nDsrc,
+    Arcface,
+    Retinaface,
+    RetinafaceDsrc,
+    PlateDet,
+    Movenet,
+    Emotionnet,
+    Gender,
+    Age,
+    CarBrand
+};
+
+extern std::map<SystemDeviceType, std::string> SystemDeviceTypeList;
+extern std::map<ModelType, std::string> ModelTypeList;
+
+struct ContainerInfo {
+    std::string taskName;
+    nlohmann::json templateConfig;
+    std::string runCommand;
+};
+
+typedef std::map<ModelType, ContainerInfo> ContainerLibType;
+
+
 
 inline void checkCudaErrorCode(cudaError_t code, std::string func_name) {
     if (code != 0) {

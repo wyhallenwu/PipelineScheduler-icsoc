@@ -86,9 +86,9 @@ bool DeviceAgent::CreateContainer(
         const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
 ) {
     try {
-        std::string cont_name = abbreviate(pipe_name + "_" + MODEL_INFO[model].second[0] + "_" + std::to_string(replica_id));
+        std::string cont_name = abbreviate(pipe_name + "_" + dev_containerLib[model].taskName + "_" + std::to_string(replica_id));
         std::cout << "Creating container: " << cont_name << std::endl;
-        std::string executable = MODEL_INFO[model].second[1];
+        std::string executable = dev_containerLib[model].runCommand;
         json start_config;
         if (model == ModelType::Sink) {
             start_config["experimentName"] = experiment_name;
@@ -98,8 +98,7 @@ bool DeviceAgent::CreateContainer(
             return true;
         }
 
-        std::ifstream file("../jsons/" + MODEL_INFO[model].second[0] + ".json");
-        start_config = json::parse(file);
+        start_config = dev_containerLib[model].templateConfig;
 
         // adjust container configs
         start_config["container"]["cont_experimentName"] = experiment_name;
@@ -110,7 +109,6 @@ bool DeviceAgent::CreateContainer(
         start_config["container"]["cont_allocationMode"] = allocation_mode;
 
         json base_config = start_config["container"]["cont_pipeline"];
-        file.close();
 
         // adjust pipeline configs
         for (auto &j: base_config) {
@@ -119,7 +117,7 @@ bool DeviceAgent::CreateContainer(
         }
         if (model == ModelType::DataSource) {
             base_config[0]["msvc_dataShape"] = {input_dims};
-        } else if (model == ModelType::Yolov5Dsrc || model == ModelType::RetinafaceDsrc) {
+        } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
             base_config[0]["msvc_dataShape"] = {input_dims};
             base_config[0]["msvc_type"] = 500;
         } else {
