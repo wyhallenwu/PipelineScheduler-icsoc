@@ -225,6 +225,13 @@ private:
     uint16_t ctrl_verbose;
 
     ContainerLibType ctrl_containerLib;
+    DeviceInfoType ctrl_sysDeviceInfo = {
+        {Server, "server"},
+        {AGXXavier, "agxavier"},
+        {NXXavier, "nxavier"},
+        {OrinNano, "orinano"}
+    };
+
     std::map<std::string, NodeHandle> devices;
     std::map<std::string, TaskHandle> tasks;
     std::map<std::string, ContainerHandle> containers;
