@@ -71,6 +71,8 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
         dev_logger
     );
 
+    dev_containerLib = getContainerLib();
+
     std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60003);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();

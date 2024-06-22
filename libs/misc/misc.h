@@ -547,5 +547,9 @@ ModelProfile queryModelProfile(
     const std::string &deviceName,
     const std::string &modelName
 );
+bool isFileEmpty(const std::string& filePath);
+
+ContainerLibType getContainerLib();
+
 
 #endif

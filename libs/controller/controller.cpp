@@ -50,6 +50,8 @@ Controller::Controller(int argc, char **argv) {
             ctrl_logger
     );
 
+    ctrl_containerLib = getContainerLib();
+
     json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
     ctrl_metricsServerConfigs.from_json(metricsCfgs);
     ctrl_metricsServerConfigs.schema = ctrl_experimentName + "_" + ctrl_systemName;

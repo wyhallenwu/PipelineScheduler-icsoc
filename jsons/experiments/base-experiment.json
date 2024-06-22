@@ -1,7 +1,7 @@
 {
-    "ctrl_expName": "ex1",
-    "ctrl_systemName": "ppp",
-    "ctrl_runtime": 60,
+    "expName": "ex1",
+    "systemName": "ppp",
+    "runtime": 60,
     "initial_pipelines": [
         {
             "pipeline_name": "batch_test",
