@@ -1,5 +1,10 @@
 #include "device_agent.h"
 
+ABSL_FLAG(std::string, dev_configPath, "../jsons/example_experiment.json", "Path to the configuration file for this experiment.");
+ABSL_FLAG(uint16_t, dev_verbose, 0, "Verbosity level of the Device Agent.");
+ABSL_FLAG(uint16_t, dev_loggingMode, 0, "Logging mode of the Device Agent. 0:stdout, 1:file, 2:both");
+ABSL_FLAG(std::string, dev_logPath, "../logs", "Path to the log dir for the Device Agent.");
+
 ABSL_FLAG(std::string, device_type, "", "string that identifies the device type");
 ABSL_FLAG(std::string, controller_url, "", "string that identifies the controller url without port!");
 
@@ -36,10 +41,35 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     utilization = {};
     mem_utilization = {};
 
+    readConfigFile(absl::GetFlag(FLAGS_dev_configPath));
+
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
     dev_metricsServerConfigs.password = "agent";
     dev_metricsServerConn = connectToMetricsServer(dev_metricsServerConfigs, "Device_agent");
+
+    dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
+    dev_logPath += "/" + dev_experimentName;
+    std::filesystem::create_directories(
+        std::filesystem::path(dev_logPath)
+    );
+
+    dev_logPath += "/" + dev_systemName;
+    std::filesystem::create_directories(
+        std::filesystem::path(dev_logPath)
+    );
+
+    dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
+    dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
+
+    setupLogger(
+        dev_logPath,
+        "controller",
+        dev_loggingMode,
+        dev_verbose,
+        dev_loggerSinks,
+        dev_logger
+    );
 
     std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60003);
     grpc::EnableDefaultHealthCheckService(true);

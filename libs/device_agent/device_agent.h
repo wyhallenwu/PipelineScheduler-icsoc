@@ -16,6 +16,9 @@
 
 using trt::TRTConfigs;
 
+ABSL_DECLARE_FLAG(std::string, dev_configPath);
+ABSL_DECLARE_FLAG(uint16_t, dev_verbose);
+ABSL_DECLARE_FLAG(uint16_t, dev_loggingMode);
 ABSL_DECLARE_FLAG(std::string, device_type);
 ABSL_DECLARE_FLAG(std::string, controller_url);
 
@@ -59,6 +62,15 @@ public:
     }
 
 private:
+
+    void readConfigFile(const std::string &path) {
+        std::ifstream file(path);
+        json j = json::parse(file);
+
+        dev_experimentName = j["expName"];
+        dev_systemName = j["systemName"];
+    }
+
     bool CreateContainer(
             ModelType model,
             std::string pipe_name,
@@ -236,6 +248,13 @@ private:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
+    std::string dev_experimentName;
+    std::string dev_systemName;
+    
+    ContainerLibType dev_containerLib;
+    SystemDeviceType dev_type;
+    DeviceInfoType dev_deviceInfo;
+
     // Basic information
     std::string name;
     bool running;
@@ -262,6 +281,12 @@ private:
 
     // This will be mounted into the container to easily collect all logs.
     std::string dev_logPath = "../logs";
+    uint16_t dev_loggingMode = 0;
+    uint16_t dev_verbose = 0;
+
+    std::vector<spdlog::sink_ptr> dev_loggerSinks = {};
+    std::shared_ptr<spdlog::logger> dev_logger;    
+
     MetricsServerConfigs dev_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> dev_metricsServerConn = nullptr;
 };
