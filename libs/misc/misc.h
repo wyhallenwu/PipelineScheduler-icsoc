@@ -218,6 +218,44 @@ struct ModelProfile {
 // we can use the stream name as the key to store the process records
 typedef std::map<std::string, ProcessRecord> ProcessRecordType;
 
+struct HardwareMetrics {
+    ClockType timestamp;
+    CpuUtilType cpuUsage = 0;
+    MemUsageType memUsage = 0;
+    MemUsageType rssMemUsage = 0;
+    GpuUtilType gpuUsage = 0;
+    GpuMemUsageType gpuMemUsage = 0;
+};
+
+struct SummarizedHardwareMetrics {
+    CpuUtilType cpuUsage = 0;
+    MemUsageType memUsage = 0;
+    MemUsageType rssMemUsage = 0;
+    GpuUtilType gpuUsage = 0;
+    GpuMemUsageType gpuMemUsage = 0;
+
+    bool metricsAvailable = false;
+
+    SummarizedHardwareMetrics& operator= (const SummarizedHardwareMetrics &metrics) {
+        metricsAvailable = true;
+        cpuUsage = std::max(metrics.cpuUsage, cpuUsage);
+        memUsage = std::max(metrics.memUsage, memUsage);
+        rssMemUsage = std::max(metrics.rssMemUsage, rssMemUsage);
+        gpuUsage = std::max(metrics.gpuUsage, gpuUsage);
+        gpuMemUsage = std::max(metrics.gpuMemUsage, gpuMemUsage);
+        return *this;
+    }
+
+    void clear() {
+        metricsAvailable = false;
+        cpuUsage = 0;
+        memUsage = 0;
+        rssMemUsage = 0;
+        gpuUsage = 0;
+        gpuMemUsage = 0;
+    }
+};
+
 typedef std::chrono::microseconds TimePrecisionType;
 
 const std::unordered_set<uint16_t> GRAYSCALE_CONVERSION_CODES = {6, 7, 10, 11};

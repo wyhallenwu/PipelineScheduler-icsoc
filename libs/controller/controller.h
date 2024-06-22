@@ -34,45 +34,6 @@ ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
 
 typedef std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> Pipeline;
 
-
-struct HardwareMetrics {
-    ClockType timestamp;
-    CpuUtilType cpuUsage = 0;
-    MemUsageType memUsage = 0;
-    MemUsageType rssMemUsage = 0;
-    GpuUtilType gpuUsage = 0;
-    GpuMemUsageType gpuMemUsage = 0;
-};
-
-struct SummarizedHardwareMetrics {
-    CpuUtilType cpuUsage = 0;
-    MemUsageType memUsage = 0;
-    MemUsageType rssMemUsage = 0;
-    GpuUtilType gpuUsage = 0;
-    GpuMemUsageType gpuMemUsage = 0;
-
-    bool metricsAvailable = false;
-
-    SummarizedHardwareMetrics& operator= (const SummarizedHardwareMetrics &metrics) {
-        metricsAvailable = true;
-        cpuUsage = std::max(metrics.cpuUsage, cpuUsage);
-        memUsage = std::max(metrics.memUsage, memUsage);
-        rssMemUsage = std::max(metrics.rssMemUsage, rssMemUsage);
-        gpuUsage = std::max(metrics.gpuUsage, gpuUsage);
-        gpuMemUsage = std::max(metrics.gpuMemUsage, gpuMemUsage);
-        return *this;
-    }
-
-    void clear() {
-        metricsAvailable = false;
-        cpuUsage = 0;
-        memUsage = 0;
-        rssMemUsage = 0;
-        gpuUsage = 0;
-        gpuMemUsage = 0;
-    }
-};
-
 namespace TaskDescription {
     struct TaskStruct {
         std::string name;
