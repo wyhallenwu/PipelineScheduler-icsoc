@@ -1,10 +1,25 @@
 #include "receiver.h"
 #include "basesink.cpp"
+#include "misc.h"
 
+ABSL_FLAG(std::string, name, "", "base name of container");
 ABSL_FLAG(std::string, json, "{\"experimentName\": \"none\", \"pipelineName\": \"none\", \"systemName\": \"none\"}",
           "json experiment configs");
+ABSL_FLAG(std::string, log_dir, "../logs", "Log path for the container");
+ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
+ABSL_FLAG(uint16_t, logging_mode, 0, "0:stdout, 1:file, 2:both");
 
 int main(int argc, char** argv) {
+    std::vector<spdlog::sink_ptr> loggerSinks;
+    std::shared_ptr<spdlog::logger> logger;
+    setupLogger(
+            absl::GetFlag(FLAGS_log_dir),
+            absl::GetFlag(FLAGS_name),
+            absl::GetFlag(FLAGS_logging_mode),
+            absl::GetFlag(FLAGS_verbose),
+            loggerSinks,
+            logger
+    );
     json j = json::parse(absl::GetFlag(FLAGS_json));
     json receiver_json = json::parse("{\"msvc_contName\": \"dataSink\", \"msvc_deviceIndex\": 0, "
                                      "\"msvc_RUNMODE\": 0, \"msvc_name\": \"receiver\", \"msvc_type\": 0, "
