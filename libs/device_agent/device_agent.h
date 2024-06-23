@@ -82,7 +82,7 @@ private:
                 "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
                 "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
-                R"(%s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs ')",
+                R"(%s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs')",
                 docker_name, executable, cont_name, start_string, device, port);
                 // + "| ./outputbuffer.pl --lines 50";
         std::cout << command << std::endl;

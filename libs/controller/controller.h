@@ -21,6 +21,7 @@ using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using controlcommunication::ControlCommunication;
 using controlcommunication::ConnectionConfigs;
+using controlcommunication::SystemInfo;
 using controlcommunication::Neighbor;
 using controlcommunication::ContainerConfig;
 using controlcommunication::ContainerLink;
@@ -186,7 +187,7 @@ private:
     class RequestHandler {
     public:
         RequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq, Controller *c)
-                : service(service), cq(cq), status(CREATE), controller(c), responder(&ctx) {}
+                : service(service), cq(cq), status(CREATE), controller(c) {}
 
         virtual ~RequestHandler() = default;
 
@@ -201,15 +202,13 @@ private:
         ServerContext ctx;
         CallStatus status;
         Controller *controller;
-        EmptyMessage reply;
-        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
     class DeviseAdvertisementHandler : public RequestHandler {
     public:
         DeviseAdvertisementHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                    Controller *c)
-                : RequestHandler(service, cq, c) {
+                : RequestHandler(service, cq, c), responder(&ctx) {
             Proceed();
         }
 
@@ -217,6 +216,8 @@ private:
 
     private:
         ConnectionConfigs request;
+        SystemInfo reply;
+        grpc::ServerAsyncResponseWriter<SystemInfo> responder;
     };
 
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,

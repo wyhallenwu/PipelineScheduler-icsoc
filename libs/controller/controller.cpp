@@ -164,11 +164,10 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     int cuda_device = 1;
     int replicas = 1;
     for (const auto &m: models) {
-        bool mergable = m.first == Yolov5 || m.first == Retinaface;
         tmp = t.name;
         containers.insert(
                 {tmp.append("_" + MODEL_INFO[m.first].second[0]),
-                 {tmp, -1, m.first, mergable, MODEL_INFO[m.first].first, replicas, {batch_sizes[m.first]},
+                 {tmp, -1, m.first, m.first == Yolov5 || m.first == Retinaface, MODEL_INFO[m.first].first, replicas, {batch_sizes[m.first]},
                   {cuda_device}, {server->next_free_port++}, {}, server, task}});
         task->subtasks.insert({tmp, &containers[tmp]});
         server->containers.insert({tmp, task->subtasks[tmp]});
@@ -209,6 +208,8 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
                                      std::vector<double>(request.processors(), 0.0), 55001, {}}});
+        reply.set_name(controller->ctrl_systemName);
+        reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
