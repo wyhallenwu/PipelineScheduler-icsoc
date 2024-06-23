@@ -59,8 +59,6 @@ Controller::Controller(int argc, char **argv) {
     ctrl_metricsServerConfigs.password = "agent";
     ctrl_metricsServerConn = connectToMetricsServer(ctrl_metricsServerConfigs, "controller");
 
-
-
     running = true;
     devices = std::map<std::string, NodeHandle>();
     tasks = std::map<std::string, TaskHandle>();
@@ -117,41 +115,45 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     NodeHandle *device = &devices[t.device];
     auto models = getModelsByPipelineType(t.type);
 
-    // std::string tmp = t.name;
-    // containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {0}}});
-    // task->subtasks.insert({tmp, &containers[tmp]});
-    // task->subtasks[tmp]->recv_port = device->next_free_port++;
-    // device->containers.insert({tmp, task->subtasks[tmp]});
-    // device = &devices["server"];
+    std::string tmp = t.name;
+    containers.insert({tmp.append("_datasource"),
+                       {tmp, 0, DataSource, true, MODEL_INFO[DataSource].first, 1, {15}, {0}, {0}, {}, device, task}});
+    task->subtasks.insert({tmp, &containers[tmp]});
+    task->subtasks[tmp]->recv_port = {device->next_free_port++};
+    device->containers.insert({tmp, task->subtasks[tmp]});
+    NodeHandle *server = &devices["server"];
 
-    // // TODO: get correct initial batch size, cuda devices, and number of replicas
-    // auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
-    // int cuda_device = 1;
-    // int replicas = 1;
-    // for (const auto &m: models) {
-    //     tmp = t.name;
+    // TODO: get correct initial batch size, cuda devices, and number of replicas
+    auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
+    int cuda_device = 1;
+    int replicas = 1;
+    for (const auto &m: models) {
+        tmp = t.name;
+        containers.insert(
+                {tmp.append("_" + MODEL_INFO[m.first].second[0]),
+                 {tmp, -1, m.first, m.first == Yolov5 || m.first == Retinaface, MODEL_INFO[m.first].first, replicas, {batch_sizes[m.first]},
+                  {cuda_device}, {server->next_free_port++}, {}, server, task}});
+        task->subtasks.insert({tmp, &containers[tmp]});
+        server->containers.insert({tmp, task->subtasks[tmp]});
+    }
 
-    //     containers.insert(
-    //             {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {cuda_device},
-    //                                                   -1, device->next_free_port++, {}, {}, {}, {}}});
-    //     task->subtasks.insert({tmp, &containers[tmp]});
-    //     device->containers.insert({tmp, task->subtasks[tmp]});
-    // }
+    task->subtasks[t.name + "_datasource"]->downstreams.push_back(
+            task->subtasks[t.name + "_" + MODEL_INFO[models[0].first].second[0]]);
+    task->subtasks[t.name + "_" + MODEL_INFO[models[0].first].second[0]]->upstreams.push_back(
+            task->subtasks[t.name + "_datasource"]);
+    for (const auto &m: models) {
+        for (const auto &d: m.second) {
+            tmp = t.name;
+            task->subtasks[tmp.append("_" + MODEL_INFO[d.first].second[0])]->class_of_interest = d.second;
+            task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + "_" + MODEL_INFO[m.first].second[0]]);
+            task->subtasks[t.name + "_" + MODEL_INFO[m.first].second[0]]->downstreams.push_back(task->subtasks[tmp]);
+        }
+    }
 
-    // task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
-    // task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
-    // for (const auto &m: models) {
-    //     for (const auto &d: m.second) {
-    //         tmp = t.name;
-    //         task->subtasks[tmp.append(MODEL_INFO[d.first][0])]->class_of_interest = d.second;
-    //         task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + MODEL_INFO[m.first][0]]);
-    //         task->subtasks[t.name + MODEL_INFO[m.first][0]]->downstreams.push_back(task->subtasks[tmp]);
-    //     }
-    // }
-
-    // for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
-    //     StartContainer(msvc, task->slo, t.source, replicas);
-    // }
+    for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
+        StartContainer(msvc, task->slo, t.source, replicas);
+    }
+    task->start_time = std::chrono::system_clock::now();
 }
 
 void Controller::DeviseAdvertisementHandler::Proceed() {
@@ -170,6 +172,8 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
                                      std::vector<double>(request.processors(), 0.0), 55001, {}}});
+        reply.set_name(controller->ctrl_systemName);
+        reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -497,133 +501,6 @@ double Controller::LoadTimeEstimator(const char *model_path, double input_mem_si
  * @return int for inference time per full batch in nanoseconds
  */
 int Controller::InferTimeEstimator(ModelType model, int batch_size) {
-    // std::map<int, int> time_per_frame;
-    // switch (model) {
-    //     case ModelType::Yolov5n:
-    //         time_per_frame = {{1,  3602348},
-    //                           {2,  2726377},
-    //                           {4,  2467065},
-    //                           {8,  2575456},
-    //                           {16, 3220761},
-    //                           {32, 4680154},
-    //                           {64, 7773959}};
-    //         break;
-    //     case ModelType::Yolov5n416:
-    //         time_per_frame = {{1,  2649396},
-    //                           {2,  2157968},
-    //                           {4,  1897505},
-    //                           {8,  2076971},
-    //                           {16, 2716276},
-    //                           {32, 4172530},
-    //                           {64, 7252059}};
-    //         break;
-    //     case ModelType::Yolov5s:
-    //         time_per_frame = {{1,  4515118},
-    //                           {2,  3399807},
-    //                           {4,  3044100},
-    //                           {8,  3008503},
-    //                           {16, 3672566},
-    //                           {32, 5116321},
-    //                           {64, 8237824}};
-    //         break;
-    //     case ModelType::Yolov5m:
-    //         time_per_frame = {{1,  7263238},
-    //                           {2,  5905167},
-    //                           {4,  4446144},
-    //                           {8,  4449675},
-    //                           {16, 4991818},
-    //                           {32, 6543270},
-    //                           {64, 9579015}};
-    //         break;
-    //     case ModelType::Yolov5nDsrc:
-    //         time_per_frame = {{1,  3602348},
-    //                           {2,  2726377},
-    //                           {4,  2467065},
-    //                           {8,  2575456},
-    //                           {16, 3220761},
-    //                           {32, 4680154},
-    //                           {64, 7773959}};
-    //         break;
-    //     case ModelType::Retinaface:
-    //         time_per_frame = {{1,  1780280},
-    //                           {2,  1527410},
-    //                           {4,  1357906},
-    //                           {8,  1164929},
-    //                           {16, 2177011},
-    //                           {32, 3399701},
-    //                           {64, 8146690}};
-    //         break;
-    //     case ModelType::CarBrand:
-    //         time_per_frame = {{1,  4998407},
-    //                           {2,  3335101},
-    //                           {4,  2344440},
-    //                           {8,  2176385},
-    //                           {16, 2483317},
-    //                           {32, 2357686},
-    //                           {64, 1155050}};
-    //         break;
-    //     case ModelType::PlateDet:
-    //         time_per_frame = {{1,  7304176},
-    //                           {2,  4909581},
-    //                           {4,  3225549},
-    //                           {8,  2883803},
-    //                           {16, 2871236},
-    //                           {32, 2004165},
-    //                           {64, 3094331}};
-    //         break;
-    //     case ModelType::Movenet:
-    //         time_per_frame = {{1,  1644526},
-    //                           {2,  3459537},
-    //                           {4,  2703916},
-    //                           {8,  2377614},
-    //                           {16, 2647643},
-    //                           {32, 2900894},
-    //                           {64, 2197719}};
-    //         break;
-    //     case ModelType::Arcface:
-    //         time_per_frame = {{1,  18120029},
-    //                           {2,  11226197},
-    //                           {4,  7883673},
-    //                           {8,  6364369},
-    //                           {16, 5620677},
-    //                           {32, 3370018},
-    //                           {64, 3206726}};
-    //         break;
-    //     case ModelType::Emotionnet:
-    //         time_per_frame = {{1,  3394144},
-    //                           {2,  1365037},
-    //                           {4,  1615653},
-    //                           {8,  1967143},
-    //                           {16, 1500867},
-    //                           {32, 1665680},
-    //                           {64, 1957914}};
-    //         break;
-    //     case ModelType::Age:
-    //         time_per_frame = {{1,  14729041},
-    //                           {2,  9050828},
-    //                           {4,  6112501},
-    //                           {8,  5015442},
-    //                           {16, 3927934},
-    //                           {32, 3523500},
-    //                           {64, 2899034}};
-    //         break;
-    //     case ModelType::Gender:
-    //         time_per_frame = {{1,  1357500},
-    //                           {2,  831649},
-    //                           {4,  687484},
-    //                           {8,  749792},
-    //                           {16, 1021500},
-    //                           {32, 1800263},
-    //                           {64, 4002824}};
-    //         break;
-    //     default:
-    //         return 0;
-    // }
-    // int i = 1;
-    // while (i < batch_size) {
-    //     i *= 2;
-    // }
-    // return time_per_frame[batch_size] * batch_size;
     return 0;
 }
 

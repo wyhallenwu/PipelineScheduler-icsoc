@@ -153,7 +153,7 @@ bool DeviceAgent::CreateContainer(
             base_config[0]["msvc_dataShape"] = {input_dims};
             base_config[0]["msvc_type"] = 500;
         } else {
-            base_config[1]["msvc_dnstreamMicroservices"]["nb_expectedShape"] = {input_dims};
+            base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
         }
 
 
@@ -193,7 +193,7 @@ bool DeviceAgent::CreateContainer(
 
         // start container
         start_config["container"]["cont_pipeline"] = base_config;
-        int control_port = CONTAINER_BASE_PORT + containers.size();
+        unsigned int control_port = CONTAINER_BASE_PORT + containers.size();
         runDocker(executable, cont_name, to_string(start_config), device, control_port);
         std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
         containers[cont_name] = {InDeviceCommunication::NewStub(
@@ -256,7 +256,7 @@ void DeviceAgent::SyncDatasources(const std::string &cont_name, const std::strin
 
 void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, SystemDeviceType type) {
     ConnectionConfigs request;
-    EmptyMessage reply;
+    SystemInfo reply;
     ClientContext context;
     Status status;
     int processing_units;
@@ -283,7 +283,7 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
 
     utilization = std::vector<double>(processing_units, 0.0);
     mem_utilization = std::vector<double>(processing_units, 0.0);
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<SystemInfo>> rpc(
             controller_stub->AsyncAdvertiseToController(&context, request, controller_sending_cq));
     rpc->Finish(&reply, &status, (void *) 1);
     void *got_tag;
@@ -294,6 +294,8 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
         spdlog::error("Ready RPC failed with code: {} and message: {}", status.error_code(), status.error_message());
         exit(1);
     }
+    system_name = reply.name();
+    experiment_name = reply.experiment();
 }
 
 void DeviceAgent::HandleDeviceRecvRpcs() {

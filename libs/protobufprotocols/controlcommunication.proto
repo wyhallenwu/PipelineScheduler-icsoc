@@ -7,7 +7,7 @@ option objc_class_prefix = "HLW";
 package controlcommunication;
 
 service ControlCommunication {
-  rpc AdvertiseToController(ConnectionConfigs) returns (google.protobuf.Empty) {}
+  rpc AdvertiseToController(ConnectionConfigs) returns (SystemInfo) {}
   rpc StartContainer(ContainerConfig) returns (google.protobuf.Empty) {}
   rpc UpdateDownstream(ContainerLink) returns (google.protobuf.Empty) {}
   rpc SyncDatasource(ContainerLink) returns (google.protobuf.Empty) {}
@@ -21,6 +21,11 @@ message ConnectionConfigs {
   string ip_address = 3;
   int32 processors = 4;
   repeated uint64 memory = 5;
+}
+
+message SystemInfo {
+  string name = 1;
+  string experiment = 2;
 }
 
 message Neighbor {
