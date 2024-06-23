@@ -1,76 +1,76 @@
 {
     "DataSource": {
-        "taskName": ":datasource",
+        "taskName": "datasource",
         "templateConfigPath": "../jsons/datasource.json",
         "runCommand": "./Container_DataSource"
     },
     "Sink": {
-        "taskName": ":basesink",
+        "taskName": "basesink",
         "templateConfigPath": "",
         "runCommand": "./runSink"
     },
     "Yolov5n": {
-        "taskName": ":yolov5n",
+        "taskName": "yolov5n",
         "templateConfigPath": "../jsons/yolov5n.json",
         "runCommand": "./Container_Yolov5"
     },
     "Yolov5s": {
-        "taskName": ":yolov5",
+        "taskName": "yolov5",
         "templateConfigPath": "../jsons/yolov5s.json",
         "runCommand": "./Container_Yolov5"
     },
     "Yolov5m": {
-        "taskName": ":yolov5",
+        "taskName": "yolov5",
         "templateConfigPath": "../jsons/yolov5m.json",
         "runCommand": "./Container_Yolov5"
     },
     "Yolov5nDsrc": {
-        "taskName": ":yolov5n-source",
-        "templateConfigPath": "../jsons/yolov5n-source.json",
+        "taskName": "yolov5n-source",
+        "templateConfigPath": "../jsons/yolov5n.json",
         "runCommand": "./Container_Yolov5"
     },
     "Retinaface": {
-        "taskName": ":retinaface",
+        "taskName": "retinaface",
         "templateConfigPath": "../jsons/retina1face.json",
         "runCommand": "./Container_RetinaFace"
     },
     "RetinafaceDsrc": {
-        "taskName": ":retinaface-source",
-        "templateConfigPath": "../jsons/retina1face-source.json",
+        "taskName": "retinaface-source",
+        "templateConfigPath": "../jsons/retina1face.json",
         "runCommand": "./Container_RetinaFace"
     },
     "PlateDet": {
-        "taskName": ":platedet",
+        "taskName": "platedet",
         "templateConfigPath": "../jsons/platedet.json",
         "runCommand": "./Container_Yolov5-plate"
     },
     "Movenet": {
-        "taskName": ":movenet",
+        "taskName": "movenet",
         "templateConfigPath": "../jsons/movenet.json",
         "runCommand": "./Container_MoveNet"
     },
     "Emotionnet": {
-        "taskName": ":emotionnet",
+        "taskName": "emotionnet",
         "templateConfigPath": "../jsons/emotionnet.json",
         "runCommand": "./Container_EmotionNet"
     },
     "Arcface": {
-        "taskName": ":arcface",
+        "taskName": "arcface",
         "templateConfigPath": "../jsons/arcface.json",
         "runCommand": "./Container_ArcFace"
     },
     "Age": {
-        "taskName": ":age",
+        "taskName": "age",
         "templateConfigPath": "../jsons/age.json",
         "runCommand": "./Container_Age"
     },
     "Gender": {
-        "taskName": ":gender",
+        "taskName": "gender",
         "templateConfigPath": "../jsons/gender.json",
         "runCommand": "./Container_Gender"
     },
     "CarBrand": {
-        "taskName": ":carbrand",
+        "taskName": "carbrand",
         "templateConfigPath": "../jsons/carbrand.json",
         "runCommand": "./Container_CarBrand"
     }

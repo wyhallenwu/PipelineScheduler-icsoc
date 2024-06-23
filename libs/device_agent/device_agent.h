@@ -35,7 +35,7 @@ typedef std::tuple<
 struct ContainerHandle {
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     CompletionQueue *cq;
-    int port;
+    unsigned int port;
     unsigned int pid;
 };
 
@@ -62,15 +62,6 @@ public:
     }
 
 private:
-
-    void readConfigFile(const std::string &path) {
-        std::ifstream file(path);
-        json j = json::parse(file);
-
-        dev_experimentName = j["expName"];
-        dev_systemName = j["systemName"];
-    }
-
     bool CreateContainer(
             ModelType model,
             std::string pipe_name,
@@ -247,10 +238,6 @@ private:
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
-
-    std::string dev_experimentName;
-    std::string dev_systemName;
-    
     ContainerLibType dev_containerLib;
     SystemDeviceType dev_type;
     DeviceInfoType dev_deviceInfo;

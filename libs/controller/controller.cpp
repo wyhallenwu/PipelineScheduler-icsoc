@@ -116,8 +116,10 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     auto models = getModelsByPipelineType(t.type);
 
     std::string tmp = t.name;
-    containers.insert({tmp.append("_datasource"),
-                       {tmp, 0, DataSource, true, MODEL_INFO[DataSource].first, 1, {15}, {0}, {0}, {}, device, task}});
+
+    containers.insert({tmp.append("_datasource"), {tmp, 0, DataSource, true,
+                                                   ctrl_containerLib[DataSource].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0],
+                                                   1, {15}, {0}, {0}, {}, device, task}});
     task->subtasks.insert({tmp, &containers[tmp]});
     task->subtasks[tmp]->recv_port = {device->next_free_port++};
     device->containers.insert({tmp, task->subtasks[tmp]});
@@ -129,24 +131,26 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     int replicas = 1;
     for (const auto &m: models) {
         tmp = t.name;
+        std::vector<int> dims = m.first == Sink ? std::vector<int>(0)
+                : ctrl_containerLib[m.first].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
         containers.insert(
-                {tmp.append("_" + MODEL_INFO[m.first].second[0]),
-                 {tmp, -1, m.first, m.first == Yolov5 || m.first == Retinaface, MODEL_INFO[m.first].first, replicas, {batch_sizes[m.first]},
-                  {cuda_device}, {server->next_free_port++}, {}, server, task}});
+                {tmp.append("_" + ctrl_containerLib[m.first].taskName),
+                 {tmp, -1, m.first, m.first == Yolov5n || m.first == Retinaface || m.first == Yolov5nDsrc || m.first == RetinafaceDsrc,
+                  dims, replicas, {batch_sizes[m.first]}, {cuda_device}, {server->next_free_port++}, {}, server, task}});
         task->subtasks.insert({tmp, &containers[tmp]});
         server->containers.insert({tmp, task->subtasks[tmp]});
     }
 
     task->subtasks[t.name + "_datasource"]->downstreams.push_back(
-            task->subtasks[t.name + "_" + MODEL_INFO[models[0].first].second[0]]);
-    task->subtasks[t.name + "_" + MODEL_INFO[models[0].first].second[0]]->upstreams.push_back(
+            task->subtasks[t.name + "_" + ctrl_containerLib[models[0].first].taskName]);
+    task->subtasks[t.name + "_" + ctrl_containerLib[models[0].first].taskName]->upstreams.push_back(
             task->subtasks[t.name + "_datasource"]);
     for (const auto &m: models) {
         for (const auto &d: m.second) {
             tmp = t.name;
-            task->subtasks[tmp.append("_" + MODEL_INFO[d.first].second[0])]->class_of_interest = d.second;
-            task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + "_" + MODEL_INFO[m.first].second[0]]);
-            task->subtasks[t.name + "_" + MODEL_INFO[m.first].second[0]]->downstreams.push_back(task->subtasks[tmp]);
+            task->subtasks[tmp.append("_" + ctrl_containerLib[d.first].taskName)]->class_of_interest = d.second;
+            task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + "_" + ctrl_containerLib[m.first].taskName]);
+            task->subtasks[t.name + "_" + ctrl_containerLib[m.first].taskName]->downstreams.push_back(task->subtasks[tmp]);
         }
     }
 
