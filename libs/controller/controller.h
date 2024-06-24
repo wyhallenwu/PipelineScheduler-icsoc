@@ -50,8 +50,6 @@ struct TaskHandle {
     std::map<std::string, ContainerHandle *> subtasks;
 };
 
-typedef std::vector<std::pair<uint32_t, uint64_t>> NetworkEntryType;
-
 struct NodeHandle {
     std::string name;
     std::string ip;
