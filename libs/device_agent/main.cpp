@@ -7,7 +7,7 @@ int main(int argc, char **argv) {
     std::string type = absl::GetFlag(FLAGS_device_type);
     std::string controller_url = absl::GetFlag(FLAGS_controller_url);
     SystemDeviceType deviceType;
-    if (type == "server") {
+    if (type == "Server") {
         deviceType = SystemDeviceType::Server;
     } else if (type == "NXXavier") {
         deviceType = SystemDeviceType::NXXavier;
@@ -17,17 +17,13 @@ int main(int argc, char **argv) {
         deviceType = SystemDeviceType::OrinNano;
     }
     else {
-        std::cerr << "Invalid device type" << std::endl;
+        std::cerr << "Invalid device type, use [Server, NXXavier, AGXXavier, OrinNano]" << std::endl;
         exit(1);
     }
 
     auto *agent = new DeviceAgent(controller_url, name, deviceType);
     while (agent->isRunning()) {
-        std::string command;
-        std::cin >> command;
-        if (command == "exit") {
-            break;
-        }
+        agent->collectRuntimeMetrics();
     }
     delete agent;
     return 0;
