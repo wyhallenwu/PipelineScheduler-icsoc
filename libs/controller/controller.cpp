@@ -674,6 +674,25 @@ std::map<ModelType, std::vector<int>> Controller::InitialRequestCount(const std:
 }
 
 /**
+ * @brief '
+ * 
+ * @param node 
+ * @param minPacketSize bytes
+ * @param maxPacketSize bytes
+ * @param numLoops 
+ * @return NetworkEntryType 
+ */
+NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize, uint32_t numLoops) {
+    NetworkEntryType entries = {};
+    // TODO: Send a request to the device to perform network testing and wait for its response
+    for (auto i = 0; i < numLoops; i++) {
+        entries.emplace_back(std::pair<uint32_t, uint64_t>(0, 0));
+    }
+    
+    return entries;
+};
+
+/**
  * @brief Query the latest network entries for each device to determine the network conditions.
  * If no such entries exists, send to each device a request for network testing.
  * 
@@ -685,6 +704,7 @@ void Controller::checkNetworkConditions() {
         std::map<std::string, NetworkEntryType> networkEntries = {};
         for (auto &[deviceName, nodeHandle] : devices) {
             // Clearing old network entries as they are no longer relevant
+            std::unique_lock<std::mutex> lock(nodeHandle.nodeHandleMutex);
             nodeHandle.latestNetworkEntries.clear();
             networkEntries[deviceName] = {};
         }

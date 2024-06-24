@@ -210,6 +210,8 @@ public:
 
 private:
 
+    NetworkEntryType initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
+
     void checkNetworkConditions();
 
     void readConfigFile(const std::string &config_path);
