@@ -47,6 +47,8 @@ struct TaskHandle {
     std::map<std::string, ContainerHandle *> subtasks;
 };
 
+typedef std::vector<std::pair<uint32_t, uint64_t>> NetworkEntryType;
+
 struct NodeHandle {
     std::string name;
     std::string ip;
@@ -59,6 +61,49 @@ struct NodeHandle {
     std::vector<double> mem_utilization; // memory utilization per pu
     int next_free_port;
     std::map<std::string, ContainerHandle *> containers;
+    // The latest network entries to determine the network conditions and latencies of transferring data
+    NetworkEntryType latestNetworkEntries = {};
+    std::mutex nodeHandleMutex;
+
+    NodeHandle() = default;
+
+    NodeHandle(const std::string& name,
+               const std::string& ip,
+               std::shared_ptr<ControlCommunication::Stub> stub,
+               grpc::CompletionQueue* cq,
+               SystemDeviceType type,
+               int num_processors,
+               std::vector<double> processors_utilization,
+               std::vector<unsigned long> mem_size,
+               std::vector<double> mem_utilization,
+               int next_free_port,
+               std::map<std::string, ContainerHandle*> containers)
+        : name(name),
+          ip(ip),
+          stub(std::move(stub)),
+          cq(cq),
+          type(type),
+          num_processors(num_processors),
+          processors_utilization(std::move(processors_utilization)),
+          mem_size(std::move(mem_size)),
+          mem_utilization(std::move(mem_utilization)),
+          next_free_port(next_free_port),
+          containers(std::move(containers)) {}
+
+    NodeHandle(const NodeHandle &other) {
+        name = other.name;
+        ip = other.ip;
+        stub = other.stub;
+        cq = other.cq;
+        type = other.type;
+        num_processors = other.num_processors;
+        processors_utilization = other.processors_utilization;
+        mem_size = other.mem_size;
+        mem_utilization = other.mem_utilization;
+        next_free_port = other.next_free_port;
+        containers = other.containers;
+        latestNetworkEntries = other.latestNetworkEntries;
+    }
 };
 
 struct ContainerHandle {

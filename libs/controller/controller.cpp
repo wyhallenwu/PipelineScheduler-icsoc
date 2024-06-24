@@ -161,8 +161,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     } else if (status == PROCESS) {
         new DeviseAdvertisementHandler(service, cq, controller);
         std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), 60002);
-        controller->devices.insert({request.device_name(),
-                                    {request.device_name(),
+        NodeHandle node{request.device_name(),
                                      request.ip_address(),
                                      ControlCommunication::NewStub(
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
@@ -170,7 +169,10 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      static_cast<SystemDeviceType>(request.device_type()),
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
-                                     std::vector<double>(request.processors(), 0.0), 55001, {}}});
+                                     std::vector<double>(request.processors(), 0.0), 55001, {}};
+        controller->devices.insert({request.device_name(),
+                                    node});
+        
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
