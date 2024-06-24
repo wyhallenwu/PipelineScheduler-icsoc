@@ -5,14 +5,38 @@ using json = nlohmann::json;
 /**
  * @brief Estimate network latency of a package of size `totalPkgSize` using linear interpolation
  * 
- * @param res contains packge size and latency data of sample packages in res[:]["p95_total_package_size_b"] and res[:]["p95_transfer_duration_us"]
+ * @param res contains packge size and latency data of sample packages
  * @param totalPkgSize 
  * @return uint64_t 
  */
 uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &totalPkgSize) {
-    if (res.size() == 0){
+    if (res.empty()) {
         throw std::invalid_argument("The result set is empty.");
     }
+    // Handle case where totalPkgSize is smaller than the smallest package size in res
+    if (totalPkgSize <= res.front().first) {
+        uint32_t pkgSize1 = res.front().first;
+        uint32_t pkgSize2 = res[1].first;
+        uint64_t latency1 = res.front().second;
+        uint64_t latency2 = res[1].second;
+
+        double t = static_cast<double>(totalPkgSize - pkgSize1) / (pkgSize2 - pkgSize1);
+        return static_cast<uint64_t>(latency1 + t * (latency2 - latency1));
+    }
+
+    // Handle case where totalPkgSize is larger than the largest package size in res
+    if (totalPkgSize >= res.back().first) {
+        size_t lastIndex = res.size() - 1;
+        uint32_t pkgSize1 = res[lastIndex - 1].first;
+        uint32_t pkgSize2 = res[lastIndex].first;
+        uint64_t latency1 = res[lastIndex - 1].second;
+        uint64_t latency2 = res[lastIndex].second;
+
+        double t = static_cast<double>(totalPkgSize - pkgSize1) / (pkgSize2 - pkgSize1);
+        return static_cast<uint64_t>(latency1 + t * (latency2 - latency1));
+    }
+
+    // Perform linear interpolation within the range
     for (size_t i = 0; i < res.size() - 1; ++i) {
         uint32_t pkgSize1 = res[i].first;
         uint32_t pkgSize2 = res[i + 1].first;
@@ -20,12 +44,13 @@ uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &tot
         uint64_t latency2 = res[i + 1].second;
 
         if (totalPkgSize >= pkgSize1 && totalPkgSize <= pkgSize2) {
-            // Linear interpolation formula
-            double t = (double)(totalPkgSize - pkgSize1) / (pkgSize2 - pkgSize1);
-            return latency1 + t * (latency2 - latency1);
+            double t = static_cast<double>(totalPkgSize - pkgSize1) / (pkgSize2 - pkgSize1);
+            return static_cast<uint64_t>(latency1 + t * (latency2 - latency1));
         }
     }
-    return 0;
+
+    // Should not reach here if the data is consistent
+    throw std::runtime_error("Failed to estimate network latency due to unexpected data range.");
 }
 
 /**
