@@ -207,6 +207,8 @@ public:
 
 private:
 
+    void checkNetworkConditions();
+
     void readConfigFile(const std::string &config_path);
 
     double LoadTimeEstimator(const char *model_path, double input_mem_size);

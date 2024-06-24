@@ -59,7 +59,8 @@ Controller::Controller(int argc, char **argv) {
     ctrl_metricsServerConfigs.password = "agent";
     ctrl_metricsServerConn = connectToMetricsServer(ctrl_metricsServerConfigs, "controller");
 
-
+    std::thread networkCheckThread(&Controller::checkNetworkConditions, this);
+    networkCheckThread.detach();
 
     running = true;
     devices = std::map<std::string, NodeHandle>();
@@ -802,4 +803,54 @@ std::map<ModelType, std::vector<int>> Controller::InitialRequestCount(const std:
         }
     }
     return request_counts;
+}
+
+/**
+ * @brief Query the latest network entries for each device to determine the network conditions.
+ * If no such entries exists, send to each device a request for network testing.
+ * 
+ */
+void Controller::checkNetworkConditions() {
+    while (true) {
+        Stopwatch stopwatch;
+        stopwatch.start();
+        std::map<std::string, NetworkEntryType> networkEntries = {};
+        for (auto &[deviceName, nodeHandle] : devices) {
+            // Clearing old network entries as they are no longer relevant
+            nodeHandle.latestNetworkEntries.clear();
+            networkEntries[deviceName] = {};
+        }
+        std::string tableName = abbreviate(ctrl_experimentName + "_" + ctrl_systemName) + "." + abbreviate(ctrl_experimentName + "_serv_netw");
+        std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
+                            "FROM %s ", tableName);
+
+        pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
+        //Getting the latest network entries into the networkEntries map
+        for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
+            std::string sender_host = row["sender_host"].as<std::string>();
+            std::pair<uint32_t, uint64_t> entry = {row["p95_transfer_duration_us"].as<uint32_t>(), row["p95_total_package_size_b"].as<uint64_t>()};
+            networkEntries[sender_host].emplace_back(entry);
+        }
+
+        // Updating NodeHandle object with the latest network entries
+        for (auto &[deviceName, entries] : networkEntries) {
+            // If entry belongs to a device that is not in the list of devices, ignore it
+            if (devices.find(deviceName) == devices.end()) {
+                continue;
+            }
+            std::unique_lock<std::mutex> lock(devices[deviceName].nodeHandleMutex);
+            devices[deviceName].latestNetworkEntries = entries;
+        }
+
+        // If no network entries exist for a device, send a request to the device to perform network testing
+        for (auto &[deviceName, nodeHandle] : devices) {
+            if (nodeHandle.latestNetworkEntries.size() == 0) {
+                // TODO: Send a request to the device to perform network testing
+
+            }
+        }
+
+        stopwatch.stop();
+        std::this_thread::sleep_for(TimePrecisionType(60 * 1000000 - stopwatch.elapsed_microseconds()));
+    }
 }
