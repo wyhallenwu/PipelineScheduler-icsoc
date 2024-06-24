@@ -40,10 +40,9 @@ std::string getHostIP() {
 }
 
 DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type) {
-    name = n;
-    utilization = {};
-    mem_utilization = {};
+    dev_name = n;
     containers = std::map<std::string, DevContainerHandle>();
+    dev_profiler = new Profiler({});
 
     dev_port_offset = absl::GetFlag(FLAGS_dev_port_offset);
     dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
@@ -75,14 +74,14 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
     controller_sending_cq = new CompletionQueue();
 
-    Ready(name, getHostIP(), type);
+    Ready(dev_name, getHostIP(), type);
 
-    dev_logPath += "/" + experiment_name;
+    dev_logPath += "/" + dev_experiment_name;
     std::filesystem::create_directories(
             std::filesystem::path(dev_logPath)
     );
 
-    dev_logPath += "/" + system_name;
+    dev_logPath += "/" + dev_system_name;
     std::filesystem::create_directories(
             std::filesystem::path(dev_logPath)
     );
@@ -107,23 +106,68 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     }
 }
 
-void DeviceAgent::testNetwork(int min_size, int max_size, int num_loops) {
+void DeviceAgent::collectRuntimeMetrics() {
+    std::string sql;
+    while (running) {
+        /*auto metricsStopwatch = Stopwatch();
+        metricsStopwatch.start();
+        auto startTime = metricsStopwatch.getStartTime();
+        uint64_t scrapeLatencyMillisec = 0;
+        uint64_t timeDiff;
+        for (auto &container: containers) {
+            if (container.second.pid > 0 && timePointCastMillisecond(startTime) >=
+                timePointCastMillisecond(dev_metricsServerConfigs.nextHwMetricsScrapeTime) && container.second.pid > 0) {
+                Profiler::sysStats stats = dev_profiler->reportAtRuntime(container.second.pid, container.second.pid);
+                container.second.hwMetrics = {stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
+                                  stats.gpuMemoryUsage};
+                metricsStopwatch.stop();
+                scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
+                dev_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() +
+                                                                    std::chrono::milliseconds(
+                                                                            dev_metricsServerConfigs.hwMetricsScrapeIntervalMillisec -
+                                                                            scrapeLatencyMillisec);
+                spdlog::get("container_agent")->trace("{0:s} SCRAPE hardware metrics. Latency {1:d}ms.",
+                                                      dev_name,
+                                                      scrapeLatencyMillisec);
+                metricsStopwatch.start();
+            }
+        }
+
+        startTime = std::chrono::high_resolution_clock::now();
+
+
+        //TODO: @Tung save the metrics to the database as desired
+
+        metricsStopwatch.stop();
+        auto reportLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
+        ClockType nextTime;
+        nextTime = std::min(dev_metricsServerConfigs.nextMetricsReportTime,
+                                dev_metricsServerConfigs.nextHwMetricsScrapeTime);
+        timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - std::chrono::high_resolution_clock::now()).count();
+        std::chrono::milliseconds sleepPeriod(timeDiff - (reportLatencyMillisec) + 2);
+        spdlog::get("container_agent")->trace("{0:s} Container Agent's Metric Reporter sleeps for {1:d} milliseconds.", dev_name, sleepPeriod.count());
+        std::this_thread::sleep_for(sleepPeriod);*/
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
+}
+
+void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
     spdlog::get("container_agent")->info("Testing network with min size: {}, max size: {}, num loops: {}",
                                          min_size, max_size, num_loops);
-    DummyMessage request;
-    EmptyMessage reply;
-    ClientContext context;
-    Status status;
     ClockType timestamp;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<float> dist = std::normal_distribution<float>((min_size + max_size) / 2, (max_size - min_size) / 6);
     for (int i = 0; i < num_loops; i++) {
-        timestamp = std::chrono::high_resolution_clock::now();
-        int size = std::round(dist(gen));
+        DummyMessage request;
+        EmptyMessage reply;
+        ClientContext context;
+        Status status;
+        int size = (int) dist(gen);
         std::vector<char> data(size, 'a');
-        request.set_origin_name(name);
-        request.set_gen_time(timestamp.time_since_epoch().count());
+        timestamp = std::chrono::high_resolution_clock::now();
+        request.set_origin_name(dev_name);
+        request.set_gen_time(std::chrono::duration_cast<TimePrecisionType>(timestamp.time_since_epoch()).count());
         request.set_data(data.data(), size);
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 controller_stub->AsyncSendDummyData(&context, request, controller_sending_cq));
@@ -150,8 +194,8 @@ bool DeviceAgent::CreateContainer(
         std::string executable = dev_containerLib[model].runCommand;
         json start_config;
         if (model == ModelType::Sink) {
-            start_config["experimentName"] = experiment_name;
-            start_config["systemName"] = system_name;
+            start_config["experimentName"] = dev_experiment_name;
+            start_config["systemName"] = dev_system_name;
             start_config["pipelineName"] = pipe_name;
             runDocker(executable, cont_name, to_string(start_config), device, 0);
             return true;
@@ -160,10 +204,10 @@ bool DeviceAgent::CreateContainer(
         start_config = dev_containerLib[model].templateConfig;
 
         // adjust container configs
-        start_config["container"]["cont_experimentName"] = experiment_name;
-        start_config["container"]["cont_systemName"] = system_name;
+        start_config["container"]["cont_experimentName"] = dev_experiment_name;
+        start_config["container"]["cont_systemName"] = dev_system_name;
         start_config["container"]["cont_pipeName"] = pipe_name;
-        start_config["container"]["cont_hostDevice"] = name;
+        start_config["container"]["cont_hostDevice"] = dev_name;
         start_config["container"]["cont_name"] = cont_name;
         start_config["container"]["cont_allocationMode"] = allocation_mode;
 
@@ -225,10 +269,10 @@ bool DeviceAgent::CreateContainer(
         std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
         containers[cont_name] = {InDeviceCommunication::NewStub(
                 grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
-                                 new CompletionQueue(), control_port, 0};
+                                 new CompletionQueue(), control_port, 0, {}};
         return true;
     } catch (std::exception &e) {
-        spdlog::error("Error creating container: {}", e.what());
+        spdlog::get("container_agent")->error("Error creating container: {}", e.what());
         return false;
     }
 }
@@ -288,7 +332,7 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
     } else {
         struct sysinfo sys_info;
         if (sysinfo(&sys_info) != 0) {
-            spdlog::error("sysinfo call failed!");
+            spdlog::get("container_agent")->error("sysinfo call failed!");
             exit(1);
         }
         processing_units = 1;
@@ -296,8 +340,7 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
         request.add_memory(sys_info.totalram * sys_info.mem_unit / 1000000);
     }
 
-    utilization = std::vector<double>(processing_units, 0.0);
-    mem_utilization = std::vector<double>(processing_units, 0.0);
+    dev_runtimeMetrics = std::vector<SummarizedHardwareMetrics>(processing_units);
     std::unique_ptr<ClientAsyncResponseReader<SystemInfo>> rpc(
             controller_stub->AsyncAdvertiseToController(&context, request, controller_sending_cq));
     finishGrpc(rpc, reply, status, controller_sending_cq);
@@ -305,9 +348,8 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
         spdlog::error("Ready RPC failed with code: {} and message: {}", status.error_code(), status.error_message());
         exit(1);
     }
-    system_name = reply.name();
-    experiment_name = reply.experiment();
-    dev_port_offset = reply.port_offset();
+    dev_system_name = reply.name();
+    dev_experiment_name = reply.experiment();
 }
 
 void DeviceAgent::HandleDeviceRecvRpcs() {
@@ -365,9 +407,10 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new ReportStartRequestHandler(service, cq, device_agent);
 
-        int pid = getContainerProcessPid(device_agent->system_name + "_" + request.msvc_name());
+        int pid = getContainerProcessPid(device_agent->dev_system_name + "_" + request.msvc_name());
         device_agent->containers[request.msvc_name()].pid = pid;
-        spdlog::info("Received start report from {} with pid: {}", request.msvc_name(), pid);
+        device_agent->dev_profiler->addPid(pid);
+        spdlog::get("container_agent")->info("Received start report from {} with pid: {}", request.msvc_name(), pid);
         reply.set_pid(pid);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
@@ -383,7 +426,7 @@ void DeviceAgent::ExecuteNetworkTestRequestHandler::Proceed() {
         service->RequestExecuteNetworkTest(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new ExecuteNetworkTestRequestHandler(service, cq, device_agent);
-        device_agent->testNetwork(request.min(), request.max(), request.repetitions());
+        device_agent->testNetwork((float) request.min(), (float) request.max(), request.repetitions());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

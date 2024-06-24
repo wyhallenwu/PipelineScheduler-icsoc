@@ -19,7 +19,6 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_runtime = j["runtime"];
     ctrl_port_offset = j["port_offset"];
     initialTasks = j["initial_pipelines"];
-
 }
 
 void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskStruct &val) {
@@ -96,6 +95,7 @@ Controller::~Controller() {
 
 void Controller::HandleRecvRpcs() {
     new DeviseAdvertisementHandler(&service, cq.get(), this);
+    new DummyDataRequestHandler(&service, cq.get(), this);
     void *tag;
     bool ok;
     while (running) {
@@ -175,7 +175,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         service->RequestAdvertiseToController(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new DeviseAdvertisementHandler(service, cq, controller);
-        std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), 60002);
+        std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), DEVICE_CONTROL_PORT + controller->ctrl_port_offset);
         NodeHandle node{request.device_name(),
                                      request.ip_address(),
                                      ControlCommunication::NewStub(
@@ -188,7 +188,25 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         controller->devices.insert({request.device_name(), node});
         reply.set_name(controller->ctrl_systemName);
         reply.set_experiment(controller->ctrl_experimentName);
-        reply.set_port_offset(controller->ctrl_port_offset);
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void Controller::DummyDataRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestSendDummyData(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new DummyDataRequestHandler(service, cq, controller);
+        ClockType now = std::chrono::system_clock::now();
+        unsigned long diff = std::chrono::duration_cast<TimePrecisionType>(
+                now - std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(request.gen_time()))).count();
+        unsigned int size = request.data().size();
+        controller->network_check_buffer[request.origin_name()].push_back({size, diff});
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -683,12 +701,23 @@ std::map<ModelType, std::vector<int>> Controller::InitialRequestCount(const std:
  * @return NetworkEntryType 
  */
 NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize, uint32_t numLoops) {
-    NetworkEntryType entries = {};
-    // TODO: Send a request to the device to perform network testing and wait for its response
-    for (auto i = 0; i < numLoops; i++) {
-        entries.emplace_back(std::pair<uint32_t, uint64_t>(0, 0));
+    LoopRange request;
+    EmptyMessage reply;
+    ClientContext context;
+    Status status;
+    request.set_min(minPacketSize);
+    request.set_max(maxPacketSize);
+    request.set_repetitions(numLoops);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            node.stub->AsyncExecuteNetworkTest(&context, request, node.cq));
+    finishGrpc(rpc, reply, status, node.cq);
+
+    while (network_check_buffer[node.name].size() < numLoops) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    
+
+    NetworkEntryType entries = network_check_buffer[node.name];
+    network_check_buffer[node.name].clear();
     return entries;
 };
 
@@ -698,7 +727,7 @@ NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t m
  * 
  */
 void Controller::checkNetworkConditions() {
-    while (true) {
+    while (running) {
         Stopwatch stopwatch;
         stopwatch.start();
         std::map<std::string, NetworkEntryType> networkEntries = {};

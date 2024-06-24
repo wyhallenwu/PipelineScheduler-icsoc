@@ -28,7 +28,6 @@ message ConnectionConfigs {
 message SystemInfo {
   string name = 1;
   string experiment = 2;
-  int32 port_offset = 3;
 }
 
 message Neighbor {

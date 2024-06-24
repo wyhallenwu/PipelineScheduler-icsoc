@@ -38,6 +38,7 @@ struct DevContainerHandle {
     CompletionQueue *cq;
     unsigned int port;
     unsigned int pid;
+    SummarizedHardwareMetrics hwMetrics;
 };
 
 class DeviceAgent {
@@ -62,8 +63,10 @@ public:
         return running;
     }
 
+    void collectRuntimeMetrics();
+
 private:
-    void testNetwork(int min_size, int max_size, int num_loops);
+    void testNetwork(float min_size, float max_size, int num_loops);
 
     bool CreateContainer(
             ModelType model,
@@ -87,8 +90,8 @@ private:
                 "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
                 "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
-                R"(%s pipeline-base-container %s --name %s --json='%s' --device %i --port %i --port_offset %i)",
-                system_name + "_" + cont_name, executable, cont_name, start_string, device, port, dev_port_offset) +
+                        R"(%s pipeline-base-container %s --name %s --json='%s' --device %i --port %i --port_offset %i)",
+                        dev_system_name + "_" + cont_name, executable, cont_name, start_string, device, port, dev_port_offset) +
                 " --log_dir= ../logs --logging_mode 1";
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -261,28 +264,26 @@ private:
     DeviceInfoType dev_deviceInfo;
 
     // Basic information
-    std::string name;
+    std::string dev_name;
     bool running;
-    std::string experiment_name;
-    std::string system_name;
+    std::string dev_experiment_name;
+    std::string dev_system_name;
     int dev_port_offset;
 
     // Runtime variables
+    Profiler *dev_profiler;
     std::map<std::string, DevContainerHandle> containers;
     std::vector<std::thread> threads;
-
-    // Profiling
-    std::vector<double> utilization;
-    std::vector<double> mem_utilization;
+    std::vector<SummarizedHardwareMetrics> dev_runtimeMetrics;
 
     // Communication
     std::unique_ptr<ServerCompletionQueue> device_cq;
     std::unique_ptr<grpc::Server> device_server;
     InDeviceCommunication::AsyncService device_service;
     std::unique_ptr<ControlCommunication::Stub> controller_stub;
-    std::unique_ptr<ServerCompletionQueue> controller_cq;
-    std::unique_ptr<grpc::Server> controller_server;
     CompletionQueue *controller_sending_cq;
+    std::unique_ptr<grpc::Server> controller_server;
+    std::unique_ptr<ServerCompletionQueue> controller_cq;
     ControlCommunication::AsyncService controller_service;
 
     // This will be mounted into the container to easily collect all logs.
@@ -291,7 +292,7 @@ private:
     uint16_t dev_verbose = 0;
 
     std::vector<spdlog::sink_ptr> dev_loggerSinks = {};
-    std::shared_ptr<spdlog::logger> dev_logger;    
+    std::shared_ptr<spdlog::logger> dev_logger;
 
     MetricsServerConfigs dev_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> dev_metricsServerConn = nullptr;
