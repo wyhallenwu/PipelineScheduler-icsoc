@@ -9,15 +9,15 @@ using json = nlohmann::json;
  * @param totalPkgSize 
  * @return uint64_t 
  */
-uint64_t estimateNetworkLatency(pqxx::result &res, const uint32_t &totalPkgSize) {
-    if (res.empty()) {
+uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &totalPkgSize) {
+    if (res.size() == 0){
         throw std::invalid_argument("The result set is empty.");
     }
     for (size_t i = 0; i < res.size() - 1; ++i) {
-        uint32_t pkgSize1 = res[i]["p95_total_package_size_b"].as<uint32_t>();
-        uint32_t pkgSize2 = res[i + 1]["p95_total_package_size_b"].as<uint32_t>();
-        uint64_t latency1 = res[i]["p95_transfer_duration_us"].as<uint64_t>();
-        uint64_t latency2 = res[i + 1]["p95_transfer_duration_us"].as<uint64_t>();
+        uint32_t pkgSize1 = res[i].first;
+        uint32_t pkgSize2 = res[i + 1].first;
+        uint64_t latency1 = res[i].second;
+        uint64_t latency2 = res[i + 1].second;
 
         if (totalPkgSize >= pkgSize1 && totalPkgSize <= pkgSize2) {
             // Linear interpolation formula
@@ -29,13 +29,22 @@ uint64_t estimateNetworkLatency(pqxx::result &res, const uint32_t &totalPkgSize)
 }
 
 /**
- * @brief 
+ * @brief query the rates, network profile of a model
  * 
+ * @param metricsConn 
+ * @param experimentName 
+ * @param systemName 
  * @param pipelineName 
  * @param streamName 
  * @param taskName 
+ * @param modelName 
+ * @param senderHost 
+ * @param senderHostNetworkEntries The latest update network entries between the sender host and the receiver host
+ *                                 Ideally the specific data of this task should be queried, but if thats not available,
+ *                                 the latest per-device data will be used. These entries are updated in a separate thread.
+ * @param receiverHost 
  * @param periods 
- * @return float 
+ * @return ModelArrivalProfile 
  */
 ModelArrivalProfile queryModelArrivalProfile(
     pqxx::connection &metricsConn,
@@ -46,6 +55,7 @@ ModelArrivalProfile queryModelArrivalProfile(
     const std::string &taskName,
     const std::string &modelName,
     const std::string &senderHost,
+    const NetworkEntryType &senderHostNetworkEntries,
     const std::string &receiverHost,
     const std::vector<uint8_t> &periods //seconds
 ) {
@@ -147,28 +157,23 @@ ModelArrivalProfile queryModelArrivalProfile(
         d2dNetworkProfile->p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
         d2dNetworkProfile->p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
 
-        std::string networkTableName = abbreviate("prof_" + receiverHost + "_netw");
-        query = "SELECT p95_transfer_duration_us, p95_total_package_size_b "
-                "FROM %s "
-                "WHERE sender_host = '%s' "
-                "LIMIT 100;";
-        query = absl::StrFormat(query.c_str(), networkTableName, senderHostAbbr);
-        res = pullSQL(metricsConn, query);
         // Estimate the upperbound of the transfer duration
-        d2dNetworkProfile->p95TransferDuration = estimateNetworkLatency(res, d2dNetworkProfile->p95PackageSize);
+        d2dNetworkProfile->p95TransferDuration = estimateNetworkLatency(senderHostNetworkEntries, d2dNetworkProfile->p95PackageSize);
     }
     return arrivalProfile;
 }
 
 /**
- * @brief Query pre and post processing latency
+ * @brief Query pre, post processing latency as well as input and output sizes
  * 
  * @param metricsConn 
- * @param tableName 
+ * @param experimentName 
+ * @param systemName 
+ * @param pipelineName 
  * @param streamName 
  * @param deviceName 
  * @param modelName 
- * @param profile 
+ * @param profile this will be updated
  */
 void queryPrePostLatency(
     pqxx::connection &metricsConn,

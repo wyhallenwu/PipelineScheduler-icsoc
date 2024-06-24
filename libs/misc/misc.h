@@ -177,8 +177,9 @@ struct PercentilesNetworkRecord {
  * @brief <<sender, receiver>, Record>
  */
 typedef std::map<std::string, PercentilesNetworkRecord> NetworkRecordType;
+typedef std::vector<std::pair<uint32_t, uint64_t>> NetworkEntryType;
 
-uint64_t estimateNetworkLatency(pqxx::result &res, const uint32_t &totalPkgSize);
+uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &totalPkgSize);
 
 // Arrival rate coming to a certain model in the pipeline
 
