@@ -63,6 +63,8 @@ public:
     }
 
 private:
+    void testNetwork(int min_size, int max_size, int num_loops);
+
     bool CreateContainer(
             ModelType model,
             std::string pipe_name,
@@ -157,6 +159,22 @@ private:
         ProcessData request;
         ProcessData reply;
         grpc::ServerAsyncResponseWriter<ProcessData> responder;
+    };
+
+    class ExecuteNetworkTestRequestHandler : public ControlRequestHandler {
+    public:
+        ExecuteNetworkTestRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                     DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        LoopRange request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
     class StartContainerRequestHandler : public ControlRequestHandler {

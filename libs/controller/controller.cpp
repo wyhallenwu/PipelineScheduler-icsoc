@@ -93,12 +93,13 @@ Controller::~Controller() {
 
 void Controller::HandleRecvRpcs() {
     new DeviseAdvertisementHandler(&service, cq.get(), this);
+    void *tag;
+    bool ok;
     while (running) {
-        void *tag;
-        bool ok;
         if (!cq->Next(&tag, &ok)) {
             break;
         }
+        GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
     }
 }
@@ -247,11 +248,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container.second->device_agent->stub->AsyncStartContainer(&context, request,
                                                                       container.second->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(container.second->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, container.second->device_agent->cq);
     if (!status.ok()) {
         std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
     }
@@ -316,11 +313,7 @@ void Controller::AdjustUpstream(int port, Controller::ContainerHandle *upstr, Co
     request.set_port(port);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(upstr->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, upstr->device_agent->cq);
 }
 
 void Controller::SyncDatasource(Controller::ContainerHandle *prev, Controller::ContainerHandle *curr) {
@@ -332,11 +325,7 @@ void Controller::SyncDatasource(Controller::ContainerHandle *prev, Controller::C
     request.set_downstream_name(curr->name);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             curr->device_agent->stub->AsyncSyncDatasource(&context, request, curr->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(curr->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, curr->device_agent->cq);
 }
 
 void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs, int replica) {
@@ -349,11 +338,7 @@ void Controller::AdjustBatchSize(Controller::ContainerHandle *msvc, int new_bs, 
     request.set_value(new_bs);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, msvc->device_agent->cq);
 }
 
 void Controller::StopContainer(std::string name, NodeHandle *device, bool forced) {
@@ -365,11 +350,7 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(device->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, device->cq);
 }
 
 void Controller::optimizeBatchSizeStep(

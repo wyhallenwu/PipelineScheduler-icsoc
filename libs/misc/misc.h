@@ -12,11 +12,15 @@
 #include "opencv2/opencv.hpp"
 #include <unordered_set>
 #include <pqxx/pqxx>
+#include <grpcpp/grpcpp.h>
 #include "absl/strings/str_format.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/flag.h"
 #include <fstream>
 
+using grpc::Status;
+using grpc::CompletionQueue;
+using grpc::ClientAsyncResponseReader;
 
 typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
@@ -588,6 +592,15 @@ ModelProfile queryModelProfile(
 bool isFileEmpty(const std::string& filePath);
 
 ContainerLibType getContainerLib();
+
+template <typename T>
+void finishGrpc(std::unique_ptr<ClientAsyncResponseReader<T>> &rpc, T &reply, Status &status, CompletionQueue *cq){
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+}
 
 
 #endif

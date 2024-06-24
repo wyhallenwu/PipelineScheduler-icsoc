@@ -5,7 +5,7 @@
         "runCommand": "./Container_DataSource"
     },
     "Sink": {
-        "taskName": "basesink",
+        "taskName": "sink",
         "templateConfigPath": "",
         "runCommand": "./runSink"
     },
