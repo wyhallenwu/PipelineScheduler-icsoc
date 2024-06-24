@@ -11,16 +11,20 @@ using namespace trt;
  * @param isConstructing 
  */
 void BaseBatchInferencer::loadConfigs(const json &jsonConfigs, bool isConstructing) {
-    spdlog::trace("{0:s} is LOANDING configs...", __func__);
+    spdlog::get("container_agent")->trace("{0:s} is LOANDING configs...", __func__);
     if (!isConstructing) { // If the function is called from the constructor, the configs are already loaded.
         Microservice::loadConfigs(jsonConfigs, isConstructing);
     }
 
     msvc_engineConfigs = jsonConfigs.get<TRTConfigs>();
-    msvc_engineConfigs.maxBatchSize = msvc_idealBatchSize;
+    if (msvc_allocationMode == AllocationMode::Conservative) {
+        msvc_engineConfigs.maxBatchSize = msvc_idealBatchSize;
+    } else if (msvc_allocationMode == AllocationMode::Aggressive) {
+        msvc_engineConfigs.maxBatchSize = msvc_maxBatchSize;
+    }
     msvc_engineConfigs.deviceIndex = msvc_deviceIndex;
 
-    spdlog::trace("{0:s} FINISHED loading configs...", __func__);
+    spdlog::get("container_agent")->trace("{0:s} FINISHED loading configs...", __func__);
 }
 
 /**
@@ -36,7 +40,7 @@ BaseBatchInferencer::BaseBatchInferencer(const json &jsonConfigs) : Microservice
     // msvc_engineInputBuffers = msvc_inferenceEngine->getInputBuffers();
     // msvc_engineOutputBuffers = msvc_inferenceEngine->getOutputBuffers();
 
-    info("{0:s} is created.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name);
 }
 
 void BaseBatchInferencer::inference() {
@@ -60,20 +64,20 @@ void BaseBatchInferencer::inference() {
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
-    spdlog::info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name);
 
     cudaStream_t inferenceStream;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
-            spdlog::info("{0:s} STOPS.", msvc_name);
+        if (STOP_THREADS) {
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
-        else if (this->PAUSE_THREADS) {
+        else if (PAUSE_THREADS) {
             if (RELOADING) {
-                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 READY = false;
 
                 /**
@@ -109,7 +113,7 @@ void BaseBatchInferencer::inference() {
                 trtInBuffer.clear();
                 trtOutBuffer.clear();
                 
-                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
                 READY = true;
             }
@@ -123,6 +127,15 @@ void BaseBatchInferencer::inference() {
         // Meaning the the timeout in pop() has been reached and no request was actually popped
         if (strcmp(currReq.req_travelPath[0].c_str(), "empty") == 0) {
             continue;
+        
+        /**
+         * @brief ONLY IN PROFILING MODE
+         * Check if the profiling is to be stopped, if true, then send a signal to the downstream microservice to stop profiling
+         */
+        } else if (strcmp(currReq.req_travelPath[0].c_str(), "STOP_PROFILING") == 0) {
+            STOP_THREADS = true;
+            msvc_OutQueue[0]->emplace(currReq);
+            continue;
         }
 
         msvc_inReqCount++;
@@ -130,27 +143,27 @@ void BaseBatchInferencer::inference() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
 
         // Do batched inference with TRT
         currReq_batchSize = currReq.req_batchSize;
-        trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
+        spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
         for (std::size_t i = 0; i < currReq_batchSize; ++i) {
             trtInBuffer.emplace_back(currReq.req_data[i].data);
         }
-        info("{0:s} extracts inference data from message. Run inference!", msvc_name);
+        spdlog::get("container_agent")->trace("{0:s} extracts inference data from message. Run inference!", msvc_name);
         msvc_inferenceEngine->runInference(trtInBuffer, trtOutBuffer, currReq_batchSize, inferenceStream);
-        trace("{0:s} finished INFERENCE.", msvc_name);
+        spdlog::get("container_agent")->trace("{0:s} finished INFERENCE.", msvc_name);
 
 
         // After inference, 4 buffers are filled with memory, which we need to carry to post processor.
         // We put 4 buffers into a vector along with their respective shapes for the post processor to interpret.
-        for (std::size_t i = 0; i < this->msvc_outReqShape.at(0).size(); ++i) {
+        for (std::size_t i = 0; i < msvc_outReqShape.at(0).size(); ++i) {
             data = {
-                this->msvc_outReqShape.at(0).at(i),
+                msvc_outReqShape.at(0).at(i),
                 trtOutBuffer[i]
             };
             outReqData.emplace_back(data);
@@ -195,15 +208,16 @@ void BaseBatchInferencer::inference() {
         // for (std::size_t i = 0; i < trtInBuffer.size(); i++) {
         //     checkCudaErrorCode(cudaFree(trtInBuffer.at(i).cudaPtr()));
         // }
-        info("{0:s} emplaced a request for a batch size of {1:d}", msvc_name, currReq_batchSize);
+        spdlog::get("container_agent")->trace("{0:s} emplaced a request for a batch size of {1:d}", msvc_name, currReq_batchSize);
 
         msvc_OutQueue[0]->emplace(outReq);
         outReqData.clear();
         trtInBuffer.clear();
         trtOutBuffer.clear();
 
-        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+        spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
+        spdlog::get("container_agent")->flush();
     }
     checkCudaErrorCode(cudaStreamDestroy(inferenceStream), __func__);
     msvc_logFile.close();
@@ -231,20 +245,20 @@ void BaseBatchInferencer::inferenceProfiling() {
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
-    spdlog::info("{0:s} STARTS.", msvc_name);
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name);
 
     auto timeNow = std::chrono::high_resolution_clock::now();
 
     cudaStream_t inferenceStream;
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
-            spdlog::info("{0:s} STOPS.", msvc_name);
+        if (STOP_THREADS) {
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
-        else if (this->PAUSE_THREADS) {
+        else if (PAUSE_THREADS) {
             if (RELOADING) {
-                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 READY = false;
                 /**
                  * @brief Opening a new log file
@@ -281,7 +295,7 @@ void BaseBatchInferencer::inferenceProfiling() {
                 trtInBuffer.clear();
                 trtOutBuffer.clear();
                 
-                spdlog::info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
                 READY = true;
             }
@@ -301,26 +315,26 @@ void BaseBatchInferencer::inferenceProfiling() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
 
         // Do batched inference with TRT
         currReq_batchSize = currReq.req_batchSize;
-        trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
+        spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
         for (std::size_t i = 0; i < currReq_batchSize; ++i) {
             trtInBuffer.emplace_back(currReq.req_data[i].data);
         }
-        info("{0:s} extracts inference data from message. Run inference!", msvc_name);
+        spdlog::get("container_agent")->trace("{0:s} extracts inference data from message. Run inference!", msvc_name);
         msvc_inferenceEngine->runInference(trtInBuffer, trtOutBuffer, currReq_batchSize, inferenceStream);
-        trace("{0:s} finished INFERENCE.", msvc_name);
+        spdlog::get("container_agent")->trace("{0:s} finished INFERENCE.", msvc_name);
 
         // After inference, 4 buffers are filled with memory, which we need to carry to post processor.
         // We put 4 buffers into a vector along with their respective shapes for the post processor to interpret.
-        for (std::size_t i = 0; i < this->msvc_outReqShape.at(0).size(); ++i) {
+        for (std::size_t i = 0; i < msvc_outReqShape.at(0).size(); ++i) {
             data = {
-                this->msvc_outReqShape.at(0).at(i),
+                msvc_outReqShape.at(0).at(i),
                 trtOutBuffer[i]
             };
             outReqData.emplace_back(data);
@@ -364,15 +378,15 @@ void BaseBatchInferencer::inferenceProfiling() {
         // for (std::size_t i = 0; i < trtInBuffer.size(); i++) {
         //     checkCudaErrorCode(cudaFree(trtInBuffer.at(i).cudaPtr()));
         // }
-        info("{0:s} emplaced a request for a batch size of {1:d}", msvc_name, currReq_batchSize);
+        spdlog::get("container_agent")->info("{0:s} emplaced a request for a batch size of {1:d}", msvc_name, currReq_batchSize);
 
         msvc_OutQueue[0]->emplace(outReq);
         outReqData.clear();
         trtInBuffer.clear();
         trtOutBuffer.clear();
 
-        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+        spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
     }
     checkCudaErrorCode(cudaStreamDestroy(inferenceStream), __func__);
     msvc_logFile.close();

@@ -1,11 +1,11 @@
 #include "controller.h"
 
-int main() {
-    auto controller = new Controller();
+int main(int argc, char **argv) {
+    auto controller = new Controller(argc, argv);
     std::thread receiver_thread(&Controller::HandleRecvRpcs, controller);
     receiver_thread.detach();
-    std::ifstream file("../jsons/experiment.json");
-    std::vector<TaskDescription::TaskStruct> tasks = json::parse(file);
+    std::thread scheduling_thread(&Controller::Scheduling, controller);
+    scheduling_thread.detach();
     std::string command;
 
     while (controller->isRunning()) {
@@ -16,9 +16,7 @@ int main() {
             controller->Stop();
             break;
         } else if (command == "init") {
-            for (auto &t: tasks) {
-                controller->AddTask(t);
-            }
+            controller->Init();
             continue;
         } else if (command == "traffic") {
             task.type = PipelineType::Traffic;

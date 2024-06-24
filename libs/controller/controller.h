@@ -21,41 +21,36 @@ using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using controlcommunication::ControlCommunication;
 using controlcommunication::ConnectionConfigs;
+using controlcommunication::SystemInfo;
 using controlcommunication::Neighbor;
+using controlcommunication::LoopRange;
+using controlcommunication::DummyMessage;
 using controlcommunication::ContainerConfig;
 using controlcommunication::ContainerLink;
 using controlcommunication::ContainerInt;
 using controlcommunication::ContainerSignal;
 using EmptyMessage = google::protobuf::Empty;
 
-enum SystemDeviceType {
-    Server,
-    XavierNX,
-    OrinNano
-};
+ABSL_DECLARE_FLAG(std::string, ctrl_configPath);
+ABSL_DECLARE_FLAG(uint16_t, ctrl_verbose);
+ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
 
-enum ModelType {
-    DataSource,
-    Sink,
-    Yolov5,
-    Yolov5Datasource,
-    Arcface,
-    Retinaface,
-    Yolov5_Plate,
-    Movenet,
-    Emotionnet,
-    Gender,
-    Age,
-    CarBrand
-};
+typedef std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> Pipeline;
+
 
 struct ContainerHandle;
 
 struct TaskHandle {
-    int slo;
+    std::string name;
     PipelineType type;
+    std::string source;
+    int slo;
+    ClockType start_time;
+    int last_latency;
     std::map<std::string, ContainerHandle *> subtasks;
 };
+
+typedef std::vector<std::pair<uint32_t, uint64_t>> NetworkEntryType;
 
 struct NodeHandle {
     std::string name;
@@ -63,56 +58,88 @@ struct NodeHandle {
     std::shared_ptr<ControlCommunication::Stub> stub;
     CompletionQueue *cq;
     SystemDeviceType type;
-    BandwidthType bandwidth;
     int num_processors; // number of processing units, 1 for Edge or # GPUs for server
     std::vector<double> processors_utilization; // utilization per pu
     std::vector<unsigned long> mem_size; // memory size in MB
     std::vector<double> mem_utilization; // memory utilization per pu
     int next_free_port;
     std::map<std::string, ContainerHandle *> containers;
+    // The latest network entries to determine the network conditions and latencies of transferring data
+    NetworkEntryType latestNetworkEntries = {};
+    std::mutex nodeHandleMutex;
+
+    NodeHandle() = default;
+
+    NodeHandle(const std::string& name,
+               const std::string& ip,
+               std::shared_ptr<ControlCommunication::Stub> stub,
+               grpc::CompletionQueue* cq,
+               SystemDeviceType type,
+               int num_processors,
+               std::vector<double> processors_utilization,
+               std::vector<unsigned long> mem_size,
+               std::vector<double> mem_utilization,
+               int next_free_port,
+               std::map<std::string, ContainerHandle*> containers)
+        : name(name),
+          ip(ip),
+          stub(std::move(stub)),
+          cq(cq),
+          type(type),
+          num_processors(num_processors),
+          processors_utilization(std::move(processors_utilization)),
+          mem_size(std::move(mem_size)),
+          mem_utilization(std::move(mem_utilization)),
+          next_free_port(next_free_port),
+          containers(std::move(containers)) {}
+
+    NodeHandle(const NodeHandle &other) {
+        name = other.name;
+        ip = other.ip;
+        stub = other.stub;
+        cq = other.cq;
+        type = other.type;
+        num_processors = other.num_processors;
+        processors_utilization = other.processors_utilization;
+        mem_size = other.mem_size;
+        mem_utilization = other.mem_utilization;
+        next_free_port = other.next_free_port;
+        containers = other.containers;
+        latestNetworkEntries = other.latestNetworkEntries;
+    }
 };
 
 struct ContainerHandle {
     std::string name;
+    int class_of_interest;
     ModelType model;
+    bool mergable;
+    std::vector<int> dimensions;
+
+    uint32_t inference_deadline;
+
+    float arrival_rate;
+
+    int num_replicas;
+    std::vector<int> batch_size;
+    std::vector<int> cuda_device;
+    std::vector<int> recv_port;
+
+    HardwareMetrics metrics;
     NodeHandle *device_agent;
     TaskHandle *task;
-    int batch_size;
-    // The deadline for the inference to be completed.
-    // The amount of time from start of each cycle, in milliseconds.
-    uint32_t inference_deadline;
-    // Arrival rate of requests
-    float arrival_rate;
-    int replicas;
-    std::vector<int> cuda_device;
-    int class_of_interest;
-    int recv_port;
-    Metrics metrics;
-    google::protobuf::RepeatedField<int32_t> queue_lengths;
     std::vector<ContainerHandle *> upstreams;
     std::vector<ContainerHandle *> downstreams;
-};
-
-struct ModelProfile {
-    uint64_t preprocessorLatency;
-    BatchLatencyProfileType inferenceLatency;
-    uint64_t postprocessorLatency;
-    // Average size of incoming queries
-    int avgInputSize = 1; // bytes
-    // Average total size of outgoing queries
-    int avgOutputSize = 1; // bytes
 };
 
 struct PipelineModel {
     std::string device;
     // Whether the upstream is on another device
     bool isSplitPoint;
-    // Max arrival rate of queries to this model over different periods (e.g., last 1 second, last 3 seconds, etc.)
-    float arrivalRate;
-    // Scale factors for different periods
-    ScaleFactorType scaleFactors;
+    //
+    ModelArrivalProfile arrivalProfile;
     // Latency profile of preprocessor, batch inferencer and postprocessor
-    ModelProfile modelProfile;
+    ModelProfile processProfile;
     // The downstream models and their classes of interest
     std::vector<std::pair<ModelType, int>> downstreams;
     std::vector<std::pair<ModelType, int>> upstreams;
@@ -145,25 +172,11 @@ typedef std::map<BatchSizeType, uint64_t> BatchLatencyProfileType;
 
 typedef int BandwidthType;
 
-extern std::map<ModelType, std::vector<std::string>> MODEL_INFO;
-extern std::map<SystemDeviceType, std::vector<std::string>> DEVICE_INFO;
-
-enum PipelineType {
-    Traffic,
-    Video_Call,
-    Building_Security
-};
 
 // Structure that whole information about the pipeline used for scheduling
 typedef std::map<ModelType, PipelineModel> PipelineModelListType;
 
-struct Metrics {
-    float requestRate = 0;
-    double cpuUsage = 0;
-    long memUsage = 0;
-    unsigned int gpuUsage = 0;
-    unsigned int gpuMemUsage = 0;
-};
+
 
 namespace TaskDescription {
     struct TaskStruct {
@@ -174,8 +187,6 @@ namespace TaskDescription {
         std::string device;
     };
 
-    void to_json(nlohmann::json &j, const TaskStruct &val);
-
     void from_json(const nlohmann::json &j, TaskStruct &val);
 }
 
@@ -183,11 +194,15 @@ namespace TaskDescription {
 
 class Controller {
 public:
-    Controller();
+    Controller(int argc, char **argv);
 
     ~Controller();
 
     void HandleRecvRpcs();
+
+    void Scheduling();
+
+    void Init() { for (auto &t: initialTasks) AddTask(t); }
 
     void AddTask(const TaskDescription::TaskStruct &task);
 
@@ -196,12 +211,12 @@ public:
     void Stop() { running = false; };
 
 private:
-    void queryRequestRateInPeriod(const std::string &name, ArrivalRateType &periods);
-    void queryScaleFactorInPeriod(const std::string &name, ScaleFactorType &periods);
-    ModelProfile queryModelProfile(const std::string &name, const std::string &deviceName); 
-    uint64_t queryTransmitLatency(const int packageSize, const std::string &sourceName, const std::string &destName);
+
+    NetworkEntryType initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
     void incNumReplicas(PipelineModel &model);
     void decNumReplicas(PipelineModel &model);
+
+    uint64_t calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate);
 
     void estimateModelLatency(PipelineModel &model, const ModelType modelType);
     void estimatePipelineLatency(PipelineModelListType &pipeline, const ModelType &currModel, const uint64_t start2HereLatency);
@@ -211,17 +226,20 @@ private:
 
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice);
 
-    void UpdateLightMetrics();
+    void checkNetworkConditions();
 
-    void UpdateFullMetrics();
+    void readConfigFile(const std::string &config_path);
 
     double LoadTimeEstimator(const char *model_path, double input_mem_size);
     int InferTimeEstimator(ModelType model, int batch_size);
+    std::map<ModelType, std::vector<int>> InitialRequestCount(const std::string &input, const Pipeline &models,
+                                                              int fps = 30);
+
 
     class RequestHandler {
     public:
         RequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq, Controller *c)
-                : service(service), cq(cq), status(CREATE), controller(c), responder(&ctx) {}
+                : service(service), cq(cq), status(CREATE), controller(c) {}
 
         virtual ~RequestHandler() = default;
 
@@ -236,15 +254,13 @@ private:
         ServerContext ctx;
         CallStatus status;
         Controller *controller;
-        EmptyMessage reply;
-        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
     class DeviseAdvertisementHandler : public RequestHandler {
     public:
         DeviseAdvertisementHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                    Controller *c)
-                : RequestHandler(service, cq, c) {
+                : RequestHandler(service, cq, c), responder(&ctx) {
             Proceed();
         }
 
@@ -252,24 +268,46 @@ private:
 
     private:
         ConnectionConfigs request;
+        SystemInfo reply;
+        grpc::ServerAsyncResponseWriter<SystemInfo> responder;
     };
 
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
-                        std::string source = "", int replica = 1);
+                        std::string source, int replica = 1, bool easy_allocation = true);
 
-    void MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica = 1);
+    void MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device = 0, int replica = 1);
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
 
-    void AdjustBatchSize(ContainerHandle *msvc, int new_bs);
+    static void SyncDatasource(ContainerHandle *prev, ContainerHandle *curr);
+
+    void AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica = 1);
 
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 
     void optimizeBatchSizeStep(
-            const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
+            const Pipeline &models,
             std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
 
     bool running;
+    std::string ctrl_experimentName;
+    std::string ctrl_systemName;
+    std::vector<TaskDescription::TaskStruct> initialTasks;
+    uint16_t ctrl_runtime;
+    uint16_t ctrl_port_offset;
+
+    std::string ctrl_logPath;
+    uint16_t ctrl_loggingMode;
+    uint16_t ctrl_verbose;
+
+    ContainerLibType ctrl_containerLib;
+    DeviceInfoType ctrl_sysDeviceInfo = {
+        {Server, "server"},
+        {AGXXavier, "agxavier"},
+        {NXXavier, "nxavier"},
+        {OrinNano, "orinano"}
+    };
+
     std::map<std::string, NodeHandle> devices;
     std::map<std::string, TaskHandle> tasks;
     std::map<std::string, ContainerHandle> containers;
@@ -278,8 +316,11 @@ private:
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<ServerCompletionQueue> cq;
 
-    std::unique_ptr<pqxx::connection> ctl_metricsServerConn = nullptr;
-    MetricsServerConfigs ctl_metricsServerConfigs;
+    std::unique_ptr<pqxx::connection> ctrl_metricsServerConn = nullptr;
+    MetricsServerConfigs ctrl_metricsServerConfigs;
+
+    std::vector<spdlog::sink_ptr> ctrl_loggerSinks = {};
+    std::shared_ptr<spdlog::logger> ctrl_logger;
 };
 
 

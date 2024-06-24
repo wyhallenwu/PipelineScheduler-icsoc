@@ -1,22 +1,25 @@
 {
-    "pipeline_name": "traffic_pipeline",
-    "container" : {
-        "cont_pipeName": "traffic_pipeline",
-        "cont_taskName": "retinaface",
+    "container": {
+        "cont_experimentName": "run",
+        "cont_systemName": "ppp",
+        "cont_pipeName": "traffic",
+        "cont_taskName": "platedet",
+        "cont_hostDevice": "server",
+        "cont_name": "yolov5_plate_0",
         "cont_pipeline": [
             {
-                "msvc_name": "::receiver",
-                "msvc_idealBatchSize": 2,
-                "msvc_appLvlConfigs": "",
+                "msvc_name": "receiver",
+                "msvc_idealBatchSize": 1,
+                "msvc_appLvlConfigs": "../jsons/yolov5_receiver.json",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::preprocessor",
+                        "nb_name": "preprocessor",
                         "nb_expectedShape": [
                             [
                                 -1,
@@ -29,8 +32,8 @@
                 "msvc_dataShape": [
                     [
                         3,
-                        640,
-                        640
+                        500,
+                        500
                     ]
                 ],
                 "msvc_svcLevelObjLatency": 999999,
@@ -38,9 +41,9 @@
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 2,
                         "nb_link": [
-                            "0.0.0.0:55014"
+                            "0.0.0.0:55022"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",
@@ -57,9 +60,9 @@
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
             },
             {
-                "msvc_name": "::preprocessor",
-                "msvc_idealBatchSize": 2,
-                "msvc_appLvlConfigs": "../jsons/retinaface_preproc.json",
+                "msvc_name": "preprocessor",
+                "msvc_idealBatchSize": 1,
+                "msvc_appLvlConfigs": "../jsons/yolov5_preproc.json",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
@@ -68,12 +71,12 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::inference",
+                        "nb_name": "inference",
                         "nb_expectedShape": [
                             [
                                 3,
-                                288,
-                                320
+                                224,
+                                224
                             ]
                         ]
                     }
@@ -94,7 +97,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::receiver",
+                        "nb_name": "receiver",
                         "nb_expectedShape": [
                             [
                                 -1,
@@ -108,23 +111,22 @@
                 "msvc_imgType": 16,
                 "msvc_colorCvtType": 4,
                 "msvc_resizeInterpolType": 3,
-                "msvc_imgNormScale": "1/1",
+                "msvc_imgNormScale": "1/255",
                 "msvc_subVals": [
-                    104,
-                    117,
-                    123
+                    0,
+                    0,
+                    0
                 ],
                 "msvc_divVals": [
                     1,
                     1,
                     1
                 ]
-
             },
             {
-                "msvc_name": "::inference",
-                "msvc_idealBatchSize": 2,
-                "msvc_appLvlConfigs": "../jsons/retinaface_trt.json",
+                "msvc_name": "inference",
+                "msvc_idealBatchSize": 1,
+                "msvc_appLvlConfigs": "../jsons/yolov5_trt.json",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
@@ -133,20 +135,20 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::postprocessor",
+                        "nb_name": "postprocessor",
                         "nb_expectedShape": [
+                            [
+                                1 
+                            ],
+                            [
+                                1,
+                                4
+                            ],
                             [
                                 1
                             ],
                             [
-                                5,
-                                4
-                            ],
-                            [
-                                5
-                            ],
-                            [
-                                5
+                                1
                             ]
                         ]
                     }
@@ -167,7 +169,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::preprocessor",
+                        "nb_name": "preprocessor",
                         "nb_expectedShape": [
                             [
                                 0,
@@ -184,22 +186,23 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/retina_single_face_3090_fp32_32_1.engine",
-                "prec": 4
+                "path": "../models/platedet_dyn_nms_3090_fp32_64_1.engine",
+                "prec": 4,
+                "device": 0
             },
             {
-                "msvc_name": "::postprocessor",
-                "msvc_idealBatchSize": 2,
+                "msvc_name": "postprocessor",
+                "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::sender",
+                        "nb_name": "sender",
                         "nb_expectedShape": [
                             [
                                 0,
@@ -210,17 +213,17 @@
                 ],
                 "msvc_dataShape": [
                     [
-                        1
+                        1 
                     ],
                     [
-                        5,
+                        1,
                         4
                     ],
                     [
-                        5
+                        1
                     ],
                     [
-                        5
+                        1
                     ]
                 ],
                 "msvc_svcLevelObjLatency": 999999,
@@ -233,11 +236,11 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::inference",
+                        "nb_name": "inference",
                         "nb_expectedShape": [
                             [
-                                0,
-                                0
+                                -1,
+                                -1
                             ]
                         ]
                     }
@@ -246,18 +249,18 @@
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
             },
             {
-                "msvc_name": "::sender",
-                "msvc_idealBatchSize": 4,
+                "msvc_name": "sender",
+                "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 2,
                         "nb_link": [
-                            "localhost:55015"
+                            "localhost:55020"
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "dummy_receiver_0",
+                        "nb_name": "datasink",
                         "nb_expectedShape": [
                             [
                                 -1,
@@ -277,16 +280,16 @@
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::postprocessor",
+                        "nb_name": "postprocessor",
                         "nb_expectedShape": [
                             [
-                                0,
-                                0
+                                -1,
+                                -1
                             ]
                         ]
                     }
@@ -296,16 +299,18 @@
             }
         ],
         "cont_metricServerConfigs": "../jsons/metricsserver.json",
-        "cont_metricScrapeIntervalSecond": 60
+        "cont_numWarmUpBatches": 15,
+        "cont_allocationMode": 1
     },
     "profiling": {
         "profile_minBatch": 1,
         "profile_maxBatch": 64,
         "profile_stepMode": 1,
         "profile_step": 1,
-        "profile_templateModelPath": "../models/retina_single_face_3090_fp32_[batch]_1.engine",
+        "profile_templateModelPath": "../models/yolov5n_224_224_dynamic_nms_3090_fp32_[batch]_1.engine",
         "profile_inputRandomizeScheme": 0,
         "profile_numWarmUpBatches": 10,
-        "profile_numProfileBatches": 100
+        "profile_numProfileBatches": 100,
+        "profile_numProfileReqs": 1800
     }
 }

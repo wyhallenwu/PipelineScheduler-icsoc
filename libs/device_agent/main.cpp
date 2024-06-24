@@ -7,10 +7,15 @@ int main(int argc, char **argv) {
     std::string type = absl::GetFlag(FLAGS_device_type);
     std::string controller_url = absl::GetFlag(FLAGS_controller_url);
     SystemDeviceType deviceType;
-    if (type == "server")
+    if (type == "server") {
         deviceType = SystemDeviceType::Server;
-    else if (type == "edge")
-        deviceType = SystemDeviceType::Edge;
+    } else if (type == "NXXavier") {
+        deviceType = SystemDeviceType::NXXavier;
+    } else if (type == "AGXXavier") {
+        deviceType = SystemDeviceType::AGXXavier;
+    } else if (type == "OrinNano") {
+        deviceType = SystemDeviceType::OrinNano;
+    }
     else {
         std::cerr << "Invalid device type" << std::endl;
         exit(1);

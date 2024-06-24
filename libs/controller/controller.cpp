@@ -1,181 +1,78 @@
 #include "controller.h"
 
-std::map<ModelType, std::vector<std::string>> MODEL_INFO = {
-        {DataSource,        {":datasource",         "./Container_DataSource"}},
-        {Sink,              {":basesink",           "./runSink"}},
-        {Yolov5,            {":yolov5",             "./Container_Yolov5"}},
-        {Yolov5Datasource,  {":yolov5datasource",   "./Container_Yolov5"}},
-        {Retinaface,        {":retinaface",         "./Container_RetinaFace"}},
-        {Yolov5_Plate,      {":platedetection",     "./Container_Yolov5-plate"}},
-        {Movenet,           {":movenet",            "./Container_MoveNet"}},
-        {Emotionnet,        {":emotionnet",         "./Container_EmotionNet"}},
-        {Arcface,           {":arcface",            "./Container_ArcFace"}},
-        {Age,               {":age",                "./Container_Age"}},
-        {Gender,            {":gender",             "./Container_Gender"}},
-        {CarBrand,          {":carbrand",           "./Container_CarBrand"}},
-};
+ABSL_FLAG(std::string, ctrl_configPath, "../jsons/experiments/base-experiment.json",
+          "Path to the configuration file for this experiment.");
+ABSL_FLAG(uint16_t, ctrl_verbose, 0, "Verbosity level of the controller.");
+ABSL_FLAG(uint16_t, ctrl_loggingMode, 0, "Logging mode of the controller. 0:stdout, 1:file, 2:both");
+ABSL_FLAG(std::string, ctrl_logPath, "../logs", "Path to the log dir for the controller.");
 
-std::map<SystemDeviceType, std::string> DEVICE_INFO = {
-    {Server, "server"},
-    {XavierNX, "xaviernx"},
-    {OrinNano, "orinano"}
-};
+const int DATA_BASE_PORT = 55001;
+const int CONTROLLER_BASE_PORT = 60001;
+const int DEVICE_CONTROL_PORT = 60002;
 
-void TaskDescription::to_json(nlohmann::json &j, const TaskDescription::TaskStruct &val) {
-    j = json{{"name",   val.name},
-             {"slo",    val.slo},
-             {"type",   val.type},
-             {"source", val.source},
-             {"device", val.device}};
+void Controller::readConfigFile(const std::string &path) {
+    std::ifstream file(path);
+    json j = json::parse(file);
+
+    ctrl_experimentName = j["expName"];
+    ctrl_systemName = j["systemName"];
+    ctrl_runtime = j["runtime"];
+    ctrl_port_offset = j["port_offset"];
+    initialTasks = j["initial_pipelines"];
+
 }
 
 void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskStruct &val) {
-    j.at("name").get_to(val.name);
-    j.at("slo").get_to(val.slo);
-    j.at("type").get_to(val.type);
-    j.at("source").get_to(val.source);
-    j.at("device").get_to(val.device);
+    j.at("pipeline_name").get_to(val.name);
+    j.at("pipeline_target_slo").get_to(val.slo);
+    j.at("pipeline_type").get_to(val.type);
+    j.at("video_source").get_to(val.source);
+    j.at("pipeline_source_device").get_to(val.device);
 }
 
-/**
- * @brief Query the request rate in a given time period (1 minute, 2 minutes...)
- * 
- * @param name 
- * @param time_period 
- * @return uint64_t 
- */
-void Controller::queryRequestRateInPeriod(const std::string &name, ArrivalRateType &rates) {
-    for (auto &rate : rates) {
-        uint32_t period = rate.first;
-        std::string query = absl::StrFormat("SELECT COUNT (*) FROM %s WHERE to_timestamp(arrival_timestamps / 1000000.0) >= NOW() - INTERVAL '", name + "_arrival_table");
-        query += std::to_string(period) + " seconds';";
+Controller::Controller(int argc, char **argv) {
+    absl::ParseCommandLine(argc, argv);
+    readConfigFile(absl::GetFlag(FLAGS_ctrl_configPath));
 
-        pqxx::nontransaction session(*ctl_metricsServerConn);
-        pqxx::result res = session.exec(query);
+    ctrl_logPath = absl::GetFlag(FLAGS_ctrl_logPath);
+    ctrl_logPath += "/" + ctrl_experimentName;
+    std::filesystem::create_directories(
+            std::filesystem::path(ctrl_logPath)
+    );
+    ctrl_logPath += "/" + ctrl_systemName;
+    std::filesystem::create_directories(
+            std::filesystem::path(ctrl_logPath)
+    );
+    ctrl_verbose = absl::GetFlag(FLAGS_ctrl_verbose);
+    ctrl_loggingMode = absl::GetFlag(FLAGS_ctrl_loggingMode);
 
-        int count = 0;
-        for (const auto& row : res) {
-            count = row[0].as<int>();
-        }
+    setupLogger(
+            ctrl_logPath,
+            "controller",
+            ctrl_loggingMode,
+            ctrl_verbose,
+            ctrl_loggerSinks,
+            ctrl_logger
+    );
 
-        rate.second = (float) count / period;
-        if (rate.second < 4) {
-            rate.second = 4;
-        }
-    }
-}
+    ctrl_containerLib = getContainerLib();
 
-/**
- * @brief Query the number of outputs per input for each model in a given time period (1 minute, 2 minutes...)
- * 
- * @param name 
- * @param time_period 
- * @return uint64_t 
- */
-void Controller::queryScaleFactorInPeriod(const std::string &name, ScaleFactorType &scale_factors) {
-    for (auto &factor : scale_factors) {
-        uint32_t period = factor.first;
-        std::string query = absl::StrFormat("SELECT MAX(scale_factors) FROM %s WHERE to_timestamp(post_process_timestamps / 1000000.0) >= NOW() - INTERVAL '", name + "_process_table");
-        query += std::to_string(period) + " seconds';";
-
-        pqxx::nontransaction session(*ctl_metricsServerConn);
-        pqxx::result res = session.exec(query);
-
-        if (!res.empty() && !res[0][0].is_null()) {
-            factor.second = res[0][0].as<float>();
-        } else {
-            factor.second = 0;
-        }
-    }
-}
-
-/**
- * @brief 
- * 
- * @param name 
- * @return ModelProfileType 
- */
-ModelProfile Controller::queryModelProfile(const std::string &name, const std::string &deviceName) {
-    // Query the median preprocess and postprocess duration of the last 1000 records as these depend on real-time data's content
-    std::string query = absl::StrFormat(R"(
-        WITH last_entries AS (
-            SELECT prep_duration, post_duration, input_size, output_size
-            FROM %s
-            ORDER BY postprocess_timestamps DESC
-            LIMIT 1000
-        )
-        SELECT
-            percentile(0.5) WITHIN GROUP (ORDER BY prep_duration) AS median_prep_duration,
-            percentile(0.5) WITHIN GROUP (ORDER BY post_duration) AS median_post_duration,
-            percentile(0.5) WITHIN GROUP (ORDER BY input_size) AS median_input_size,
-            percentile(0.5) WITHIN GROUP (ORDER BY output_size) AS median_output_size
-        FROM last_entries;
-    )", name + "_process_table");
-
-    pqxx::nontransaction session(*ctl_metricsServerConn);
-    pqxx::result res = session.exec(query);
-
-    uint64_t prep_duration, post_duration;
-    int input_size, output_size;
-    if (!res.empty()) {
-        prep_duration = res[0]["median_prep_duration"].as<uint64_t>();
-        post_duration = res[0]["median_post_duration"].as<uint64_t>();
-        input_size = res[0]["median_input_size"].as<int>();
-        output_size = res[0]["median_output_size"].as<int>();
-    }
-
-    // Query batch profile from the profile table
-    // Profile could be a one-time-only measurement or a periodically updated one
-    std::string modelName = splitString(name, '_').back();
-
-    query = absl::StrFormat(R"(
-        SELECT batch_size, per_query_latency FROM %s
-    )", modelName + "_" + deviceName + "_profile_table");
-
-    res = session.exec(query);
-
-    BatchLatencyProfileType batch_profile;
-
-    for (const auto& row : res) {
-        batch_profile[row["batch_size"].as<BatchSizeType>()] = row["per_query_latency"].as<uint64_t>();
-    }
-
-
-    return {prep_duration, batch_profile, post_duration, input_size, output_size};
-
-}
-
-/**
- * @brief query and calculate expected latency in microseconds to transfer the output of the model to the next model
- * 
- * @param name 
- * @return uint64_t expected latency in microseconds
- */
-uint64_t Controller::queryTransmitLatency(const int packageSize, const std::string &sourceName, const std::string &destName) {
-    // TODO: Should consider two cases (1) Same device and (2) different devices
-    if (sourceName == destName) {
-        return 1000;
-    }
-    return 5000;
-}
-
-Controller::Controller() {
     json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
-    ctl_metricsServerConfigs.from_json(metricsCfgs);
-    ctl_metricsServerConfigs.user = "controller";
-    ctl_metricsServerConfigs.password = "agent";
+    ctrl_metricsServerConfigs.from_json(metricsCfgs);
+    ctrl_metricsServerConfigs.schema = ctrl_experimentName + "_" + ctrl_systemName;
+    ctrl_metricsServerConfigs.user = "controller";
+    ctrl_metricsServerConfigs.password = "agent";
+    ctrl_metricsServerConn = connectToMetricsServer(ctrl_metricsServerConfigs, "controller");
 
-    ctl_metricsServerConn = connectToMetricsServer(ctl_metricsServerConfigs, "controller");
-
+    std::thread networkCheckThread(&Controller::checkNetworkConditions, this);
+    networkCheckThread.detach();
 
     running = true;
     devices = std::map<std::string, NodeHandle>();
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
 
-
-
-    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60001);
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", CONTROLLER_BASE_PORT + ctrl_port_offset);
     ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
@@ -199,36 +96,25 @@ Controller::~Controller() {
 
 void Controller::HandleRecvRpcs() {
     new DeviseAdvertisementHandler(&service, cq.get(), this);
+    void *tag;
+    bool ok;
     while (running) {
-        void *tag;
-        bool ok;
         if (!cq->Next(&tag, &ok)) {
             break;
         }
+        GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
     }
 }
 
-
-void Controller::UpdateLightMetrics() {
-    // TODO: Replace with Database Scraping
-//    for (auto metric: metrics) {
-//        containers[metric.name()].queue_lengths = metric.queue_size();
-//        containers[metric.name()].metrics.requestRate = metric.request_rate();
-//    }
-}
-
-void Controller::UpdateFullMetrics() {
-    //TODO: Replace with Database Scraping
-//    for (auto metric: metrics) {
-//        containers[metric.name()].queue_lengths = metric.queue_size();
-//        Metrics *m = &containers[metric.name()].metrics;
-//        m->requestRate = metric.request_rate();
-//        m->cpuUsage = metric.cpu_usage();
-//        m->memUsage = metric.mem_usage();
-//        m->gpuUsage = metric.gpu_usage();
-//        m->gpuMemUsage = metric.gpu_mem_usage();
-//    }
+void Controller::Scheduling() {
+    // TODO: please out your scheduling loop inside of here
+    while (running) {
+        // use list of devices, tasks and containers to schedule depending on your algorithm
+        // put helper functions as a private member function of the controller and write them at the bottom of this file.
+        std::this_thread::sleep_for(std::chrono::milliseconds(
+                5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
+    }
 }
 
 void Controller::DeviseAdvertisementHandler::Proceed() {
@@ -238,18 +124,19 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     } else if (status == PROCESS) {
         new DeviseAdvertisementHandler(service, cq, controller);
         std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), 60002);
-        controller->devices.insert({request.device_name(),
-                                    {   
-                                        request.device_name(),
-                                        request.ip_address(),
+        NodeHandle node{request.device_name(),
+                                     request.ip_address(),
                                      ControlCommunication::NewStub(
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
                                      new CompletionQueue(),
                                      static_cast<SystemDeviceType>(request.device_type()),
-                                     100, // Mbps // TODO: dynamically query and set the bandwidth
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
-                                     std::vector<double>(request.processors(), 0.0), 55001, {}}});
+                                     std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset, {}};
+        controller->devices.insert({request.device_name(), node});
+        reply.set_name(controller->ctrl_systemName);
+        reply.set_experiment(controller->ctrl_experimentName);
+        reply.set_port_offset(controller->ctrl_port_offset);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -259,25 +146,33 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
 }
 
 void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &container, int slo, std::string source,
-                                int replica) {
+                                int replica, bool easy_allocation) {
     std::cout << "Starting container: " << container.first << std::endl;
     ContainerConfig request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
-    request.set_name(container.first);
+    request.set_pipeline_name(container.second->task->name);
     request.set_model(container.second->model);
-    request.set_batch_size(container.second->batch_size);
-    request.set_recv_port(container.second->recv_port);
-    request.set_slo(slo);
+    request.set_batch_size(container.second->batch_size[replica -1]);
+    request.set_replica_id(replica);
+    request.set_allocation_mode(easy_allocation);
     request.set_device(container.second->cuda_device[replica - 1]);
+    request.set_slo(slo);
+    for (auto dim: container.second->dimensions) {
+        request.add_input_dimensions(dim);
+    }
     for (auto dwnstr: container.second->downstreams) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name(dwnstr->name);
-        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
+        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port[replica - 1]));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
-        dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
-                                (container.second->cuda_device == dwnstr->cuda_device));
+        if (dwnstr->model == Sink) {
+            dwn->set_gpu_connection(false);
+        } else {
+            dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
+                                    (container.second->cuda_device == dwnstr->cuda_device));
+        }
     }
     if (request.downstream_size() == 0) {
         Neighbor *dwn = request.add_downstream();
@@ -286,7 +181,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
         dwn->set_class_of_interest(-1);
         dwn->set_gpu_connection(false);
     }
-    if (container.second->model == DataSource) {
+    if (container.second->model == DataSource || container.second->model == Yolov5nDsrc || container.second->model == RetinafaceDsrc) {
         Neighbor *up = request.add_upstream();
         up->set_name("video_source");
         up->set_ip(source);
@@ -296,7 +191,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
         for (auto upstr: container.second->upstreams) {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
-            up->set_ip(absl::StrFormat("%s:%d", upstr->device_agent->ip, upstr->recv_port));
+            up->set_ip(absl::StrFormat("0.0.0.0:%d", container.second->recv_port[replica -1]));
             up->set_class_of_interest(-2);
             up->set_gpu_connection((container.second->device_agent == upstr->device_agent) &&
                                    (container.second->cuda_device == upstr->cuda_device));
@@ -305,32 +200,54 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container.second->device_agent->stub->AsyncStartContainer(&context, request,
                                                                       container.second->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(container.second->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, container.second->device_agent->cq);
     if (!status.ok()) {
         std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
     }
 }
 
-void Controller::MoveContainer(ContainerHandle *msvc, int cuda_device, bool to_edge, int replica) {
+void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device, int replica) {
     NodeHandle *old_device = msvc->device_agent;
     NodeHandle *device;
+    bool start_dsrc = false, merge_dsrc = false;
     if (to_edge) {
         device = msvc->upstreams[0]->device_agent;
+        if (msvc->mergable) {
+            merge_dsrc = true;
+            if (msvc->model == Yolov5n) {
+                msvc->model = Yolov5nDsrc;
+            } else if (msvc->model == Retinaface) {
+                msvc->model = RetinafaceDsrc;
+            }
+        }
     } else {
         device = &devices["server"];
+        if (msvc->mergable) {
+            start_dsrc = true;
+            if (msvc->model == Yolov5nDsrc) {
+                msvc->model = Yolov5n;
+            } else if (msvc->model == RetinafaceDsrc) {
+                msvc->model = Retinaface;
+            }
+        }
     }
     msvc->device_agent = device;
-    msvc->recv_port = device->next_free_port++;
+    msvc->recv_port[replica - 1] = device->next_free_port++;
     device->containers.insert({msvc->name, msvc});
-    msvc->cuda_device[replica -1] = cuda_device;
+    msvc->cuda_device[replica - 1] = cuda_device;
     std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
-    StartContainer(pair, msvc->task->slo, "");
+    StartContainer(pair, msvc->task->slo, msvc->task->source, replica, !(start_dsrc || merge_dsrc));
     for (auto upstr: msvc->upstreams) {
-        AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
+        if (start_dsrc) {
+            std::pair<std::string, ContainerHandle *> dsrc_pair = {upstr->name, upstr};
+            StartContainer(dsrc_pair, upstr->task->slo, msvc->task->source, replica, false);
+            SyncDatasource(msvc, upstr);
+        } else if (merge_dsrc) {
+            SyncDatasource(upstr, msvc);
+            StopContainer(upstr->name, old_device);
+        } else {
+            AdjustUpstream(msvc->recv_port[replica - 1], upstr, device, msvc->name);
+        }
     }
     StopContainer(msvc->name, old_device);
     old_device->containers.erase(msvc->name);
@@ -348,15 +265,23 @@ void Controller::AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *ne
     request.set_port(port);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(upstr->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, upstr->device_agent->cq);
 }
 
-void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs) {
-    msvc->batch_size = new_bs;
+void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
+    ContainerLink request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(prev->name);
+    request.set_downstream_name(curr->name);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            curr->device_agent->stub->AsyncSyncDatasource(&context, request, curr->device_agent->cq));
+    finishGrpc(rpc, reply, status, curr->device_agent->cq);
+}
+
+void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica) {
+    msvc->batch_size[replica - 1] = new_bs;
     ContainerInt request;
     ClientContext context;
     EmptyMessage reply;
@@ -365,11 +290,7 @@ void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs) {
     request.set_value(new_bs);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, msvc->device_agent->cq);
 }
 
 void Controller::StopContainer(std::string name, NodeHandle *device, bool forced) {
@@ -381,26 +302,7 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(device->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
-}
-
-/**
- * @brief Calculate queueing latency for each query coming to the preprocessor's queue, in microseconds
- * Queue type is expected to be M/D/1
- * 
- * @param arrival_rate 
- * @param preprocess_rate 
- * @return uint64_t 
- */
-inline uint64_t calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate) {
-    float rho = arrival_rate / preprocess_rate;
-    float numQueriesInSystem = rho / (1 - rho);
-    float averageQueueLength = rho * rho / (1 - rho);
-    return (uint64_t) (averageQueueLength / arrival_rate * 1000000);
+    finishGrpc(rpc, reply, status, device->cq);
 }
 
 /**
@@ -411,13 +313,13 @@ inline uint64_t calculateQueuingLatency(const float &arrival_rate, const float &
  * @param modelType 
  */
 void Controller::estimateModelLatency(PipelineModel &model, const ModelType modelType) {
-    uint64_t preprocessLatency = model.modelProfile.preprocessorLatency;
+    uint64_t preprocessLatency = model.processProfile.p95prepLat;
     BatchSizeType batchSize = model.batchSize;
     uint64_t inferLatency = InferTimeEstimator(modelType, batchSize);
-    uint64_t postprocessLatency =  model.modelProfile.postprocessorLatency;
+    uint64_t postprocessLatency =  model.processProfile.p95postLat;
     float preprocessRate = 1000000.f / preprocessLatency;
 
-    model.expectedQueueingLatency = calculateQueuingLatency(model.arrivalRate, preprocessRate);
+    model.expectedQueueingLatency = calculateQueuingLatency(model.arrivalProfile.arrivalRates, preprocessRate);
     model.expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
     model.expectedMaxProcessLatency = preprocessLatency * batchSize + inferLatency * batchSize + postprocessLatency * batchSize;
     model.estimatedPerQueryCost = model.expectedAvgPerQueryLatency + model.expectedQueueingLatency + model.expectedTransmitLatency;
@@ -460,10 +362,10 @@ void Controller::estimatePipelineLatency(PipelineModelListType &pipeline, const 
  */
 void Controller::incNumReplicas(PipelineModel &model) {
     uint8_t numReplicas = model.numReplicas;
-    uint64_t inferenceLatency = model.modelProfile.inferenceLatency[model.batchSize];
-    float indiProcessRate = 1 / (inferenceLatency + model.modelProfile.preprocessorLatency + model.modelProfile.postprocessorLatency);
+    uint64_t inferenceLatency = model.processProfile.batchInfer[model.batchSize].p95inferLat;
+    float indiProcessRate = 1 / (inferenceLatency + model.processProfile.p95prepLat + model.processProfile.p95postLat);
     float processRate = indiProcessRate * numReplicas;
-    while (processRate < model.arrivalRate) {
+    while (processRate < model.arrivalProfile.arrivalRates) {
         numReplicas++;
         processRate = indiProcessRate * numReplicas;
     }
@@ -477,14 +379,14 @@ void Controller::incNumReplicas(PipelineModel &model) {
  */
 void Controller::decNumReplicas(PipelineModel &model) {
     uint8_t numReplicas = model.numReplicas;
-    uint64_t inferenceLatency = model.modelProfile.inferenceLatency[model.batchSize];
-    float indiProcessRate = 1 / (inferenceLatency + model.modelProfile.preprocessorLatency + model.modelProfile.postprocessorLatency);
+    uint64_t inferenceLatency = model.processProfile.batchInfer[model.batchSize].p95inferLat;
+    float indiProcessRate = 1 / (inferenceLatency + model.processProfile.p95prepLat + model.processProfile.p95postLat);
     float processRate = indiProcessRate * numReplicas;
     while (numReplicas > 1) {
         numReplicas--;
         processRate = indiProcessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if (processRate < model.arrivalRate) {
+        if (processRate < model.arrivalProfile.arrivalRates) {
             numReplicas++;
             break;
         }
@@ -492,8 +394,23 @@ void Controller::decNumReplicas(PipelineModel &model) {
     model.numReplicas = numReplicas;
 }
 
+/**
+ * @brief Calculate queueing latency for each query coming to the preprocessor's queue, in microseconds
+ * Queue type is expected to be M/D/1
+ * 
+ * @param arrival_rate 
+ * @param preprocess_rate 
+ * @return uint64_t 
+ */
+uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate) {
+    float rho = arrival_rate / preprocess_rate;
+    float numQueriesInSystem = rho / (1 - rho);
+    float averageQueueLength = rho * rho / (1 - rho);
+    return (uint64_t) (averageQueueLength / arrival_rate * 1000000);
+}
+
 void Controller::optimizeBatchSizeStep(
-        const std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> &models,
+        const Pipeline &models,
         std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
     ModelType candidate;
     int max_saving = 0;
@@ -606,15 +523,16 @@ void Controller::shiftModelToEdge(PipelineModelListType &models, const ModelType
     PipelineModelListType tmp_models = models;
     std::string startDevice = tmp_models.begin()->second.device;
     std::string currDevice = tmp_models.at(currModel).device;
-    std::string currModelName = MODEL_INFO[currModel][0].substr(1);
+    std::string currModelName = ctrl_containerLib[currModel].taskName.substr(1);
 
     if (currDevice != startDevice) {
-        int inputSize = tmp_models.at(currModel).modelProfile.avgInputSize;
-        int outputSize = tmp_models.at(currModel).modelProfile.avgOutputSize;
+        int inputSize = tmp_models.at(currModel).processProfile.p95InputSize;
+        int outputSize = tmp_models.at(currModel).processProfile.p95OutputSize;
         if (inputSize * 0.8 < outputSize) {
             tmp_models.at(currModel).device = startDevice;
             for (auto &d: tmp_models.at(currModel).downstreams) {
-                tmp_models.at(currModel).expectedTransmitLatency = queryTransmitLatency(tmp_models.at(d.first).modelProfile.avgInputSize, startDevice, currDevice);
+                //TODO: update the transmit latency
+                tmp_models.at(currModel).expectedTransmitLatency = 0;
             }
             estimatePipelineLatency(tmp_models, tmp_models.begin()->first, 0);
             uint64_t expectedE2ELatency = tmp_models.at(ModelType::Sink).expectedStart2HereLatency;
@@ -631,63 +549,63 @@ void Controller::shiftModelToEdge(PipelineModelListType &models, const ModelType
 
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
-    tasks.insert({t.name, {t.slo, t.type, {}}});
-    TaskHandle *task = &tasks[t.name];
-    NodeHandle *device = &devices[t.device];
-    auto models = getModelsByPipelineType(t.type, t.device);
-    ArrivalRateType arrival_rates;
+    // tasks.insert({t.name, {t.slo, t.type, {}}});
+    // TaskHandle *task = &tasks[t.name];
+    // NodeHandle *device = &devices[t.device];
+    // auto models = getModelsByPipelineType(t.type, t.device);
+    // ArrivalRateType arrival_rates;
 
-    ScaleFactorType scale_factors;
-    // Query arrival rates of individual models
-    for (auto &m: models) {
-        arrival_rates = {
-            {1, -1}, //1 second
-            {3, -1},
-            {7, -1},
-            {15, -1},
-            {30, -1},
-            {60, -1}
-        };
+    // ScaleFactorType scale_factors;
+    // // Query arrival rates of individual models
+    // for (auto &m: models) {
+    //     arrival_rates = {
+    //         {1, -1}, //1 second
+    //         {3, -1},
+    //         {7, -1},
+    //         {15, -1},
+    //         {30, -1},
+    //         {60, -1}
+    //     };
 
-        scale_factors = {
-            {1, 1},
-            {3, 1},
-            {7, 1},
-            {15, 1},
-            {30, 1},
-            {60, 1}
-        };
+    //     scale_factors = {
+    //         {1, 1},
+    //         {3, 1},
+    //         {7, 1},
+    //         {15, 1},
+    //         {30, 1},
+    //         {60, 1}
+    //     };
 
-        // Get the name of the model
-        // substr(1) is used to remove the colon at the beginning of the model name
-        std::string model_name = t.name + "_" + MODEL_INFO[std::get<0>(m)][0].substr(1);
+    //     // Get the name of the model
+    //     // substr(1) is used to remove the colon at the beginning of the model name
+    //     std::string model_name = t.name + "_" + MODEL_INFO[std::get<0>(m)][0].substr(1);
 
-        // Query the request rate for each time period
-        queryRequestRateInPeriod(model_name + "_arrival_table", arrival_rates);
-        // Query the scale factor (ratio of number of outputs / each input) for each time period
-        queryScaleFactorInPeriod(model_name + "_process_table", scale_factors);
+    //     // Query the request rate for each time period
+    //     queryRequestRateInPeriod(model_name + "_arrival_table", arrival_rates);
+    //     // Query the scale factor (ratio of number of outputs / each input) for each time period
+    //     queryScaleFactorInPeriod(model_name + "_process_table", scale_factors);
 
-        m.second.arrivalRate = std::max_element(arrival_rates.begin(), arrival_rates.end(),
-                                              [](const std::pair<int, float> &p1, const std::pair<int, float> &p2) {
-                                                  return p1.second < p2.second;
-                                              })->second;
-        m.second.scaleFactors = scale_factors;
-        m.second.modelProfile = queryModelProfile(model_name, DEVICE_INFO[device->type]);
-        m.second.expectedTransmitLatency = queryTransmitLatency(m.second.modelProfile.avgInputSize, t.source, m.second.device);
-    }
+    //     m.second.arrivalRate = std::max_element(arrival_rates.begin(), arrival_rates.end(),
+    //                                           [](const std::pair<int, float> &p1, const std::pair<int, float> &p2) {
+    //                                               return p1.second < p2.second;
+    //                                           })->second;
+    //     m.second.scaleFactors = scale_factors;
+    //     m.second.modelProfile = queryModelProfile(model_name, DEVICE_INFO[device->type]);
+    //     m.second.expectedTransmitLatency = queryTransmitLatency(m.second.modelProfile.avgInputSize, t.source, m.second.device);
+    // }
 
-    std::string tmp = t.name;
-    containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 9999, 0, 1, {-1}}});
-    task->subtasks.insert({tmp, &containers[tmp]});
-    task->subtasks[tmp]->recv_port = device->next_free_port++;
-    device->containers.insert({tmp, task->subtasks[tmp]});
-    device = &devices["server"];
+    // std::string tmp = t.name;
+    // containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 9999, 0, 1, {-1}}});
+    // task->subtasks.insert({tmp, &containers[tmp]});
+    // task->subtasks[tmp]->recv_port = device->next_free_port++;
+    // device->containers.insert({tmp, task->subtasks[tmp]});
+    // device = &devices["server"];
 
-    // Find an initial batch size and replica configuration that meets the SLO at the server
-    getInitialBatchSizes(models, t.slo, 10);
+    // // Find an initial batch size and replica configuration that meets the SLO at the server
+    // getInitialBatchSizes(models, t.slo, 10);
 
-    // Try to shift model to edge devices
-    shiftModelToEdge(models, ModelType::DataSource, t.slo);
+    // // Try to shift model to edge devices
+    // shiftModelToEdge(models, ModelType::DataSource, t.slo);
 
     // for (const auto &m: models) {
     //     tmp = t.name;
@@ -722,28 +640,28 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             return {
                 {
                     ModelType::DataSource, 
-                    {startDevice, true, 0, {}, {}, {{ModelType::Yolov5, 0}}}
+                    {startDevice, true, {}, {}, {{ModelType::Yolov5n, 0}}}
                 },
                 {
-                    ModelType::Yolov5,
+                    ModelType::Yolov5n,
                     {
-                        "server", true, 0, {}, {},       
-                        {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::Yolov5_Plate, 2}},
+                        "server", true, {}, {},       
+                        {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::PlateDet, 2}},
                         {{ModelType::DataSource, -1}}
                     },
                 },
                 {
                     ModelType::Retinaface, 
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Arcface,    -1}},
-                        {{ModelType::Yolov5, -1}}
+                        {{ModelType::Yolov5n, -1}}
                     }
                 },
                 {
                     ModelType::Arcface,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Sink,   -1}},
                         {{ModelType::Retinaface, -1}}
                     }
@@ -751,24 +669,24 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {
                     ModelType::CarBrand,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Sink,   -1}},
-                        {{ModelType::Yolov5, -1}}
+                        {{ModelType::Yolov5n, -1}}
                     }
                 },
                 {
-                    ModelType::Yolov5_Plate,
+                    ModelType::PlateDet,
                     {
-                        "server", false, 0, {}, {}, {{ModelType::Sink,   -1}},
-                        {{ModelType::Yolov5, -1}}
+                        "server", false, {}, {}, {{ModelType::Sink,   -1}},
+                        {{ModelType::Yolov5n, -1}}
                     }
                 },
                 {
                     ModelType::Sink,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {},
-                        {{ModelType::Arcface, -1}, {ModelType::CarBrand, -1}, {ModelType::Yolov5_Plate, -1}}
+                        {{ModelType::Arcface, -1}, {ModelType::CarBrand, -1}, {ModelType::PlateDet, -1}}
                     }
                 }
             };
@@ -776,12 +694,12 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             return {
                 {
                     ModelType::DataSource,
-                    {startDevice, true, 0, {}, {}, {{ModelType::Retinaface, 0}}}
+                    {startDevice, true, {}, {}, {{ModelType::Retinaface, 0}}}
                 },
                 {
                     ModelType::Retinaface,
                     {
-                        "server", true, 0, {}, {},
+                        "server", true, {}, {},
                         {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}},
                         {{ModelType::DataSource, -1}}
                     }
@@ -789,7 +707,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {
                     ModelType::Gender,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Sink,   -1}},
                         {{ModelType::Retinaface, -1}}
                     }
@@ -797,7 +715,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {
                     ModelType::Age,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Sink,   -1}},
                         {{ModelType::Retinaface, -1}}
                     }
@@ -805,7 +723,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {
                     ModelType::Emotionnet,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Sink,   -1}},
                         {{ModelType::Retinaface, -1}}
                     }
@@ -813,7 +731,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {
                     ModelType::Arcface,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Sink,   -1}},
                         {{ModelType::Retinaface, -1}}
                     }
@@ -821,7 +739,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {
                     ModelType::Sink,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {},
                         {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}
                     }
@@ -831,12 +749,12 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             return {
                 {
                     ModelType::DataSource,
-                    {startDevice, true, 0, {}, {}, {{ModelType::Yolov5, 0}}}
+                    {startDevice, true, {}, {}, {{ModelType::Yolov5n, 0}}}
                 },
                 {
-                    ModelType::Yolov5,
+                    ModelType::Yolov5n,
                     {
-                        "server", true, 0, {}, {},
+                        "server", true, {}, {},
                         {{ModelType::Retinaface, 0}},
                         {{ModelType::DataSource, -1}}
                     }
@@ -844,23 +762,23 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {
                     ModelType::Retinaface,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Gender,     -1}, {ModelType::Age, -1}},
-                        {{ModelType::Yolov5, -1}}
+                        {{ModelType::Yolov5n, -1}}
                     }
                 },
                 {
                     ModelType::Movenet,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Sink,   -1}},
-                        {{ModelType::Yolov5, -1}}
+                        {{ModelType::Yolov5n, -1}}
                     }
                 },
                 {
                     ModelType::Gender,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Sink,   -1}},
                         {{ModelType::Retinaface, -1}}
                     }
@@ -868,7 +786,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {
                     ModelType::Age,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {{ModelType::Sink,   -1}},
                         {{ModelType::Retinaface, -1}}
                     }
@@ -876,7 +794,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {
                     ModelType::Sink,
                     {
-                        "server", false, 0, {}, {},
+                        "server", false, {}, {},
                         {},
                         {{ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Movenet, -1}}
                     }
@@ -925,106 +843,115 @@ double Controller::LoadTimeEstimator(const char *model_path, double input_mem_si
     return out_result[0];
 }
 
-// returns the profiling results for inference time per frame in a full batch in nanoseconds
+
+/**
+ * @brief
+ *
+ * @param model to specify model
+ * @param batch_size for targeted batch size (binary)
+ * @return int for inference time per full batch in nanoseconds
+ */
 int Controller::InferTimeEstimator(ModelType model, int batch_size) {
-    std::map<int, int> time_per_frame;
-    switch (model) {
-        case ModelType::Yolov5:
-            time_per_frame = {{1,  3602348},
-                              {2,  2726377},
-                              {4,  2467065},
-                              {8,  2575456},
-                              {16, 3220761},
-                              {32, 4680154},
-                              {64, 7773959}};
-            break;
-        case ModelType::Yolov5Datasource:
-            time_per_frame = {{1,  3602348},
-                              {2,  2726377},
-                              {4,  2467065},
-                              {8,  2575456},
-                              {16, 3220761},
-                              {32, 4680154},
-                              {64, 7773959}};
-            break;
-        case ModelType::Retinaface:
-            time_per_frame = {{1,  1780280},
-                              {2,  1527410},
-                              {4,  1357906},
-                              {8,  1164929},
-                              {16, 2177011},
-                              {32, 3399701},
-                              {64, 8146690}};
-            break;
-        case ModelType::CarBrand:
-            time_per_frame = {{1,  4998407},
-                              {2,  3335101},
-                              {4,  2344440},
-                              {8,  2176385},
-                              {16, 2483317},
-                              {32, 2357686},
-                              {64, 1155050}};
-            break;
-        case ModelType::Yolov5_Plate:
-            time_per_frame = {{1,  7304176},
-                              {2,  4909581},
-                              {4,  3225549},
-                              {8,  2883803},
-                              {16, 2871236},
-                              {32, 2004165},
-                              {64, 3094331}};
-            break;
-        case ModelType::Movenet:
-            time_per_frame = {{1,  1644526},
-                              {2,  3459537},
-                              {4,  2703916},
-                              {8,  2377614},
-                              {16, 2647643},
-                              {32, 2900894},
-                              {64, 2197719}};
-            break;
-        case ModelType::Arcface:
-            time_per_frame = {{1,  18120029},
-                              {2,  11226197},
-                              {4,  7883673},
-                              {8,  6364369},
-                              {16, 5620677},
-                              {32, 3370018},
-                              {64, 3206726}};
-            break;
-        case ModelType::Emotionnet:
-            time_per_frame = {{1,  3394144},
-                              {2,  1365037},
-                              {4,  1615653},
-                              {8,  1967143},
-                              {16, 1500867},
-                              {32, 1665680},
-                              {64, 1957914}};
-            break;
-        case ModelType::Age:
-            time_per_frame = {{1,  14729041},
-                              {2,  9050828},
-                              {4,  6112501},
-                              {8,  5015442},
-                              {16, 3927934},
-                              {32, 3523500},
-                              {64, 2899034}};
-            break;
-        case ModelType::Gender:
-            time_per_frame = {{1,  1357500},
-                              {2,  831649},
-                              {4,  687484},
-                              {8,  749792},
-                              {16, 1021500},
-                              {32, 1800263},
-                              {64, 4002824}};
-            break;
-        default:
-            return 0;
+    return 0;
+}
+
+std::map<ModelType, std::vector<int>> Controller::InitialRequestCount(const std::string &input, const Pipeline &models,
+                                                                      int fps) {
+    std::map<ModelType, std::vector<int>> request_counts = {};
+    std::vector<int> fps_values = {fps, fps * 3, fps * 7, fps * 15, fps * 30, fps * 60};
+
+    request_counts[models[0].first] = fps_values;
+    json objectCount = json::parse(std::ifstream("../jsons/object_count.json"))[input];
+
+    for (const auto &m: models) {
+        if (m.first == ModelType::Sink) {
+            request_counts[m.first] = std::vector<int>(6, 0);
+            continue;
+        }
+
+        for (const auto &d: m.second) {
+            if (d.second == -1) {
+                request_counts[d.first] = request_counts[m.first];
+            } else {
+                std::vector<int> objects = (d.second == 0 ? objectCount["person"]
+                                                          : objectCount["car"]).get<std::vector<int>>();
+
+                for (int j: fps_values) {
+                    int count = std::accumulate(objects.begin(), objects.begin() + j, 0);
+                    request_counts[d.first].push_back(request_counts[m.first][0] * count);
+                }
+            }
+        }
     }
-    int i = 1;
-    while (i < batch_size) {
-        i *= 2;
+    return request_counts;
+}
+
+/**
+ * @brief '
+ * 
+ * @param node 
+ * @param minPacketSize bytes
+ * @param maxPacketSize bytes
+ * @param numLoops 
+ * @return NetworkEntryType 
+ */
+NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize, uint32_t numLoops) {
+    NetworkEntryType entries = {};
+    // TODO: Send a request to the device to perform network testing and wait for its response
+    for (auto i = 0; i < numLoops; i++) {
+        entries.emplace_back(std::pair<uint32_t, uint64_t>(0, 0));
     }
-    return time_per_frame[batch_size] * batch_size;
+    
+    return entries;
+};
+
+/**
+ * @brief Query the latest network entries for each device to determine the network conditions.
+ * If no such entries exists, send to each device a request for network testing.
+ * 
+ */
+void Controller::checkNetworkConditions() {
+    while (true) {
+        Stopwatch stopwatch;
+        stopwatch.start();
+        std::map<std::string, NetworkEntryType> networkEntries = {};
+        for (auto &[deviceName, nodeHandle] : devices) {
+            // Clearing old network entries as they are no longer relevant
+            std::unique_lock<std::mutex> lock(nodeHandle.nodeHandleMutex);
+            nodeHandle.latestNetworkEntries.clear();
+            networkEntries[deviceName] = {};
+        }
+        std::string tableName = abbreviate(ctrl_experimentName + "_" + ctrl_systemName) + "." + abbreviate(ctrl_experimentName + "_serv_netw");
+        std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
+                            "FROM %s ", tableName);
+
+        pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
+        //Getting the latest network entries into the networkEntries map
+        for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
+            std::string sender_host = row["sender_host"].as<std::string>();
+            std::pair<uint32_t, uint64_t> entry = {row["p95_transfer_duration_us"].as<uint32_t>(), row["p95_total_package_size_b"].as<uint64_t>()};
+            networkEntries[sender_host].emplace_back(entry);
+        }
+
+        // Updating NodeHandle object with the latest network entries
+        for (auto &[deviceName, entries] : networkEntries) {
+            // If entry belongs to a device that is not in the list of devices, ignore it
+            if (devices.find(deviceName) == devices.end()) {
+                continue;
+            }
+            std::unique_lock<std::mutex> lock(devices[deviceName].nodeHandleMutex);
+            devices[deviceName].latestNetworkEntries = entries;
+        }
+
+        // If no network entries exist for a device, send a request to the device to perform network testing
+        for (auto &[deviceName, nodeHandle] : devices) {
+            if (nodeHandle.latestNetworkEntries.size() == 0) {
+                // TODO: Send a request to the device to perform network testing
+
+            }
+        }
+
+        stopwatch.stop();
+        std::this_thread::sleep_for(TimePrecisionType(60 * 1000000 - stopwatch.elapsed_microseconds()));
+    }
 }

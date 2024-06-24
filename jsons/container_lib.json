@@ -1,0 +1,77 @@
+{
+    "DataSource": {
+        "taskName": "datasource",
+        "templateConfigPath": "../jsons/datasource.json",
+        "runCommand": "./Container_DataSource"
+    },
+    "Sink": {
+        "taskName": "sink",
+        "templateConfigPath": "",
+        "runCommand": "./runSink"
+    },
+    "Yolov5n": {
+        "taskName": "yolov5n",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5"
+    },
+    "Yolov5s": {
+        "taskName": "yolov5s",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5"
+    },
+    "Yolov5m": {
+        "taskName": "yolov5m",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5"
+    },
+    "Yolov5nDsrc": {
+        "taskName": "yolov5n-source",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5"
+    },
+    "Retinaface": {
+        "taskName": "retinaface",
+        "templateConfigPath": "../jsons/retina1face.json",
+        "runCommand": "./Container_RetinaFace"
+    },
+    "RetinafaceDsrc": {
+        "taskName": "retinaface-source",
+        "templateConfigPath": "../jsons/retina1face.json",
+        "runCommand": "./Container_RetinaFace"
+    },
+    "PlateDet": {
+        "taskName": "platedet",
+        "templateConfigPath": "../jsons/platedet.json",
+        "runCommand": "./Container_Yolov5-plate"
+    },
+    "Movenet": {
+        "taskName": "movenet",
+        "templateConfigPath": "../jsons/movenet.json",
+        "runCommand": "./Container_MoveNet"
+    },
+    "Emotionnet": {
+        "taskName": "emotionnet",
+        "templateConfigPath": "../jsons/emotionnet.json",
+        "runCommand": "./Container_EmotionNet"
+    },
+    "Arcface": {
+        "taskName": "arcface",
+        "templateConfigPath": "../jsons/arcface.json",
+        "runCommand": "./Container_ArcFace"
+    },
+    "Age": {
+        "taskName": "age",
+        "templateConfigPath": "../jsons/age.json",
+        "runCommand": "./Container_Age"
+    },
+    "Gender": {
+        "taskName": "gender",
+        "templateConfigPath": "../jsons/gender.json",
+        "runCommand": "./Container_Gender"
+    },
+    "CarBrand": {
+        "taskName": "carbrand",
+        "templateConfigPath": "../jsons/carbrand.json",
+        "runCommand": "./Container_CarBrand"
+    }
+}

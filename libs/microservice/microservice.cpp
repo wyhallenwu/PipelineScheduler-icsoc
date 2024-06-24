@@ -50,10 +50,18 @@ void msvcconfigs::to_json(json &j, const msvcconfigs::BaseMicroserviceConfigs &v
 void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     BaseMicroserviceConfigs configs = jsonConfigs.get<BaseMicroserviceConfigs>();
 
-    msvc_containerName = configs.msvc_contName;
-    msvc_idealBatchSize = configs.msvc_idealBatchSize;
-    msvc_dataShape = configs.msvc_dataShape;
+    // Identifiers
     msvc_name = configs.msvc_name;
+    msvc_containerName = configs.msvc_contName;
+    msvc_experimentName = jsonConfigs.at("msvc_experimentName");
+    msvc_pipelineName = jsonConfigs.at("msvc_pipelineName");
+    msvc_taskName = jsonConfigs.at("msvc_taskName");
+    msvc_hostDevice = jsonConfigs.at("msvc_hostDevice");
+    msvc_systemName = jsonConfigs.at("msvc_systemName");
+    msvc_idealBatchSize = configs.msvc_idealBatchSize;
+
+    // Configurations
+    msvc_dataShape = configs.msvc_dataShape;
     msvc_svcLevelObjLatency = configs.msvc_svcLevelObjLatency;
     msvc_type = configs.msvc_type;
     PAUSE_THREADS = true;
@@ -61,20 +69,38 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_deviceIndex = configs.msvc_deviceIndex;
     msvc_RUNMODE = configs.msvc_RUNMODE;
 
-    if (msvc_RUNMODE == RUNMODE::PROFILING) {
+    if (msvc_taskName != "dsrc") {
+        msvc_maxBatchSize = jsonConfigs.at("msvc_maxBatchSize");
+        msvc_allocationMode = static_cast<AllocationMode>(jsonConfigs.at("msvc_allocationMode"));
+    }
+
+
+    if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
+        msvc_numWarmupBatches = jsonConfigs.at("msvc_numWarmUpBatches");
+    } else if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        msvc_numWarmupBatches = jsonConfigs.at("profile_numWarmUpBatches");
+    }
+    // During profiling, we want to have at least 120 requests for warming ups
+    // Results before warming up are not reliable
+    if ((msvc_numWarmupBatches * msvc_idealBatchSize) < 120) {
+        msvc_numWarmupBatches = std::ceil(120 / msvc_idealBatchSize) + 1;
+    }
+
+    if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
         msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + ".txt";
     } else {
         msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + "_" + getTimestampString() + ".txt";
     }
 
-    
+
+    // Initialize the queues    
     if (isConstructing) {
         msvc_InQueue = {};
         msvc_OutQueue = {};
         msvc_outReqShape = {};
 
         for (auto it = configs.msvc_dnstreamMicroservices.begin(); it != configs.msvc_dnstreamMicroservices.end(); ++it) {
-            msvc_OutQueue.emplace_back(new ThreadSafeFixSizedDoubleQueue(configs.msvc_maxQueueSize, it->classOfInterest));
+            msvc_OutQueue.emplace_back(new ThreadSafeFixSizedDoubleQueue(configs.msvc_maxQueueSize, it->classOfInterest, it->name));
             // Create downstream neigbor config and push that into a list for information later
             // Local microservice supposedly has only 1 downstream but `receiver` microservices could have multiple senders.
             NeighborMicroservice dnStreamMsvc = NeighborMicroservice(*it, nummsvc_dnstreamMicroservices);
@@ -110,6 +136,7 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
  */
 Microservice::Microservice(const json &jsonConfigs) {
     Microservice::loadConfigs(jsonConfigs, true);
+    msvc_configs = jsonConfigs;
 }
 
 /**

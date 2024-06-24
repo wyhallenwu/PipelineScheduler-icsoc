@@ -9,9 +9,17 @@
 #include "controller.h"
 #include "indevicecommunication.grpc.pb.h"
 #include "controlcommunication.grpc.pb.h"
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <ifaddrs.h>
 
 using trt::TRTConfigs;
 
+ABSL_DECLARE_FLAG(std::string, dev_configPath);
+ABSL_DECLARE_FLAG(uint16_t, dev_verbose);
+ABSL_DECLARE_FLAG(uint16_t, dev_loggingMode);
+ABSL_DECLARE_FLAG(uint16_t, dev_port_offset);
 ABSL_DECLARE_FLAG(std::string, device_type);
 ABSL_DECLARE_FLAG(std::string, controller_url);
 
@@ -25,9 +33,10 @@ typedef std::tuple<
     QueueLengthType
 > MsvcConfigTupleType;
 
-struct ContainerHandle {
+struct DevContainerHandle {
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     CompletionQueue *cq;
+    unsigned int port;
     unsigned int pid;
 };
 
@@ -54,39 +63,46 @@ public:
     }
 
 private:
+    void testNetwork(int min_size, int max_size, int num_loops);
+
     bool CreateContainer(
             ModelType model,
-            std::string name,
+            std::string pipe_name,
             BatchSizeType batch_size,
+            std::vector<int> input_dims,
+            int replica_id,
+            int allocation_mode,
             int device,
             const MsvcSLOType &slo,
             const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
             const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
     );
 
-    static int runDocker(const std::string &executable, const std::string &name, const std::string &start_string,
+    int runDocker(const std::string &executable, const std::string &cont_name, const std::string &start_string,
                          const int &device, const int &port) {
         std::string command;
-        std::string container_name = name;
-        std::replace(container_name.begin(), container_name.end(), ':', '-');
-        command = "docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/app/data/  "
-                  "-v /ssd0/tung/PipePlusPlus/logs/:/app/logs/ -v /ssd0/tung/PipePlusPlus/models/:/app/models/ "
-                  "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
-                  "-d --rm --runtime nvidia --gpus all --name " +
+        command =
+                "docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/app/data/  "
+                "-v /ssd0/tung/PipePlusPlus/logs/:/app/logs/ -v /ssd0/tung/PipePlusPlus/models/:/app/models/ "
+                "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
+                "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
-                R"(%s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs')",
-                container_name, executable, name, start_string, device, port);
+                R"(%s pipeline-base-container %s --name %s --json='%s' --device %i --port %i --port_offset %i)",
+                system_name + "_" + cont_name, executable, cont_name, start_string, device, port, dev_port_offset) +
+                " --log_dir= ../logs --logging_mode 1";
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         return system(command.c_str());
     };
 
-    static void StopContainer(const ContainerHandle &container, bool forced = false);
+    static void StopContainer(const DevContainerHandle &container, bool forced = false);
 
-    void UpdateContainerSender(const std::string &name, const std::string &dwnstr, const std::string &ip,
+    void UpdateContainerSender(const std::string &cont_name, const std::string &dwnstr, const std::string &ip,
                                const int &port);
 
-    void Ready(const std::string &name, const std::string &ip, SystemDeviceType type);
+    void SyncDatasources(const std::string &cont_name, const std::string &dsrc);
+
+    void Ready(const std::string &cont_name, const std::string &ip, SystemDeviceType type);
 
     void HandleDeviceRecvRpcs();
 
@@ -145,6 +161,22 @@ private:
         grpc::ServerAsyncResponseWriter<ProcessData> responder;
     };
 
+    class ExecuteNetworkTestRequestHandler : public ControlRequestHandler {
+    public:
+        ExecuteNetworkTestRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                     DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        LoopRange request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+    };
+
     class StartContainerRequestHandler : public ControlRequestHandler {
     public:
         StartContainerRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
@@ -193,6 +225,22 @@ private:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
+    class SyncDatasourceRequestHandler : public ControlRequestHandler {
+    public:
+        SyncDatasourceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                       DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        ContainerLink request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+    };
+
     class UpdateBatchsizeRequestHandler : public ControlRequestHandler {
     public:
         UpdateBatchsizeRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
@@ -208,15 +256,26 @@ private:
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
+    ContainerLibType dev_containerLib;
+    SystemDeviceType dev_type;
+    DeviceInfoType dev_deviceInfo;
 
+    // Basic information
     std::string name;
     bool running;
-    int processing_units;
-    std::vector<double> utilization;
-    std::vector<double> mem_utilization;
-    std::map<std::string, ContainerHandle> containers;
+    std::string experiment_name;
+    std::string system_name;
+    int dev_port_offset;
+
+    // Runtime variables
+    std::map<std::string, DevContainerHandle> containers;
     std::vector<std::thread> threads;
 
+    // Profiling
+    std::vector<double> utilization;
+    std::vector<double> mem_utilization;
+
+    // Communication
     std::unique_ptr<ServerCompletionQueue> device_cq;
     std::unique_ptr<grpc::Server> device_server;
     InDeviceCommunication::AsyncService device_service;
@@ -228,6 +287,12 @@ private:
 
     // This will be mounted into the container to easily collect all logs.
     std::string dev_logPath = "../logs";
+    uint16_t dev_loggingMode = 0;
+    uint16_t dev_verbose = 0;
+
+    std::vector<spdlog::sink_ptr> dev_loggerSinks = {};
+    std::shared_ptr<spdlog::logger> dev_logger;    
+
     MetricsServerConfigs dev_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> dev_metricsServerConn = nullptr;
 };
