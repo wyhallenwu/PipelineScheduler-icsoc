@@ -27,6 +27,7 @@ ABSL_DECLARE_FLAG(std::optional<std::string>, json_path);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json_path);
 ABSL_DECLARE_FLAG(uint16_t, port);
+ABSL_DECLARE_FLAG(uint16_t, port_offset);
 ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
 ABSL_DECLARE_FLAG(uint16_t, logging_mode);
@@ -75,7 +76,7 @@ class ContainerAgent {
 public:
     ContainerAgent(const json &configs);
 
-    ~ContainerAgent() {
+    virtual ~ContainerAgent() {
         for (auto msvc: cont_msvcsList) {
             delete msvc;
         }

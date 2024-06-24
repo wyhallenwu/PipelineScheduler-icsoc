@@ -11,22 +11,22 @@
     },
     "Yolov5n": {
         "taskName": "yolov5n",
-        "templateConfigPath": "../jsons/yolov5n.json",
+        "templateConfigPath": "../jsons/yolov5.json",
         "runCommand": "./Container_Yolov5"
     },
     "Yolov5s": {
-        "taskName": "yolov5",
-        "templateConfigPath": "../jsons/yolov5s.json",
+        "taskName": "yolov5s",
+        "templateConfigPath": "../jsons/yolov5.json",
         "runCommand": "./Container_Yolov5"
     },
     "Yolov5m": {
-        "taskName": "yolov5",
-        "templateConfigPath": "../jsons/yolov5m.json",
+        "taskName": "yolov5m",
+        "templateConfigPath": "../jsons/yolov5.json",
         "runCommand": "./Container_Yolov5"
     },
     "Yolov5nDsrc": {
         "taskName": "yolov5n-source",
-        "templateConfigPath": "../jsons/yolov5n.json",
+        "templateConfigPath": "../jsons/yolov5.json",
         "runCommand": "./Container_Yolov5"
     },
     "Retinaface": {

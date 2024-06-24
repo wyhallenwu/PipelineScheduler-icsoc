@@ -378,7 +378,7 @@ enum MODEL_DATA_TYPE {
 enum ModelType {
     DataSource,
     Sink,
-    Yolov5n, // = Yolov5n
+    Yolov5n,
     Yolov5s,
     Yolov5m,
     Yolov5nDsrc,

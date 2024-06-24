@@ -6,8 +6,12 @@ ABSL_FLAG(std::string, dev_logPath, "../logs", "Path to the log dir for the Devi
 
 ABSL_FLAG(std::string, device_type, "", "string that identifies the device type");
 ABSL_FLAG(std::string, controller_url, "", "string that identifies the controller url without port!");
+ABSL_FLAG(uint16_t, dev_port_offset, 0, "port offset for starting the control communication");
 
 const int CONTAINER_BASE_PORT = 50001;
+const int CONTROLLER_BASE_PORT = 60001;
+const int DEVICE_CONTROL_PORT = 60002;
+const int INDEVICE_CONTROL_PORT = 60003;
 
 std::string getHostIP() {
     struct ifaddrs *ifAddrStruct = nullptr;
@@ -39,13 +43,14 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     name = n;
     utilization = {};
     mem_utilization = {};
+    dev_port_offset = absl::GetFlag(FLAGS_dev_port_offset);
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
     dev_metricsServerConfigs.password = "agent";
     dev_metricsServerConn = connectToMetricsServer(dev_metricsServerConfigs, "Device_agent");
 
-    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60003);
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", INDEVICE_CONTROL_PORT + dev_port_offset);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder device_builder;
@@ -54,13 +59,13 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     device_cq = device_builder.AddCompletionQueue();
     device_server = device_builder.BuildAndStart();
 
-    server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60002);
+    server_address = absl::StrFormat("%s:%d", "0.0.0.0", DEVICE_CONTROL_PORT + dev_port_offset);
     ServerBuilder controller_builder;
     controller_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     controller_builder.RegisterService(&controller_service);
     controller_cq = controller_builder.AddCompletionQueue();
     controller_server = controller_builder.BuildAndStart();
-    std::string target_str = absl::StrFormat("%s:%d", controller_url, 60001);
+    std::string target_str = absl::StrFormat("%s:%d", controller_url, CONTROLLER_BASE_PORT + dev_port_offset);
     controller_stub = ControlCommunication::NewStub(
             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
     controller_sending_cq = new CompletionQueue();
@@ -190,7 +195,7 @@ bool DeviceAgent::CreateContainer(
 
         // start container
         start_config["container"]["cont_pipeline"] = base_config;
-        unsigned int control_port = CONTAINER_BASE_PORT + containers.size();
+        unsigned int control_port = CONTAINER_BASE_PORT + dev_port_offset + containers.size();
         runDocker(executable, cont_name, to_string(start_config), device, control_port);
         std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
         containers[cont_name] = {InDeviceCommunication::NewStub(
@@ -293,6 +298,7 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
     }
     system_name = reply.name();
     experiment_name = reply.experiment();
+    dev_port_offset = reply.port_offset();
 }
 
 void DeviceAgent::HandleDeviceRecvRpcs() {
@@ -347,7 +353,7 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new ReportStartRequestHandler(service, cq, device_agent);
 
-        int pid = getContainerProcessPid(request.msvc_name());
+        int pid = getContainerProcessPid(device_agent->system_name + "_" + request.msvc_name());
         device_agent->containers[request.msvc_name()].pid = pid;
         spdlog::info("Received start report from {} with pid: {}", request.msvc_name(), pid);
 

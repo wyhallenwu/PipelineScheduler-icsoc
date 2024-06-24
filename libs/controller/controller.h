@@ -181,6 +181,7 @@ private:
     std::string ctrl_systemName;
     std::vector<TaskDescription::TaskStruct> initialTasks;
     uint16_t ctrl_runtime;
+    uint16_t ctrl_port_offset;
 
     std::string ctrl_logPath;
     uint16_t ctrl_loggingMode;

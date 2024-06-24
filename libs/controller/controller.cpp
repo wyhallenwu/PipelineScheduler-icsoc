@@ -6,6 +6,10 @@ ABSL_FLAG(uint16_t, ctrl_verbose, 0, "Verbosity level of the controller.");
 ABSL_FLAG(uint16_t, ctrl_loggingMode, 0, "Logging mode of the controller. 0:stdout, 1:file, 2:both");
 ABSL_FLAG(std::string, ctrl_logPath, "../logs", "Path to the log dir for the controller.");
 
+const int DATA_BASE_PORT = 55001;
+const int CONTROLLER_BASE_PORT = 60001;
+const int DEVICE_CONTROL_PORT = 60002;
+
 void Controller::readConfigFile(const std::string &path) {
     std::ifstream file(path);
     json j = json::parse(file);
@@ -13,6 +17,7 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_experimentName = j["expName"];
     ctrl_systemName = j["systemName"];
     ctrl_runtime = j["runtime"];
+    ctrl_port_offset = j["port_offset"];
     initialTasks = j["initial_pipelines"];
 
 }
@@ -64,7 +69,7 @@ Controller::Controller(int argc, char **argv) {
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
 
-    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60001);
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", CONTROLLER_BASE_PORT + ctrl_port_offset);
     ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
@@ -166,7 +171,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         service->RequestAdvertiseToController(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new DeviseAdvertisementHandler(service, cq, controller);
-        std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), 60002);
+        std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), DEVICE_CONTROL_PORT + controller->ctrl_port_offset);
         controller->devices.insert({request.device_name(),
                                     {request.ip_address(),
                                      ControlCommunication::NewStub(
@@ -175,9 +180,10 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      static_cast<SystemDeviceType>(request.device_type()),
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
-                                     std::vector<double>(request.processors(), 0.0), 55001, {}}});
+                                     std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset, {}}});
         reply.set_name(controller->ctrl_systemName);
         reply.set_experiment(controller->ctrl_experimentName);
+        reply.set_port_offset(controller->ctrl_port_offset);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

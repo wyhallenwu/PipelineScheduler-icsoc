@@ -5,7 +5,8 @@ ABSL_FLAG(std::optional<std::string>, json, std::nullopt, "configurations for mi
 ABSL_FLAG(std::optional<std::string>, json_path, std::nullopt, "json for configuration inside a file");
 ABSL_FLAG(std::optional<std::string>, trt_json, std::nullopt, "optional json for TRTConfiguration");
 ABSL_FLAG(std::optional<std::string>, trt_json_path, std::nullopt, "json for TRTConfiguration");
-ABSL_FLAG(uint16_t, port, 0, "server port for the service");
+ABSL_FLAG(uint16_t, port, 0, "control port for the service");
+ABSL_FLAG(uint16_t, port_offset, 0, "port offset for control communication");
 ABSL_FLAG(int16_t, device, 0, "Index of GPU device");
 ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
 ABSL_FLAG(uint16_t, logging_mode, 0, "0:stdout, 1:file, 2:both");
@@ -13,6 +14,7 @@ ABSL_FLAG(std::string, log_dir, "../logs", "Log path for the container");
 ABSL_FLAG(uint16_t, profiling_mode, 0,
           "flag to make the model running in profiling mode 0:deployment, 1:profiling, 2:empty_profiling");
 
+const int INDEVICE_CONTROL_PORT = 60003;
 
 std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::milliseconds> timePointCastMillisecond(
     std::chrono::system_clock::time_point tp) {
@@ -623,7 +625,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
     int own_port = containerConfigs.at("cont_port");
 
-    std::string server_address = absl::StrFormat("%s:%d", "localhost", own_port);
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", own_port);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder builder;
@@ -632,7 +634,8 @@ ContainerAgent::ContainerAgent(const json &configs) {
     server_cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
 
-    stub = InDeviceCommunication::NewStub(grpc::CreateChannel("localhost:60003", grpc::InsecureChannelCredentials()));
+    server_address = absl::StrFormat("%s:%d", "localhost", INDEVICE_CONTROL_PORT  + absl::GetFlag(FLAGS_port_offset));
+    stub = InDeviceCommunication::NewStub(grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
     sender_cq = new CompletionQueue();
 
     run = true;
