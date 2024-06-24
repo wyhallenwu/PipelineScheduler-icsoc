@@ -19,6 +19,7 @@ using trt::TRTConfigs;
 ABSL_DECLARE_FLAG(std::string, dev_configPath);
 ABSL_DECLARE_FLAG(uint16_t, dev_verbose);
 ABSL_DECLARE_FLAG(uint16_t, dev_loggingMode);
+ABSL_DECLARE_FLAG(uint16_t, dev_port_offset);
 ABSL_DECLARE_FLAG(std::string, device_type);
 ABSL_DECLARE_FLAG(std::string, controller_url);
 
@@ -35,7 +36,7 @@ typedef std::tuple<
 struct DevContainerHandle {
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     CompletionQueue *cq;
-    int port;
+    unsigned int port;
     unsigned int pid;
 };
 
@@ -62,14 +63,7 @@ public:
     }
 
 private:
-
-    void readConfigFile(const std::string &path) {
-        std::ifstream file(path);
-        json j = json::parse(file);
-
-        dev_experimentName = j["expName"];
-        dev_systemName = j["systemName"];
-    }
+    void testNetwork(int min_size, int max_size, int num_loops);
 
     bool CreateContainer(
             ModelType model,
@@ -84,19 +78,18 @@ private:
             const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
     );
 
-    static int runDocker(const std::string &executable, const std::string &cont_name, const std::string &start_string,
+    int runDocker(const std::string &executable, const std::string &cont_name, const std::string &start_string,
                          const int &device, const int &port) {
         std::string command;
-        std::string docker_name = cont_name;
         command =
                 "docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/app/data/  "
                 "-v /ssd0/tung/PipePlusPlus/logs/:/app/logs/ -v /ssd0/tung/PipePlusPlus/models/:/app/models/ "
                 "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
                 "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
-                R"(%s pipeline-base-container %s --name="%s" --json='%s' --device=%i --port=%i --log_dir='../logs ')",
-                docker_name, executable, cont_name, start_string, device, port);
-                // + "| ./outputbuffer.pl --lines 50";
+                R"(%s pipeline-base-container %s --name %s --json='%s' --device %i --port %i --port_offset %i)",
+                system_name + "_" + cont_name, executable, cont_name, start_string, device, port, dev_port_offset) +
+                " --log_dir= ../logs --logging_mode 1";
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         return system(command.c_str());
@@ -166,6 +159,22 @@ private:
         ProcessData request;
         ProcessData reply;
         grpc::ServerAsyncResponseWriter<ProcessData> responder;
+    };
+
+    class ExecuteNetworkTestRequestHandler : public ControlRequestHandler {
+    public:
+        ExecuteNetworkTestRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                     DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        LoopRange request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
     class StartContainerRequestHandler : public ControlRequestHandler {
@@ -247,10 +256,6 @@ private:
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
-
-    std::string dev_experimentName;
-    std::string dev_systemName;
-    
     ContainerLibType dev_containerLib;
     SystemDeviceType dev_type;
     DeviceInfoType dev_deviceInfo;
@@ -260,6 +265,7 @@ private:
     bool running;
     std::string experiment_name;
     std::string system_name;
+    int dev_port_offset;
 
     // Runtime variables
     std::map<std::string, DevContainerHandle> containers;

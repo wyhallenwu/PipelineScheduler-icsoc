@@ -21,7 +21,10 @@ using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
 using controlcommunication::ControlCommunication;
 using controlcommunication::ConnectionConfigs;
+using controlcommunication::SystemInfo;
 using controlcommunication::Neighbor;
+using controlcommunication::LoopRange;
+using controlcommunication::DummyMessage;
 using controlcommunication::ContainerConfig;
 using controlcommunication::ContainerLink;
 using controlcommunication::ContainerInt;
@@ -220,7 +223,7 @@ private:
     class RequestHandler {
     public:
         RequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq, Controller *c)
-                : service(service), cq(cq), status(CREATE), controller(c), responder(&ctx) {}
+                : service(service), cq(cq), status(CREATE), controller(c) {}
 
         virtual ~RequestHandler() = default;
 
@@ -235,15 +238,13 @@ private:
         ServerContext ctx;
         CallStatus status;
         Controller *controller;
-        EmptyMessage reply;
-        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
     class DeviseAdvertisementHandler : public RequestHandler {
     public:
         DeviseAdvertisementHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
                                    Controller *c)
-                : RequestHandler(service, cq, c) {
+                : RequestHandler(service, cq, c), responder(&ctx) {
             Proceed();
         }
 
@@ -251,6 +252,8 @@ private:
 
     private:
         ConnectionConfigs request;
+        SystemInfo reply;
+        grpc::ServerAsyncResponseWriter<SystemInfo> responder;
     };
 
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
@@ -281,6 +284,7 @@ private:
     std::string ctrl_systemName;
     std::vector<TaskDescription::TaskStruct> initialTasks;
     uint16_t ctrl_runtime;
+    uint16_t ctrl_port_offset;
 
     std::string ctrl_logPath;
     uint16_t ctrl_loggingMode;

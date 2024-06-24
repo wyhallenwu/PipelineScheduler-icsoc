@@ -6,6 +6,10 @@ ABSL_FLAG(uint16_t, ctrl_verbose, 0, "Verbosity level of the controller.");
 ABSL_FLAG(uint16_t, ctrl_loggingMode, 0, "Logging mode of the controller. 0:stdout, 1:file, 2:both");
 ABSL_FLAG(std::string, ctrl_logPath, "../logs", "Path to the log dir for the controller.");
 
+const int DATA_BASE_PORT = 55001;
+const int CONTROLLER_BASE_PORT = 60001;
+const int DEVICE_CONTROL_PORT = 60002;
+
 void Controller::readConfigFile(const std::string &path) {
     std::ifstream file(path);
     json j = json::parse(file);
@@ -13,6 +17,7 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_experimentName = j["expName"];
     ctrl_systemName = j["systemName"];
     ctrl_runtime = j["runtime"];
+    ctrl_port_offset = j["port_offset"];
     initialTasks = j["initial_pipelines"];
 
 }
@@ -67,7 +72,7 @@ Controller::Controller(int argc, char **argv) {
     tasks = std::map<std::string, TaskHandle>();
     containers = std::map<std::string, ContainerHandle>();
 
-    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60001);
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", CONTROLLER_BASE_PORT + ctrl_port_offset);
     ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
@@ -91,12 +96,13 @@ Controller::~Controller() {
 
 void Controller::HandleRecvRpcs() {
     new DeviseAdvertisementHandler(&service, cq.get(), this);
+    void *tag;
+    bool ok;
     while (running) {
-        void *tag;
-        bool ok;
         if (!cq->Next(&tag, &ok)) {
             break;
         }
+        GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
     }
 }
@@ -119,11 +125,14 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     // auto models = getModelsByPipelineType(t.type);
 
     // std::string tmp = t.name;
-    // containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 1, {0}}});
+
+    // containers.insert({tmp.append("_datasource"), {tmp, 0, DataSource, true,
+    //                                                ctrl_containerLib[DataSource].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0],
+    //                                                1, {15}, {0}, {0}, {}, device, task}});
     // task->subtasks.insert({tmp, &containers[tmp]});
-    // task->subtasks[tmp]->recv_port = device->next_free_port++;
+    // task->subtasks[tmp]->recv_port = {device->next_free_port++};
     // device->containers.insert({tmp, task->subtasks[tmp]});
-    // device = &devices["server"];
+    // NodeHandle *server = &devices["server"];
 
     // // TODO: get correct initial batch size, cuda devices, and number of replicas
     // auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
@@ -131,28 +140,33 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     // int replicas = 1;
     // for (const auto &m: models) {
     //     tmp = t.name;
-
+    //     std::vector<int> dims = m.first == Sink ? std::vector<int>(0)
+    //             : ctrl_containerLib[m.first].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
     //     containers.insert(
-    //             {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {cuda_device},
-    //                                                   -1, device->next_free_port++, {}, {}, {}, {}}});
+    //             {tmp.append("_" + ctrl_containerLib[m.first].taskName),
+    //              {tmp, -1, m.first, m.first == Yolov5n || m.first == Retinaface || m.first == Yolov5nDsrc || m.first == RetinafaceDsrc,
+    //               dims, replicas, {batch_sizes[m.first]}, {cuda_device}, {server->next_free_port++}, {}, server, task}});
     //     task->subtasks.insert({tmp, &containers[tmp]});
-    //     device->containers.insert({tmp, task->subtasks[tmp]});
+    //     server->containers.insert({tmp, task->subtasks[tmp]});
     // }
 
-    // task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
-    // task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
+    // task->subtasks[t.name + "_datasource"]->downstreams.push_back(
+    //         task->subtasks[t.name + "_" + ctrl_containerLib[models[0].first].taskName]);
+    // task->subtasks[t.name + "_" + ctrl_containerLib[models[0].first].taskName]->upstreams.push_back(
+    //         task->subtasks[t.name + "_datasource"]);
     // for (const auto &m: models) {
     //     for (const auto &d: m.second) {
     //         tmp = t.name;
-    //         task->subtasks[tmp.append(MODEL_INFO[d.first][0])]->class_of_interest = d.second;
-    //         task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + MODEL_INFO[m.first][0]]);
-    //         task->subtasks[t.name + MODEL_INFO[m.first][0]]->downstreams.push_back(task->subtasks[tmp]);
+    //         task->subtasks[tmp.append("_" + ctrl_containerLib[d.first].taskName)]->class_of_interest = d.second;
+    //         task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + "_" + ctrl_containerLib[m.first].taskName]);
+    //         task->subtasks[t.name + "_" + ctrl_containerLib[m.first].taskName]->downstreams.push_back(task->subtasks[tmp]);
     //     }
     // }
 
     // for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
     //     StartContainer(msvc, task->slo, t.source, replicas);
     // }
+    // task->start_time = std::chrono::system_clock::now();
 }
 
 void Controller::DeviseAdvertisementHandler::Proceed() {
@@ -170,10 +184,11 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      static_cast<SystemDeviceType>(request.device_type()),
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
-                                     std::vector<double>(request.processors(), 0.0), 55001, {}};
-        controller->devices.insert({request.device_name(),
-                                    node});
-        
+                                     std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset, {}};
+        controller->devices.insert({request.device_name(), node});
+        reply.set_name(controller->ctrl_systemName);
+        reply.set_experiment(controller->ctrl_experimentName);
+        reply.set_port_offset(controller->ctrl_port_offset);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -237,11 +252,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container.second->device_agent->stub->AsyncStartContainer(&context, request,
                                                                       container.second->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(container.second->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, container.second->device_agent->cq);
     if (!status.ok()) {
         std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
     }
@@ -306,11 +317,7 @@ void Controller::AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *ne
     request.set_port(port);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(upstr->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, upstr->device_agent->cq);
 }
 
 void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
@@ -322,11 +329,7 @@ void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
     request.set_downstream_name(curr->name);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             curr->device_agent->stub->AsyncSyncDatasource(&context, request, curr->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(curr->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, curr->device_agent->cq);
 }
 
 void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica) {
@@ -339,11 +342,7 @@ void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica)
     request.set_value(new_bs);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, msvc->device_agent->cq);
 }
 
 void Controller::StopContainer(std::string name, NodeHandle *device, bool forced) {
@@ -355,11 +354,7 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(device->cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, device->cq);
 }
 
 void Controller::optimizeBatchSizeStep(
@@ -644,133 +639,6 @@ double Controller::LoadTimeEstimator(const char *model_path, double input_mem_si
  * @return int for inference time per full batch in nanoseconds
  */
 int Controller::InferTimeEstimator(ModelType model, int batch_size) {
-    // std::map<int, int> time_per_frame;
-    // switch (model) {
-    //     case ModelType::Yolov5n:
-    //         time_per_frame = {{1,  3602348},
-    //                           {2,  2726377},
-    //                           {4,  2467065},
-    //                           {8,  2575456},
-    //                           {16, 3220761},
-    //                           {32, 4680154},
-    //                           {64, 7773959}};
-    //         break;
-    //     case ModelType::Yolov5n416:
-    //         time_per_frame = {{1,  2649396},
-    //                           {2,  2157968},
-    //                           {4,  1897505},
-    //                           {8,  2076971},
-    //                           {16, 2716276},
-    //                           {32, 4172530},
-    //                           {64, 7252059}};
-    //         break;
-    //     case ModelType::Yolov5s:
-    //         time_per_frame = {{1,  4515118},
-    //                           {2,  3399807},
-    //                           {4,  3044100},
-    //                           {8,  3008503},
-    //                           {16, 3672566},
-    //                           {32, 5116321},
-    //                           {64, 8237824}};
-    //         break;
-    //     case ModelType::Yolov5m:
-    //         time_per_frame = {{1,  7263238},
-    //                           {2,  5905167},
-    //                           {4,  4446144},
-    //                           {8,  4449675},
-    //                           {16, 4991818},
-    //                           {32, 6543270},
-    //                           {64, 9579015}};
-    //         break;
-    //     case ModelType::Yolov5nDsrc:
-    //         time_per_frame = {{1,  3602348},
-    //                           {2,  2726377},
-    //                           {4,  2467065},
-    //                           {8,  2575456},
-    //                           {16, 3220761},
-    //                           {32, 4680154},
-    //                           {64, 7773959}};
-    //         break;
-    //     case ModelType::Retinaface:
-    //         time_per_frame = {{1,  1780280},
-    //                           {2,  1527410},
-    //                           {4,  1357906},
-    //                           {8,  1164929},
-    //                           {16, 2177011},
-    //                           {32, 3399701},
-    //                           {64, 8146690}};
-    //         break;
-    //     case ModelType::CarBrand:
-    //         time_per_frame = {{1,  4998407},
-    //                           {2,  3335101},
-    //                           {4,  2344440},
-    //                           {8,  2176385},
-    //                           {16, 2483317},
-    //                           {32, 2357686},
-    //                           {64, 1155050}};
-    //         break;
-    //     case ModelType::PlateDet:
-    //         time_per_frame = {{1,  7304176},
-    //                           {2,  4909581},
-    //                           {4,  3225549},
-    //                           {8,  2883803},
-    //                           {16, 2871236},
-    //                           {32, 2004165},
-    //                           {64, 3094331}};
-    //         break;
-    //     case ModelType::Movenet:
-    //         time_per_frame = {{1,  1644526},
-    //                           {2,  3459537},
-    //                           {4,  2703916},
-    //                           {8,  2377614},
-    //                           {16, 2647643},
-    //                           {32, 2900894},
-    //                           {64, 2197719}};
-    //         break;
-    //     case ModelType::Arcface:
-    //         time_per_frame = {{1,  18120029},
-    //                           {2,  11226197},
-    //                           {4,  7883673},
-    //                           {8,  6364369},
-    //                           {16, 5620677},
-    //                           {32, 3370018},
-    //                           {64, 3206726}};
-    //         break;
-    //     case ModelType::Emotionnet:
-    //         time_per_frame = {{1,  3394144},
-    //                           {2,  1365037},
-    //                           {4,  1615653},
-    //                           {8,  1967143},
-    //                           {16, 1500867},
-    //                           {32, 1665680},
-    //                           {64, 1957914}};
-    //         break;
-    //     case ModelType::Age:
-    //         time_per_frame = {{1,  14729041},
-    //                           {2,  9050828},
-    //                           {4,  6112501},
-    //                           {8,  5015442},
-    //                           {16, 3927934},
-    //                           {32, 3523500},
-    //                           {64, 2899034}};
-    //         break;
-    //     case ModelType::Gender:
-    //         time_per_frame = {{1,  1357500},
-    //                           {2,  831649},
-    //                           {4,  687484},
-    //                           {8,  749792},
-    //                           {16, 1021500},
-    //                           {32, 1800263},
-    //                           {64, 4002824}};
-    //         break;
-    //     default:
-    //         return 0;
-    // }
-    // int i = 1;
-    // while (i < batch_size) {
-    //     i *= 2;
-    // }
-    // return time_per_frame[batch_size] * batch_size;
     return 0;
 }
 

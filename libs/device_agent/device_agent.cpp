@@ -1,14 +1,17 @@
 #include "device_agent.h"
 
-ABSL_FLAG(std::string, dev_configPath, "../jsons/example_experiment.json", "Path to the configuration file for this experiment.");
 ABSL_FLAG(uint16_t, dev_verbose, 0, "Verbosity level of the Device Agent.");
 ABSL_FLAG(uint16_t, dev_loggingMode, 0, "Logging mode of the Device Agent. 0:stdout, 1:file, 2:both");
 ABSL_FLAG(std::string, dev_logPath, "../logs", "Path to the log dir for the Device Agent.");
 
 ABSL_FLAG(std::string, device_type, "", "string that identifies the device type");
 ABSL_FLAG(std::string, controller_url, "", "string that identifies the controller url without port!");
+ABSL_FLAG(uint16_t, dev_port_offset, 0, "port offset for starting the control communication");
 
 const int CONTAINER_BASE_PORT = 50001;
+const int CONTROLLER_BASE_PORT = 60001;
+const int DEVICE_CONTROL_PORT = 60002;
+const int INDEVICE_CONTROL_PORT = 60003;
 
 std::string getHostIP() {
     struct ifaddrs *ifAddrStruct = nullptr;
@@ -40,40 +43,19 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     name = n;
     utilization = {};
     mem_utilization = {};
+    containers = std::map<std::string, DevContainerHandle>();
 
-    readConfigFile(absl::GetFlag(FLAGS_dev_configPath));
+    dev_port_offset = absl::GetFlag(FLAGS_dev_port_offset);
+    dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
+    dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
+    dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
     dev_metricsServerConfigs.password = "agent";
     dev_metricsServerConn = connectToMetricsServer(dev_metricsServerConfigs, "Device_agent");
 
-    dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
-    dev_logPath += "/" + dev_experimentName;
-    std::filesystem::create_directories(
-        std::filesystem::path(dev_logPath)
-    );
-
-    dev_logPath += "/" + dev_systemName;
-    std::filesystem::create_directories(
-        std::filesystem::path(dev_logPath)
-    );
-
-    dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
-    dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
-
-    setupLogger(
-        dev_logPath,
-        "controller",
-        dev_loggingMode,
-        dev_verbose,
-        dev_loggerSinks,
-        dev_logger
-    );
-
-    dev_containerLib = getContainerLib();
-
-    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60003);
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", INDEVICE_CONTROL_PORT + dev_port_offset);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder device_builder;
@@ -82,27 +64,72 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     device_cq = device_builder.AddCompletionQueue();
     device_server = device_builder.BuildAndStart();
 
-    server_address = absl::StrFormat("%s:%d", "0.0.0.0", 60002);
+    server_address = absl::StrFormat("%s:%d", "0.0.0.0", DEVICE_CONTROL_PORT + dev_port_offset);
     ServerBuilder controller_builder;
     controller_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     controller_builder.RegisterService(&controller_service);
     controller_cq = controller_builder.AddCompletionQueue();
     controller_server = controller_builder.BuildAndStart();
-    std::string target_str = absl::StrFormat("%s:%d", controller_url, 60001);
+    std::string target_str = absl::StrFormat("%s:%d", controller_url, CONTROLLER_BASE_PORT + dev_port_offset);
     controller_stub = ControlCommunication::NewStub(
             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
     controller_sending_cq = new CompletionQueue();
 
+    Ready(name, getHostIP(), type);
+
+    dev_logPath += "/" + experiment_name;
+    std::filesystem::create_directories(
+            std::filesystem::path(dev_logPath)
+    );
+
+    dev_logPath += "/" + system_name;
+    std::filesystem::create_directories(
+            std::filesystem::path(dev_logPath)
+    );
+
+    setupLogger(
+            dev_logPath,
+            "controller",
+            dev_loggingMode,
+            dev_verbose,
+            dev_loggerSinks,
+            dev_logger
+    );
+
+    dev_containerLib = getContainerLib();
+
     running = true;
-    containers = std::map<std::string, DevContainerHandle>();
     threads = std::vector<std::thread>();
     threads.emplace_back(&DeviceAgent::HandleDeviceRecvRpcs, this);
     threads.emplace_back(&DeviceAgent::HandleControlRecvRpcs, this);
     for (auto &thread: threads) {
         thread.detach();
     }
+}
 
-    Ready(name, getHostIP(), type);
+void DeviceAgent::testNetwork(int min_size, int max_size, int num_loops) {
+    spdlog::get("container_agent")->info("Testing network with min size: {}, max size: {}, num loops: {}",
+                                         min_size, max_size, num_loops);
+    DummyMessage request;
+    EmptyMessage reply;
+    ClientContext context;
+    Status status;
+    ClockType timestamp;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::normal_distribution<float> dist = std::normal_distribution<float>((min_size + max_size) / 2, (max_size - min_size) / 6);
+    for (int i = 0; i < num_loops; i++) {
+        timestamp = std::chrono::high_resolution_clock::now();
+        int size = std::round(dist(gen));
+        std::vector<char> data(size, 'a');
+        request.set_origin_name(name);
+        request.set_gen_time(timestamp.time_since_epoch().count());
+        request.set_data(data.data(), size);
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+                controller_stub->AsyncSendDummyData(&context, request, controller_sending_cq));
+        finishGrpc(rpc, reply, status, controller_sending_cq);
+    }
+    spdlog::get("container_agent")->trace("Network test completed");
 }
 
 bool DeviceAgent::CreateContainer(
@@ -153,7 +180,7 @@ bool DeviceAgent::CreateContainer(
             base_config[0]["msvc_dataShape"] = {input_dims};
             base_config[0]["msvc_type"] = 500;
         } else {
-            base_config[1]["msvc_dnstreamMicroservices"]["nb_expectedShape"] = {input_dims};
+            base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
         }
 
 
@@ -193,7 +220,7 @@ bool DeviceAgent::CreateContainer(
 
         // start container
         start_config["container"]["cont_pipeline"] = base_config;
-        int control_port = CONTAINER_BASE_PORT + containers.size();
+        unsigned int control_port = CONTAINER_BASE_PORT + dev_port_offset + containers.size();
         runDocker(executable, cont_name, to_string(start_config), device, control_port);
         std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
         containers[cont_name] = {InDeviceCommunication::NewStub(
@@ -214,11 +241,7 @@ void DeviceAgent::StopContainer(const DevContainerHandle &container, bool forced
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container.stub->AsyncStopExecution(&context, request, container.cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(container.cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, container.cq);
 }
 
 void DeviceAgent::UpdateContainerSender(const std::string &cont_name, const std::string &dwnstr, const std::string &ip,
@@ -232,11 +255,7 @@ void DeviceAgent::UpdateContainerSender(const std::string &cont_name, const std:
     request.set_port(port);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             containers[cont_name].stub->AsyncUpdateSender(&context, request, containers[cont_name].cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(containers[cont_name].cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, containers[cont_name].cq);
 }
 
 void DeviceAgent::SyncDatasources(const std::string &cont_name, const std::string &dsrc) {
@@ -247,16 +266,12 @@ void DeviceAgent::SyncDatasources(const std::string &cont_name, const std::strin
     request.set_value(containers[dsrc].port);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             containers[cont_name].stub->AsyncSyncDatasources(&context, request, containers[cont_name].cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(containers[cont_name].cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, containers[cont_name].cq);
 }
 
 void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, SystemDeviceType type) {
     ConnectionConfigs request;
-    EmptyMessage reply;
+    SystemInfo reply;
     ClientContext context;
     Status status;
     int processing_units;
@@ -283,42 +298,44 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
 
     utilization = std::vector<double>(processing_units, 0.0);
     mem_utilization = std::vector<double>(processing_units, 0.0);
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    std::unique_ptr<ClientAsyncResponseReader<SystemInfo>> rpc(
             controller_stub->AsyncAdvertiseToController(&context, request, controller_sending_cq));
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(controller_sending_cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
+    finishGrpc(rpc, reply, status, controller_sending_cq);
     if (!status.ok()) {
         spdlog::error("Ready RPC failed with code: {} and message: {}", status.error_code(), status.error_message());
         exit(1);
     }
+    system_name = reply.name();
+    experiment_name = reply.experiment();
+    dev_port_offset = reply.port_offset();
 }
 
 void DeviceAgent::HandleDeviceRecvRpcs() {
     new ReportStartRequestHandler(&device_service, device_cq.get(), this);
+    void *tag;
+    bool ok;
     while (running) {
-        void *tag;
-        bool ok;
         if (!device_cq->Next(&tag, &ok)) {
             break;
         }
+        GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
     }
 }
 
 void DeviceAgent::HandleControlRecvRpcs() {
+    new ExecuteNetworkTestRequestHandler(&controller_service, controller_cq.get(), this);
     new StartContainerRequestHandler(&controller_service, controller_cq.get(), this);
     new UpdateDownstreamRequestHandler(&controller_service, controller_cq.get(), this);
     new UpdateBatchsizeRequestHandler(&controller_service, controller_cq.get(), this);
     new StopContainerRequestHandler(&controller_service, controller_cq.get(), this);
+    void *tag;
+    bool ok;
     while (running) {
-        void *tag;
-        bool ok;
         if (!controller_cq->Next(&tag, &ok)) {
             break;
         }
+        GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
     }
 }
@@ -348,11 +365,25 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new ReportStartRequestHandler(service, cq, device_agent);
 
-        int pid = getContainerProcessPid(request.msvc_name());
+        int pid = getContainerProcessPid(device_agent->system_name + "_" + request.msvc_name());
         device_agent->containers[request.msvc_name()].pid = pid;
         spdlog::info("Received start report from {} with pid: {}", request.msvc_name(), pid);
-
         reply.set_pid(pid);
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void DeviceAgent::ExecuteNetworkTestRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestExecuteNetworkTest(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new ExecuteNetworkTestRequestHandler(service, cq, device_agent);
+        device_agent->testNetwork(request.min(), request.max(), request.repetitions());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

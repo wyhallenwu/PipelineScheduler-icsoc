@@ -25,6 +25,7 @@ uint64_t estimateNetworkLatency(pqxx::result &res, const uint32_t &totalPkgSize)
             return latency1 + t * (latency2 - latency1);
         }
     }
+    return 0;
 }
 
 /**
@@ -55,7 +56,7 @@ ModelArrivalProfile queryModelArrivalProfile(
 
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
-   
+
     std::string periodQuery;
     for (const auto &period: periods) {
         periodQuery += absl::StrFormat("recent_data.arrival_rate_%ds,", period);
@@ -77,7 +78,7 @@ ModelArrivalProfile queryModelArrivalProfile(
                         "FROM arrival_rate;";
     query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, periodQuery, streamName);
     std::cout << query << std::endl;
-    
+
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
         // If there is no historical data, we look for the rate of the most recent profiled data
@@ -246,7 +247,7 @@ void queryBatchInferLatency(
                             "FROM %s "
                             "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
                             "GROUP BY infer_batch_size;", tableName, streamName);
-    
+
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
         std::string profileTableName = abbreviate("prof__" + modelName + "__" + deviceName) + "_batch";
@@ -550,6 +551,7 @@ std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &m
         return metricsServerConn;
     } catch (const std::exception &e) {
         std::cerr << e.what() << std::endl;
+        return nullptr;
     }
 }
 
@@ -593,8 +595,8 @@ bool isHypertable(pqxx::connection &conn, const std::string &tableName) {
 bool tableExists(pqxx::connection &conn, const std::string &schemaName, const std::string &tableName) {
     pqxx::work txn(conn);
     std::string name = splitString(tableName, ".").back();
-    std::string query = 
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = " + txn.quote(schemaName) + 
+    std::string query =
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = " + txn.quote(schemaName) +
         " AND table_name = " + txn.quote(name) + ");";
     pqxx::result r = txn.exec(query);
     return r[0][0].as<bool>();
@@ -680,7 +682,7 @@ bool isFileEmpty(const std::string& filePath) {
 
     std::streamsize size = file.tellg();
     file.close();
-    
+
     return size == 0;
 }
 
@@ -694,7 +696,7 @@ ContainerLibType getContainerLib() {
         try {
             containerLib[model].taskName = j[modelName]["taskName"];
             std::string templatePath = j[modelName]["templateConfigPath"].get<std::string>();
-            if (!templatePath.empty() && !isFileEmpty(templatePath)) {    
+            if (!templatePath.empty() && !isFileEmpty(templatePath)) {
                 file = std::ifstream(templatePath);
                 containerLib[model].templateConfig = json::parse(file);
             } else {
