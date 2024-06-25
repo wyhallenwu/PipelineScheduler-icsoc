@@ -657,7 +657,7 @@ void ContainerAgent::ReportStart() {
     pid = reply.pid();
     spdlog::get("container_agent")->info("Container Agent started with pid: {0:d}", pid);
     if (cont_taskName != "dsrc" && cont_taskName != "sink" && cont_RUNMODE == RUNMODE::PROFILING) {
-        profiler = new Profiler({pid});
+        profiler = new Profiler({pid}, "profile");
         reportHwMetrics = true;
     }
 }
@@ -756,7 +756,7 @@ void ContainerAgent::collectRuntimeMetrics() {
         if (reportHwMetrics) {
             if (timePointCastMillisecond(startTime) >= timePointCastMillisecond(cont_metricsServerConfigs.nextHwMetricsScrapeTime) && pid > 0) {
                 Profiler::sysStats stats = profiler->reportAtRuntime(pid);
-                cont_hwMetrics = {stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
+                cont_hwMetrics = {stats.cpuUsage, stats.processMemoryUsage, stats.processMemoryUsage, stats.gpuUtilization,
                                              stats.gpuMemoryUsage};
 
                 metricsStopwatch.stop();

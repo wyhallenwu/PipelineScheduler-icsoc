@@ -17,31 +17,31 @@
 
 class Profiler {
 public:
-    Profiler(const std::vector<unsigned int> &pids);
+    Profiler(const std::vector<unsigned int> &pids, std::string mode);
     ~Profiler();
 
     void run();
 
     struct sysStats {
-        uint64_t timestamp = 0;
         int cpuUsage = 0;
-        int memoryUsage = 0;
-        int rssMemory = 0;
+        int processMemoryUsage = 0;
+        int deviceMemoryUsage = 0;
         unsigned int gpuUtilization = 0;
         unsigned int gpuMemoryUsage = 0;
     };
 
-    int getGpuCount() { return 1; };
-    std::vector<unsigned int> getGpuMemory() { return {0}; };
+    static int getGpuCount() { return 1; };
+    void addPid(unsigned int pid) { stats[pid] = sysStats(); };
+    static std::vector<unsigned int> getGpuMemory() { return {0}; };
 
     sysStats reportAtRuntime(unsigned int pid) {
-        std::lock_guard<std::mutex> lock(m); return stats; };
+        std::lock_guard<std::mutex> lock(m); return stats[pid]; };
 
 private:
     void jtop(const std::string &cmd);
     std::thread t;
     std::mutex m;
-    sysStats stats;
+    std::map<unsigned int, sysStats> stats;
 };
 
 

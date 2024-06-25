@@ -42,7 +42,6 @@ std::string getHostIP() {
 DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type) {
     dev_name = n;
     containers = std::map<std::string, DevContainerHandle>();
-    dev_profiler = new Profiler({});
 
     dev_port_offset = absl::GetFlag(FLAGS_dev_port_offset);
     dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
@@ -95,6 +94,8 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             dev_logger
     );
 
+    dev_profiler = new Profiler({getpid()}, "runtime");
+
     dev_containerLib = getContainerLib();
 
     running = true;
@@ -114,17 +115,14 @@ void DeviceAgent::collectRuntimeMetrics() {
         auto startTime = metricsStopwatch.getStartTime();
         uint64_t scrapeLatencyMillisec = 0;
         uint64_t timeDiff;
-        std::vector<Profiler::sysStats> stats = dev_profiler->reportDeviceStats();
-        for (int i = 0; i < stats.size(); i++) {
-            dev_runtimeMetrics[i].gpuUsage = stats[i].gpuUtilization;
-            dev_runtimeMetrics[i].gpuMemUsage = stats[i].gpuMemoryUsage;
-        }
         for (auto &container: containers) {
             if (container.second.pid > 0 && timePointCastMillisecond(startTime) >=
                 timePointCastMillisecond(dev_metricsServerConfigs.nextHwMetricsScrapeTime) && container.second.pid > 0) {
-                Profiler::sysStats stats = dev_profiler->reportAtRuntime(container.second.pid, container.second.pid);
-                container.second.hwMetrics = {stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
+                Profiler::sysStats stats = dev_profiler->reportAtRuntime(container.second.pid);
+                container.second.hwMetrics = {stats.cpuUsage, stats.processMemoryUsage, stats.processMemoryUsage, stats.gpuUtilization,
                                   stats.gpuMemoryUsage};
+                dev_runtimeMetrics[0].gpuUsage = stats.gpuUtilization;
+                dev_runtimeMetrics[0].gpuMemUsage = stats.deviceMemoryUsage;
                 metricsStopwatch.stop();
                 scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
                 dev_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() +
@@ -328,10 +326,9 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
     request.set_device_type(type);
     request.set_ip_address(ip);
     if (type == SystemDeviceType::Server) {
-        Profiler p = Profiler({});
-        processing_units = p.getGpuCount();
+        processing_units = dev_profiler->getGpuCount();
         request.set_processors(processing_units);
-        for (auto &mem: p.getGpuMemory()) {
+        for (auto &mem: dev_profiler->getGpuMemory()) {
             request.add_memory(mem);
         }
     } else {

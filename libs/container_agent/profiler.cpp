@@ -1,9 +1,9 @@
 #include "profiler.h"
 
-Profiler::Profiler(const std::vector<unsigned int> &pids) {
+Profiler::Profiler(const std::vector<unsigned int> &pids, std::string mode) {
     if (!pids.empty()) {
         int pid = pids[0];
-        std::string command = "python3 ../jetson_profiler.py " + std::to_string(pid);
+        std::string command = "python3 ../jetson_profiler.py " + mode + " " + std::to_string(pid);
         t = std::thread(&Profiler::jtop, this, command);
         t.detach();
     }
@@ -29,8 +29,8 @@ void Profiler::jtop(const std::string &cmd) {
             result.push_back(token);
         }
         std::lock_guard<std::mutex> lock(m);
-        stats = {0, std::stoi(result[0]), std::stoi(result[1]), std::stoi(result[1]), std::stoi(result[3]),
-                 std::stoi(result[2])};
+        stats[std::stoi(result[0])] = {std::stoi(result[1]), std::stoi(result[2]), std::stoi(result[5]), std::stoi(result[4]),
+                 std::stoi(result[3])};
         m.unlock();
         result = {};
     }
