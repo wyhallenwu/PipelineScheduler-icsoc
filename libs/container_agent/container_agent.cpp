@@ -55,7 +55,7 @@ json loadRunArgs(int argc, char **argv) {
     /**
      * @brief     If this is profiling, set configurations to the first batch size that should be profiled
      * This includes
-     * 1. Setting its name based on the template model path    
+     * 1. Setting its name based on the template model path
      * 2. Setting the batch size to the smallest profile batch size
      * 
      */
@@ -128,7 +128,7 @@ json loadRunArgs(int argc, char **argv) {
         /**
          * @brief     If this is profiling, set configurations to the first batch size that should be profiled
          * This includes
-         * 1. Setting its profile dir whose name is based on the template model path    
+         * 1. Setting its profile dir whose name is based on the template model path
          * 2. Setting the batch size to the smallest profile batch size
          * 
          */
@@ -880,31 +880,6 @@ void ContainerAgent::collectRuntimeMetrics() {
                 if (numEntries == 0) {
                     continue;
                 }
-
-
-
-                // sql = absl::StrFormat("INSERT INTO %s (postprocess_timestamps, "
-                //                       "stream, prep_duration_us, batch_duration_us, infer_duration_us, "
-                //                       "post_duration_us, infer_batch_size, input_size_b, output_size_b) VALUES ",
-                //                      cont_processTableName + "_f");
-                // for (int i = 0; i < numEntries; i++) {
-                //     sql += "(" + std::to_string(records.postEndTime[i].time_since_epoch().count()) + ", ";
-                //     sql += "'" + reqOriginStream + "', ";
-                //     sql += std::to_string(records.prepDuration[i]) + ", ";
-                //     sql += std::to_string(records.batchDuration[i]) + ", ";
-                //     sql += std::to_string(records.inferDuration[i]) + ", ";
-                //     sql += std::to_string(records.postDuration[i]) + ", ";
-                //     sql += std::to_string(records.inferBatchSize[i]) + ", ";
-                //     sql += std::to_string(records.inputSize[i]) + ", ";
-                //     sql += std::to_string(records.outputSize[i]) + ")";
-                //     if (i != numEntries - 1) {
-                //         sql += ", ";
-                //     }
-                // }
-
-                // pushSQL(*cont_metricsServerConn, sql.c_str());
-
-                // spdlog::get("container_agent")->trace("{0:s} pushed FULL PROCESS METRICS to the database.", cont_name);
 
                 // Construct the SQL statement
                 sql = absl::StrFormat("INSERT INTO %s (timestamps, stream", cont_processTableName);

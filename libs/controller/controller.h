@@ -284,6 +284,22 @@ private:
         grpc::ServerAsyncResponseWriter<SystemInfo> responder;
     };
 
+    class DummyDataRequestHandler : public RequestHandler {
+    public:
+        DummyDataRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                   Controller *c)
+                : RequestHandler(service, cq, c), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        DummyMessage request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+    };
+
     void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
                         std::string source, int replica = 1, bool easy_allocation = true);
 
@@ -323,6 +339,7 @@ private:
     std::map<std::string, NodeHandle> devices;
     std::map<std::string, TaskHandle> tasks;
     std::map<std::string, ContainerHandle> containers;
+    std::map<std::string, NetworkEntryType> network_check_buffer;
 
     ControlCommunication::AsyncService service;
     std::unique_ptr<grpc::Server> server;
