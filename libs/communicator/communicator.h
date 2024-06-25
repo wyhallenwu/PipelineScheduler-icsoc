@@ -18,7 +18,7 @@
 #include <chrono>
 
 #include "microservice.h"
-#include "pipelinescheduler.grpc.pb.h"
+#include "dataexchange.grpc.pb.h"
 
 using grpc::Channel;
 using grpc::Status;

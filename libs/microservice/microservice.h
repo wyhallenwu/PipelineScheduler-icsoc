@@ -142,7 +142,7 @@ private:
     bool isEmpty;
 
 public:
-    ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi, std::string name) : q_MaxSize(size), class_of_interest(coi), q_name(name) {}
+    ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi, std::string name) :  q_name(name), q_MaxSize(size), class_of_interest(coi) {}
 
     ~ThreadSafeFixSizedDoubleQueue() {
         std::queue<Request<LocalGPUReqDataType>>().swap(q_gpuQueue);
@@ -332,7 +332,7 @@ namespace msvcconfigs {
         // Receiver should have number smaller than 500
         Receiver = 0,
         // DataProcessor should have number between 500 and 1000
-        DataSource = 500,
+        DataReader = 500,
         ProfileGenerator = 501,
         DataSink = 502,
         // Preprocessor should have number between 1000 and 2000
@@ -439,7 +439,17 @@ public:
     ) {
         std::unique_lock<std::mutex> lock(mutex);
         ArrivalRecord * record = &records[{reqOriginStream, abbreviate(originDevice)}];
-        record->transferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
+        auto transferDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count();
+        // If transfer latency is 0 or negative, which only happens when time between devices are not properly synchronized
+        if (timestamps[3] <= timestamps[2]) {
+            if (record->transferDuration.empty() || lastTransferDuration == -1){
+                transferDuration = 0;
+            } else {
+                transferDuration = record->transferDuration.back();
+            }
+        }
+        record->transferDuration.emplace_back(transferDuration);
+        lastTransferDuration = transferDuration;
         record->outQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
         record->queueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
         record->arrivalTime.emplace_back(timestamps[2]);
@@ -460,6 +470,7 @@ public:
         currNumEntries = 0;
         return temp;
     }
+
     void setKeepLength(uint64_t keepLength) {
         std::unique_lock<std::mutex> lock(mutex);
         this->keepLength = std::chrono::milliseconds(keepLength);
@@ -467,6 +478,7 @@ public:
 
 private:
     std::mutex mutex;
+    int64_t lastTransferDuration = -1;
     ArrivalRecordType records;
     std::chrono::milliseconds keepLength;
     uint64_t totalNumEntries = 0, currNumEntries = 0;
@@ -582,6 +594,9 @@ public:
     // Name of the system (e.g., ours, SOTA1, SOTA2, etc.)
     std::string msvc_systemName;
 
+    void SetCurrFrameID(int id) {
+        msvc_currFrameID = id;
+    }
 
     void SetInQueue(std::vector<ThreadSafeFixSizedDoubleQueue *> queue) {
         msvc_InQueue = std::move(queue);
@@ -608,15 +623,9 @@ public:
         return nullptr;
     };
 
-    MicroserviceType getMsvcType() {
-        return msvc_type;
-    }
-
     virtual QueueLengthType GetOutQueueSize(int i) { return msvc_OutQueue[i]->size(); };
 
     int GetDroppedReqCount() const { return droppedReqCount; };
-
-    int GetArrivalRate() const { return msvc_interReqTime; };
 
     void stopThread() {
         STOP_THREADS = true;
@@ -641,12 +650,12 @@ public:
         return PAUSE_THREADS;
     }
 
-    RUNMODE checkMode() {
-        return msvc_RUNMODE;
-    }
-
     void setRELOAD() {
         RELOADING = true;
+    }
+
+    void setReady() {
+        READY = true;
     }
 
     /**
@@ -657,12 +666,6 @@ public:
     void setDevice() {
         setDevice(msvc_deviceIndex);
     }
-
-    void setInferenceShape(RequestShapeType shape) {
-        msvc_inferenceShape = shape;
-    }
-
-    virtual void setProfileConfigs(const json &profileConfigs) {};
 
     /**
      * @brief Set the Device index
@@ -679,14 +682,6 @@ public:
             }
             cudaFree(0);
         }
-    }
-
-    void setDeviceIndex(int8_t deviceIndex) {
-        msvc_deviceIndex = deviceIndex;
-    }
-
-    void setContainerLogPath(std::string dirPath) {
-        msvc_microserviceLogPath = dirPath + "/" + msvc_name;
     }
 
     virtual void dispatchThread() {};

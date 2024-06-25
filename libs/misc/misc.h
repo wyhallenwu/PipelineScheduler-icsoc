@@ -12,11 +12,15 @@
 #include "opencv2/opencv.hpp"
 #include <unordered_set>
 #include <pqxx/pqxx>
+#include <grpcpp/grpcpp.h>
 #include "absl/strings/str_format.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/flag.h"
 #include <fstream>
 
+using grpc::Status;
+using grpc::CompletionQueue;
+using grpc::ClientAsyncResponseReader;
 
 typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
@@ -160,10 +164,102 @@ struct BatchInferRecord : public Record {
 
 typedef std::map<std::pair<std::string, BatchSizeType>, BatchInferRecord> BatchInferRecordType;
 
+/**
+ * @brief 
+ * 
+ */
+struct PercentilesNetworkRecord {
+    uint32_t totalPkgSize = -1;
+    uint64_t transferDuration = -1;
+};
+
+/**
+ * @brief <<sender, receiver>, Record>
+ */
+typedef std::map<std::string, PercentilesNetworkRecord> NetworkRecordType;
+typedef std::vector<std::pair<uint32_t, uint64_t>> NetworkEntryType;
+
+uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &totalPkgSize);
+
+// Arrival rate coming to a certain model in the pipeline
+
+// Network profile between two devices
+struct NetworkProfile {
+    uint64_t p95OutQueueingDuration; // out queue before sender of the last container
+    uint64_t p95TransferDuration;
+    uint64_t p95QueueingDuration; // in queue of batcher of this container
+    uint32_t p95PackageSize;
+};
+
+// Device to device network profile
+typedef std::map<std::pair<std::string, std::string>, NetworkProfile> D2DNetworkProfile;
+
+// Arrival profile of a certain model
+struct ModelArrivalProfile {
+    // Network profile between two devices, one of which is the receiver host that runs the model
+    D2DNetworkProfile d2dNetworkProfile;
+    float arrivalRates;
+};
+
+// <<pipelineName, modelName>, ModelArrivalProfile>
+typedef std::map<std::pair<std::string, std::string>, ModelArrivalProfile> ModelArrivalProfileList;
+
+struct ModelProfile {
+    // p95 latency of preprocessing per query
+    uint64_t p95prepLat;
+    // p95 latency of batch inference per query
+    BatchInferProfileListType batchInfer;
+    // p95 latency of postprocessing per query
+    uint64_t p95postLat;
+    // Average size of incoming queries
+    int p95InputSize = 1; // bytes
+    // Average total size of outgoing queries
+    int p95OutputSize = 1; // bytes
+};
+
+
 //<reqOriginStream, Record>
 // Since each stream's content is unique, which causes unique process behaviors, 
 // we can use the stream name as the key to store the process records
 typedef std::map<std::string, ProcessRecord> ProcessRecordType;
+
+struct HardwareMetrics {
+    ClockType timestamp;
+    CpuUtilType cpuUsage = 0;
+    MemUsageType memUsage = 0;
+    MemUsageType rssMemUsage = 0;
+    GpuUtilType gpuUsage = 0;
+    GpuMemUsageType gpuMemUsage = 0;
+};
+
+struct SummarizedHardwareMetrics {
+    CpuUtilType cpuUsage = 0;
+    MemUsageType memUsage = 0;
+    MemUsageType rssMemUsage = 0;
+    GpuUtilType gpuUsage = 0;
+    GpuMemUsageType gpuMemUsage = 0;
+
+    bool metricsAvailable = false;
+
+    SummarizedHardwareMetrics& operator= (const SummarizedHardwareMetrics &metrics) {
+        metricsAvailable = true;
+        cpuUsage = std::max(metrics.cpuUsage, cpuUsage);
+        memUsage = std::max(metrics.memUsage, memUsage);
+        rssMemUsage = std::max(metrics.rssMemUsage, rssMemUsage);
+        gpuUsage = std::max(metrics.gpuUsage, gpuUsage);
+        gpuMemUsage = std::max(metrics.gpuMemUsage, gpuMemUsage);
+        return *this;
+    }
+
+    void clear() {
+        metricsAvailable = false;
+        cpuUsage = 0;
+        memUsage = 0;
+        rssMemUsage = 0;
+        gpuUsage = 0;
+        gpuMemUsage = 0;
+    }
+};
 
 typedef std::chrono::microseconds TimePrecisionType;
 
@@ -187,6 +283,7 @@ const std::vector<std::string> cocoClassNames = {
 };
 
 const std::map<std::string, std::string> keywordAbbrs {
+    {"batch", "batch"},
     {"server", "serv"},
     {"agxaviver", "agx"},
     {"agxavier1", "agx1"},
@@ -214,6 +311,7 @@ const std::map<std::string, std::string> keywordAbbrs {
     {"carbrand", "cbrd"},
     {"gender", "gndr"},
     {"emotion", "emtn"},
+    {"emotionnet", "emtn"},
     {"platedet", "pldt"},
     {"dynamic", "dyn"},
     {"3090", "39"}, // GPU name
@@ -261,11 +359,57 @@ struct MetricsServerConfigs {
 
 std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &metricsServerConfigs, const std::string &name);
 
+enum SystemDeviceType {
+    Server,
+    NXXavier,
+    AGXXavier,
+    OrinNano
+};
+
+typedef std::map<SystemDeviceType, std::string> DeviceInfoType;
+
+enum PipelineType {
+    Traffic,
+    Video_Call,
+    Building_Security
+};
+
 enum MODEL_DATA_TYPE {
     int8 = sizeof(uint8_t),
     fp16 = int(sizeof(float) / 2),
     fp32 = sizeof(float)
 };
+
+enum ModelType {
+    DataSource,
+    Sink,
+    Yolov5n,
+    Yolov5s,
+    Yolov5m,
+    Yolov5nDsrc,
+    Arcface,
+    Retinaface,
+    RetinafaceDsrc,
+    PlateDet,
+    Movenet,
+    Emotionnet,
+    Gender,
+    Age,
+    CarBrand
+};
+
+extern std::map<SystemDeviceType, std::string> SystemDeviceTypeList;
+extern std::map<ModelType, std::string> ModelTypeList;
+
+struct ContainerInfo {
+    std::string taskName;
+    nlohmann::json templateConfig;
+    std::string runCommand;
+};
+
+typedef std::map<ModelType, ContainerInfo> ContainerLibType;
+
+
 
 inline void checkCudaErrorCode(cudaError_t code, std::string func_name) {
     if (code != 0) {
@@ -384,5 +528,80 @@ bool tableExists(pqxx::connection &conn, const std::string &schemaName, const st
 std::string abbreviate(const std::string &keyphrase);
 
 bool confirmIntention(const std::string& message, const std::string& magicPhrase);
+
+ModelArrivalProfile queryModelArrivalProfile(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::string &modelName,
+    const std::string &senderHost,
+    const std::string &receiverHost,
+    const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
+);
+
+void queryBatchInferLatency(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName,
+    ModelProfile &profile
+);
+
+BatchInferProfileListType queryBatchInferLatency(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName
+);
+
+void queryPrePostLatency(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName,
+    ModelProfile &profile
+);
+
+void queryResourceRequirements(
+    pqxx::connection &metricsConn,
+    const std::string &deviceName,
+    const std::string &modelName,
+    ModelProfile &profile
+);
+
+ModelProfile queryModelProfile(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &modelName
+);
+bool isFileEmpty(const std::string& filePath);
+
+ContainerLibType getContainerLib();
+
+template <typename T>
+void finishGrpc(std::unique_ptr<ClientAsyncResponseReader<T>> &rpc, T &reply, Status &status, CompletionQueue *cq){
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(cq->Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+}
+
 
 #endif
