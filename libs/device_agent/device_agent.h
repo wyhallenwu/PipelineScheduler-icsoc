@@ -296,6 +296,7 @@ private:
 
     MetricsServerConfigs dev_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> dev_metricsServerConn = nullptr;
+    std::string dev_hwMetricsTableName;
 };
 
 #endif //DEVICE_AGENT_H

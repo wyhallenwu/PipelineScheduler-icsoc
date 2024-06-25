@@ -96,6 +96,27 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             std::filesystem::path(dev_logPath)
     );
 
+    dev_metricsServerConfigs.schema = dev_experiment_name + "_" + dev_system_name;
+    dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + dev_name + "_hwMetrics";
+
+    if (!tableExists(*dev_metricsServerConn, dev_metricsServerConfigs.schema, dev_hwMetricsTableName)) {
+        std::string sql = "CREATE TABLE IF NOT EXISTS " + dev_hwMetricsTableName + " ("
+                                                                                    "   timestamps BIGINT NOT NULL,"
+                                                                                    "   cpu_usage INT2 NOT NULL," // percentage (1-100)
+                                                                                    "   mem_usage INT NOT NULL," // Megabytes
+                                                                                    "   gpu_usage INT2 NOT NULL," // percentage (1-100)
+                                                                                    "   gpu_mem_usage INT NOT NULL," // Megabytes
+                                                                                    "   PRIMARY KEY (timestamps)"
+                                                                                    ");";
+        pushSQL(*dev_metricsServerConn, sql);
+
+        sql = "SELECT create_hypertable('" + dev_hwMetricsTableName + "', 'timestamps', if_not_exists => TRUE);";
+        pushSQL(*dev_metricsServerConn, sql);
+
+        sql = "CREATE INDEX ON " + dev_hwMetricsTableName + " (timestamps);";
+        pushSQL(*dev_metricsServerConn, sql);
+    }
+
     dev_profiler = new Profiler({});
 
     running = true;
