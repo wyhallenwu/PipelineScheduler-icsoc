@@ -6,14 +6,13 @@ Profiler::Profiler(const std::vector<unsigned int> &pids) {
         return;
     }
     pidOnDevices = std::map<unsigned int, nvmlDevice_t>();
+    cuda_devices = getDevices();
     if (!pids.empty()) {
-        auto devices = getDevices();
         for (const auto &pid: pids) {
-            setPidOnDevices(pid, devices);
+            setPidOnDevices(pid);
         }
     }
     nvmlInitialized = true;
-    running = false;
 }
 
 Profiler::~Profiler() {
@@ -25,42 +24,12 @@ Profiler::~Profiler() {
     }
 }
 
-void Profiler::run() {
-    running = true;
-    profilerThread = std::thread(&Profiler::collectStats, this);
-    profilerThread.detach();
-}
-
-
-void Profiler::stop() {
-    running = false;
-    profilerThread.join();
-}
-
-void Profiler::updatePids(const std::vector<unsigned int> &pids) {
-    bool restart = false;
-    if (running) {
-        stop();
-        restart = true;
-    }
-    pidOnDevices.clear();
-    stats.clear();
-    auto devices = getDevices();
-    for (const auto &pid: pids) {
-        setPidOnDevices(pid, devices);
-    }
-    if (restart) {
-        run();
-    }
-}
-
 void Profiler::addPid(unsigned int pid) {
-    setPidOnDevices(pid, getDevices());
+    setPidOnDevices(pid);
 }
 
 void Profiler::removePid(unsigned int pid) {
     pidOnDevices.erase(pid);
-    stats.erase(pid);
 }
 
 int Profiler::getGpuCount() {
@@ -93,16 +62,6 @@ std::vector<long> Profiler::getGpuMemory(int device_count) {
     return totalMemory;
 }
 
-std::vector<Profiler::sysStats> Profiler::getStats(unsigned int pid) const {
-    return stats.at(pid);
-}
-
-std::vector<Profiler::sysStats> Profiler::popStats(unsigned int pid) {
-    std::vector<Profiler::sysStats> statsCopy = stats[pid];
-    stats[pid] = std::vector<sysStats>();
-    return statsCopy;
-}
-
 Profiler::sysStats Profiler::reportAtRuntime(unsigned int cpu_pid, unsigned int gpu_pid) {
     sysStats value{};
     value.cpuUsage = getCPUInfo(cpu_pid);
@@ -116,29 +75,16 @@ Profiler::sysStats Profiler::reportAtRuntime(unsigned int cpu_pid, unsigned int 
     return value;
 }
 
-void Profiler::collectStats() {
-    uint64_t currentTime;
-    while (running) {
-        for (const auto &[pid, device]: pidOnDevices) {
-            currentTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-            auto cpu = getCPUInfo(pid);
-            auto memory = getMemoryInfo(pid);
-            auto gpu = getGPUInfo(pid, device);
-            auto pcie = getPcieInfo(device);
-            sysStats systemInfo{
-                    currentTime,
-                    cpu,
-                    memory.first,
-                    memory.second,
-                    gpu.gpuUtilization,
-                    gpu.memoryUtilization,
-                    (long) gpu.maxMemoryUsage / 1000000, // convert to MB
-                    pcie / 1000 // convert to MB/s
-            };
-            stats[pid].push_back(systemInfo);
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+std::vector<Profiler::sysStats> Profiler::reportDeviceStats() {
+    std::vector<Profiler::sysStats> deviceStats;
+    for (int i = 0; i < cuda_devices.size(); i++) {
+        sysStats value{};
+        nvmlAccountingStats_t gpu = getGPUInfo(0, cuda_devices[i]);
+        value.gpuUtilization = gpu.gpuUtilization;
+        value.gpuMemoryUsage = gpu.memoryUtilization;
+        deviceStats.push_back(value);
     }
+    return deviceStats;
 }
 
 bool Profiler::initializeNVML() {
@@ -188,8 +134,8 @@ std::vector<nvmlDevice_t> Profiler::getDevices() {
     return devices;
 }
 
-void Profiler::setPidOnDevices(unsigned int pid, std::vector<nvmlDevice_t> devices) {
-    for (const auto &device: devices) {
+void Profiler::setPidOnDevices(unsigned int pid) {
+    for (const auto &device: cuda_devices) {
         nvmlProcessInfo_t processes[64];
         unsigned int infoCount = 64;
         nvmlReturn_t result = nvmlDeviceGetComputeRunningProcesses(device, &infoCount, processes);
@@ -200,7 +146,6 @@ void Profiler::setPidOnDevices(unsigned int pid, std::vector<nvmlDevice_t> devic
         for (unsigned int j = 0; j < infoCount; j++) {
             if (processes[j].pid == pid) {
                 pidOnDevices[pid] = device;
-                stats[pid] = std::vector<sysStats>();
                 break;
             }
         }

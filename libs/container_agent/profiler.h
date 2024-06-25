@@ -39,12 +39,6 @@ public:
 
     ~Profiler();
 
-    void run();
-
-    void stop();
-
-    void updatePids(const std::vector<unsigned int> &pids);
-
     void addPid(unsigned int pid);
 
     void removePid(unsigned int pid);
@@ -56,22 +50,17 @@ public:
         int rssMemory = 0;
         unsigned int gpuUtilization = 0;
         unsigned int gpuMemoryUsage = 0;
-        long maxGpuMemoryUsage = 0;
-        unsigned int pcieThroughput = 0;
     };
 
     static int getGpuCount();
 
     static std::vector<long> getGpuMemory(int device_count);
 
-    [[nodiscard]] std::vector<sysStats> getStats(unsigned int pid) const;
-
-    std::vector<sysStats> popStats(unsigned int pid);
-
     sysStats reportAtRuntime(unsigned int cpu_pid, unsigned int gpu_pid);
 
+    std::vector<Profiler::sysStats> reportDeviceStats();
+
 private:
-    void collectStats();
 
     bool initializeNVML();
 
@@ -79,7 +68,7 @@ private:
 
     static std::vector<nvmlDevice_t> getDevices();
 
-    void setPidOnDevices(unsigned int pid, std::vector<nvmlDevice_t> devices);
+    void setPidOnDevices(unsigned int pid);
 
     bool cleanupNVML();
 
@@ -92,12 +81,10 @@ private:
     unsigned int getPcieInfo(nvmlDevice_t device);
 
     bool nvmlInitialized;
-    bool running;
-    std::thread profilerThread;
 
     std::map<unsigned int, LimitedPairQueue> prevCpuTimes;
+    std::vector<nvmlDevice_t> cuda_devices;
     std::map<unsigned int, nvmlDevice_t> pidOnDevices;
-    std::map<unsigned int, std::vector<sysStats>> stats;
 };
 
 

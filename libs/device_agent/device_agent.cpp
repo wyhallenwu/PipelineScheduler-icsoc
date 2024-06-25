@@ -114,6 +114,11 @@ void DeviceAgent::collectRuntimeMetrics() {
         auto startTime = metricsStopwatch.getStartTime();
         uint64_t scrapeLatencyMillisec = 0;
         uint64_t timeDiff;
+        std::vector<Profiler::sysStats> stats = dev_profiler->reportDeviceStats();
+        for (int i = 0; i < stats.size(); i++) {
+            dev_runtimeMetrics[i].gpuUsage = stats[i].gpuUtilization;
+            dev_runtimeMetrics[i].gpuMemUsage = stats[i].gpuMemoryUsage;
+        }
         for (auto &container: containers) {
             if (container.second.pid > 0 && timePointCastMillisecond(startTime) >=
                 timePointCastMillisecond(dev_metricsServerConfigs.nextHwMetricsScrapeTime) && container.second.pid > 0) {
