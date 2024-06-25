@@ -306,6 +306,42 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
 }
 
 /**
+ * @brief 
+ * 
+ * @param container calculating queue sizes for the container before its official deployment.
+ * @param modelType 
+ */
+void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType modelType) {
+    float preprocessRate = 1000000.f / container.expectedPreprocessLatency; // queries per second
+    float postprocessRate = 1000000.f / container.expectedPostprocessLatency; // qps
+    float inferRate = 1000000.f / (container.expectedInferLatency * container.batch_size[0]); // batch per second
+
+    QueueLengthType minimumQueueSize = 30;
+
+    // Receiver to Preprocessor
+    // Utilization of preprocessor
+    float preprocess_rho = container.arrival_rate / preprocessRate;
+    QueueLengthType preprocess_inQueueSize = std::max((QueueLengthType) std::ceil(preprocess_rho * preprocess_rho / (2 * (1 - preprocess_rho))), minimumQueueSize);
+    float preprocess_thrpt = std::min(preprocessRate, container.arrival_rate);
+
+    // Preprocessor to Inferencer
+    // Utilization of inferencer
+    float infer_rho = preprocess_thrpt / container.batch_size[0] / inferRate;
+    QueueLengthType infer_inQueueSize = std::max((QueueLengthType) std::ceil(infer_rho * infer_rho / (2 * (1 - infer_rho))), minimumQueueSize);
+    float infer_thrpt = std::min(inferRate, preprocess_thrpt / container.batch_size[0]); // batch per second
+
+    float postprocess_rho = (infer_thrpt * container.batch_size[0]) / postprocessRate;
+    QueueLengthType postprocess_inQueueSize = std::max((QueueLengthType) std::ceil(postprocess_rho * postprocess_rho / (2 * (1 - postprocess_rho))), minimumQueueSize);
+    float postprocess_thrpt = std::min(postprocessRate, infer_thrpt * container.batch_size[0]);
+
+    QueueLengthType sender_inQueueSize = postprocess_inQueueSize * container.batch_size[0];
+
+    container.queueSizes = {preprocess_inQueueSize, infer_inQueueSize, postprocess_inQueueSize, sender_inQueueSize};
+
+    container.expectedThroughput = postprocess_thrpt;
+}
+
+/**
  * @brief estimate the different types of latency, in microseconds
  * Due to batch inference's nature, the queries that come later has to wait for more time both in preprocessor and postprocessor.
  * 
@@ -322,7 +358,7 @@ void Controller::estimateModelLatency(PipelineModel &model, const ModelType mode
     model.expectedQueueingLatency = calculateQueuingLatency(model.arrivalProfile.arrivalRates, preprocessRate);
     model.expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
     model.expectedMaxProcessLatency = preprocessLatency * batchSize + inferLatency * batchSize + postprocessLatency * batchSize;
-    model.estimatedPerQueryCost = model.expectedAvgPerQueryLatency + model.expectedQueueingLatency + model.expectedTransmitLatency;
+    model.estimatedPerQueryCost = model.expectedAvgPerQueryLatency + model.expectedQueueingLatency + model.expectedTransferLatency;
 }
 
 /**
@@ -339,7 +375,7 @@ void Controller::estimatePipelineLatency(PipelineModelListType &pipeline, const 
     // to reach from each upstream.
     pipeline.at(currModel).expectedStart2HereLatency = std::max(
         pipeline.at(currModel).expectedStart2HereLatency,
-        start2HereLatency + pipeline.at(currModel).expectedMaxProcessLatency + pipeline.at(currModel).expectedTransmitLatency + pipeline.at(currModel).expectedQueueingLatency
+        start2HereLatency + pipeline.at(currModel).expectedMaxProcessLatency + pipeline.at(currModel).expectedTransferLatency + pipeline.at(currModel).expectedQueueingLatency
     );
 
     // Cost of the pipeline until the current model
@@ -532,7 +568,7 @@ void Controller::shiftModelToEdge(PipelineModelListType &models, const ModelType
             tmp_models.at(currModel).device = startDevice;
             for (auto &d: tmp_models.at(currModel).downstreams) {
                 //TODO: update the transmit latency
-                tmp_models.at(currModel).expectedTransmitLatency = 0;
+                tmp_models.at(currModel).expectedTransferLatency = 0;
             }
             estimatePipelineLatency(tmp_models, tmp_models.begin()->first, 0);
             uint64_t expectedE2ELatency = tmp_models.at(ModelType::Sink).expectedStart2HereLatency;
