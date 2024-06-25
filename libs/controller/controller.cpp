@@ -54,7 +54,7 @@ Controller::Controller(int argc, char **argv) {
             ctrl_logger
     );
 
-    ctrl_containerLib = getContainerLib();
+    ctrl_containerLib = getContainerLib("all");
 
     json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
     ctrl_metricsServerConfigs.from_json(metricsCfgs);
@@ -571,34 +571,34 @@ void Controller::getInitialBatchSizes(
  * @param slo
  */
 void Controller::shiftModelToEdge(PipelineModelListType &models, const ModelType &currModel, uint64_t slo) {
-    if (currModel == ModelType::Sink) {
-        return;
-    }
-    PipelineModelListType tmp_models = models;
-    std::string startDevice = tmp_models.begin()->second.device;
-    std::string currDevice = tmp_models.at(currModel).device;
-    std::string currModelName = ctrl_containerLib[currModel].taskName.substr(1);
+    // if (currModel == ModelType::Sink) {
+    //     return;
+    // }
+    // PipelineModelListType tmp_models = models;
+    // std::string startDevice = tmp_models.begin()->second.device;
+    // std::string currDevice = tmp_models.at(currModel).device;
+    // std::string currModelName = ctrl_containerLib[currModel].taskName.substr(1);
 
-    if (currDevice != startDevice) {
-        int inputSize = tmp_models.at(currModel).processProfile.p95InputSize;
-        int outputSize = tmp_models.at(currModel).processProfile.p95OutputSize;
-        if (inputSize * 0.8 < outputSize) {
-            tmp_models.at(currModel).device = startDevice;
-            for (auto &d: tmp_models.at(currModel).downstreams) {
-                //TODO: update the transmit latency
-                tmp_models.at(currModel).expectedTransferLatency = 0;
-            }
-            estimatePipelineLatency(tmp_models, tmp_models.begin()->first, 0);
-            uint64_t expectedE2ELatency = tmp_models.at(ModelType::Sink).expectedStart2HereLatency;
-            // if after shifting the model to the edge device, the pipeline still meets the SLO, we should keep it
-            if (expectedE2ELatency < slo) {
-                models = tmp_models;
-            }
-        }
-    }
-    for (auto &d: tmp_models.at(currModel).downstreams) {
-        shiftModelToEdge(tmp_models, d.first, slo);
-    }
+    // if (currDevice != startDevice) {
+    //     int inputSize = tmp_models.at(currModel).processProfile.p95InputSize;
+    //     int outputSize = tmp_models.at(currModel).processProfile.p95OutputSize;
+    //     if (inputSize * 0.8 < outputSize) {
+    //         tmp_models.at(currModel).device = startDevice;
+    //         for (auto &d: tmp_models.at(currModel).downstreams) {
+    //             //TODO: update the transmit latency
+    //             tmp_models.at(currModel).expectedTransferLatency = 0;
+    //         }
+    //         estimatePipelineLatency(tmp_models, tmp_models.begin()->first, 0);
+    //         uint64_t expectedE2ELatency = tmp_models.at(ModelType::Sink).expectedStart2HereLatency;
+    //         // if after shifting the model to the edge device, the pipeline still meets the SLO, we should keep it
+    //         if (expectedE2ELatency < slo) {
+    //             models = tmp_models;
+    //         }
+    //     }
+    // }
+    // for (auto &d: tmp_models.at(currModel).downstreams) {
+    //     shiftModelToEdge(tmp_models, d.first, slo);
+    // }
 }
 
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {

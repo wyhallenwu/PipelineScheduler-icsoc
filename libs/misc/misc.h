@@ -403,11 +403,13 @@ extern std::map<ModelType, std::string> ModelTypeList;
 
 struct ContainerInfo {
     std::string taskName;
+    std::string modelName;
+    std::string modelPath;
     nlohmann::json templateConfig;
     std::string runCommand;
 };
 
-typedef std::map<ModelType, ContainerInfo> ContainerLibType;
+typedef std::map<std::string, ContainerInfo> ContainerLibType;
 
 
 
@@ -592,7 +594,17 @@ ModelProfile queryModelProfile(
 );
 bool isFileEmpty(const std::string& filePath);
 
-ContainerLibType getContainerLib();
+std::string getDeviceTypeAbbr(const SystemDeviceType &deviceType);
+
+std::string getContainerName(const SystemDeviceType& deviceType, const ModelType& modelType);
+
+/**
+ * @brief Get the Container Lib object
+ * 
+ * @param deviceName "all" for controller, a specifc type for each device
+ * @return ContainerLibType 
+ */
+ContainerLibType getContainerLib(const std::string& deviceType);
 
 template <typename T>
 void finishGrpc(std::unique_ptr<ClientAsyncResponseReader<T>> &rpc, T &reply, Status &status, CompletionQueue *cq){

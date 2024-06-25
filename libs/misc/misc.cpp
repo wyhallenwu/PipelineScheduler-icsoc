@@ -716,26 +716,41 @@ bool isFileEmpty(const std::string& filePath) {
     return size == 0;
 }
 
+std::string getContainerName(const SystemDeviceType& deviceType, const ModelType& modelType) {
+    std::string deviceAbbr = abbreviate(SystemDeviceTypeList.at(deviceType));
+    std::string modelAbbr = ModelTypeList.at(modelType);
+    return modelAbbr + "-" + deviceAbbr;
+}
 
-ContainerLibType getContainerLib() {
+std::string getDeviceTypeAbbr(const SystemDeviceType &deviceType) {
+    return abbreviate(SystemDeviceTypeList.at(deviceType));
+}
+
+ContainerLibType getContainerLib(const std::string& deviceType) {
     ContainerLibType containerLib;
     std::ifstream file("../jsons/container_lib.json");
     json j = json::parse(file);
     file.close();
-    for (auto &[model, modelName]: ModelTypeList) {
+    for (const auto item : j.items()) {
+        std::string containerName = item.key();
+        if (containerName.find(deviceType) == std::string::npos && deviceType != "all") {
+            continue;
+        }
         try {
-            containerLib[model].taskName = j[modelName]["taskName"];
-            std::string templatePath = j[modelName]["templateConfigPath"].get<std::string>();
+            containerLib[containerName].taskName = j[containerName]["taskName"];
+            std::string templatePath = j[containerName]["templateConfigPath"].get<std::string>();
             if (!templatePath.empty() && !isFileEmpty(templatePath)) {
-                file = std::ifstream(templatePath);
-                containerLib[model].templateConfig = json::parse(file);
+                std::ifstream file = std::ifstream(templatePath);
+                containerLib[containerName].templateConfig = json::parse(file);
             } else {
-                spdlog::get("container_agent")->error("Template config file for {0:s} is empty or does not exist.", modelName);
+                spdlog::get("container_agent")->error("Template config file for {0:s} is empty or does not exist.", containerName);
             }
-            containerLib[model].runCommand = j[modelName]["runCommand"];
+            containerLib[containerName].runCommand = j[containerName]["runCommand"];
+            containerLib[containerName].modelPath = j[containerName]["modelPath"];
+            containerLib[containerName].modelName = splitString(containerLib[containerName].modelPath, "/").back();
         } catch (json::exception &e) {
-            spdlog::get("container_agent")->error("Error parsing template config file for {0:s}: {1:}", modelName, e.what());
-            containerLib.erase(model);
+            spdlog::get("container_agent")->error("Error parsing template config file for {0:s}: {1:}", containerName, e.what());
+            containerLib.erase(containerName);
         }
     }
     spdlog::get("container_agent")->info("Container Library Loaded");

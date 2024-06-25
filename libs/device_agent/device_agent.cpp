@@ -42,12 +42,22 @@ std::string getHostIP() {
 DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type) {
     dev_name = n;
     containers = std::map<std::string, DevContainerHandle>();
-    dev_profiler = new Profiler({});
 
     dev_port_offset = absl::GetFlag(FLAGS_dev_port_offset);
     dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
     dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
     dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
+
+    setupLogger(
+        dev_logPath,
+        "device_agent",
+        dev_loggingMode,
+        dev_verbose,
+        dev_loggerSinks,
+        dev_logger
+    );
+
+    dev_containerLib = getContainerLib(abbreviate(SystemDeviceTypeList[type]));
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
@@ -86,16 +96,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             std::filesystem::path(dev_logPath)
     );
 
-    setupLogger(
-            dev_logPath,
-            "controller",
-            dev_loggingMode,
-            dev_verbose,
-            dev_loggerSinks,
-            dev_logger
-    );
-
-    dev_containerLib = getContainerLib();
+    dev_profiler = new Profiler({});
 
     running = true;
     threads = std::vector<std::thread>();
@@ -193,10 +194,11 @@ bool DeviceAgent::CreateContainer(
         const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
         const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
 ) {
+    std::string modelName = getContainerName(dev_type, model);
     try {
-        std::string cont_name = abbreviate(pipe_name + "_" + dev_containerLib[model].taskName + "_" + std::to_string(replica_id));
+        std::string cont_name = abbreviate(pipe_name + "_" + dev_containerLib[modelName].taskName + "_" + std::to_string(replica_id));
         std::cout << "Creating container: " << cont_name << std::endl;
-        std::string executable = dev_containerLib[model].runCommand;
+        std::string executable = dev_containerLib[modelName].runCommand;
         json start_config;
         if (model == ModelType::Sink) {
             start_config["experimentName"] = dev_experiment_name;
@@ -206,7 +208,7 @@ bool DeviceAgent::CreateContainer(
             return true;
         }
 
-        start_config = dev_containerLib[model].templateConfig;
+        start_config = dev_containerLib[modelName].templateConfig;
 
         // adjust container configs
         start_config["container"]["cont_experimentName"] = dev_experiment_name;
