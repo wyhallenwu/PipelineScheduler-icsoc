@@ -680,10 +680,10 @@ bool confirmIntention(const std::string &message, const std::string &magicPhrase
 }
 
 std::map<SystemDeviceType, std::string> SystemDeviceTypeList = {
-    {Server, "Server"},
-    {NXXavier, "NXXavier"},
-    {AGXXavier, "AGXXavier"},
-    {OrinNano, "OrinNano"}
+    {Server, "server"},
+    {NXXavier, "nxavier"},
+    {AGXXavier, "agxavier"},
+    {OrinNano, "orinano"}
 };
 
 std::map<ModelType, std::string> ModelTypeList = {
