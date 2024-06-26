@@ -58,10 +58,21 @@ Controller::Controller(int argc, char **argv) {
 
     json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
     ctrl_metricsServerConfigs.from_json(metricsCfgs);
-    ctrl_metricsServerConfigs.schema = ctrl_experimentName + "_" + ctrl_systemName;
+    ctrl_metricsServerConfigs.schema = abbreviate(ctrl_experimentName + "_" + ctrl_systemName);
     ctrl_metricsServerConfigs.user = "controller";
     ctrl_metricsServerConfigs.password = "agent";
     ctrl_metricsServerConn = connectToMetricsServer(ctrl_metricsServerConfigs, "controller");
+
+    std::string sql = "CREATE SCHEMA IF NOT EXISTS " + ctrl_metricsServerConfigs.schema + ";";
+    pushSQL(*ctrl_metricsServerConn, sql);
+    sql = "GRANT USAGE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
+    pushSQL(*ctrl_metricsServerConn, sql);
+    sql = "GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
+    pushSQL(*ctrl_metricsServerConn, sql);
+    sql = "GRANT CREATE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
+    pushSQL(*ctrl_metricsServerConn, sql);
+    sql = "ALTER DEFAULT PRIVILEGES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " GRANT SELECT, INSERT ON TABLES TO device_agent, container_agent;";
+    pushSQL(*ctrl_metricsServerConn, sql);
 
     std::thread networkCheckThread(&Controller::checkNetworkConditions, this);
     networkCheckThread.detach();
