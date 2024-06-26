@@ -976,6 +976,7 @@ NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t m
  * 
  */
 void Controller::checkNetworkConditions() {
+    std::this_thread::sleep_for(TimePrecisionType(60 * 1000000));
     while (running) {
         Stopwatch stopwatch;
         stopwatch.start();
