@@ -48,15 +48,6 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
     dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
 
-    setupLogger(
-        dev_logPath,
-        "device_agent",
-        dev_loggingMode,
-        dev_verbose,
-        dev_loggerSinks,
-        dev_logger
-    );
-
     dev_containerLib = getContainerLib(abbreviate(SystemDeviceTypeList[type]));
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
@@ -84,8 +75,6 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
     controller_sending_cq = new CompletionQueue();
 
-    dev_profiler = new Profiler({});
-
     Ready(dev_name, getHostIP(), type);
 
     dev_logPath += "/" + dev_experiment_name;
@@ -96,6 +85,15 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     dev_logPath += "/" + dev_system_name;
     std::filesystem::create_directories(
             std::filesystem::path(dev_logPath)
+    );
+
+    setupLogger(
+            dev_logPath,
+            "device_agent",
+            dev_loggingMode,
+            dev_verbose,
+            dev_loggerSinks,
+            dev_logger
     );
 
     dev_metricsServerConfigs.schema = abbreviate(dev_experiment_name + "_" + dev_system_name);
@@ -126,13 +124,12 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     if (!tableExists(*dev_metricsServerConn, dev_metricsServerConfigs.schema, dev_hwMetricsTableName)) {
         std::string sql = "CREATE TABLE IF NOT EXISTS " + dev_hwMetricsTableName + " ("
                                                                                     "   timestamps BIGINT NOT NULL,"
-                                                                                    "   cpu_usage INT," // percentage (1-100)
-                                                                                    "   mem_usage INT,"; // Megabytes
-        for (auto i = 0; i < dev_numCudaDevices; i++) {
-            sql += "gpu_" + std::to_string(i) + "_usage INT," // percentage (1-100)
-                   "gpu_" + std::to_string(i) + "_mem_usage INT,"; // Megabytes
-        };
-        sql += "   PRIMARY KEY (timestamps)"
+                                                                                    "   cuda_device_id INT1 NOT NULL,"
+                                                                                    "   cpu_usage INT2 NOT NULL," // percentage (1-100)
+                                                                                    "   mem_usage INT NOT NULL," // Megabytes
+                                                                                    "   gpu_usage INT2 NOT NULL," // percentage (1-100)
+                                                                                    "   gpu_mem_usage INT NOT NULL," // Megabytes
+                                                                                    "   PRIMARY KEY (timestamps)"
                                                                                     ");";
         pushSQL(*dev_metricsServerConn, sql);
 
@@ -142,6 +139,8 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
         sql = "CREATE INDEX ON " + dev_hwMetricsTableName + " (timestamps);";
         pushSQL(*dev_metricsServerConn, sql);
     }
+
+    dev_profiler = new Profiler({});
 
     running = true;
     threads = std::vector<std::thread>();
@@ -170,7 +169,7 @@ void DeviceAgent::collectRuntimeMetrics() {
         auto startTime = metricsStopwatch.getStartTime();
         uint64_t scrapeLatencyMillisec = 0;
         uint64_t timeDiff;
-        
+
 
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextHwMetricsScrapeTime)) {
@@ -209,7 +208,7 @@ void DeviceAgent::collectRuntimeMetrics() {
         startTime = metricsStopwatch.getStartTime();
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextMetricsReportTime)) {
-            
+
             if (dev_runtimeMetrics.size() == 0) {
                 spdlog::get("container_agent")->trace("{0:s} No runtime metrics to push to the database.", dev_name);
                 dev_metricsServerConfigs.nextMetricsReportTime = std::chrono::high_resolution_clock::now() +
@@ -219,7 +218,7 @@ void DeviceAgent::collectRuntimeMetrics() {
             }
             sql = "INSERT INTO " + dev_hwMetricsTableName +
                   " (timestamps, cpu_usage, mem_usage";
-            
+
             for (int i = 0; i < dev_numCudaDevices; i++) {
                 sql += ", gpu_" + std::to_string(i) + "_usage, gpu_" + std::to_string(i) + "_mem_usage";
             }
