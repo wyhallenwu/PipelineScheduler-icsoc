@@ -719,7 +719,6 @@ std::vector<float> getRatesInPeriods(const std::vector<ClockType> &timestamps, c
 
 
 void ContainerAgent::collectRuntimeMetrics() {
-    std::vector<int> queueSizes;
     int lateCount;
     ArrivalRecordType arrivalRecords;
     ProcessRecordType processRecords;
@@ -775,9 +774,6 @@ void ContainerAgent::collectRuntimeMetrics() {
                 timePointCastMillisecond(cont_metricsServerConfigs.nextMetricsReportTime)) {
             Stopwatch pushMetricsStopWatch;
             pushMetricsStopWatch.start();
-            for (auto msvc: cont_msvcsList) {
-                queueSizes.push_back(msvc->GetOutQueueSize(0));
-            }
             lateCount = cont_msvcsList[1]->GetDroppedReqCount();
 
             std::string modelName = cont_msvcsList[2]->getModelName();

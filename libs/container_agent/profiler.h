@@ -74,9 +74,13 @@ private:
 
     int getCPUInfo(unsigned int pid);
 
+    int getDeviceCPUInfo();
+
     std::pair<int, int> getMemoryInfo(unsigned int pid);
 
-    nvmlAccountingStats_t getGPUInfo(unsigned int pid, nvmlDevice_t device);
+    int getDeviceMemoryInfo();
+
+    nvmlUtilization_t getGPUInfo(unsigned int pid, nvmlDevice_t device);
 
     unsigned int getPcieInfo(nvmlDevice_t device);
 
