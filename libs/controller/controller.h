@@ -63,7 +63,7 @@ struct NodeHandle {
     int next_free_port;
     std::map<std::string, ContainerHandle *> containers;
     // The latest network entries to determine the network conditions and latencies of transferring data
-    NetworkEntryType latestNetworkEntries = {};
+    std::map<std::string, NetworkEntryType> latestNetworkEntries = {};
     std::mutex nodeHandleMutex;
 
     NodeHandle() = default;
@@ -350,6 +350,8 @@ private:
 
     std::vector<spdlog::sink_ptr> ctrl_loggerSinks = {};
     std::shared_ptr<spdlog::logger> ctrl_logger;
+
+    std::map<std::string, NetworkEntryType> ctrl_inDeviceNetworkEntries;
 };
 
 
