@@ -274,7 +274,7 @@ private:
     Profiler *dev_profiler;
     std::map<std::string, DevContainerHandle> containers;
     std::vector<std::thread> threads;
-    std::vector<SummarizedHardwareMetrics> dev_runtimeMetrics;
+    std::vector<DeviceHardwareMetrics> dev_runtimeMetrics;
 
     // Communication
     std::unique_ptr<ServerCompletionQueue> device_cq;
@@ -297,6 +297,9 @@ private:
     MetricsServerConfigs dev_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> dev_metricsServerConn = nullptr;
     std::string dev_hwMetricsTableName;
+    std::string dev_networkTableName;
+
+    uint16_t dev_numCudaDevices;
 };
 
 #endif //DEVICE_AGENT_H

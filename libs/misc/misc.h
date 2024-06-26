@@ -232,6 +232,15 @@ struct HardwareMetrics {
     GpuMemUsageType gpuMemUsage = 0;
 };
 
+struct DeviceHardwareMetrics {
+    ClockType timestamp;
+    CpuUtilType cpuUsage = 0;
+    MemUsageType memUsage = 0;
+    MemUsageType rssMemUsage = 0;
+    std::vector<GpuUtilType> gpuUsage;
+    std::vector<GpuMemUsageType> gpuMemUsage;
+};
+
 struct SummarizedHardwareMetrics {
     CpuUtilType cpuUsage = 0;
     MemUsageType memUsage = 0;
