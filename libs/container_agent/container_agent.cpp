@@ -310,6 +310,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
     cont_pipeName = containerConfigs["cont_pipeName"].get<std::string>();
     cont_taskName = containerConfigs["cont_taskName"].get<std::string>();
     cont_hostDevice = containerConfigs["cont_hostDevice"].get<std::string>();
+    cont_hostDeviceType = containerConfigs["cont_hostDeviceType"].get<std::string>();
     cont_systemName = containerConfigs["cont_systemName"].get<std::string>();
 
     cont_deviceIndex = containerConfigs["cont_device"];
@@ -358,30 +359,32 @@ ContainerAgent::ContainerAgent(const json &configs) {
         std::string cont_pipeNameAbbr = abbreviate(cont_pipeName);
         std::string cont_taskNameAbbr = abbreviate(cont_taskName);
         std::string cont_hostDeviceAbbr = abbreviate(cont_hostDevice);
+        std::string cont_hostDeviceTypeAbbr = abbreviate(cont_hostDeviceType);
 
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
-            // cont_batchInferProfileList = queryBatchInferLatency(
-            //     *cont_metricsServerConn,
-            //     cont_experimentName,
-            //     cont_systemName,
-            //     cont_pipeName,
-            //     cont_inferModel,
-            //     cont_hostDevice,
-            //     cont_inferModel
-            // );
+            cont_batchInferProfileList = queryBatchInferLatency(
+                *cont_metricsServerConn,
+                cont_experimentName,
+                cont_systemName,
+                cont_pipeName,
+                "stream",
+                cont_inferModel,
+                cont_hostDeviceType,
+                cont_inferModel
+            );
             
             cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "_" + cont_taskNameAbbr + "_arr";
-            cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_proc";
-            cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_batch";
-            cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_hw";
+            cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_proc";
+            cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_batch";
+            cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_hw";
             cont_networkTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" + cont_hostDeviceAbbr + "_netw";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
             cont_arrivalTableName = cont_experimentNameAbbr + "_" + cont_taskNameAbbr +  "_arr";
-            cont_processTableName = cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_proc";
-            cont_batchInferTableName = cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_batch";
+            cont_processTableName = cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_proc";
+            cont_batchInferTableName = cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_batch";
             cont_hwMetricsTableName =
-                    cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_hw";
-            cont_networkTableName = cont_experimentNameAbbr + "_" + cont_hostDeviceAbbr + "_netw";
+                    cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_hw";
+            cont_networkTableName = cont_experimentNameAbbr + "_" + cont_hostDeviceTypeAbbr + "_netw";
             cont_metricsServerConfigs.schema = "public";
 
             std::string question = absl::StrFormat("Do you want to remove old profile entries of %s?", cont_inferModel);
@@ -974,7 +977,7 @@ void ContainerAgent::collectRuntimeMetrics() {
 }
 
 void ContainerAgent::updateProfileTable() {
-    std::string profileTableName = abbreviate("prof__" + cont_inferModel + "__" + cont_hostDevice);
+    std::string profileTableName = abbreviate("prof__" + cont_inferModel + "__" + cont_hostDeviceType);
     std::string procTableName = profileTableName + "_proc";
     std::string hwTableName = profileTableName + "_hw";
     
@@ -1053,6 +1056,7 @@ void ContainerAgent::HandleRecvRpcs() {
     new StopRequestHandler(&service, server_cq.get(), &run);
     new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
+    new UpdateResolutionRequestHandler(&service, server_cq.get(), this);
     new SyncDatasourcesRequestHandler(&service, server_cq.get(), this);
     void *tag;
     bool ok;
@@ -1144,6 +1148,30 @@ void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
         for (auto msvc : *msvcs) {
             msvc->msvc_idealBatchSize = request.value();
         }
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void ContainerAgent::UpdateResolutionRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateResolution(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateResolutionRequestHandler(service, cq, container_agent);
+        std::vector<int> resolution = {};
+        resolution.push_back(request.channels());
+        resolution.push_back(request.height());
+        resolution.push_back(request.width());
+        if (container_agent->cont_msvcsList[0]->msvc_type == msvcconfigs::MicroserviceType::DataReader){
+            container_agent->cont_msvcsList[0]->msvc_dataShape = {resolution};
+        } else {
+            container_agent->cont_msvcsList[1]->dnstreamMicroserviceList[0].expectedShape = {resolution};
+        }
+
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

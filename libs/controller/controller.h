@@ -27,7 +27,7 @@ using controlcommunication::LoopRange;
 using controlcommunication::DummyMessage;
 using controlcommunication::ContainerConfig;
 using controlcommunication::ContainerLink;
-using controlcommunication::ContainerInt;
+using controlcommunication::ContainerInts;
 using controlcommunication::ContainerSignal;
 using EmptyMessage = google::protobuf::Empty;
 
@@ -343,6 +343,8 @@ private:
     static void SyncDatasource(ContainerHandle *prev, ContainerHandle *curr);
 
     void AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica = 1);
+
+    void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution, int replica = 1);
 
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 

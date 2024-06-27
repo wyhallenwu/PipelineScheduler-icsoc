@@ -312,6 +312,7 @@ bool DeviceAgent::CreateContainer(
         start_config["container"]["cont_systemName"] = dev_system_name;
         start_config["container"]["cont_pipeName"] = pipe_name;
         start_config["container"]["cont_hostDevice"] = dev_name;
+        start_config["container"]["cont_hostDeviceType"] = dev_deviceInfo[dev_type];
         start_config["container"]["cont_name"] = cont_name;
         start_config["container"]["cont_allocationMode"] = allocation_mode;
 
@@ -474,6 +475,7 @@ void DeviceAgent::HandleControlRecvRpcs() {
     new StartContainerRequestHandler(&controller_service, controller_cq.get(), this);
     new UpdateDownstreamRequestHandler(&controller_service, controller_cq.get(), this);
     new UpdateBatchsizeRequestHandler(&controller_service, controller_cq.get(), this);
+    new UpdateResolutionRequestHandler(&controller_service, controller_cq.get(), this);
     new StopContainerRequestHandler(&controller_service, controller_cq.get(), this);
     void *tag;
     bool ok;
@@ -628,14 +630,35 @@ void DeviceAgent::UpdateBatchsizeRequestHandler::Proceed() {
         ClientContext context;
         Status state;
         indevicecommunication::Int32 bs;
-        bs.set_value(request.value());
+        bs.set_value(request.value().at(0));
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 device_agent->containers[request.name()].stub->AsyncUpdateBatchSize(&context, bs,
                                                                                     device_agent->containers[request.name()].cq));
-        rpc->Finish(&reply, &state, (void *) 1);
-        void *got_tag;
-        bool ok = false;
-        GPR_ASSERT(device_agent->containers[request.name()].cq->Next(&got_tag, &ok));
+        finishGrpc(rpc, reply, state, device_agent->containers[request.name()].cq);
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void DeviceAgent::UpdateResolutionRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateResolution(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateResolutionRequestHandler(service, cq, device_agent);
+        ClientContext context;
+        Status state;
+        indevicecommunication::Dimensions dims;
+        dims.set_channels(request.value().at(0));
+        dims.set_height(request.value().at(1));
+        dims.set_width(request.value().at(2));
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+                device_agent->containers[request.name()].stub->AsyncUpdateResolution(&context, dims,
+                                                                                    device_agent->containers[request.name()].cq));
+        finishGrpc(rpc, reply, state, device_agent->containers[request.name()].cq);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
