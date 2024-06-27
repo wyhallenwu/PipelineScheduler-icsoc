@@ -747,6 +747,7 @@ void ContainerAgent::collectRuntimeMetrics() {
             std::this_thread::sleep_for(std::chrono::milliseconds(10000));
             continue;
         }
+        bool hwMetricsScraped = false;
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
         auto startTime = metricsStopwatch.getStartTime();
@@ -760,6 +761,7 @@ void ContainerAgent::collectRuntimeMetrics() {
 
                 metricsStopwatch.stop();
                 scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);  
+                hwMetricsScraped = true;
                 cont_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + 
                     std::chrono::milliseconds(cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec - scrapeLatencyMillisec);
                 spdlog::get("container_agent")->trace("{0:s} SCRAPE hardware metrics. Latency {1:d}ms.",
@@ -950,7 +952,7 @@ void ContainerAgent::collectRuntimeMetrics() {
         metricsStopwatch.stop();
         auto reportLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
         ClockType nextTime;
-        if (reportHwMetrics){
+        if (reportHwMetrics && hwMetricsScraped){
             nextTime = std::min(cont_metricsServerConfigs.nextMetricsReportTime,
                                 cont_metricsServerConfigs.nextHwMetricsScrapeTime);
         } else {
