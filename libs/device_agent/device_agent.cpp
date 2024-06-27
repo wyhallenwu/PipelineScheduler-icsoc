@@ -161,7 +161,7 @@ void DeviceAgent::collectRuntimeMetrics() {
                 dev_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
     }
     while (running) {
-        auto metricsStopwatch = Stopwatch();
+        /*auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
         auto startTime = metricsStopwatch.getStartTime();
         uint64_t scrapeLatencyMillisec = 0;
@@ -170,28 +170,26 @@ void DeviceAgent::collectRuntimeMetrics() {
 
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextHwMetricsScrapeTime)) {
-            std::vector<Profiler::sysStats> stats = dev_profiler->reportDeviceStats();
-
             DeviceHardwareMetrics metrics;
-            metrics.timestamp = std::chrono::high_resolution_clock::now();
-            metrics.cpuUsage = stats[0].cpuUsage;
-            metrics.memUsage = stats[0].memoryUsage;
-            metrics.rssMemUsage = stats[0].rssMemory;
-            for (int i = 0; i < stats.size(); i++) {
-                metrics.gpuUsage.emplace_back(stats[i].gpuUtilization);
-                metrics.gpuMemUsage.emplace_back(stats[i].gpuMemoryUsage);
-            }
-            dev_runtimeMetrics.emplace_back(metrics);
             for (auto &container: containers) {
                 if (container.second.pid > 0) {
                     Profiler::sysStats stats = dev_profiler->reportAtRuntime(container.second.pid, container.second.pid);
-                    container.second.hwMetrics = {stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
+                    container.second.hwMetrics = {stats.cpuUsage, stats.processMemoryUsage, stats.processMemoryUsage, stats.gpuUtilization,
                                     stats.gpuMemoryUsage};
                     spdlog::get("container_agent")->trace("{0:s} SCRAPE hardware metrics. Latency {1:d}ms.",
                                                         dev_name,
                                                         scrapeLatencyMillisec);
+                    metrics.timestamp = std::chrono::high_resolution_clock::now();
+                    metrics.memUsage = stats.deviceMemoryUsage;
+                    metrics.rssMemUsage = stats.deviceMemoryUsage;
+                    for (int i = 0; i < stats.size(); i++) {
+                        metrics.gpuUsage.emplace_back(stats.gpuUtilization);
+                        metrics.gpuMemUsage.emplace_back(stats.deviceMemoryUsage);
+                    }
                 }
             }
+            metrics.cpuUsage = dev_profiler->getgetDeviceCPUInfo();
+            dev_runtimeMetrics.emplace_back(metrics);
             metricsStopwatch.stop();
             scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
             dev_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() +
@@ -248,7 +246,8 @@ void DeviceAgent::collectRuntimeMetrics() {
         timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - std::chrono::high_resolution_clock::now()).count();
         std::chrono::milliseconds sleepPeriod(timeDiff - (reportLatencyMillisec) + 2);
         spdlog::get("container_agent")->trace("{0:s} Container Agent's Metric Reporter sleeps for {1:d} milliseconds.", dev_name, sleepPeriod.count());
-        std::this_thread::sleep_for(sleepPeriod);
+        std::this_thread::sleep_for(sleepPeriod);*/
+        std::this_thread::sleep_for(std::chrono::seconds(5));
     }
 }
 
@@ -579,7 +578,6 @@ void DeviceAgent::StopContainerRequestHandler::Proceed() {
         DeviceAgent::StopContainer(device_agent->containers[request.name()], request.forced());
         unsigned int pid = device_agent->containers[request.name()].pid;
         device_agent->containers.erase(request.name());
-        device_agent->dev_profiler->removePid(pid);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

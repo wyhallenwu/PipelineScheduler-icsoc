@@ -36,3 +36,26 @@ void Profiler::jtop(const std::string &cmd) {
     }
 }
 
+int Profiler::getDeviceCPUInfo() {
+    std::string line;
+    std::string cpu;
+    std::ifstream stream("/proc/stat");
+    if (stream.is_open()) {
+        std::getline(stream, line);
+        std::istringstream linestream(line);
+        linestream >> cpu;
+        long total_active = 0;
+        for (int i = 0; i < 10; ++i) {
+            linestream >> cpu;
+            total_active += std::stol(cpu);
+        }
+        long idle = std::stol(cpu);
+        double cpuUsage = 100.0 * (double) (total_active - prevCpuTimes.front().first) / (total_active - idle);
+        prevCpuTimes.push(std::make_pair(total_active, idle));
+        if (std::isinf(cpuUsage) || std::isnan(cpuUsage)) {
+            return 0.0;
+        }
+        return (int) cpuUsage;
+    }
+    return 0;
+}

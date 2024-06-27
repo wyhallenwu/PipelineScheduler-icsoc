@@ -8,12 +8,31 @@
 #include <sstream>
 #include <chrono>
 #include <thread>
+#include <queue>
 #include <unistd.h>
 #include <Python.h>
 #include <mutex>
 #include <condition_variable>
 #include <termios.h>
 #include <sys/select.h>
+
+class LimitedPairQueue {
+public:
+    LimitedPairQueue(unsigned int limit = 10) : limit(limit) {}
+
+    void push(std::pair<long, long> value) {
+        if (q.size() == limit) q.pop();
+        q.push(value);
+    }
+
+    std::pair<long, long> front() { return q.front(); }
+
+    int size() { return q.size(); }
+
+private:
+    std::queue<std::pair<long, long>> q;
+    unsigned int limit;
+};
 
 class Profiler {
 public:
@@ -32,13 +51,16 @@ public:
 
     static int getGpuCount() { return 1; };
     void addPid(unsigned int pid) { stats[pid] = sysStats(); };
-    static std::vector<unsigned int> getGpuMemory() { return {0}; };
+    static std::vector<unsigned int> getGpuMemory(int device_count) { return {0}; };
 
     sysStats reportAtRuntime(unsigned int pid) {
         std::lock_guard<std::mutex> lock(m); return stats[pid]; };
 
+    int getDeviceCPUInfo();
+
 private:
     void jtop(const std::string &cmd);
+    LimitedPairQueue prevCpuTimes;
     std::thread t;
     std::mutex m;
     std::map<unsigned int, sysStats> stats;
