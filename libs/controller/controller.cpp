@@ -1005,7 +1005,7 @@ void Controller::checkNetworkConditions() {
             std::string deviceTypeName = SystemDeviceTypeList[nodeHandle.type];
             // If the entries for thios type of device type do not exist, we query the database
             if (ctrl_inDeviceNetworkEntries.find(deviceTypeName) == ctrl_inDeviceNetworkEntries.end()) {
-                std::string tableName = "prof_" + deviceTypeName + "_netw";
+                std::string tableName = "prof_" + abbreviate(deviceTypeName) + "_netw";
                 std::string sql = absl::StrFormat("SELECT p95_transfer_duration_us, p95_total_package_size_b "
                                             "FROM %s ", tableName);
                 pqxx::result res = pullSQL(*ctrl_metricsServerConn, sql);

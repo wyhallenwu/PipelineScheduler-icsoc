@@ -8,17 +8,15 @@
 
 class DataSourceAgent : public ContainerAgent {
 public:
-    DataSourceAgent(
-        const json &configs
-    );
+    DataSourceAgent(const json &configs) : ContainerAgent(configs) {}
 
     void runService(const json &pipeConfigs, const json &configs) override;
 
     class SetStartFrameRequestHandler : public RequestHandler {
     public:
         SetStartFrameRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
-                                    Microservice *data_reader)
-                : RequestHandler(service, cq), data_reader(data_reader) {
+                                    std::vector<Microservice*> *msvcs)
+                : RequestHandler(service, cq), msvcs(msvcs) {
             Proceed();
         }
 
@@ -26,7 +24,7 @@ public:
 
     private:
         indevicecommunication::Int32 request;
-        Microservice *data_reader;
+        std::vector<Microservice*> *msvcs;
     };
 
     void HandleRecvRpcs() override;
