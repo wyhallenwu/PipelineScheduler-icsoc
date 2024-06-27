@@ -1,6 +1,6 @@
 {
     "container": {
-        "cont_experimentName": "run",
+        "cont_experimentName": "prof",
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "platedet",
@@ -43,7 +43,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "0.0.0.0:55022"
+                            "0.0.0.0:55012"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",

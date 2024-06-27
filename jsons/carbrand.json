@@ -43,7 +43,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 3,
                         "nb_link": [
-                            "0.0.0.0:55023"
+                            "0.0.0.0:55013"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",

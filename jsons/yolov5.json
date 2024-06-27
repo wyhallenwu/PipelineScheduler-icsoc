@@ -1,6 +1,6 @@
 {
     "container": {
-        "cont_experimentName": "prof",
+        "cont_experimentName": "run",
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "yolov5",
@@ -43,7 +43,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "0.0.0.0:55021"
+                            "0.0.0.0:55011"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "datasource",
@@ -196,7 +196,7 @@
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
-                        "nb_classOfInterest": 0,
+                        "nb_classOfInterest": 2,
                         "nb_commMethod": 4,
                         "nb_link": [
                             ""
@@ -258,7 +258,7 @@
                         "nb_classOfInterest": -1,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "localhost:55022"
+                            "localhost:55012"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "name",

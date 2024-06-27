@@ -1,7 +1,7 @@
 {
     "pipeline_name": "traffic",
     "container" : {
-        "cont_experimentName": "run",
+        "cont_experimentName": "prof",
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "retina1face",
@@ -44,7 +44,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "0.0.0.0:55014"
+                            "0.0.0.0:55024"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "yolov5",
@@ -258,7 +258,7 @@
                         "nb_classOfInterest": -1,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "143.248.57.150:55055"
+                            "localhost:55012"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "dummy_receiver_0",

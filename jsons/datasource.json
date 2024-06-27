@@ -9,7 +9,7 @@
         "cont_pipeline": [
             {
                 "msvc_name": "data_reader",
-                "msvc_idealBatchSize": 15,
+                "msvc_idealBatchSize": 30,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -43,7 +43,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 4,
                         "nb_link": [
-                            "../data/preview/people_profiling.mp4"
+                            "../data/preview/traffic_profiling.mp4"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "video_source",
