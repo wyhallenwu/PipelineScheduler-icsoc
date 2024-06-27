@@ -27,6 +27,7 @@ ABSL_DECLARE_FLAG(std::optional<std::string>, json_path);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json_path);
 ABSL_DECLARE_FLAG(uint16_t, port);
+ABSL_DECLARE_FLAG(uint16_t, port_offset);
 ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
 ABSL_DECLARE_FLAG(uint16_t, logging_mode);
@@ -64,16 +65,6 @@ namespace msvcconfigs {
     std::vector<BaseMicroserviceConfigs> LoadFromJson();
 }
 
-struct contRunArgs {
-    std::string cont_name;
-    uint16_t cont_port;
-    int8_t cont_devIndex;
-    std::string cont_logPath;
-    RUNMODE cont_runmode;
-    json cont_pipeConfigs;
-    json cont_profilingConfigs;
-};
-
 json loadRunArgs(int argc, char **argv);
 
 void addProfileConfigs(json &msvcConfigs, const json &profileConfigs);
@@ -85,7 +76,7 @@ class ContainerAgent {
 public:
     ContainerAgent(const json &configs);
 
-    ~ContainerAgent() {
+    virtual ~ContainerAgent() {
         for (auto msvc: cont_msvcsList) {
             delete msvc;
         }
@@ -133,17 +124,14 @@ public:
         }
     }
 
+    void transferFrameID(std::string url);
+
     void profiling(const json &pipeConfigs, const json &profileConfigs);
 
-    void runService(const json &pipeConfigs, const json &configs);
+    virtual void runService(const json &pipeConfigs, const json &configs);
 
 protected:
-
     void updateProfileTable();
-
-    void queryProfileTable();
-
-    uint8_t deviceIndex = -1;
 
     void ReportStart();
 
@@ -212,25 +200,37 @@ protected:
         void Proceed() final;
 
     private:
-        indevicecommunication::BatchSize request;
+        indevicecommunication::Int32 request;
         std::vector<Microservice *> *msvcs;
     };
 
-    void HandleRecvRpcs();
+    class SyncDatasourcesRequestHandler : public RequestHandler {
+    public:
+        SyncDatasourcesRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                      ContainerAgent *containerAgent)
+                : RequestHandler(service, cq), containerAgent(containerAgent) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        indevicecommunication::Int32 request;
+        ContainerAgent *containerAgent;
+    };
+
+    virtual void HandleRecvRpcs();
 
     std::string cont_experimentName;
     std::string cont_systemName;
-    std::string cont_batchInferTableName;
     std::string cont_name;
     std::vector<Microservice *> cont_msvcsList;
     std::string cont_pipeName;
     std::string cont_taskName;
     // Name of the host where the container is running
     std::string cont_hostDevice;
-
     std::string cont_inferModel;
 
-    float arrivalRate;
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
     InDeviceCommunication::AsyncService service;
@@ -254,8 +254,10 @@ protected:
     SummarizedHardwareMetrics cont_hwMetrics;
     BatchInferProfileListType cont_batchInferProfileList;
 
+    std::string cont_batchInferTableName;
     std::string cont_arrivalTableName;
     std::string cont_processTableName;
+    std::string cont_networkTableName;
 
     MetricsServerConfigs cont_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> cont_metricsServerConn = nullptr;

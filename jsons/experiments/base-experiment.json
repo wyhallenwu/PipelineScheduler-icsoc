@@ -1,0 +1,15 @@
+{
+    "expName": "ex1",
+    "systemName": "ppp",
+    "runtime": 60,
+    "port_offset": 0,
+    "initial_pipelines": [
+        {
+            "pipeline_name": "batch_test",
+            "pipeline_target_slo": 500000000,
+            "pipeline_type": 0,
+            "video_source": "../data/preview/batch_test.mp4",
+            "pipeline_source_device": "server"
+        }
+    ]
+}

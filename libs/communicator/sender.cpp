@@ -47,10 +47,10 @@ std::string Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMe
 void Sender::Process() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     while (READY) {
-        if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
-        } else if (this->PAUSE_THREADS) {
+        } else if (PAUSE_THREADS) {
             if (RELOADING) {
                 spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 RELOADING = false;
@@ -101,10 +101,10 @@ GPUSender::GPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
 void GPUSender::Process() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     while (READY) {
-        if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
-        } else if (this->PAUSE_THREADS) {
+        } else if (PAUSE_THREADS) {
             if (RELOADING) {
                 spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();

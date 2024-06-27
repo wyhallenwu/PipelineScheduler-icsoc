@@ -50,7 +50,6 @@ void BaseSoftmaxClassifier::classify() {
 
     cudaStream_t postProcStream;
 
-    // TODO: remove potentially unused variable
     NumQueuesType queueIndex;
 
     size_t bufferSize;
@@ -64,11 +63,11 @@ void BaseSoftmaxClassifier::classify() {
 
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
-        else if (this->PAUSE_THREADS) {
+        else if (PAUSE_THREADS) {
             if (RELOADING) {
                 /**
                  * @brief Opening a new log file
@@ -121,8 +120,8 @@ void BaseSoftmaxClassifier::classify() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
 
         currReq_batchSize = currReq.req_batchSize;
@@ -130,7 +129,7 @@ void BaseSoftmaxClassifier::classify() {
 
         currReq_data = currReq.req_data;
 
-        bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
+        bufferSize = msvc_modelDataType * (size_t)currReq_batchSize;
         shape = currReq_data[0].shape;
         for (uint8_t j = 0; j < shape.size(); ++j) {
             bufferSize *= shape[j];
@@ -155,7 +154,7 @@ void BaseSoftmaxClassifier::classify() {
             softmax(predictedLogits + i * msvc_numClasses, predictedProbs + i * msvc_numClasses, msvc_numClasses);
             predictedClass[i] = maxIndex(predictedProbs + i * msvc_numClasses, msvc_numClasses);
 
-            if (this->msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
+            if (msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out(currReq.upstreamReq_data[i].data.size(), currReq.upstreamReq_data[i].data.type());
                 checkCudaErrorCode(cudaMemcpyAsync(
                     out.ptr(),
@@ -216,7 +215,7 @@ void BaseSoftmaxClassifier::classify() {
         msvc_batchCount++;
 
         spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
 
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
@@ -244,9 +243,6 @@ void BaseSoftmaxClassifier::classifyProfiling() {
 
     cudaStream_t postProcStream;
 
-    // TODO: remove potentially unused variable
-    NumQueuesType queueIndex;
-
     size_t bufferSize;
     RequestDataShapeType shape;
 
@@ -258,11 +254,11 @@ void BaseSoftmaxClassifier::classifyProfiling() {
 
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
-        else if (this->PAUSE_THREADS) {
+        else if (PAUSE_THREADS) {
             if (RELOADING) {
                 /**
                  * @brief Opening a new log file
@@ -301,8 +297,8 @@ void BaseSoftmaxClassifier::classifyProfiling() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
 
         inferTimeReport_batchSize = inferTimeReportReq.req_batchSize;
@@ -310,7 +306,7 @@ void BaseSoftmaxClassifier::classifyProfiling() {
 
         inferTimeReportData = inferTimeReportReq.req_data;
 
-        bufferSize = this->msvc_modelDataType * (size_t)inferTimeReport_batchSize;
+        bufferSize = msvc_modelDataType * (size_t)inferTimeReport_batchSize;
         shape = inferTimeReportData[0].shape;
         for (uint8_t j = 0; j < shape.size(); ++j) {
             bufferSize *= shape[j];
@@ -343,7 +339,7 @@ void BaseSoftmaxClassifier::classifyProfiling() {
         
 
         spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
 
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);

@@ -1,9 +1,9 @@
 #include "profiler.h"
 
-Profiler::Profiler(const std::vector<unsigned int> &pids) {
+Profiler::Profiler(const std::vector<unsigned int> &pids, std::string mode) {
     if (!pids.empty()) {
         int pid = pids[0];
-        std::string command = "python3 ../jetson_profiler.py " + std::to_string(pid);
+        std::string command = "python3 ../jetson_profiler.py " + mode + " " + std::to_string(pid);
         t = std::thread(&Profiler::jtop, this, command);
         t.detach();
     }
@@ -29,10 +29,33 @@ void Profiler::jtop(const std::string &cmd) {
             result.push_back(token);
         }
         std::lock_guard<std::mutex> lock(m);
-        stats = {0, std::stoi(result[0]), std::stoi(result[1]), std::stoi(result[1]), std::stoi(result[3]),
-                 std::stoi(result[2])};
+        stats[std::stoi(result[0])] = {std::stoi(result[1]), std::stoi(result[2]), std::stoi(result[5]), std::stoi(result[4]),
+                 std::stoi(result[3])};
         m.unlock();
         result = {};
     }
 }
 
+int Profiler::getDeviceCPUInfo() {
+    std::string line;
+    std::string cpu;
+    std::ifstream stream("/proc/stat");
+    if (stream.is_open()) {
+        std::getline(stream, line);
+        std::istringstream linestream(line);
+        linestream >> cpu;
+        long total_active = 0;
+        for (int i = 0; i < 10; ++i) {
+            linestream >> cpu;
+            total_active += std::stol(cpu);
+        }
+        long idle = std::stol(cpu);
+        double cpuUsage = 100.0 * (double) (total_active - prevCpuTimes.front().first) / (total_active - idle);
+        prevCpuTimes.push(std::make_pair(total_active, idle));
+        if (std::isinf(cpuUsage) || std::isnan(cpuUsage)) {
+            return 0.0;
+        }
+        return (int) cpuUsage;
+    }
+    return 0;
+}

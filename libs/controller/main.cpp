@@ -6,8 +6,6 @@ int main(int argc, char **argv) {
     receiver_thread.detach();
     std::thread scheduling_thread(&Controller::Scheduling, controller);
     scheduling_thread.detach();
-    std::ifstream file("../jsons/experiment.json");
-    std::vector<TaskDescription::TaskStruct> tasks = json::parse(file);
     std::string command;
 
     while (controller->isRunning()) {
@@ -18,9 +16,7 @@ int main(int argc, char **argv) {
             controller->Stop();
             break;
         } else if (command == "init") {
-            for (auto &t: tasks) {
-                controller->AddTask(t);
-            }
+            controller->Init();
             continue;
         } else if (command == "traffic") {
             task.type = PipelineType::Traffic;
