@@ -81,6 +81,11 @@ uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &tot
     throw std::runtime_error("Failed to estimate network latency due to unexpected data range.");
 }
 
+// ================================================================== Queries functions ==================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+
 /**
  * @brief query the rates, network profile of a model
  * 
@@ -221,7 +226,6 @@ ModelArrivalProfile queryModelArrivalProfile(
     return arrivalProfile;
 }
 
-
 /**
  * @brief Query pre, post processing latency as well as input and output sizes
  * 
@@ -241,6 +245,7 @@ void queryPrePostLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 ) {
@@ -262,7 +267,7 @@ void queryPrePostLatency(
     pqxx::result res = pullSQL(metricsConn, query);
     // If most current historical data is not available, we query profiled data
     if (res[0][0].is_null()) {
-        std::string profileTableName = abbreviate("prof__" + modelName +  "__" + deviceName + "_proc");
+        std::string profileTableName = abbreviate("prof__" + modelName +  "__" + deviceTypeName + "_proc");
         query = absl::StrFormat("WITH recent_data AS ("
                                 "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
                                 "FROM %s "
@@ -301,6 +306,7 @@ void queryBatchInferLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 ) {
@@ -314,7 +320,7 @@ void queryBatchInferLatency(
 
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
-        std::string profileTableName = abbreviate("prof__" + modelName + "__" + deviceName) + "_batch";
+        std::string profileTableName = abbreviate("prof__" + modelName + "__" + deviceTypeName) + "_batch";
         query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
                                 "FROM %s "
                                 "GROUP BY infer_batch_size", profileTableName);
@@ -334,6 +340,7 @@ BatchInferProfileListType queryBatchInferLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName
 ) {
     ModelProfile modelProfile;
@@ -344,6 +351,7 @@ BatchInferProfileListType queryBatchInferLatency(
         pipelineName,
         streamName,
         deviceName,
+        deviceTypeName,
         modelName,
         modelProfile
     );
@@ -362,11 +370,11 @@ BatchInferProfileListType queryBatchInferLatency(
  */
 void queryResourceRequirements(
     pqxx::connection &metricsConn,
-    const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 ) {
-    std::string tableName = abbreviate("prof__" + modelName + "__" + deviceName + "_hw");
+    std::string tableName = abbreviate("prof__" + modelName + "__" + deviceTypeName + "_hw");
     std::string query = absl::StrFormat("SELECT batch_size, MAX(cpu_usage), MAX(mem_usage), MAX(rss_mem_usage), MAX(gpu_usage), MAX(gpu_mem_usage) "
                             "FROM %s "
                             "GROUP BY batch_size;", tableName);
@@ -400,6 +408,7 @@ ModelProfile queryModelProfile(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName
 ) {
     ModelProfile profile;
@@ -425,21 +434,26 @@ ModelProfile queryModelProfile(
      * @brief Query pre, post processing profile
      * 
      */
-    queryPrePostLatency(metricsConn, experimentName, systemName, pipelineName, streamName, deviceName, modelName, profile);
+    queryPrePostLatency(metricsConn, experimentName, systemName, pipelineName, streamName, deviceName, deviceTypeName, modelName, profile);
 
     /**
      * @brief Query the batch inference profile
      * 
      */
-    queryBatchInferLatency(metricsConn, experimentName, systemName, pipelineName, streamName, deviceName, modelName, profile);
+    queryBatchInferLatency(metricsConn, experimentName, systemName, pipelineName, streamName, deviceName, deviceTypeName, modelName, profile);
 
     /**
      * @brief Query the batch resource consumptions
      * 
      */
-    queryResourceRequirements(metricsConn, deviceName, modelName, profile);
+    queryResourceRequirements(metricsConn, deviceTypeName, modelName, profile);
     return profile;
 }
+
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
 
 void trt::to_json(nlohmann::json &j, const trt::TRTConfigs &val) {
     j["path"] = val.path;

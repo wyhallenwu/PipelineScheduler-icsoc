@@ -547,6 +547,12 @@ std::string abbreviate(const std::string &keyphrase, const std::string delimiter
 
 bool confirmIntention(const std::string& message, const std::string& magicPhrase);
 
+
+// ================================================================== Queries functions ==================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+
 ModelArrivalProfile queryModelArrivalProfile(
     pqxx::connection &metricsConn,
     const std::string &experimentName,
@@ -567,6 +573,7 @@ void queryBatchInferLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 );
@@ -578,6 +585,7 @@ BatchInferProfileListType queryBatchInferLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName
 );
 
@@ -588,13 +596,14 @@ void queryPrePostLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 );
 
 void queryResourceRequirements(
     pqxx::connection &metricsConn,
-    const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 );
@@ -606,8 +615,14 @@ ModelProfile queryModelProfile(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName
 );
+
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+
 bool isFileEmpty(const std::string& filePath);
 
 std::string getDeviceTypeAbbr(const SystemDeviceType &deviceType);
