@@ -52,9 +52,9 @@ public:
         unsigned int gpuMemoryUsage = 0;
     };
 
-    static int getGpuCount();
+    int getGpuCount();
 
-    static std::vector<long> getGpuMemory(int device_count);
+    std::vector<long> getGpuMemory(int device_count);
 
     sysStats reportAtRuntime(unsigned int cpu_pid, unsigned int gpu_pid);
 

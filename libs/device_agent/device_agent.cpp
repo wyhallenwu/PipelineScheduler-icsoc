@@ -48,8 +48,6 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
     dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
 
-    dev_containerLib = getContainerLib(abbreviate(SystemDeviceTypeList[type]));
-
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
     dev_metricsServerConfigs.password = "agent";
@@ -75,6 +73,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
     controller_sending_cq = new CompletionQueue();
 
+    dev_profiler = new Profiler({});
     Ready(dev_name, getHostIP(), type);
 
     dev_logPath += "/" + dev_experiment_name;
@@ -96,11 +95,10 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             dev_logger
     );
 
+    dev_containerLib = getContainerLib(abbreviate(SystemDeviceTypeList[type]));
     dev_metricsServerConfigs.schema = abbreviate(dev_experiment_name + "_" + dev_system_name);
     dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name + "_hw");
     dev_networkTableName = dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name + "_netw");
-
-    dev_numCudaDevices = Profiler::getGpuCount();
 
     if (!tableExists(*dev_metricsServerConn, dev_metricsServerConfigs.schema, dev_networkTableName)) {
         std::string sql = "CREATE TABLE IF NOT EXISTS " + dev_networkTableName + " ("
@@ -139,9 +137,6 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
         sql = "CREATE INDEX ON " + dev_hwMetricsTableName + " (timestamps);";
         pushSQL(*dev_metricsServerConn, sql);
     }
-
-    dev_profiler = new Profiler({});
-
     running = true;
     threads = std::vector<std::thread>();
     threads.emplace_back(&DeviceAgent::HandleDeviceRecvRpcs, this);
@@ -429,9 +424,9 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
     request.set_device_type(type);
     request.set_ip_address(ip);
     if (type == SystemDeviceType::Server) {
-        processing_units = Profiler::getGpuCount();
+        processing_units = dev_profiler->getGpuCount();
         request.set_processors(processing_units);
-        for (auto &mem: Profiler::getGpuMemory(processing_units)) {
+        for (auto &mem: dev_profiler->getGpuMemory(processing_units)) {
             request.add_memory(mem);
         }
     } else {
@@ -444,8 +439,8 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
         request.set_processors(processing_units);
         request.add_memory(sys_info.totalram * sys_info.mem_unit / 1000000);
     }
+    dev_numCudaDevices = processing_units;
 
-    // dev_runtimeMetrics = std::vector<SummarizedHardwareMetrics>(processing_units);
     std::unique_ptr<ClientAsyncResponseReader<SystemInfo>> rpc(
             controller_stub->AsyncAdvertiseToController(&context, request, controller_sending_cq));
     finishGrpc(rpc, reply, status, controller_sending_cq);

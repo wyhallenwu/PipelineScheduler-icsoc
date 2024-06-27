@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
         deviceType = SystemDeviceType::OrinNano;
     }
     else {
-        std::cerr << "Invalid device type, use [Server, NXXavier, AGXXavier, OrinNano]" << std::endl;
+        std::cerr << "Invalid device type, use [server, nxavier, agxavier, orinano]" << std::endl;
         exit(1);
     }
 

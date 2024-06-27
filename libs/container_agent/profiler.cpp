@@ -2,7 +2,7 @@
 
 Profiler::Profiler(const std::vector<unsigned int> &pids) {
     if (!initializeNVML()) {
-        spdlog::get("container_agent")->error("Failed to initialize NVML");
+        spdlog::error("Failed to initialize NVML");
         return;
     }
     pidOnDevices = std::map<unsigned int, nvmlDevice_t>();
@@ -36,7 +36,7 @@ int Profiler::getGpuCount() {
     unsigned int device_count;
     nvmlReturn_t result = nvmlDeviceGetCount(&device_count);
     if (result != NVML_SUCCESS) {
-        spdlog::get("container_agent")->error("Failed to get device count: {}", nvmlErrorString(result));
+        spdlog::error("Failed to get device count: {}", nvmlErrorString(result));
         return -1;
     }
     return device_count;
@@ -48,7 +48,7 @@ std::vector<long> Profiler::getGpuMemory(int device_count) {
         nvmlDevice_t device;
         nvmlReturn_t result = nvmlDeviceGetHandleByIndex(i, &device);
         if (result != NVML_SUCCESS) {
-            spdlog::get("container_agent")->error("Failed to get handle for device {}: {}", i, nvmlErrorString(result));
+            spdlog::error("Failed to get handle for device {}: {}", i, nvmlErrorString(result));
             return {-1};
         }
         nvmlMemory_t memory;
@@ -108,7 +108,7 @@ bool Profiler::setAccounting(nvmlDevice_t device) {
     if (state == NVML_FEATURE_DISABLED) {
         result = nvmlDeviceSetAccountingMode(device, NVML_FEATURE_ENABLED);
         if (result != NVML_SUCCESS) {
-            spdlog::get("container_agent")->error("Failed to enable accounting mode: {}", nvmlErrorString(result));
+            spdlog::error("Failed to enable accounting mode: {}", nvmlErrorString(result));
             return false;
         }
     }
