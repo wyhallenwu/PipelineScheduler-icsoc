@@ -113,7 +113,6 @@ struct ContainerHandle {
     ModelType model;
     bool mergable;
     std::vector<int> dimensions;
-
     uint64_t inference_deadline;
 
     float arrival_rate;
@@ -122,6 +121,7 @@ struct ContainerHandle {
     std::vector<int> batch_size;
     std::vector<int> cuda_device;
     std::vector<int> recv_port;
+    std::vector<std::string> model_file;
 
     HardwareMetrics metrics;
     NodeHandle *device_agent;

@@ -70,6 +70,7 @@ private:
 
     bool CreateContainer(
             ModelType model,
+            std::string model_file,
             std::string pipe_name,
             BatchSizeType batch_size,
             std::vector<int> input_dims,

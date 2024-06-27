@@ -209,6 +209,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     Status status;
     request.set_pipeline_name(container.second->task->name);
     request.set_model(container.second->model);
+    request.set_model_file(container.second->model_file[replica -1]);
     request.set_batch_size(container.second->batch_size[replica -1]);
     request.set_replica_id(replica);
     request.set_allocation_mode(easy_allocation);
