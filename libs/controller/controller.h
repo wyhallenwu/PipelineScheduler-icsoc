@@ -247,6 +247,7 @@ private:
     std::map<ModelType, std::vector<int>> InitialRequestCount(const std::string &input, const Pipeline &models,
                                                               int fps = 30);
 
+    void queryInDeviceNetworkEntries(NodeHandle *node);
 
     class RequestHandler {
     public:

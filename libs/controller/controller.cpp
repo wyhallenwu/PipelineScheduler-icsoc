@@ -128,6 +128,29 @@ void Controller::Scheduling() {
     }
 }
 
+void Controller::queryInDeviceNetworkEntries(NodeHandle *node) {
+    std::string deviceTypeName = SystemDeviceTypeList[node->type];
+    std::string deviceTypeNameAbbr = abbreviate(deviceTypeName);
+    if (ctrl_inDeviceNetworkEntries.find(deviceTypeNameAbbr) == ctrl_inDeviceNetworkEntries.end()) {
+        std::string tableName = "prof_" + abbreviate(deviceTypeNameAbbr) + "_netw";
+        std::string sql = absl::StrFormat("SELECT p95_transfer_duration_us, p95_total_package_size_b "
+                                    "FROM %s ", tableName);
+        pqxx::result res = pullSQL(*ctrl_metricsServerConn, sql);
+        if (res.empty()) {
+            spdlog::get("container_agent")->error("No in-device network entries found for device type {}.", deviceTypeName);
+            return;
+        }
+        for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
+            std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
+            ctrl_inDeviceNetworkEntries[deviceTypeNameAbbr].emplace_back(entry);
+        }
+        spdlog::get("container_agent")->info("Finished querying in-device network entries for device type {}.", deviceTypeName);
+    }
+    std::unique_lock lock(node->nodeHandleMutex);
+    node->latestNetworkEntries[deviceTypeNameAbbr] = aggregateNetworkEntries(ctrl_inDeviceNetworkEntries[deviceTypeNameAbbr]);
+    std::cout << node->latestNetworkEntries[deviceTypeNameAbbr].size() << std::endl;
+}
+
 void Controller::DeviseAdvertisementHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
@@ -150,6 +173,8 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
+        spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
+        controller->queryInDeviceNetworkEntries(&(controller->devices[deviceName]));
     } else {
         GPR_ASSERT(status == FINISH);
         delete this;
@@ -988,41 +1013,17 @@ NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t m
  * 
  */
 void Controller::checkNetworkConditions() {
-    std::this_thread::sleep_for(TimePrecisionType(60 * 1000000));
+    std::this_thread::sleep_for(TimePrecisionType(5 * 1000000));
     while (running) {
         Stopwatch stopwatch;
         stopwatch.start();
         std::map<std::string, NetworkEntryType> networkEntries = {};
 
         for (auto &[deviceName, nodeHandle] : devices) {
-            // Clearing old network entries as they are no longer relevant
-            std::unique_lock<std::mutex> lock(nodeHandle.nodeHandleMutex);
-            nodeHandle.latestNetworkEntries.clear();
-            lock.unlock();
-            networkEntries[deviceName] = {};
-
-            // We first try to have the indevice communication entries for each type of device
-            // This should contain the full entries
-            std::string deviceTypeName = abbreviate(SystemDeviceTypeList[nodeHandle.type]);
-            // If the entries for thios type of device type do not exist, we query the database
-            if (ctrl_inDeviceNetworkEntries.find(deviceTypeName) == ctrl_inDeviceNetworkEntries.end()) {
-                std::string tableName = "prof_" + abbreviate(deviceTypeName) + "_netw";
-                std::string sql = absl::StrFormat("SELECT p95_transfer_duration_us, p95_total_package_size_b "
-                                            "FROM %s ", tableName);
-                pqxx::result res = pullSQL(*ctrl_metricsServerConn, sql);
-
-                if (res.empty()) {
-                    continue;
-                }
-
-                for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
-                    std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
-                    ctrl_inDeviceNetworkEntries[deviceTypeName].emplace_back(entry);
-                }
-            // If the entries for the device type exist, we use the latest network entries 
-            } else {
-                nodeHandle.latestNetworkEntries[deviceName] = ctrl_inDeviceNetworkEntries[SystemDeviceTypeList[nodeHandle.type]];
+            if (deviceName == "serv") {
+                continue;
             }
+            networkEntries[deviceName] = {};
         }
         std::string tableName = abbreviate(ctrl_experimentName + "_" + ctrl_systemName) + "." + abbreviate(ctrl_experimentName + "_serv_netw");
         std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
@@ -1039,11 +1040,11 @@ void Controller::checkNetworkConditions() {
         // Updating NodeHandle object with the latest network entries
         for (auto &[deviceName, entries] : networkEntries) {
             // If entry belongs to a device that is not in the list of devices, ignore it
-            if (devices.find(deviceName) == devices.end()) {
+            if (devices.find(deviceName) == devices.end() || deviceName != "serv") {
                 continue;
             }
             std::unique_lock<std::mutex> lock(devices[deviceName].nodeHandleMutex);
-            devices[deviceName].latestNetworkEntries["serv"] = entries;
+            devices[deviceName].latestNetworkEntries["serv"] = aggregateNetworkEntries(entries);
         }
 
         // If no network entries exist for a device, send a request to the device to perform network testing
