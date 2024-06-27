@@ -35,7 +35,7 @@ ABSL_DECLARE_FLAG(std::string, ctrl_configPath);
 ABSL_DECLARE_FLAG(uint16_t, ctrl_verbose);
 ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
 
-typedef std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> Pipeline;
+// typedef std::vector<std::pair<ModelType, std::vector<std::pair<ModelType, int>>>> Pipeline;
 
 
 struct ContainerHandle;
@@ -226,6 +226,35 @@ public:
 
 private:
 
+    struct Pipeline {
+        PipelineModelListType pipelineModels;
+        std::mutex pipelineMutex;
+
+        Pipeline() = default;
+        ~Pipeline() {
+            for (auto &model: pipelineModels) {
+                delete model;
+            }
+        }
+
+        Pipeline(PipelineModelListType pipelineModels) {
+            this->pipelineModels = pipelineModels;
+        }
+
+        Pipeline(const Pipeline &other) {
+            pipelineModels = other.pipelineModels;
+        }
+
+        Pipeline& operator=(const Pipeline &other) {
+            if (this != &other) {
+                pipelineModels = other.pipelineModels;
+            }
+            return *this;
+        }
+    };
+
+    std::vector<Pipeline> ctrl_unscheduledPipelines, ctrl_scheduledPipelines;
+
     NetworkEntryType initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
     uint8_t incNumReplicas(const PipelineModel *model);
     uint8_t decNumReplicas(const PipelineModel *model);
@@ -236,8 +265,8 @@ private:
     void estimateModelLatency(PipelineModel *currModel, const std::string& deviceName);
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
-    void getInitialBatchSizes(PipelineModelListType &models, uint64_t slo, int nObjects);
-    void shiftModelToEdge(PipelineModelListType &models, const ModelType &currModel, uint64_t slo);
+    void getInitialBatchSizes(Pipeline &models, uint64_t slo, int nObjects);
+    void shiftModelToEdge(Pipeline &models, const ModelType &currModel, uint64_t slo);
 
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice);
 
@@ -247,8 +276,8 @@ private:
 
     double LoadTimeEstimator(const char *model_path, double input_mem_size);
     int InferTimeEstimator(ModelType model, int batch_size);
-    std::map<ModelType, std::vector<int>> InitialRequestCount(const std::string &input, const Pipeline &models,
-                                                              int fps = 30);
+    // std::map<ModelType, std::vector<int>> InitialRequestCount(const std::string &input, const Pipeline &models,
+    //                                                           int fps = 30);
 
     void queryInDeviceNetworkEntries(NodeHandle *node);
 
@@ -317,9 +346,9 @@ private:
 
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
 
-    void optimizeBatchSizeStep(
-            const Pipeline &models,
-            std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
+    // void optimizeBatchSizeStep(
+    //         const Pipeline &models,
+    //         std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
 
     bool running;
     std::string ctrl_experimentName;

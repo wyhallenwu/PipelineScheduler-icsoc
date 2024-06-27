@@ -5,9 +5,10 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     tasks.insert({t.name, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
     TaskHandle *task = &tasks[t.name];
     NodeHandle *device = &devices[t.device];
-    PipelineModelListType models = getModelsByPipelineType(t.type, t.device);
+    Pipeline pipe = {getModelsByPipelineType(t.type, t.device)};
+    ctrl_unscheduledPipelines.emplace_back(pipe);
 
-    std::vector<std::pair<std::string, std::string>> possibleDeviceList = {{"serv", "serv"}};
+    std::vector<std::pair<std::string, std::string>> possibleDeviceList = {{"server", "server"}};
     std::map<std::pair<std::string, std::string>, NetworkEntryType> possibleNetworkEntryPairs;
 
     for (const auto &pair : possibleDeviceList) {
@@ -16,100 +17,50 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
         lock.unlock();
     }
 
-    for (auto model: models) {
-        std::string containerName = getContainerName(model->name, model->device);
+    for (auto& model: ctrl_unscheduledPipelines.back().pipelineModels) {
+        std::string containerName = model->name + "-" + possibleDeviceList[0].second;
         if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos) {
             continue;
         }
-        model->arrivalProfiles = queryModelArrivalProfile(
+        model->arrivalProfiles.arrivalRates = queryArrivalRate(
             *ctrl_metricsServerConn,
             ctrl_experimentName,
             ctrl_systemName,
             t.name,
             t.source,
             ctrl_containerLib[containerName].taskName,
-            ctrl_containerLib[containerName].modelName,
-            possibleDeviceList,
-            possibleNetworkEntryPairs
+            ctrl_containerLib[containerName].modelName
         );
+        for (const auto &pair : possibleDeviceList) {
+            NetworkProfile test = queryNetworkProfile(
+                *ctrl_metricsServerConn,
+                ctrl_experimentName,
+                ctrl_systemName,
+                t.name,
+                t.source,
+                ctrl_containerLib[containerName].taskName,
+                ctrl_containerLib[containerName].modelName,
+                pair.first,
+                pair.second,
+                possibleNetworkEntryPairs[pair]
+            );   
+            model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
+        }
+        
+        // ModelArrivalProfile profile = queryModelArrivalProfile(
+        //     *ctrl_metricsServerConn,
+        //     ctrl_experimentName,
+        //     ctrl_systemName,
+        //     t.name,
+        //     t.source,
+        //     ctrl_containerLib[containerName].taskName,
+        //     ctrl_containerLib[containerName].modelName,
+        //     possibleDeviceList,
+        //     possibleNetworkEntryPairs
+        // );
+        // std::cout << "sdfsdfasdf" << std::endl;
     }
-    // ScaleFactorType scale_factors;
-    // // Query arrival rates of individual models
-    // for (auto &m: models) {
-    //     arrival_rates = {
-    //         {1, -1}, //1 second
-    //         {3, -1},
-    //         {7, -1},
-    //         {15, -1},
-    //         {30, -1},
-    //         {60, -1}
-    //     };
-
-    //     scale_factors = {
-    //         {1, 1},
-    //         {3, 1},
-    //         {7, 1},
-    //         {15, 1},
-    //         {30, 1},
-    //         {60, 1}
-    //     };
-
-    //     // Get the name of the model
-    //     // substr(1) is used to remove the colon at the beginning of the model name
-    //     std::string model_name = t.name + "_" + MODEL_INFO[std::get<0>(m)][0].substr(1);
-
-    //     // Query the request rate for each time period
-    //     queryRequestRateInPeriod(model_name + "_arrival_table", arrival_rates);
-    //     // Query the scale factor (ratio of number of outputs / each input) for each time period
-    //     queryScaleFactorInPeriod(model_name + "_process_table", scale_factors);
-
-    //     m.second.arrivalRate = std::max_element(arrival_rates.begin(), arrival_rates.end(),
-    //                                           [](const std::pair<int, float> &p1, const std::pair<int, float> &p2) {
-    //                                               return p1.second < p2.second;
-    //                                           })->second;
-    //     m.second.scaleFactors = scale_factors;
-    //     m.second.modelProfile = queryModelProfile(model_name, DEVICE_INFO[device->type]);
-    //     m.second.expectedTransmitLatency = queryTransmitLatency(m.second.modelProfile.avgInputSize, t.source, m.second.device);
-    // }
-
-    // std::string tmp = t.name;
-    // containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 9999, 0, 1, {-1}}});
-    // task->subtasks.insert({tmp, &containers[tmp]});
-    // task->subtasks[tmp]->recv_port = device->next_free_port++;
-    // device->containers.insert({tmp, task->subtasks[tmp]});
-    // device = &devices["server"];
-
-    // // Find an initial batch size and replica configuration that meets the SLO at the server
-    // getInitialBatchSizes(models, t.slo, 10);
-
-    // // Try to shift model to edge devices
-    // shiftModelToEdge(models, ModelType::DataSource, t.slo);
-
-    // for (const auto &m: models) {
-    //     tmp = t.name;
-    //     // TODO: get correct initial cuda devices based on TaskDescription and System State
-    //     int cuda_device = 1;
-    //     containers.insert(
-    //             {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {cuda_device},
-    //                                                   -1, device->next_free_port++, {}, {}, {}, {}}});
-    //     task->subtasks.insert({tmp, &containers[tmp]});
-    //     device->containers.insert({tmp, task->subtasks[tmp]});
-    // }
-
-    // task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
-    // task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
-    // for (const auto &m: models) {
-    //     for (const auto &d: m.second) {
-    //         tmp = t.name;
-    //         task->subtasks[tmp.append(MODEL_INFO[d.first][0])]->class_of_interest = d.second;
-    //         task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + MODEL_INFO[m.first][0]]);
-    //         task->subtasks[t.name + MODEL_INFO[m.first][0]]->downstreams.push_back(task->subtasks[tmp]);
-    //     }
-    // }
-
-    // for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
-    //     StartContainer(msvc, task->slo, t.source);
-    // }
+    std::cout << "Task added: " << t.name << std::endl;
 }
 
 PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice) {
@@ -332,7 +283,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
  * @param models 
  * @param slo
  */
-void Controller::shiftModelToEdge(PipelineModelListType &models, const ModelType &currModel, uint64_t slo) {
+void Controller::shiftModelToEdge(Controller::Pipeline &models, const ModelType &currModel, uint64_t slo) {
 }
 
 /**
@@ -344,7 +295,7 @@ void Controller::shiftModelToEdge(PipelineModelListType &models, const ModelType
  * @return std::map<ModelType, int> 
  */
 void Controller::getInitialBatchSizes(
-        PipelineModelListType &models, uint64_t slo,
+        Controller::Pipeline &models, uint64_t slo,
         int nObjects) {
 
     // for (auto &m: models) {

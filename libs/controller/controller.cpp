@@ -397,38 +397,38 @@ void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType
     container.expectedThroughput = postprocess_thrpt;
 }
 
-void Controller::optimizeBatchSizeStep(
-        const Pipeline &models,
-        std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
-    ModelType candidate;
-    int max_saving = 0;
-    std::vector<ModelType> blacklist;
-    for (const auto &m: models) {
-        int saving;
-        if (max_saving == 0) {
-            saving =
-                    estimated_infer_times[m.first] - InferTimeEstimator(m.first, batch_sizes[m.first] * 2);
-        } else {
-            if (batch_sizes[m.first] == 64 ||
-                std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
-                continue;
-            }
-            for (const auto &d: m.second) {
-                if (batch_sizes[d.first] > batch_sizes[m.first]) {
-                    blacklist.push_back(d.first);
-                }
-            }
-            saving = estimated_infer_times[m.first] -
-                     (InferTimeEstimator(m.first, batch_sizes[m.first] * 2) * (nObjects / batch_sizes[m.first] * 2));
-        }
-        if (saving > max_saving) {
-            max_saving = saving;
-            candidate = m.first;
-        }
-    }
-    batch_sizes[candidate] *= 2;
-    estimated_infer_times[candidate] -= max_saving;
-}
+// void Controller::optimizeBatchSizeStep(
+//         const Pipeline &models,
+//         std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
+//     ModelType candidate;
+//     int max_saving = 0;
+//     std::vector<ModelType> blacklist;
+//     for (const auto &m: models) {
+//         int saving;
+//         if (max_saving == 0) {
+//             saving =
+//                     estimated_infer_times[m.first] - InferTimeEstimator(m.first, batch_sizes[m.first] * 2);
+//         } else {
+//             if (batch_sizes[m.first] == 64 ||
+//                 std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
+//                 continue;
+//             }
+//             for (const auto &d: m.second) {
+//                 if (batch_sizes[d.first] > batch_sizes[m.first]) {
+//                     blacklist.push_back(d.first);
+//                 }
+//             }
+//             saving = estimated_infer_times[m.first] -
+//                      (InferTimeEstimator(m.first, batch_sizes[m.first] * 2) * (nObjects / batch_sizes[m.first] * 2));
+//         }
+//         if (saving > max_saving) {
+//             max_saving = saving;
+//             candidate = m.first;
+//         }
+//     }
+//     batch_sizes[candidate] *= 2;
+//     estimated_infer_times[candidate] -= max_saving;
+// }
 
 double Controller::LoadTimeEstimator(const char *model_path, double input_mem_size) {
     // Load the pre-trained model
@@ -480,36 +480,36 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     return 0;
 }
 
-std::map<ModelType, std::vector<int>> Controller::InitialRequestCount(const std::string &input, const Pipeline &models,
-                                                                      int fps) {
-    std::map<ModelType, std::vector<int>> request_counts = {};
-    std::vector<int> fps_values = {fps, fps * 3, fps * 7, fps * 15, fps * 30, fps * 60};
+// std::map<ModelType, std::vector<int>> Controller::InitialRequestCount(const std::string &input, const Pipeline &models,
+//                                                                       int fps) {
+//     std::map<ModelType, std::vector<int>> request_counts = {};
+//     std::vector<int> fps_values = {fps, fps * 3, fps * 7, fps * 15, fps * 30, fps * 60};
 
-    request_counts[models[0].first] = fps_values;
-    json objectCount = json::parse(std::ifstream("../jsons/object_count.json"))[input];
+//     request_counts[models[0].first] = fps_values;
+//     json objectCount = json::parse(std::ifstream("../jsons/object_count.json"))[input];
 
-    for (const auto &m: models) {
-        if (m.first == ModelType::Sink) {
-            request_counts[m.first] = std::vector<int>(6, 0);
-            continue;
-        }
+//     for (const auto &m: models) {
+//         if (m.first == ModelType::Sink) {
+//             request_counts[m.first] = std::vector<int>(6, 0);
+//             continue;
+//         }
 
-        for (const auto &d: m.second) {
-            if (d.second == -1) {
-                request_counts[d.first] = request_counts[m.first];
-            } else {
-                std::vector<int> objects = (d.second == 0 ? objectCount["person"]
-                                                          : objectCount["car"]).get<std::vector<int>>();
+//         for (const auto &d: m.second) {
+//             if (d.second == -1) {
+//                 request_counts[d.first] = request_counts[m.first];
+//             } else {
+//                 std::vector<int> objects = (d.second == 0 ? objectCount["person"]
+//                                                           : objectCount["car"]).get<std::vector<int>>();
 
-                for (int j: fps_values) {
-                    int count = std::accumulate(objects.begin(), objects.begin() + j, 0);
-                    request_counts[d.first].push_back(request_counts[m.first][0] * count);
-                }
-            }
-        }
-    }
-    return request_counts;
-}
+//                 for (int j: fps_values) {
+//                     int count = std::accumulate(objects.begin(), objects.begin() + j, 0);
+//                     request_counts[d.first].push_back(request_counts[m.first][0] * count);
+//                 }
+//             }
+//         }
+//     }
+//     return request_counts;
+// }
 
 /**
  * @brief '
