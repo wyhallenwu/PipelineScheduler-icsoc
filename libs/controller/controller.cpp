@@ -1002,7 +1002,7 @@ void Controller::checkNetworkConditions() {
 
             // We first try to have the indevice communication entries for each type of device
             // This should contain the full entries
-            std::string deviceTypeName = SystemDeviceTypeList[nodeHandle.type];
+            std::string deviceTypeName = abbreviate(SystemDeviceTypeList[nodeHandle.type]);
             // If the entries for thios type of device type do not exist, we query the database
             if (ctrl_inDeviceNetworkEntries.find(deviceTypeName) == ctrl_inDeviceNetworkEntries.end()) {
                 std::string tableName = "prof_" + deviceTypeName + "_netw";
