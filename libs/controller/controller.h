@@ -182,6 +182,8 @@ struct PipelineModel {
     uint64_t estimatedPerQueryCost = 0;
     // The estimated latency of the model
     uint64_t estimatedStart2HereCost = 0;
+
+    std::string deviceTypeName;
 };
 
 
@@ -225,8 +227,8 @@ public:
 private:
 
     NetworkEntryType initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
-    void incNumReplicas(PipelineModel &model, const std::string& deviceName);
-    void decNumReplicas(PipelineModel &model, const std::string& deviceName);
+    uint8_t incNumReplicas(const PipelineModel *model);
+    uint8_t decNumReplicas(const PipelineModel *model);
 
     void calculateQueueSizes(ContainerHandle &model, const ModelType modelType);
     uint64_t calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate);

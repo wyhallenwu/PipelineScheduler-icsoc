@@ -454,42 +454,50 @@ void Controller::estimatePipelineLatency(PipelineModel* currModel, const uint64_
 }
 
 /**
- * @brief Increase the number of replicas until the arrival rate is met
+ * @brief Attempts to increase the number of replicas to meet the arrival rate
  * 
- * @param model 
+ * @param model the model to be scaled
+ * @param deviceName 
+ * @return uint8_t The number of replicas to be added
  */
-void Controller::incNumReplicas(PipelineModel &model, const std::string& deviceName) {
-    uint8_t numReplicas = model.numReplicas;
-    uint64_t inferenceLatency = model.processProfiles[deviceName].batchInfer[model.batchSize].p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + model.processProfiles[deviceName].p95prepLat + model.processProfiles[deviceName].p95postLat);
+uint8_t Controller::incNumReplicas(const PipelineModel *model) {
+    uint8_t numReplicas = model->numReplicas;
+    std::string deviceTypeName = model->deviceTypeName;
+    ModelProfile profile = model->processProfiles.at(deviceTypeName);
+    uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
+    float indiProcessRate = 1 / (inferenceLatency + profile.p95prepLat 
+                            + profile.p95postLat);
     float processRate = indiProcessRate * numReplicas;
-    while (processRate < model.arrivalProfiles.arrivalRates) {
+    while (processRate < model->arrivalProfiles.arrivalRates) {
         numReplicas++;
         processRate = indiProcessRate * numReplicas;
     }
-    model.numReplicas = numReplicas;
+    return numReplicas - model->numReplicas;
 }
 
 /**
  * @brief Decrease the number of replicas as long as it is possible to meet the arrival rate
  * 
  * @param model 
+ * @return uint8_t The number of replicas to be removed
  */
-void Controller::decNumReplicas(PipelineModel &model, const std::string& deviceName) {
-    uint8_t numReplicas = model.numReplicas;
-    uint64_t inferenceLatency = model.processProfiles[deviceName].batchInfer[model.batchSize].p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + model.processProfiles[deviceName].p95prepLat + model.processProfiles[deviceName].p95postLat);
+uint8_t Controller::decNumReplicas(const PipelineModel *model) {
+    uint8_t numReplicas = model->numReplicas;
+    std::string deviceTypeName = model->deviceTypeName;
+    ModelProfile profile = model->processProfiles.at(deviceTypeName);
+    uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
+    float indiProcessRate = 1 / (inferenceLatency + profile.p95prepLat + profile.p95postLat);
     float processRate = indiProcessRate * numReplicas;
     while (numReplicas > 1) {
         numReplicas--;
         processRate = indiProcessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if (processRate < model.arrivalProfiles.arrivalRates) {
+        if (processRate < model->arrivalProfiles.arrivalRates) {
             numReplicas++;
             break;
         }
     }
-    model.numReplicas = numReplicas;
+    return model->numReplicas - numReplicas;
 }
 
 /**
