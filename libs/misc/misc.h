@@ -552,8 +552,8 @@ ModelArrivalProfile queryModelArrivalProfile(
     const std::string &streamName,
     const std::string &taskName,
     const std::string &modelName,
-    const std::string &senderHost,
-    const std::string &receiverHost,
+    const std::vector<std::pair<std::string, std::string>> &commPair,
+    const std::map<std::pair<std::string, std::string>, NetworkEntryType> &networkEntries,
     const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
 );
 
