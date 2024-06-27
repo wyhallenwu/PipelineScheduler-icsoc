@@ -9,7 +9,7 @@
         "cont_pipeline": [
             {
                 "msvc_name": "data_reader",
-                "msvc_idealBatchSize": 30,
+                "msvc_idealBatchSize": 15,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
