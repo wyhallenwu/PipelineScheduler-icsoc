@@ -612,6 +612,7 @@ bool isFileEmpty(const std::string& filePath);
 
 std::string getDeviceTypeAbbr(const SystemDeviceType &deviceType);
 
+std::string getContainerName(const std::string& deviceTypeName, const std::string& modelName);
 std::string getContainerName(const SystemDeviceType& deviceType, const ModelType& modelType);
 
 /**

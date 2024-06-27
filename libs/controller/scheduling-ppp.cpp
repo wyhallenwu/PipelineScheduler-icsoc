@@ -16,19 +16,19 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
         lock.unlock();
     }
 
-    for (auto &[modelType, modelObj]: models) {
-        std::string modelName = getContainerName(devices[t.device].type, modelType);
-        if (modelName.find("datasource") != std::string::npos || modelName.find("sink") != std::string::npos) {
+    for (auto model: models) {
+        std::string containerName = getContainerName(model->name, model->device);
+        if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos) {
             continue;
         }
-        modelObj.arrivalProfiles = queryModelArrivalProfile(
+        model->arrivalProfiles = queryModelArrivalProfile(
             *ctrl_metricsServerConn,
             ctrl_experimentName,
             ctrl_systemName,
             t.name,
             t.source,
-            ctrl_containerLib[modelName].taskName,
-            ctrl_containerLib[modelName].modelName,
+            ctrl_containerLib[containerName].taskName,
+            ctrl_containerLib[containerName].modelName,
             possibleDeviceList,
             possibleNetworkEntryPairs
         );
@@ -114,170 +114,211 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
 
 PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice) {
     switch (type) {
-        case PipelineType::Traffic:
-            return {
-                {
-                    ModelType::DataSource, 
-                    {startDevice, true, {}, {}, {{ModelType::Yolov5n, 0}}}
-                },
-                {
-                    ModelType::Yolov5n,
-                    {
-                        "server", true, {}, {},       
-                        {{ModelType::Retinaface, 0}, {ModelType::CarBrand, 2}, {ModelType::PlateDet, 2}},
-                        {{ModelType::DataSource, -1}}
-                    },
-                },
-                {
-                    ModelType::Retinaface, 
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Arcface,    -1}},
-                        {{ModelType::Yolov5n, -1}}
-                    }
-                },
-                {
-                    ModelType::Arcface,
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Sink,   -1}},
-                        {{ModelType::Retinaface, -1}}
-                    }
-                },
-                {
-                    ModelType::CarBrand,
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Sink,   -1}},
-                        {{ModelType::Yolov5n, -1}}
-                    }
-                },
-                {
-                    ModelType::PlateDet,
-                    {
-                        "server", false, {}, {}, {{ModelType::Sink,   -1}},
-                        {{ModelType::Yolov5n, -1}}
-                    }
-                },
-                {
-                    ModelType::Sink,
-                    {
-                        "server", false, {}, {},
-                        {},
-                        {{ModelType::Arcface, -1}, {ModelType::CarBrand, -1}, {ModelType::PlateDet, -1}}
-                    }
-                }
+        case PipelineType::Traffic: {
+            PipelineModel datasource = {startDevice, "datasource", true, {}, {}};
+            PipelineModel yolov5n = {
+                "server",
+                "yolov5n",
+                true,
+                {},
+                {},
+                {},
+                {{&datasource, -1}}
             };
-        case PipelineType::Video_Call:
-            return {
-                {
-                    ModelType::DataSource,
-                    {startDevice, true, {}, {}, {{ModelType::Retinaface, 0}}}
-                },
-                {
-                    ModelType::Retinaface,
-                    {
-                        "server", true, {}, {},
-                        {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}},
-                        {{ModelType::DataSource, -1}}
-                    }
-                },
-                {
-                    ModelType::Gender,
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Sink,   -1}},
-                        {{ModelType::Retinaface, -1}}
-                    }
-                },
-                {
-                    ModelType::Age,
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Sink,   -1}},
-                        {{ModelType::Retinaface, -1}}
-                    }
-                },
-                {
-                    ModelType::Emotionnet,
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Sink,   -1}},
-                        {{ModelType::Retinaface, -1}}
-                    }
-                },
-                {
-                    ModelType::Arcface,
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Sink,   -1}},
-                        {{ModelType::Retinaface, -1}}
-                    }
-                },
-                {
-                    ModelType::Sink,
-                    {
-                        "server", false, {}, {},
-                        {},
-                        {{ModelType::Emotionnet, -1}, {ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Arcface, -1}}
-                    }
-                }
+            datasource.downstreams.push_back({&yolov5n, -1});
+
+            PipelineModel retina1face = {
+                "server",
+                "retina1face",
+                false,
+                {},
+                {},
+                {},
+                {{&yolov5n, 0}}
             };
-        case PipelineType::Building_Security:
-            return {
-                {
-                    ModelType::DataSource,
-                    {startDevice, true, {}, {}, {{ModelType::Yolov5n, 0}}}
-                },
-                {
-                    ModelType::Yolov5n,
-                    {
-                        "server", true, {}, {},
-                        {{ModelType::Retinaface, 0}},
-                        {{ModelType::DataSource, -1}}
-                    }
-                },
-                {
-                    ModelType::Retinaface,
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Gender,     -1}, {ModelType::Age, -1}},
-                        {{ModelType::Yolov5n, -1}}
-                    }
-                },
-                {
-                    ModelType::Movenet,
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Sink,   -1}},
-                        {{ModelType::Yolov5n, -1}}
-                    }
-                },
-                {
-                    ModelType::Gender,
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Sink,   -1}},
-                        {{ModelType::Retinaface, -1}}
-                    }
-                },
-                {
-                    ModelType::Age,
-                    {
-                        "server", false, {}, {},
-                        {{ModelType::Sink,   -1}},
-                        {{ModelType::Retinaface, -1}}
-                    }
-                },
-                {
-                    ModelType::Sink,
-                    {
-                        "server", false, {}, {},
-                        {},
-                        {{ModelType::Age, -1}, {ModelType::Gender, -1}, {ModelType::Movenet, -1}}
-                    }
-                }
+            yolov5n.downstreams.push_back({&retina1face, 0});
+
+            PipelineModel carbrand = {
+                "server",
+                "carbrand",
+                false,
+                {},
+                {},
+                {},
+                {{&yolov5n, 2}}
             };
+            yolov5n.downstreams.push_back({&carbrand, 2});
+
+            PipelineModel platedet = {
+                "server",
+                "platedet",
+                false,
+                {},
+                {},
+                {},
+                {{&yolov5n, 2}}
+            };
+            yolov5n.downstreams.push_back({&platedet, 2});
+
+            PipelineModel sink = {
+                "server",
+                "sink",
+                false,
+                {},
+                {},
+                {},
+                {{&retina1face, -1}, {&carbrand, -1}, {&platedet, -1}}
+            };
+            retina1face.downstreams.push_back({&sink, -1});
+            carbrand.downstreams.push_back({&sink, -1});
+            platedet.downstreams.push_back({&sink, -1});
+
+            return {&datasource, &yolov5n, &retina1face, &carbrand, &platedet, &sink};
+        }
+        case PipelineType::Building_Security: {
+            PipelineModel datasource = {startDevice, "datasource", true, {}, {}};
+            PipelineModel yolov5n = {
+                "server",
+                "yolov5n",
+                true,
+                {},
+                {},
+                {},
+                {{&datasource, -1}}
+            };
+            datasource.downstreams.push_back({&yolov5n, -1});
+
+            PipelineModel retina1face = {
+                "server",
+                "retina1face",
+                false,
+                {},
+                {},
+                {},
+                {{&yolov5n, 0}}
+            };
+            yolov5n.downstreams.push_back({&retina1face, 0});
+
+            PipelineModel movenet = {
+                "server",
+                "movenet",
+                false,
+                {},
+                {},
+                {},
+                {{&yolov5n, 0}}
+            };
+            yolov5n.downstreams.push_back({&movenet, 0});
+
+            PipelineModel gender = {
+                "server",
+                "gender",
+                false,
+                {},
+                {},
+                {},
+                {{&retina1face, -1}}
+            };
+            retina1face.downstreams.push_back({&gender, -1});
+
+            PipelineModel age = {
+                "server",
+                "age",
+                false,
+                {},
+                {},
+                {},
+                {{&retina1face, -1}}
+            };
+            retina1face.downstreams.push_back({&age, -1});
+
+            PipelineModel sink = {
+                "server",
+                "sink",
+                false,
+                {},
+                {},
+                {},
+                {{&gender, -1}, {&age, -1}, {&movenet, -1}}
+            };
+            gender.downstreams.push_back({&sink, -1});
+            age.downstreams.push_back({&sink, -1});
+            movenet.downstreams.push_back({&sink, -1});
+            return {&datasource, &yolov5n, &retina1face, &movenet, &gender, &age, &sink};
+        }
+        case PipelineType::Video_Call: {
+             PipelineModel datasource = {startDevice, "datasource", true, {}, {}};
+            PipelineModel retina1face = {
+                "server",
+                "retina1face",
+                true,
+                {},
+                {},
+                {},
+                {{&datasource, -1}}
+            };
+            datasource.downstreams.push_back({&retina1face, -1});
+
+            PipelineModel emotionnet = {
+                "server",
+                "emotionnet",
+                false,
+                {},
+                {},
+                {},
+                {{&retina1face, -1}}
+            };
+            retina1face.downstreams.push_back({&emotionnet, -1});
+
+            PipelineModel age = {
+                "server",
+                "age",
+                false,
+                {},
+                {},
+                {},
+                {{&retina1face, -1}}
+            };
+            retina1face.downstreams.push_back({&age, -1});
+
+            PipelineModel gender = {
+                "server",
+                "gender",
+                false,
+                {},
+                {},
+                {},
+                {{&retina1face, -1}}
+            };
+            retina1face.downstreams.push_back({&gender, -1});
+
+            PipelineModel arcface = {
+                "server",
+                "arcface",
+                false,
+                {},
+                {},
+                {},
+                {{&retina1face, -1}}
+            };
+            retina1face.downstreams.push_back({&arcface, -1});
+
+            PipelineModel sink = {
+                "server",
+                "sink",
+                false,
+                {},
+                {},
+                {},
+                {{&emotionnet, -1}, {&age, -1}, {&gender, -1}, {&arcface, -1}}
+            };
+            emotionnet.downstreams.push_back({&sink, -1});
+            age.downstreams.push_back({&sink, -1});
+            gender.downstreams.push_back({&sink, -1});
+            arcface.downstreams.push_back({&sink, -1});
+
+            return {&datasource, &retina1face, &emotionnet, &age, &gender, &arcface, &sink};
+        }
         default:
             return {};
     }
@@ -305,60 +346,60 @@ void Controller::getInitialBatchSizes(
         PipelineModelListType &models, uint64_t slo,
         int nObjects) {
 
-    for (auto &m: models) {
-        ModelType modelType  = std::get<0>(m);
-        m.second.batchSize = 1;
-        m.second.numReplicas = 1;
-    }
+    // for (auto &m: models) {
+    //     ModelType modelType  = std::get<0>(m);
+    //     m.second.batchSize = 1;
+    //     m.second.numReplicas = 1;
+    // }
 
-    // DFS-style recursively estimate the latency of a pipeline from source to sin
-    estimatePipelineLatency(models, models.begin()->first, 0);
+    // // DFS-style recursively estimate the latency of a pipeline from source to sin
+    // estimatePipelineLatency(models, models.begin()->first, 0);
 
-    uint64_t expectedE2ELatency = models.at(ModelType::Sink).expectedStart2HereLatency;
+    // uint64_t expectedE2ELatency = models.at(ModelType::Sink).expectedStart2HereLatency;
 
-    if (slo < expectedE2ELatency) {
-        spdlog::info("SLO is too low for the pipeline to meet. Expected E2E latency: {0:d}, SLO: {1:d}", expectedE2ELatency, slo);
-    }
+    // if (slo < expectedE2ELatency) {
+    //     spdlog::info("SLO is too low for the pipeline to meet. Expected E2E latency: {0:d}, SLO: {1:d}", expectedE2ELatency, slo);
+    // }
 
-    // Increase number of replicas to avoid bottlenecks
-    for (auto &m: models) {
-        incNumReplicas(m.second, m.second.device);
-    }
+    // // Increase number of replicas to avoid bottlenecks
+    // for (auto &m: models) {
+    //     incNumReplicas(m.second, m.second.device);
+    // }
 
-    // Find near-optimal batch sizes
-    auto foundBest = true;
-    while (foundBest) {
-        foundBest = false;
-        uint64_t bestCost = models.at(ModelType::Sink).estimatedStart2HereCost;
-        PipelineModelListType tmp_models = models;
-        for (auto &m: tmp_models) {
-            m.second.batchSize *= 2;
-            estimatePipelineLatency(tmp_models, tmp_models.begin()->first, 0);
-            expectedE2ELatency = tmp_models.at(ModelType::Sink).expectedStart2HereLatency;
-            if (expectedE2ELatency < slo) { 
-                // If increasing the batch size of model `m` creates a pipeline that meets the SLO, we should keep it
-                uint64_t estimatedE2Ecost = tmp_models.at(ModelType::Sink).estimatedStart2HereCost;
-                // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
-                if (estimatedE2Ecost < bestCost) {
-                    bestCost = estimatedE2Ecost;
-                    models = tmp_models;
-                    foundBest = true;
-                }
-                if (!foundBest) {
-                    continue;
-                }
-                // If increasing the batch size meets the SLO, we can try decreasing the number of replicas
-                decNumReplicas(m.second, m.second.device);
-                estimatedE2Ecost = tmp_models.at(ModelType::Sink).estimatedStart2HereCost;
-                if (estimatedE2Ecost < bestCost) {
-                    models = tmp_models;
-                    foundBest = true;
-                }
-            } else {
-                m.second.batchSize /= 2;
-            }
-        }   
-    }
+    // // Find near-optimal batch sizes
+    // auto foundBest = true;
+    // while (foundBest) {
+    //     foundBest = false;
+    //     uint64_t bestCost = models.at(ModelType::Sink).estimatedStart2HereCost;
+    //     PipelineModelListType tmp_models = models;
+    //     for (auto &m: tmp_models) {
+    //         m.second.batchSize *= 2;
+    //         estimatePipelineLatency(tmp_models, tmp_models.begin()->first, 0);
+    //         expectedE2ELatency = tmp_models.at(ModelType::Sink).expectedStart2HereLatency;
+    //         if (expectedE2ELatency < slo) { 
+    //             // If increasing the batch size of model `m` creates a pipeline that meets the SLO, we should keep it
+    //             uint64_t estimatedE2Ecost = tmp_models.at(ModelType::Sink).estimatedStart2HereCost;
+    //             // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
+    //             if (estimatedE2Ecost < bestCost) {
+    //                 bestCost = estimatedE2Ecost;
+    //                 models = tmp_models;
+    //                 foundBest = true;
+    //             }
+    //             if (!foundBest) {
+    //                 continue;
+    //             }
+    //             // If increasing the batch size meets the SLO, we can try decreasing the number of replicas
+    //             decNumReplicas(m.second, m.second.device);
+    //             estimatedE2Ecost = tmp_models.at(ModelType::Sink).estimatedStart2HereCost;
+    //             if (estimatedE2Ecost < bestCost) {
+    //                 models = tmp_models;
+    //                 foundBest = true;
+    //             }
+    //         } else {
+    //             m.second.batchSize /= 2;
+    //         }
+    //     }   
+    // }
 }
 
 /**
@@ -368,18 +409,18 @@ void Controller::getInitialBatchSizes(
  * @param model infomation about the model
  * @param modelType 
  */
-void Controller::estimateModelLatency(PipelineModel &model, const ModelType modelType, const std::string& deviceName) {
-    ModelProfile profile = model.processProfiles[deviceName];
+void Controller::estimateModelLatency(PipelineModel *currModel, const std::string& deviceName) {
+    ModelProfile profile = currModel->processProfiles[deviceName];
     uint64_t preprocessLatency = profile.p95prepLat;
-    BatchSizeType batchSize = model.batchSize;
+    BatchSizeType batchSize = currModel->batchSize;
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
     uint64_t postprocessLatency =  profile.p95postLat;
     float preprocessRate = 1000000.f / preprocessLatency;
 
-    model.expectedQueueingLatency = calculateQueuingLatency(model.arrivalProfiles.arrivalRates, preprocessRate);
-    model.expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
-    model.expectedMaxProcessLatency = preprocessLatency * batchSize + inferLatency * batchSize + postprocessLatency * batchSize;
-    model.estimatedPerQueryCost = model.expectedAvgPerQueryLatency + model.expectedQueueingLatency + model.expectedTransferLatency;
+    currModel->expectedQueueingLatency = calculateQueuingLatency(currModel->arrivalProfiles.arrivalRates, preprocessRate);
+    currModel->expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
+    currModel->expectedMaxProcessLatency = preprocessLatency * batchSize + inferLatency * batchSize + postprocessLatency * batchSize;
+    currModel->estimatedPerQueryCost = currModel->expectedAvgPerQueryLatency + currModel->expectedQueueingLatency + currModel->expectedTransferLatency;
 }
 
 /**
@@ -388,26 +429,26 @@ void Controller::estimateModelLatency(PipelineModel &model, const ModelType mode
  * @param pipeline provides all information about the pipeline needed for scheduling
  * @param currModel 
  */
-void Controller::estimatePipelineLatency(PipelineModelListType &pipeline, const ModelType &currModel, const uint64_t start2HereLatency) {
-    estimateModelLatency(pipeline.at(currModel), currModel, pipeline.at(currModel).device);
+void Controller::estimatePipelineLatency(PipelineModel* currModel, const uint64_t start2HereLatency) {
+    // estimateModelLatency(currModel, currModel->device);
 
     // Update the expected latency to reach the current model
     // In case a model has multiple upstreams, the expected latency to reach the model is the maximum of the expected latency 
     // to reach from each upstream.
-    pipeline.at(currModel).expectedStart2HereLatency = std::max(
-        pipeline.at(currModel).expectedStart2HereLatency,
-        start2HereLatency + pipeline.at(currModel).expectedMaxProcessLatency + pipeline.at(currModel).expectedTransferLatency + pipeline.at(currModel).expectedQueueingLatency
+    currModel->expectedStart2HereLatency = std::max(
+        currModel->expectedStart2HereLatency,
+        start2HereLatency + currModel->expectedMaxProcessLatency + currModel->expectedTransferLatency + currModel->expectedQueueingLatency
     );
 
     // Cost of the pipeline until the current model
-    pipeline.at(currModel).estimatedStart2HereCost += pipeline.at(currModel).estimatedPerQueryCost;
+    currModel->estimatedStart2HereCost += currModel->estimatedPerQueryCost;
 
-    std::vector<std::pair<ModelType, int>> downstreams = pipeline.at(currModel).downstreams;
+    std::vector<std::pair<PipelineModel *, int>> downstreams = currModel->downstreams;
     for (const auto &d: downstreams) {
-        estimatePipelineLatency(pipeline, d.first, pipeline.at(currModel).expectedStart2HereLatency);
+        estimatePipelineLatency(d.first, currModel->expectedStart2HereLatency);
     }
 
-    if (currModel == ModelType::Sink) {
+    if (currModel->downstreams.size() == 0) {
         return;
     }
 }
