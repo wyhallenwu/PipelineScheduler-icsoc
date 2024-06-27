@@ -4,7 +4,7 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "videocall",
         "cont_taskName": "emotionnet",
-        "cont_hostDevice": "nx",
+        "cont_hostDevice": "orn",
         "cont_name": "emotionnet_0",
         "cont_pipeline": [
             {
@@ -176,7 +176,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/emotion_dyn_agx_fp32_16_1.engine",
+                "path": "../models/emotion_dyn_orn_fp32_8_1.engine",
                 "prec": 4
             },
             {

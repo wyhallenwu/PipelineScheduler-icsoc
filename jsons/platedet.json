@@ -4,7 +4,7 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "platedet",
-        "cont_hostDevice": "nx",
+        "cont_hostDevice": "orn",
         "cont_name": "yolov5_plate_0",
         "cont_pipeline": [
             {
@@ -186,7 +186,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/platedet_dyn_nms_nx_fp32_8_1.engine",
+                "path": "../models/platedet_dyn_nms_orn_fp32_8_1.engine",
                 "prec": 4,
                 "device": 0
             },

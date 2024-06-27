@@ -5,7 +5,7 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "arcface",
-        "cont_hostDevice": "nx",
+        "cont_hostDevice": "orn",
         "cont_name": "arcface_0",
         "cont_pipeline": [
             {
@@ -177,7 +177,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/arcface_dynamic_nx_fp32_8_1.engine",
+                "path": "../models/arcface_dynamic_orn_fp32_8_1.engine",
                 "prec": 4
             },
             {

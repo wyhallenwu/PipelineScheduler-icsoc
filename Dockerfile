@@ -1,5 +1,5 @@
 # Builder Image
-FROM pipeline-scheduler-nx as builder
+FROM pipeline-scheduler-orin-nano
 
 USER root
 WORKDIR /home/soulsaver/PipelineScheduler/build

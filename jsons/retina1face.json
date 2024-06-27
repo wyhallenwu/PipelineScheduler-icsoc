@@ -5,7 +5,7 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "retina1face",
-        "cont_hostDevice": "nx",
+        "cont_hostDevice": "orn",
         "cont_name": "retinaface_0",
         "cont_pipeline": [
             {
@@ -188,7 +188,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/retina1face_nx_fp32_8_1.engine",
+                "path": "../models/retina1face_orn_fp32_8_1.engine",
                 "prec": 4
             },
             {
