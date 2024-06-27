@@ -28,6 +28,7 @@ endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES
         controller.h
+        scheduling-ppp.h
         ../json/json.h
 )
 
@@ -35,6 +36,7 @@ set(
 set(
         SOURCE_FILES
         controller.cpp
+        scheduling-ppp.cpp
 )
 
 # Here we define the library.
