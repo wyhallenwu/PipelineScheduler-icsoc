@@ -1,5 +1,5 @@
 # Builder Image
-FROM pipeline-scheduler-agx
+FROM pipeline-scheduler-orin-nano
 
 USER root
 RUN pip install -U jetson-stats --force

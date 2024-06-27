@@ -4,7 +4,7 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "pedestrian",
         "cont_taskName": "age",
-        "cont_hostDevice": "agx",
+        "cont_hostDevice": "orn",
         "cont_name": "age_0",
         "cont_pipeline": [
             {
@@ -176,7 +176,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/age_dynamic_Xavier_fp32_16_1.engine",
+                "path": "../models/age_dynamic_orn_fp32_8_1.engine",
                 "prec": 4
             },
             {

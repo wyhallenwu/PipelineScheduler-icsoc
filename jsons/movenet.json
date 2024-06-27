@@ -4,7 +4,7 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "pedestrian_security",
         "cont_taskName": "movenet",
-        "cont_hostDevice": "agx",
+        "cont_hostDevice": "orn",
         "cont_name": "movenet_0",
         "cont_pipeline": [
             {
@@ -178,7 +178,7 @@
                 "cbs":1, 
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/pose_Xavier_fp32_16_1.engine",
+                "path": "../models/pose_orn_fp32_8_1.engine",
                 "prec": 4
             },
             {
@@ -188,7 +188,7 @@
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
