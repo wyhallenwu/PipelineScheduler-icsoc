@@ -280,6 +280,7 @@ void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
 
 bool DeviceAgent::CreateContainer(
         ModelType model,
+        std::string model_file,
         std::string pipe_name,
         BatchSizeType batch_size,
         std::vector<int> input_dims,
@@ -328,6 +329,7 @@ bool DeviceAgent::CreateContainer(
             base_config[0]["msvc_type"] = 500;
         } else {
             base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
+            base_config[2]["path"] = model_file;
         }
 
 
@@ -547,9 +549,9 @@ void DeviceAgent::StartContainerRequestHandler::Proceed() {
         for (auto &dim: request.input_dimensions()) {
             input_dims.push_back(dim);
         }
-        bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.pipeline_name(),
-                                                     request.batch_size(), input_dims, request.replica_id(),
-                                                     request.allocation_mode(), request.device(),
+        bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.model_file(),
+                                                     request.pipeline_name(), request.batch_size(), input_dims,
+                                                     request.replica_id(), request.allocation_mode(), request.device(),
                                                      request.slo(), request.upstream(), request.downstream());
         if (!success) {
             status = FINISH;

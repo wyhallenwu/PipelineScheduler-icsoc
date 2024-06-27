@@ -184,6 +184,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     Status status;
     request.set_pipeline_name(container.second->task->name);
     request.set_model(container.second->model);
+    request.set_model_file(container.second->model_file[replica -1]);
     request.set_batch_size(container.second->batch_size[replica -1]);
     request.set_replica_id(replica);
     request.set_allocation_mode(easy_allocation);
@@ -615,7 +616,7 @@ void Controller::shiftModelToEdge(PipelineModelListType &models, const ModelType
 
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
-    // tasks.insert({t.name, {t.slo, t.type, {}}});
+    // tasks.insert({t.name, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
     // TaskHandle *task = &tasks[t.name];
     // NodeHandle *device = &devices[t.device];
     // auto models = getModelsByPipelineType(t.type, t.device);
@@ -661,43 +662,47 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     // }
 
     // std::string tmp = t.name;
-    // containers.insert({tmp.append(":datasource"), {tmp, DataSource, device, task, 33, 9999, 0, 1, {-1}}});
+    // containers.insert({tmp.append("_datasource"), {tmp, 0, DataSource, true,
+    //                                                ctrl_containerLib[DataSource].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0],
+    //                                                1, {15}, {0}, {0}, {}, device, task}});
     // task->subtasks.insert({tmp, &containers[tmp]});
-    // task->subtasks[tmp]->recv_port = device->next_free_port++;
+    // task->subtasks[tmp]->recv_port = {device->next_free_port++};
     // device->containers.insert({tmp, task->subtasks[tmp]});
-    // device = &devices["server"];
+    // NodeHandle *server = &devices["server"];
 
-    // // Find an initial batch size and replica configuration that meets the SLO at the server
-    // getInitialBatchSizes(models, t.slo, 10);
-
-    // // Try to shift model to edge devices
-    // shiftModelToEdge(models, ModelType::DataSource, t.slo);
-
+    // TODO: get correct initial batch size, cuda devices, and number of replicas
+    // auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
+    // int cuda_device = 1;
+    // int replicas = 1;
     // for (const auto &m: models) {
     //     tmp = t.name;
-    //     // TODO: get correct initial cuda devices based on TaskDescription and System State
-    //     int cuda_device = 1;
+    //     std::vector<int> dims = m.first == Sink ? std::vector<int>(0)
+    //                                             : ctrl_containerLib[m.first].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
     //     containers.insert(
-    //             {tmp.append(MODEL_INFO[m.first][0]), {tmp, m.first, device, task, batch_sizes[m.first], 1, {cuda_device},
-    //                                                   -1, device->next_free_port++, {}, {}, {}, {}}});
-    //     task->subtasks.insert({tmp, &containers[tmp]});
-    //     device->containers.insert({tmp, task->subtasks[tmp]});
-    // }
+    //             {tmp.append("_" + ctrl_containerLib[m.first].taskName),
+    //              {tmp, -1, m.first, m.first == Yolov5n || m.first == Retinaface || m.first == Yolov5nDsrc || m.first == RetinafaceDsrc,
+    //               dims, replicas, {batch_sizes[m.first]}, {cuda_device}, {server->next_free_port++}, {}, server, task}});
+    //    task->subtasks.insert({tmp, &containers[tmp]});
+    //    server->containers.insert({tmp, task->subtasks[tmp]});
+    //}
 
-    // task->subtasks[t.name + ":datasource"]->downstreams.push_back(task->subtasks[t.name + MODEL_INFO[models[0].first][0]]);
-    // task->subtasks[t.name + MODEL_INFO[models[0].first][0]]->upstreams.push_back(task->subtasks[t.name + ":datasource"]);
-    // for (const auto &m: models) {
-    //     for (const auto &d: m.second) {
-    //         tmp = t.name;
-    //         task->subtasks[tmp.append(MODEL_INFO[d.first][0])]->class_of_interest = d.second;
-    //         task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + MODEL_INFO[m.first][0]]);
-    //         task->subtasks[t.name + MODEL_INFO[m.first][0]]->downstreams.push_back(task->subtasks[tmp]);
-    //     }
-    // }
+    //task->subtasks[t.name + "_datasource"]->downstreams.push_back(
+    //        task->subtasks[t.name + "_" + ctrl_containerLib[models[0].first].taskName]);
+    //task->subtasks[t.name + "_" + ctrl_containerLib[models[0].first].taskName]->upstreams.push_back(
+    //        task->subtasks[t.name + "_datasource"]);
+    //for (const auto &m: models) {
+    //    for (const auto &d: m.second) {
+    //        tmp = t.name;
+    //        task->subtasks[tmp.append("_" + ctrl_containerLib[d.first].taskName)]->class_of_interest = d.second;
+    //        task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + "_" + ctrl_containerLib[m.first].taskName]);
+    //        task->subtasks[t.name + "_" + ctrl_containerLib[m.first].taskName]->downstreams.push_back(task->subtasks[tmp]);
+    //    }
+    //}
 
-    // for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
-    //     StartContainer(msvc, task->slo, t.source);
-    // }
+    //for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
+    //    StartContainer(msvc, task->slo, t.source, replicas);
+    //}
+    //task->start_time = std::chrono::system_clock::now();
 }
 
 PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice) {
