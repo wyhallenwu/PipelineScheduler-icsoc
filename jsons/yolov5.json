@@ -1,6 +1,6 @@
 {
     "container": {
-        "cont_experimentName": "prof",
+        "cont_experimentName": "run",
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "yolov5",
@@ -258,7 +258,7 @@
                         "nb_classOfInterest": -1,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "localhost:55022"
+                            "localhost:55012"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "name",

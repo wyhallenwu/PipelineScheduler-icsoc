@@ -54,14 +54,25 @@ Controller::Controller(int argc, char **argv) {
             ctrl_logger
     );
 
-    ctrl_containerLib = getContainerLib();
+    ctrl_containerLib = getContainerLib("all");
 
     json metricsCfgs = json::parse(std::ifstream("../jsons/metricsserver.json"));
     ctrl_metricsServerConfigs.from_json(metricsCfgs);
-    ctrl_metricsServerConfigs.schema = ctrl_experimentName + "_" + ctrl_systemName;
+    ctrl_metricsServerConfigs.schema = abbreviate(ctrl_experimentName + "_" + ctrl_systemName);
     ctrl_metricsServerConfigs.user = "controller";
     ctrl_metricsServerConfigs.password = "agent";
     ctrl_metricsServerConn = connectToMetricsServer(ctrl_metricsServerConfigs, "controller");
+
+    std::string sql = "CREATE SCHEMA IF NOT EXISTS " + ctrl_metricsServerConfigs.schema + ";";
+    pushSQL(*ctrl_metricsServerConn, sql);
+    sql = "GRANT USAGE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
+    pushSQL(*ctrl_metricsServerConn, sql);
+    sql = "GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
+    pushSQL(*ctrl_metricsServerConn, sql);
+    sql = "GRANT CREATE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
+    pushSQL(*ctrl_metricsServerConn, sql);
+    sql = "ALTER DEFAULT PRIVILEGES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " GRANT SELECT, INSERT ON TABLES TO device_agent, container_agent;";
+    pushSQL(*ctrl_metricsServerConn, sql);
 
     std::thread networkCheckThread(&Controller::checkNetworkConditions, this);
     networkCheckThread.detach();
@@ -117,58 +128,6 @@ void Controller::Scheduling() {
     }
 }
 
-void Controller::AddTask(const TaskDescription::TaskStruct &t) {
-    std::cout << "Adding task: " << t.name << std::endl;
-    // tasks.insert({t.name, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
-    // TaskHandle *task = &tasks[t.name];
-    // NodeHandle *device = &devices[t.device];
-    // auto models = getModelsByPipelineType(t.type);
-
-    // std::string tmp = t.name;
-
-    // containers.insert({tmp.append("_datasource"), {tmp, 0, DataSource, true,
-    //                                                ctrl_containerLib[DataSource].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0],
-    //                                                1, {15}, {0}, {0}, {}, device, task}});
-    // task->subtasks.insert({tmp, &containers[tmp]});
-    // task->subtasks[tmp]->recv_port = {device->next_free_port++};
-    // device->containers.insert({tmp, task->subtasks[tmp]});
-    // NodeHandle *server = &devices["server"];
-
-    // // TODO: get correct initial batch size, cuda devices, and number of replicas
-    // auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
-    // int cuda_device = 1;
-    // int replicas = 1;
-    // for (const auto &m: models) {
-    //     tmp = t.name;
-    //     std::vector<int> dims = m.first == Sink ? std::vector<int>(0)
-    //             : ctrl_containerLib[m.first].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
-    //     containers.insert(
-    //             {tmp.append("_" + ctrl_containerLib[m.first].taskName),
-    //              {tmp, -1, m.first, m.first == Yolov5n || m.first == Retinaface || m.first == Yolov5nDsrc || m.first == RetinafaceDsrc,
-    //               dims, replicas, {batch_sizes[m.first]}, {cuda_device}, {server->next_free_port++}, {}, server, task}});
-    //     task->subtasks.insert({tmp, &containers[tmp]});
-    //     server->containers.insert({tmp, task->subtasks[tmp]});
-    // }
-
-    // task->subtasks[t.name + "_datasource"]->downstreams.push_back(
-    //         task->subtasks[t.name + "_" + ctrl_containerLib[models[0].first].taskName]);
-    // task->subtasks[t.name + "_" + ctrl_containerLib[models[0].first].taskName]->upstreams.push_back(
-    //         task->subtasks[t.name + "_datasource"]);
-    // for (const auto &m: models) {
-    //     for (const auto &d: m.second) {
-    //         tmp = t.name;
-    //         task->subtasks[tmp.append("_" + ctrl_containerLib[d.first].taskName)]->class_of_interest = d.second;
-    //         task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + "_" + ctrl_containerLib[m.first].taskName]);
-    //         task->subtasks[t.name + "_" + ctrl_containerLib[m.first].taskName]->downstreams.push_back(task->subtasks[tmp]);
-    //     }
-    // }
-
-    // for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
-    //     StartContainer(msvc, task->slo, t.source, replicas);
-    // }
-    // task->start_time = std::chrono::system_clock::now();
-}
-
 void Controller::DeviseAdvertisementHandler::Proceed() {
     if (status == CREATE) {
         status = PROCESS;
@@ -176,7 +135,8 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     } else if (status == PROCESS) {
         new DeviseAdvertisementHandler(service, cq, controller);
         std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), DEVICE_CONTROL_PORT + controller->ctrl_port_offset);
-        NodeHandle node{request.device_name(),
+        std::string deviceName = abbreviate(request.device_name());
+        NodeHandle node{deviceName,
                                      request.ip_address(),
                                      ControlCommunication::NewStub(
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
@@ -185,7 +145,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
                                      std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset, {}};
-        controller->devices.insert({request.device_name(), node});
+        controller->devices.insert({deviceName, node});
         reply.set_name(controller->ctrl_systemName);
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
@@ -224,6 +184,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     Status status;
     request.set_pipeline_name(container.second->task->name);
     request.set_model(container.second->model);
+    request.set_model_file(container.second->model_file[replica -1]);
     request.set_batch_size(container.second->batch_size[replica -1]);
     request.set_replica_id(replica);
     request.set_allocation_mode(easy_allocation);
@@ -375,6 +336,146 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     finishGrpc(rpc, reply, status, device->cq);
 }
 
+/**
+ * @brief 
+ * 
+ * @param container calculating queue sizes for the container before its official deployment.
+ * @param modelType 
+ */
+void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType modelType) {
+    float preprocessRate = 1000000.f / container.expectedPreprocessLatency; // queries per second
+    float postprocessRate = 1000000.f / container.expectedPostprocessLatency; // qps
+    float inferRate = 1000000.f / (container.expectedInferLatency * container.batch_size[0]); // batch per second
+
+    QueueLengthType minimumQueueSize = 30;
+
+    // Receiver to Preprocessor
+    // Utilization of preprocessor
+    float preprocess_rho = container.arrival_rate / preprocessRate;
+    QueueLengthType preprocess_inQueueSize = std::max((QueueLengthType) std::ceil(preprocess_rho * preprocess_rho / (2 * (1 - preprocess_rho))), minimumQueueSize);
+    float preprocess_thrpt = std::min(preprocessRate, container.arrival_rate);
+
+    // Preprocessor to Inferencer
+    // Utilization of inferencer
+    float infer_rho = preprocess_thrpt / container.batch_size[0] / inferRate;
+    QueueLengthType infer_inQueueSize = std::max((QueueLengthType) std::ceil(infer_rho * infer_rho / (2 * (1 - infer_rho))), minimumQueueSize);
+    float infer_thrpt = std::min(inferRate, preprocess_thrpt / container.batch_size[0]); // batch per second
+
+    float postprocess_rho = (infer_thrpt * container.batch_size[0]) / postprocessRate;
+    QueueLengthType postprocess_inQueueSize = std::max((QueueLengthType) std::ceil(postprocess_rho * postprocess_rho / (2 * (1 - postprocess_rho))), minimumQueueSize);
+    float postprocess_thrpt = std::min(postprocessRate, infer_thrpt * container.batch_size[0]);
+
+    QueueLengthType sender_inQueueSize = postprocess_inQueueSize * container.batch_size[0];
+
+    container.queueSizes = {preprocess_inQueueSize, infer_inQueueSize, postprocess_inQueueSize, sender_inQueueSize};
+
+    container.expectedThroughput = postprocess_thrpt;
+}
+
+/**
+ * @brief estimate the different types of latency, in microseconds
+ * Due to batch inference's nature, the queries that come later has to wait for more time both in preprocessor and postprocessor.
+ * 
+ * @param model infomation about the model
+ * @param modelType 
+ */
+void Controller::estimateModelLatency(PipelineModel &model, const ModelType modelType) {
+    uint64_t preprocessLatency = model.processProfile.p95prepLat;
+    BatchSizeType batchSize = model.batchSize;
+    uint64_t inferLatency = InferTimeEstimator(modelType, batchSize);
+    uint64_t postprocessLatency =  model.processProfile.p95postLat;
+    float preprocessRate = 1000000.f / preprocessLatency;
+
+    model.expectedQueueingLatency = calculateQueuingLatency(model.arrivalProfile.arrivalRates, preprocessRate);
+    model.expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
+    model.expectedMaxProcessLatency = preprocessLatency * batchSize + inferLatency * batchSize + postprocessLatency * batchSize;
+    model.estimatedPerQueryCost = model.expectedAvgPerQueryLatency + model.expectedQueueingLatency + model.expectedTransferLatency;
+}
+
+/**
+ * @brief DFS-style recursively estimate the latency of a pipeline from source to sink
+ * 
+ * @param pipeline provides all information about the pipeline needed for scheduling
+ * @param currModel 
+ */
+void Controller::estimatePipelineLatency(PipelineModelListType &pipeline, const ModelType &currModel, const uint64_t start2HereLatency) {
+    estimateModelLatency(pipeline.at(currModel), currModel);
+
+    // Update the expected latency to reach the current model
+    // In case a model has multiple upstreams, the expected latency to reach the model is the maximum of the expected latency 
+    // to reach from each upstream.
+    pipeline.at(currModel).expectedStart2HereLatency = std::max(
+        pipeline.at(currModel).expectedStart2HereLatency,
+        start2HereLatency + pipeline.at(currModel).expectedMaxProcessLatency + pipeline.at(currModel).expectedTransferLatency + pipeline.at(currModel).expectedQueueingLatency
+    );
+
+    // Cost of the pipeline until the current model
+    pipeline.at(currModel).estimatedStart2HereCost += pipeline.at(currModel).estimatedPerQueryCost;
+
+    std::vector<std::pair<ModelType, int>> downstreams = pipeline.at(currModel).downstreams;
+    for (const auto &d: downstreams) {
+        estimatePipelineLatency(pipeline, d.first, pipeline.at(currModel).expectedStart2HereLatency);
+    }
+
+    if (currModel == ModelType::Sink) {
+        return;
+    }
+}
+
+/**
+ * @brief Increase the number of replicas until the arrival rate is met
+ * 
+ * @param model 
+ */
+void Controller::incNumReplicas(PipelineModel &model) {
+    uint8_t numReplicas = model.numReplicas;
+    uint64_t inferenceLatency = model.processProfile.batchInfer[model.batchSize].p95inferLat;
+    float indiProcessRate = 1 / (inferenceLatency + model.processProfile.p95prepLat + model.processProfile.p95postLat);
+    float processRate = indiProcessRate * numReplicas;
+    while (processRate < model.arrivalProfile.arrivalRates) {
+        numReplicas++;
+        processRate = indiProcessRate * numReplicas;
+    }
+    model.numReplicas = numReplicas;
+}
+
+/**
+ * @brief Decrease the number of replicas as long as it is possible to meet the arrival rate
+ * 
+ * @param model 
+ */
+void Controller::decNumReplicas(PipelineModel &model) {
+    uint8_t numReplicas = model.numReplicas;
+    uint64_t inferenceLatency = model.processProfile.batchInfer[model.batchSize].p95inferLat;
+    float indiProcessRate = 1 / (inferenceLatency + model.processProfile.p95prepLat + model.processProfile.p95postLat);
+    float processRate = indiProcessRate * numReplicas;
+    while (numReplicas > 1) {
+        numReplicas--;
+        processRate = indiProcessRate * numReplicas;
+        // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
+        if (processRate < model.arrivalProfile.arrivalRates) {
+            numReplicas++;
+            break;
+        }
+    }
+    model.numReplicas = numReplicas;
+}
+
+/**
+ * @brief Calculate queueing latency for each query coming to the preprocessor's queue, in microseconds
+ * Queue type is expected to be M/D/1
+ * 
+ * @param arrival_rate 
+ * @param preprocess_rate 
+ * @return uint64_t 
+ */
+uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate) {
+    float rho = arrival_rate / preprocess_rate;
+    float numQueriesInSystem = rho / (1 - rho);
+    float averageQueueLength = rho * rho / (1 - rho);
+    return (uint64_t) (averageQueueLength / arrival_rate * 1000000);
+}
+
 void Controller::optimizeBatchSizeStep(
         const Pipeline &models,
         std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
@@ -408,35 +509,200 @@ void Controller::optimizeBatchSizeStep(
     estimated_infer_times[candidate] -= max_saving;
 }
 
-std::map<ModelType, int> Controller::getInitialBatchSizes(
-        const Pipeline &models, int slo,
+/**
+ * @brief 
+ * 
+ * @param models 
+ * @param slo 
+ * @param nObjects 
+ * @return std::map<ModelType, int> 
+ */
+void Controller::getInitialBatchSizes(
+        PipelineModelListType &models, uint64_t slo,
         int nObjects) {
-    std::map<ModelType, int> batch_sizes = {};
-    std::map<ModelType, int> estimated_infer_times = {};
 
-    for (const auto &m: models) {
-        batch_sizes[m.first] = 1;
-        if (estimated_infer_times.size() == 0) {
-            estimated_infer_times[m.first] = (InferTimeEstimator(m.first, 1));
-        } else {
-            estimated_infer_times[m.first] = (InferTimeEstimator(m.first, 1) * nObjects);
-        }
+    for (auto &m: models) {
+        ModelType modelType  = std::get<0>(m);
+        m.second.batchSize = 1;
+        m.second.numReplicas = 1;
     }
 
-    int sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
-                              [](int acc, const std::pair<ModelType, int> &p) {
-                                  return acc + p.second;
-                              });
+    // DFS-style recursively estimate the latency of a pipeline from source to sin
+    estimatePipelineLatency(models, models.begin()->first, 0);
 
-    while (slo < sum) {
-        optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
-        sum = std::accumulate(estimated_infer_times.begin(), estimated_infer_times.end(), 0,
-                              [](int acc, const std::pair<ModelType, int> &p) {
-                                  return acc + p.second;
-                              });
+    uint64_t expectedE2ELatency = models.at(ModelType::Sink).expectedStart2HereLatency;
+
+    if (slo < expectedE2ELatency) {
+        spdlog::info("SLO is too low for the pipeline to meet. Expected E2E latency: {0:d}, SLO: {1:d}", expectedE2ELatency, slo);
     }
-    optimizeBatchSizeStep(models, batch_sizes, estimated_infer_times, nObjects);
-    return batch_sizes;
+
+    // Increase number of replicas to avoid bottlenecks
+    for (auto &m: models) {
+        incNumReplicas(m.second);
+    }
+
+    // Find near-optimal batch sizes
+    auto foundBest = true;
+    while (foundBest) {
+        foundBest = false;
+        uint64_t bestCost = models.at(ModelType::Sink).estimatedStart2HereCost;
+        PipelineModelListType tmp_models = models;
+        for (auto &m: tmp_models) {
+            m.second.batchSize *= 2;
+            estimatePipelineLatency(tmp_models, tmp_models.begin()->first, 0);
+            expectedE2ELatency = tmp_models.at(ModelType::Sink).expectedStart2HereLatency;
+            if (expectedE2ELatency < slo) { 
+                // If increasing the batch size of model `m` creates a pipeline that meets the SLO, we should keep it
+                uint64_t estimatedE2Ecost = tmp_models.at(ModelType::Sink).estimatedStart2HereCost;
+                // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
+                if (estimatedE2Ecost < bestCost) {
+                    bestCost = estimatedE2Ecost;
+                    models = tmp_models;
+                    foundBest = true;
+                }
+                if (!foundBest) {
+                    continue;
+                }
+                // If increasing the batch size meets the SLO, we can try decreasing the number of replicas
+                decNumReplicas(m.second);
+                estimatedE2Ecost = tmp_models.at(ModelType::Sink).estimatedStart2HereCost;
+                if (estimatedE2Ecost < bestCost) {
+                    models = tmp_models;
+                    foundBest = true;
+                }
+            } else {
+                m.second.batchSize /= 2;
+            }
+        }   
+    }
+}
+
+/**
+ * @brief Recursively traverse the model tree and try shifting models to edge devices
+ * 
+ * @param models 
+ * @param slo
+ */
+void Controller::shiftModelToEdge(PipelineModelListType &models, const ModelType &currModel, uint64_t slo) {
+    // if (currModel == ModelType::Sink) {
+    //     return;
+    // }
+    // PipelineModelListType tmp_models = models;
+    // std::string startDevice = tmp_models.begin()->second.device;
+    // std::string currDevice = tmp_models.at(currModel).device;
+    // std::string currModelName = ctrl_containerLib[currModel].taskName.substr(1);
+
+    // if (currDevice != startDevice) {
+    //     int inputSize = tmp_models.at(currModel).processProfile.p95InputSize;
+    //     int outputSize = tmp_models.at(currModel).processProfile.p95OutputSize;
+    //     if (inputSize * 0.8 < outputSize) {
+    //         tmp_models.at(currModel).device = startDevice;
+    //         for (auto &d: tmp_models.at(currModel).downstreams) {
+    //             //TODO: update the transmit latency
+    //             tmp_models.at(currModel).expectedTransferLatency = 0;
+    //         }
+    //         estimatePipelineLatency(tmp_models, tmp_models.begin()->first, 0);
+    //         uint64_t expectedE2ELatency = tmp_models.at(ModelType::Sink).expectedStart2HereLatency;
+    //         // if after shifting the model to the edge device, the pipeline still meets the SLO, we should keep it
+    //         if (expectedE2ELatency < slo) {
+    //             models = tmp_models;
+    //         }
+    //     }
+    // }
+    // for (auto &d: tmp_models.at(currModel).downstreams) {
+    //     shiftModelToEdge(tmp_models, d.first, slo);
+    // }
+}
+
+void Controller::AddTask(const TaskDescription::TaskStruct &t) {
+    std::cout << "Adding task: " << t.name << std::endl;
+    // tasks.insert({t.name, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
+    // TaskHandle *task = &tasks[t.name];
+    // NodeHandle *device = &devices[t.device];
+    // auto models = getModelsByPipelineType(t.type, t.device);
+    // ArrivalRateType arrival_rates;
+
+    // ScaleFactorType scale_factors;
+    // // Query arrival rates of individual models
+    // for (auto &m: models) {
+    //     arrival_rates = {
+    //         {1, -1}, //1 second
+    //         {3, -1},
+    //         {7, -1},
+    //         {15, -1},
+    //         {30, -1},
+    //         {60, -1}
+    //     };
+
+    //     scale_factors = {
+    //         {1, 1},
+    //         {3, 1},
+    //         {7, 1},
+    //         {15, 1},
+    //         {30, 1},
+    //         {60, 1}
+    //     };
+
+    //     // Get the name of the model
+    //     // substr(1) is used to remove the colon at the beginning of the model name
+    //     std::string model_name = t.name + "_" + MODEL_INFO[std::get<0>(m)][0].substr(1);
+
+    //     // Query the request rate for each time period
+    //     queryRequestRateInPeriod(model_name + "_arrival_table", arrival_rates);
+    //     // Query the scale factor (ratio of number of outputs / each input) for each time period
+    //     queryScaleFactorInPeriod(model_name + "_process_table", scale_factors);
+
+    //     m.second.arrivalRate = std::max_element(arrival_rates.begin(), arrival_rates.end(),
+    //                                           [](const std::pair<int, float> &p1, const std::pair<int, float> &p2) {
+    //                                               return p1.second < p2.second;
+    //                                           })->second;
+    //     m.second.scaleFactors = scale_factors;
+    //     m.second.modelProfile = queryModelProfile(model_name, DEVICE_INFO[device->type]);
+    //     m.second.expectedTransmitLatency = queryTransmitLatency(m.second.modelProfile.avgInputSize, t.source, m.second.device);
+    // }
+
+    // std::string tmp = t.name;
+    // containers.insert({tmp.append("_datasource"), {tmp, 0, DataSource, true,
+    //                                                ctrl_containerLib[DataSource].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0],
+    //                                                1, {15}, {0}, {0}, {}, device, task}});
+    // task->subtasks.insert({tmp, &containers[tmp]});
+    // task->subtasks[tmp]->recv_port = {device->next_free_port++};
+    // device->containers.insert({tmp, task->subtasks[tmp]});
+    // NodeHandle *server = &devices["server"];
+
+    // TODO: get correct initial batch size, cuda devices, and number of replicas
+    // auto batch_sizes = getInitialBatchSizes(models, t.slo, 10);
+    // int cuda_device = 1;
+    // int replicas = 1;
+    // for (const auto &m: models) {
+    //     tmp = t.name;
+    //     std::vector<int> dims = m.first == Sink ? std::vector<int>(0)
+    //                                             : ctrl_containerLib[m.first].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
+    //     containers.insert(
+    //             {tmp.append("_" + ctrl_containerLib[m.first].taskName),
+    //              {tmp, -1, m.first, m.first == Yolov5n || m.first == Retinaface || m.first == Yolov5nDsrc || m.first == RetinafaceDsrc,
+    //               dims, replicas, {batch_sizes[m.first]}, {cuda_device}, {server->next_free_port++}, {}, server, task}});
+    //    task->subtasks.insert({tmp, &containers[tmp]});
+    //    server->containers.insert({tmp, task->subtasks[tmp]});
+    //}
+
+    //task->subtasks[t.name + "_datasource"]->downstreams.push_back(
+    //        task->subtasks[t.name + "_" + ctrl_containerLib[models[0].first].taskName]);
+    //task->subtasks[t.name + "_" + ctrl_containerLib[models[0].first].taskName]->upstreams.push_back(
+    //        task->subtasks[t.name + "_datasource"]);
+    //for (const auto &m: models) {
+    //    for (const auto &d: m.second) {
+    //        tmp = t.name;
+    //        task->subtasks[tmp.append("_" + ctrl_containerLib[d.first].taskName)]->class_of_interest = d.second;
+    //        task->subtasks[tmp]->upstreams.push_back(task->subtasks[t.name + "_" + ctrl_containerLib[m.first].taskName]);
+    //        task->subtasks[t.name + "_" + ctrl_containerLib[m.first].taskName]->downstreams.push_back(task->subtasks[tmp]);
+    //    }
+    //}
+
+    //for (std::pair<std::string, ContainerHandle *> msvc: task->subtasks) {
+    //    StartContainer(msvc, task->slo, t.source, replicas);
+    //}
+    //task->start_time = std::chrono::system_clock::now();
 }
 
 PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice) {
@@ -727,15 +993,41 @@ NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t m
  * 
  */
 void Controller::checkNetworkConditions() {
+    std::this_thread::sleep_for(TimePrecisionType(60 * 1000000));
     while (running) {
         Stopwatch stopwatch;
         stopwatch.start();
         std::map<std::string, NetworkEntryType> networkEntries = {};
+
         for (auto &[deviceName, nodeHandle] : devices) {
             // Clearing old network entries as they are no longer relevant
             std::unique_lock<std::mutex> lock(nodeHandle.nodeHandleMutex);
             nodeHandle.latestNetworkEntries.clear();
+            lock.unlock();
             networkEntries[deviceName] = {};
+
+            // We first try to have the indevice communication entries for each type of device
+            // This should contain the full entries
+            std::string deviceTypeName = abbreviate(SystemDeviceTypeList[nodeHandle.type]);
+            // If the entries for thios type of device type do not exist, we query the database
+            if (ctrl_inDeviceNetworkEntries.find(deviceTypeName) == ctrl_inDeviceNetworkEntries.end()) {
+                std::string tableName = "prof_" + abbreviate(deviceTypeName) + "_netw";
+                std::string sql = absl::StrFormat("SELECT p95_transfer_duration_us, p95_total_package_size_b "
+                                            "FROM %s ", tableName);
+                pqxx::result res = pullSQL(*ctrl_metricsServerConn, sql);
+
+                if (res.empty()) {
+                    continue;
+                }
+
+                for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
+                    std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
+                    ctrl_inDeviceNetworkEntries[deviceTypeName].emplace_back(entry);
+                }
+            // If the entries for the device type exist, we use the latest network entries 
+            } else {
+                nodeHandle.latestNetworkEntries[deviceName] = ctrl_inDeviceNetworkEntries[SystemDeviceTypeList[nodeHandle.type]];
+            }
         }
         std::string tableName = abbreviate(ctrl_experimentName + "_" + ctrl_systemName) + "." + abbreviate(ctrl_experimentName + "_serv_netw");
         std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
@@ -745,7 +1037,7 @@ void Controller::checkNetworkConditions() {
         //Getting the latest network entries into the networkEntries map
         for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
             std::string sender_host = row["sender_host"].as<std::string>();
-            std::pair<uint32_t, uint64_t> entry = {row["p95_transfer_duration_us"].as<uint32_t>(), row["p95_total_package_size_b"].as<uint64_t>()};
+            std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
             networkEntries[sender_host].emplace_back(entry);
         }
 
@@ -756,7 +1048,7 @@ void Controller::checkNetworkConditions() {
                 continue;
             }
             std::unique_lock<std::mutex> lock(devices[deviceName].nodeHandleMutex);
-            devices[deviceName].latestNetworkEntries = entries;
+            devices[deviceName].latestNetworkEntries["serv"] = entries;
         }
 
         // If no network entries exist for a device, send a request to the device to perform network testing

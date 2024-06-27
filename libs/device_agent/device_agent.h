@@ -70,6 +70,7 @@ private:
 
     bool CreateContainer(
             ModelType model,
+            std::string model_file,
             std::string pipe_name,
             BatchSizeType batch_size,
             std::vector<int> input_dims,
@@ -104,7 +105,7 @@ private:
 
     void SyncDatasources(const std::string &cont_name, const std::string &dsrc);
 
-    void Ready(const std::string &cont_name, const std::string &ip, SystemDeviceType type);
+    void Ready(const std::string &ip, SystemDeviceType type);
 
     void HandleDeviceRecvRpcs();
 
@@ -273,7 +274,7 @@ private:
     Profiler *dev_profiler;
     std::map<std::string, DevContainerHandle> containers;
     std::vector<std::thread> threads;
-    std::vector<SummarizedHardwareMetrics> dev_runtimeMetrics;
+    std::vector<DeviceHardwareMetrics> dev_runtimeMetrics;
 
     // Communication
     std::unique_ptr<ServerCompletionQueue> device_cq;
@@ -295,6 +296,10 @@ private:
 
     MetricsServerConfigs dev_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> dev_metricsServerConn = nullptr;
+    std::string dev_hwMetricsTableName;
+    std::string dev_networkTableName;
+
+    uint16_t dev_numCudaDevices;
 };
 
 #endif //DEVICE_AGENT_H

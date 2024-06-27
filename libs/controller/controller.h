@@ -63,7 +63,7 @@ struct NodeHandle {
     int next_free_port;
     std::map<std::string, ContainerHandle *> containers;
     // The latest network entries to determine the network conditions and latencies of transferring data
-    NetworkEntryType latestNetworkEntries = {};
+    std::map<std::string, NetworkEntryType> latestNetworkEntries = {};
     std::mutex nodeHandleMutex;
 
     NodeHandle() = default;
@@ -113,8 +113,7 @@ struct ContainerHandle {
     ModelType model;
     bool mergable;
     std::vector<int> dimensions;
-
-    uint32_t inference_deadline;
+    uint64_t inference_deadline;
 
     float arrival_rate;
 
@@ -122,12 +121,35 @@ struct ContainerHandle {
     std::vector<int> batch_size;
     std::vector<int> cuda_device;
     std::vector<int> recv_port;
+    std::vector<std::string> model_file;
 
     HardwareMetrics metrics;
     NodeHandle *device_agent;
     TaskHandle *task;
     std::vector<ContainerHandle *> upstreams;
     std::vector<ContainerHandle *> downstreams;
+    // Queue sizes of the model
+    std::vector<QueueLengthType> queueSizes;
+
+    // Flag to indicate whether the container is running
+    // At the end of scheduling, all containerhandle marked with `running = false` object will be deleted
+    bool running = false;
+
+    // Number of microservices packed inside this container. A regular container has 5 namely
+    // receiver, preprocessor, inferencer, postprocessor, sender
+    uint8_t numMicroservices = 5;
+    // Average latency to query to reach from the upstream
+    uint64_t expectedTransferLatency = 0;
+    // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
+    uint64_t expectedQueueingLatency = 0;
+    // Average latency to preprocess each query
+    uint64_t expectedPreprocessLatency = 0;
+    // Average latency to process each batch running at the specified batch size
+    uint64_t expectedInferLatency = 0;
+    // Average latency to postprocess each query
+    uint64_t expectedPostprocessLatency = 0;
+    // Expected throughput
+    float expectedThroughput = 0;
 };
 
 struct PipelineModel {
@@ -146,7 +168,7 @@ struct PipelineModel {
     // The number of replicas of the model
     uint8_t numReplicas;
     // Average latency to query to reach from the upstream
-    uint64_t expectedTransmitLatency;
+    uint64_t expectedTransferLatency;
     // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
     uint64_t expectedQueueingLatency;
     // Average latency to process each query
@@ -160,15 +182,6 @@ struct PipelineModel {
     // The estimated latency of the model
     uint64_t estimatedStart2HereCost = 0;
 };
-
-// Arrival rates during different periods (e.g., last 1 second, last 3 seconds, etc.)
-typedef std::map<int, float> ArrivalRateType;
-// Scale factors for different periods
-typedef std::map<int, float> ScaleFactorType;
-
-typedef std::map<BatchSizeType, uint64_t> BatchLatencyProfileType;
-
-typedef int BandwidthType;
 
 
 // Structure that whole information about the pipeline used for scheduling
@@ -187,6 +200,8 @@ namespace TaskDescription {
 
     void from_json(const nlohmann::json &j, TaskStruct &val);
 }
+
+
 
 class Controller {
 public:
@@ -209,6 +224,19 @@ public:
 private:
 
     NetworkEntryType initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
+    void incNumReplicas(PipelineModel &model);
+    void decNumReplicas(PipelineModel &model);
+
+    void calculateQueueSizes(ContainerHandle &model, const ModelType modelType);
+    uint64_t calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate);
+
+    void estimateModelLatency(PipelineModel &model, const ModelType modelType);
+    void estimatePipelineLatency(PipelineModelListType &pipeline, const ModelType &currModel, const uint64_t start2HereLatency);
+
+    void getInitialBatchSizes(PipelineModelListType &models, uint64_t slo, int nObjects);
+    void shiftModelToEdge(PipelineModelListType &models, const ModelType &currModel, uint64_t slo);
+
+    PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice);
 
     void checkNetworkConditions();
 
@@ -289,12 +317,6 @@ private:
             const Pipeline &models,
             std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
 
-    std::map<ModelType, int> getInitialBatchSizes(
-            const Pipeline &models, int slo,
-            int nObjects);
-
-    PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice);
-
     bool running;
     std::string ctrl_experimentName;
     std::string ctrl_systemName;
@@ -328,6 +350,8 @@ private:
 
     std::vector<spdlog::sink_ptr> ctrl_loggerSinks = {};
     std::shared_ptr<spdlog::logger> ctrl_logger;
+
+    std::map<std::string, NetworkEntryType> ctrl_inDeviceNetworkEntries;
 };
 
 

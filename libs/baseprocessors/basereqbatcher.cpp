@@ -249,7 +249,7 @@ void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 BaseReqBatcher::BaseReqBatcher(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs);
     //set to maximum value
-    oldestReqTime = std::chrono::high_resolution_clock::now() + std::chrono::hours(1);
+    oldestReqTime = std::chrono::high_resolution_clock::time_point::max();
     spdlog::get("container_agent")->info("{0:s} is created.", msvc_name);
 }
 
@@ -509,7 +509,7 @@ void BaseReqBatcher::executeBatch(ClockType time, BatchTimeType &genTime, Reques
         bufferData.clear();
         prevData.clear();
         timeout = 100;
-        oldestReqTime = std::chrono::high_resolution_clock::now() + std::chrono::hours(1);
+        oldestReqTime = std::chrono::high_resolution_clock::time_point::max();;
     }
 
     spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);

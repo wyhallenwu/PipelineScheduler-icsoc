@@ -1,16 +1,5 @@
 #include "data_source.h"
 
-DataSourceAgent::DataSourceAgent(
-        const json &configs
-) : ContainerAgent(configs) {
-    json pipeConfigs = configs["container"]["cont_pipeline"];
-    cont_msvcsList.push_back(new DataReader(pipeConfigs[0]));
-    for (int i = 1; i < pipeConfigs.size(); i++) {
-        cont_msvcsList.push_back(new RemoteCPUSender(pipeConfigs[i]));
-        cont_msvcsList[i]->SetInQueue(cont_msvcsList[0]->GetOutQueue());
-    }
-}
-
 void DataSourceAgent::runService(const json &pipeConfigs, const json &configs) {
     if (configs["cont_allocationMode"] == 0) {
         while (!cont_msvcsList[0]->checkReady()) {
@@ -35,8 +24,8 @@ void DataSourceAgent::SetStartFrameRequestHandler::Proceed() {
         status = PROCESS;
         service->RequestSetStartFrame(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
-        data_reader->SetCurrFrameID(request.value() - 1);
-        data_reader->setReady();
+        msvcs->front()->SetCurrFrameID(request.value() - 1);
+        msvcs->front()->setReady();
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -46,7 +35,6 @@ void DataSourceAgent::SetStartFrameRequestHandler::Proceed() {
 }
 
 void DataSourceAgent::HandleRecvRpcs() {
-    new SetStartFrameRequestHandler(&service, server_cq.get(), cont_msvcsList[0]);
+    new SetStartFrameRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     ContainerAgent::HandleRecvRpcs();
-
 }

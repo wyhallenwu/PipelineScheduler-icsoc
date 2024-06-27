@@ -40,7 +40,7 @@ std::string getHostIP() {
 }
 
 DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type) {
-    dev_name = n;
+    dev_name = abbreviate(n);
     containers = std::map<std::string, DevContainerHandle>();
 
     dev_port_offset = absl::GetFlag(FLAGS_dev_port_offset);
@@ -73,7 +73,8 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
     controller_sending_cq = new CompletionQueue();
 
-    Ready(dev_name, getHostIP(), type);
+    dev_profiler = new Profiler({getpid()}, "runtime");
+    Ready(getHostIP(), type);
 
     dev_logPath += "/" + dev_experiment_name;
     std::filesystem::create_directories(
@@ -87,16 +88,56 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
 
     setupLogger(
             dev_logPath,
-            "controller",
+            "device_agent",
             dev_loggingMode,
             dev_verbose,
             dev_loggerSinks,
             dev_logger
     );
 
-    dev_profiler = new Profiler({getpid()}, "runtime");
+    dev_containerLib = getContainerLib(abbreviate(SystemDeviceTypeList[type]));
+    dev_metricsServerConfigs.schema = abbreviate(dev_experiment_name + "_" + dev_system_name);
+    dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name + "_hw");
+    dev_networkTableName = dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name + "_netw");
 
-    dev_containerLib = getContainerLib();
+    if (!tableExists(*dev_metricsServerConn, dev_metricsServerConfigs.schema, dev_networkTableName)) {
+        std::string sql = "CREATE TABLE IF NOT EXISTS " + dev_networkTableName + " ("
+                                                                                    "timestamps BIGINT NOT NULL, "
+                                                                                    "sender_host TEXT NOT NULL, "
+                                                                                    "p95_transfer_duration_us BIGINT NOT NULL, "
+                                                                                    "p95_total_package_size_b INTEGER NOT NULL)";
+
+        pushSQL(*dev_metricsServerConn, sql);
+
+        sql = "SELECT create_hypertable('" + dev_networkTableName + "', 'timestamps', if_not_exists => TRUE);";
+        pushSQL(*dev_metricsServerConn, sql);
+
+        sql = "CREATE INDEX ON " + dev_networkTableName + " (timestamps);";
+        pushSQL(*dev_metricsServerConn, sql);
+
+        sql = "CREATE INDEX ON " + dev_networkTableName + " (sender_host);";
+        pushSQL(*dev_metricsServerConn, sql);
+    }
+
+    if (!tableExists(*dev_metricsServerConn, dev_metricsServerConfigs.schema, dev_hwMetricsTableName)) {
+        std::string sql = "CREATE TABLE IF NOT EXISTS " + dev_hwMetricsTableName + " ("
+                                                                                    "   timestamps BIGINT NOT NULL,"
+                                                                                    "   cpu_usage INT," // percentage (1-100)
+                                                                                    "   mem_usage INT,"; // Megabytes
+        for (auto i = 0; i < dev_numCudaDevices; i++) {
+            sql += "gpu_" + std::to_string(i) + "_usage INT," // percentage (1-100)
+                   "gpu_" + std::to_string(i) + "_mem_usage INT,"; // Megabytes
+        };
+        sql += "   PRIMARY KEY (timestamps)"
+                                                                                    ");";
+        pushSQL(*dev_metricsServerConn, sql);
+
+        sql = "SELECT create_hypertable('" + dev_hwMetricsTableName + "', 'timestamps', if_not_exists => TRUE);";
+        pushSQL(*dev_metricsServerConn, sql);
+
+        sql = "CREATE INDEX ON " + dev_hwMetricsTableName + " (timestamps);";
+        pushSQL(*dev_metricsServerConn, sql);
+    }
 
     running = true;
     threads = std::vector<std::thread>();
@@ -109,48 +150,105 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
 
 void DeviceAgent::collectRuntimeMetrics() {
     std::string sql;
+    auto timeNow = std::chrono::high_resolution_clock::now();
+    if (timeNow > dev_metricsServerConfigs.nextMetricsReportTime) {
+        dev_metricsServerConfigs.nextMetricsReportTime = timeNow + std::chrono::milliseconds(
+                dev_metricsServerConfigs.metricsReportIntervalMillisec);
+    }
+
+    if (timeNow > dev_metricsServerConfigs.nextHwMetricsScrapeTime) {
+        dev_metricsServerConfigs.nextHwMetricsScrapeTime = timeNow + std::chrono::milliseconds(
+                dev_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
+    }
     while (running) {
-        /*auto metricsStopwatch = Stopwatch();
+        auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
         auto startTime = metricsStopwatch.getStartTime();
         uint64_t scrapeLatencyMillisec = 0;
         uint64_t timeDiff;
-        for (auto &container: containers) {
-            if (container.second.pid > 0 && timePointCastMillisecond(startTime) >=
-                timePointCastMillisecond(dev_metricsServerConfigs.nextHwMetricsScrapeTime) && container.second.pid > 0) {
-                Profiler::sysStats stats = dev_profiler->reportAtRuntime(container.second.pid);
-                container.second.hwMetrics = {stats.cpuUsage, stats.processMemoryUsage, stats.processMemoryUsage, stats.gpuUtilization,
-                                  stats.gpuMemoryUsage};
-                dev_runtimeMetrics[0].gpuUsage = stats.gpuUtilization;
-                dev_runtimeMetrics[0].gpuMemUsage = stats.deviceMemoryUsage;
-                metricsStopwatch.stop();
-                scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
-                dev_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() +
-                                                                    std::chrono::milliseconds(
-                                                                            dev_metricsServerConfigs.hwMetricsScrapeIntervalMillisec -
-                                                                            scrapeLatencyMillisec);
-                spdlog::get("container_agent")->trace("{0:s} SCRAPE hardware metrics. Latency {1:d}ms.",
-                                                      dev_name,
-                                                      scrapeLatencyMillisec);
-                metricsStopwatch.start();
+
+
+        if (timePointCastMillisecond(startTime) >=
+            timePointCastMillisecond(dev_metricsServerConfigs.nextHwMetricsScrapeTime)) {
+            std::vector<Profiler::sysStats> stats = dev_profiler->reportDeviceStats();
+
+            DeviceHardwareMetrics metrics;
+            metrics.timestamp = std::chrono::high_resolution_clock::now();
+            metrics.cpuUsage = stats[0].cpuUsage;
+            metrics.memUsage = stats[0].memoryUsage;
+            metrics.rssMemUsage = stats[0].rssMemory;
+            for (int i = 0; i < stats.size(); i++) {
+                metrics.gpuUsage.emplace_back(stats[i].gpuUtilization);
+                metrics.gpuMemUsage.emplace_back(stats[i].gpuMemoryUsage);
             }
+            dev_runtimeMetrics.emplace_back(metrics);
+            for (auto &container: containers) {
+                if (container.second.pid > 0) {
+                    Profiler::sysStats stats = dev_profiler->reportAtRuntime(container.second.pid, container.second.pid);
+                    container.second.hwMetrics = {stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
+                                    stats.gpuMemoryUsage};
+                    spdlog::get("container_agent")->trace("{0:s} SCRAPE hardware metrics. Latency {1:d}ms.",
+                                                        dev_name,
+                                                        scrapeLatencyMillisec);
+                }
+            }
+            metricsStopwatch.stop();
+            scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
+            dev_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() +
+                                                                        std::chrono::milliseconds(
+                                                                                dev_metricsServerConfigs.hwMetricsScrapeIntervalMillisec -
+                                                                                scrapeLatencyMillisec);
         }
 
-        startTime = std::chrono::high_resolution_clock::now();
+        metricsStopwatch.reset();
+        metricsStopwatch.start();
+        startTime = metricsStopwatch.getStartTime();
+        if (timePointCastMillisecond(startTime) >=
+            timePointCastMillisecond(dev_metricsServerConfigs.nextMetricsReportTime)) {
 
+            if (dev_runtimeMetrics.size() == 0) {
+                spdlog::get("container_agent")->trace("{0:s} No runtime metrics to push to the database.", dev_name);
+                dev_metricsServerConfigs.nextMetricsReportTime = std::chrono::high_resolution_clock::now() +
+                                                                 std::chrono::milliseconds(
+                                                                         dev_metricsServerConfigs.metricsReportIntervalMillisec);
+                continue;
+            }
+            sql = "INSERT INTO " + dev_hwMetricsTableName +
+                  " (timestamps, cpu_usage, mem_usage";
 
-        //TODO: @Tung save the metrics to the database as desired
+            for (int i = 0; i < dev_numCudaDevices; i++) {
+                sql += ", gpu_" + std::to_string(i) + "_usage, gpu_" + std::to_string(i) + "_mem_usage";
+            }
+            sql += ") VALUES ";
+            for (const auto& entry : dev_runtimeMetrics) {
+                sql += absl::StrFormat("(%s, %d, %d", timePointToEpochString(entry.timestamp),
+                    entry.cpuUsage, entry.memUsage);
+                for (int i = 0; i < dev_numCudaDevices; i++) {
+                    sql += absl::StrFormat(", %d, %d", entry.gpuUsage[i], entry.gpuMemUsage[i]);
+                }
+                sql += "),";
+            }
+            sql.pop_back();
+            dev_runtimeMetrics.clear();
+            pushSQL(*dev_metricsServerConn, sql);
+            spdlog::get("container_agent")->trace("{0:s} pushed device hardware metrics to the database.", dev_name);
+
+            dev_metricsServerConfigs.nextMetricsReportTime = std::chrono::high_resolution_clock::now() +
+                                                             std::chrono::milliseconds(
+                                                                     dev_metricsServerConfigs.metricsReportIntervalMillisec);
+        }
+
+        //TODO: push individual container metrics to the database
 
         metricsStopwatch.stop();
         auto reportLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
         ClockType nextTime;
         nextTime = std::min(dev_metricsServerConfigs.nextMetricsReportTime,
-                                dev_metricsServerConfigs.nextHwMetricsScrapeTime);
+                            dev_metricsServerConfigs.nextHwMetricsScrapeTime);
         timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - std::chrono::high_resolution_clock::now()).count();
         std::chrono::milliseconds sleepPeriod(timeDiff - (reportLatencyMillisec) + 2);
         spdlog::get("container_agent")->trace("{0:s} Container Agent's Metric Reporter sleeps for {1:d} milliseconds.", dev_name, sleepPeriod.count());
-        std::this_thread::sleep_for(sleepPeriod);*/
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::this_thread::sleep_for(sleepPeriod);
     }
 }
 
@@ -181,6 +279,7 @@ void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
 
 bool DeviceAgent::CreateContainer(
         ModelType model,
+        std::string model_file,
         std::string pipe_name,
         BatchSizeType batch_size,
         std::vector<int> input_dims,
@@ -191,10 +290,11 @@ bool DeviceAgent::CreateContainer(
         const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
         const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
 ) {
+    std::string modelName = getContainerName(dev_type, model);
     try {
-        std::string cont_name = abbreviate(pipe_name + "_" + dev_containerLib[model].taskName + "_" + std::to_string(replica_id));
+        std::string cont_name = abbreviate(pipe_name + "_" + dev_containerLib[modelName].taskName + "_" + std::to_string(replica_id));
         std::cout << "Creating container: " << cont_name << std::endl;
-        std::string executable = dev_containerLib[model].runCommand;
+        std::string executable = dev_containerLib[modelName].runCommand;
         json start_config;
         if (model == ModelType::Sink) {
             start_config["experimentName"] = dev_experiment_name;
@@ -204,7 +304,7 @@ bool DeviceAgent::CreateContainer(
             return true;
         }
 
-        start_config = dev_containerLib[model].templateConfig;
+        start_config = dev_containerLib[modelName].templateConfig;
 
         // adjust container configs
         start_config["container"]["cont_experimentName"] = dev_experiment_name;
@@ -228,6 +328,7 @@ bool DeviceAgent::CreateContainer(
             base_config[0]["msvc_type"] = 500;
         } else {
             base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
+            base_config[2]["path"] = model_file;
         }
 
 
@@ -316,19 +417,19 @@ void DeviceAgent::SyncDatasources(const std::string &cont_name, const std::strin
     finishGrpc(rpc, reply, status, containers[cont_name].cq);
 }
 
-void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, SystemDeviceType type) {
+void DeviceAgent::Ready(const std::string &ip, SystemDeviceType type) {
     ConnectionConfigs request;
     SystemInfo reply;
     ClientContext context;
     Status status;
     int processing_units;
-    request.set_device_name(cont_name);
+    request.set_device_name(dev_name);
     request.set_device_type(type);
     request.set_ip_address(ip);
     if (type == SystemDeviceType::Server) {
         processing_units = dev_profiler->getGpuCount();
         request.set_processors(processing_units);
-        for (auto &mem: dev_profiler->getGpuMemory()) {
+        for (auto &mem: dev_profiler->getGpuMemory(processing_units)) {
             request.add_memory(mem);
         }
     } else {
@@ -341,8 +442,8 @@ void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, Sys
         request.set_processors(processing_units);
         request.add_memory(sys_info.totalram * sys_info.mem_unit / 1000000);
     }
+    dev_numCudaDevices = processing_units;
 
-    dev_runtimeMetrics = std::vector<SummarizedHardwareMetrics>(processing_units);
     std::unique_ptr<ClientAsyncResponseReader<SystemInfo>> rpc(
             controller_stub->AsyncAdvertiseToController(&context, request, controller_sending_cq));
     finishGrpc(rpc, reply, status, controller_sending_cq);
@@ -447,9 +548,9 @@ void DeviceAgent::StartContainerRequestHandler::Proceed() {
         for (auto &dim: request.input_dimensions()) {
             input_dims.push_back(dim);
         }
-        bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.pipeline_name(),
-                                                     request.batch_size(), input_dims, request.replica_id(),
-                                                     request.allocation_mode(), request.device(),
+        bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.model_file(),
+                                                     request.pipeline_name(), request.batch_size(), input_dims,
+                                                     request.replica_id(), request.allocation_mode(), request.device(),
                                                      request.slo(), request.upstream(), request.downstream());
         if (!success) {
             status = FINISH;
@@ -475,7 +576,10 @@ void DeviceAgent::StopContainerRequestHandler::Proceed() {
             responder.Finish(reply, Status::CANCELLED, this);
             return;
         }
-        device_agent->StopContainer(device_agent->containers[request.name()], request.forced());
+        DeviceAgent::StopContainer(device_agent->containers[request.name()], request.forced());
+        unsigned int pid = device_agent->containers[request.name()].pid;
+        device_agent->containers.erase(request.name());
+        device_agent->dev_profiler->removePid(pid);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

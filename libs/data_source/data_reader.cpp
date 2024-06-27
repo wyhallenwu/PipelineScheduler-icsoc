@@ -68,7 +68,6 @@ void DataReader::Process() {
         } else {
             // two `time`s is not necessary, but it follows the format set for the downstreams.
             msvc_currFrameID = (int) source.get(cv::CAP_PROP_POS_FRAMES);
-            std::cout << "Frame Number: " << msvc_currFrameID << std::endl;
             frame = resizePadRightBottom(frame, msvc_dataShape[0][1], msvc_dataShape[0][2],
                                          {128, 128, 128}, cv::INTER_AREA);
             RequestMemSizeType frameMemSize = frame.channels() * frame.rows * frame.cols * CV_ELEM_SIZE1(frame.type());
