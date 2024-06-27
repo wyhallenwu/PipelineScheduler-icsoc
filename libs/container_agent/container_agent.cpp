@@ -310,6 +310,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
     cont_pipeName = abbreviate(containerConfigs["cont_pipeName"].get<std::string>());
     cont_taskName = abbreviate(containerConfigs["cont_taskName"].get<std::string>());
     cont_hostDevice = abbreviate(containerConfigs["cont_hostDevice"].get<std::string>());
+    cont_hostDeviceType = abbreviate(containerConfigs["cont_hostDeviceType"].get<std::string>());
     cont_systemName = containerConfigs["cont_systemName"].get<std::string>();
 
     cont_deviceIndex = containerConfigs["cont_device"];
@@ -361,21 +362,21 @@ ContainerAgent::ContainerAgent(const json &configs) {
                 cont_systemName,
                 cont_pipeName,
                 cont_inferModel,
-                cont_hostDevice,
+                cont_hostDeviceType,
                 cont_inferModel
             );
             cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
-            cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
-            cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
-            cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
-            cont_networkTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" + cont_hostDevice + "_netw";
+            cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDeviceType + "_proc";
+            cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDeviceType + "_batch";
+            cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDeviceType + "_hw";
+            cont_networkTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" + cont_hostDeviceType + "_netw";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
             cont_arrivalTableName = cont_experimentName + "_" + cont_taskName +  "_arr";
-            cont_processTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
-            cont_batchInferTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
+            cont_processTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDeviceType + "_proc";
+            cont_batchInferTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDeviceType + "_batch";
             cont_hwMetricsTableName =
-                    cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
-            cont_networkTableName = cont_experimentName + "_" + cont_hostDevice + "_netw";
+                    cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDeviceType + "_hw";
+            cont_networkTableName = cont_experimentName + "_" + cont_hostDeviceType + "_netw";
             cont_metricsServerConfigs.schema = "public";
 
             std::string question = absl::StrFormat("Do you want to remove old profile entries of %s?", cont_inferModel);
@@ -965,7 +966,7 @@ void ContainerAgent::collectRuntimeMetrics() {
 }
 
 void ContainerAgent::updateProfileTable() {
-    std::string profileTableName = abbreviate("prof__" + cont_inferModel + "__" + cont_hostDevice);
+    std::string profileTableName = abbreviate("prof__" + cont_inferModel + "__" + cont_hostDeviceType);
     std::string procTableName = profileTableName + "_proc";
     std::string hwTableName = profileTableName + "_hw";
     

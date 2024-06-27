@@ -5,6 +5,7 @@
         "cont_pipeName": "pedestrian",
         "cont_taskName": "movenet",
         "cont_hostDevice": "server",
+        "cont_hostDeviceType": "server",
         "cont_name": "movenet_0",
         "cont_pipeline": [
             {

@@ -312,6 +312,7 @@ bool DeviceAgent::CreateContainer(
         start_config["container"]["cont_systemName"] = dev_system_name;
         start_config["container"]["cont_pipeName"] = pipe_name;
         start_config["container"]["cont_hostDevice"] = dev_name;
+        start_config["container"]["cont_hostDeviceType"] = dev_deviceInfo[dev_type];
         start_config["container"]["cont_name"] = cont_name;
         start_config["container"]["cont_allocationMode"] = allocation_mode;
 

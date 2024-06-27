@@ -5,6 +5,7 @@
         "cont_pipeName": "traffic",
         "cont_taskName": "carbrand",
         "cont_hostDevice": "server",
+        "cont_hostDeviceType": "server",
         "cont_name": "carbrand_0",
         "cont_pipeline": [
             {
