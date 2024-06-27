@@ -647,5 +647,5 @@ void finishGrpc(std::unique_ptr<ClientAsyncResponseReader<T>> &rpc, T &reply, St
     GPR_ASSERT(ok);
 }
 
-
+std::string getDeviceTypeName(SystemDeviceType deviceType);
 #endif

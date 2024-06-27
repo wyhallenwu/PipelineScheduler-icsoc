@@ -815,3 +815,7 @@ ContainerLibType getContainerLib(const std::string& deviceType) {
     spdlog::get("container_agent")->info("Container Library Loaded");
     return containerLib;
 }
+
+std::string getDeviceTypeName(SystemDeviceType deviceType) {
+    return SystemDeviceTypeList[deviceType];
+}
