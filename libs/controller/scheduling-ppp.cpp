@@ -115,209 +115,210 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
 PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice) {
     switch (type) {
         case PipelineType::Traffic: {
-            PipelineModel datasource = {startDevice, "datasource", true, {}, {}};
-            PipelineModel yolov5n = {
+            PipelineModel *datasource = new PipelineModel{startDevice, "datasource", true, {}, {}};
+            PipelineModel *yolov5n = new PipelineModel{
                 "server",
                 "yolov5n",
                 true,
                 {},
                 {},
                 {},
-                {{&datasource, -1}}
+                {{datasource, -1}}
             };
-            datasource.downstreams.push_back({&yolov5n, -1});
+            datasource->downstreams.push_back({yolov5n, -1});
 
-            PipelineModel retina1face = {
+            PipelineModel *retina1face = new PipelineModel{
                 "server",
                 "retina1face",
                 false,
                 {},
                 {},
                 {},
-                {{&yolov5n, 0}}
+                {{yolov5n, 0}}
             };
-            yolov5n.downstreams.push_back({&retina1face, 0});
+            yolov5n->downstreams.push_back({retina1face, 0});
 
-            PipelineModel carbrand = {
+            PipelineModel *carbrand = new PipelineModel{
                 "server",
                 "carbrand",
                 false,
                 {},
                 {},
                 {},
-                {{&yolov5n, 2}}
+                {{yolov5n, 2}}
             };
-            yolov5n.downstreams.push_back({&carbrand, 2});
+            yolov5n->downstreams.push_back({carbrand, 2});
 
-            PipelineModel platedet = {
+            PipelineModel *platedet = new PipelineModel{
                 "server",
                 "platedet",
                 false,
                 {},
                 {},
                 {},
-                {{&yolov5n, 2}}
+                {{yolov5n, 2}}
             };
-            yolov5n.downstreams.push_back({&platedet, 2});
+            yolov5n->downstreams.push_back({platedet, 2});
 
-            PipelineModel sink = {
+            PipelineModel *sink = new PipelineModel{
                 "server",
                 "sink",
                 false,
                 {},
                 {},
                 {},
-                {{&retina1face, -1}, {&carbrand, -1}, {&platedet, -1}}
+                {{retina1face, -1}, {carbrand, -1}, {platedet, -1}}
             };
-            retina1face.downstreams.push_back({&sink, -1});
-            carbrand.downstreams.push_back({&sink, -1});
-            platedet.downstreams.push_back({&sink, -1});
+            retina1face->downstreams.push_back({sink, -1});
+            carbrand->downstreams.push_back({sink, -1});
+            platedet->downstreams.push_back({sink, -1});
 
-            return {&datasource, &yolov5n, &retina1face, &carbrand, &platedet, &sink};
+            return {datasource, yolov5n, retina1face, carbrand, platedet, sink};
         }
         case PipelineType::Building_Security: {
-            PipelineModel datasource = {startDevice, "datasource", true, {}, {}};
-            PipelineModel yolov5n = {
+            PipelineModel *datasource = new PipelineModel{startDevice, "datasource", true, {}, {}};
+            PipelineModel *yolov5n = new PipelineModel{
                 "server",
                 "yolov5n",
                 true,
                 {},
                 {},
                 {},
-                {{&datasource, -1}}
+                {{datasource, -1}}
             };
-            datasource.downstreams.push_back({&yolov5n, -1});
+            datasource->downstreams.push_back({yolov5n, -1});
 
-            PipelineModel retina1face = {
+            PipelineModel *retina1face = new PipelineModel{
                 "server",
                 "retina1face",
                 false,
                 {},
                 {},
                 {},
-                {{&yolov5n, 0}}
+                {{yolov5n, 0}}
             };
-            yolov5n.downstreams.push_back({&retina1face, 0});
+            yolov5n->downstreams.push_back({retina1face, 0});
 
-            PipelineModel movenet = {
+            PipelineModel *movenet = new PipelineModel{
                 "server",
                 "movenet",
                 false,
                 {},
                 {},
                 {},
-                {{&yolov5n, 0}}
+                {{yolov5n, 0}}
             };
-            yolov5n.downstreams.push_back({&movenet, 0});
+            yolov5n->downstreams.push_back({movenet, 0});
 
-            PipelineModel gender = {
+            PipelineModel *gender = new PipelineModel{
                 "server",
                 "gender",
                 false,
                 {},
                 {},
                 {},
-                {{&retina1face, -1}}
+                {{retina1face, -1}}
             };
-            retina1face.downstreams.push_back({&gender, -1});
+            retina1face->downstreams.push_back({gender, -1});
 
-            PipelineModel age = {
+            PipelineModel *age = new PipelineModel{
                 "server",
                 "age",
                 false,
                 {},
                 {},
                 {},
-                {{&retina1face, -1}}
+                {{retina1face, -1}}
             };
-            retina1face.downstreams.push_back({&age, -1});
+            retina1face->downstreams.push_back({age, -1});
 
-            PipelineModel sink = {
+            PipelineModel *sink = new PipelineModel{
                 "server",
                 "sink",
                 false,
                 {},
                 {},
                 {},
-                {{&gender, -1}, {&age, -1}, {&movenet, -1}}
+                {{gender, -1}, {age, -1}, {movenet, -1}}
             };
-            gender.downstreams.push_back({&sink, -1});
-            age.downstreams.push_back({&sink, -1});
-            movenet.downstreams.push_back({&sink, -1});
-            return {&datasource, &yolov5n, &retina1face, &movenet, &gender, &age, &sink};
+            gender->downstreams.push_back({sink, -1});
+            age->downstreams.push_back({sink, -1});
+            movenet->downstreams.push_back({sink, -1});
+
+            return {datasource, yolov5n, retina1face, movenet, gender, age, sink};
         }
         case PipelineType::Video_Call: {
-             PipelineModel datasource = {startDevice, "datasource", true, {}, {}};
-            PipelineModel retina1face = {
+            PipelineModel *datasource = new PipelineModel{startDevice, "datasource", true, {}, {}};
+            PipelineModel *retina1face = new PipelineModel{
                 "server",
                 "retina1face",
                 true,
                 {},
                 {},
                 {},
-                {{&datasource, -1}}
+                {{datasource, -1}}
             };
-            datasource.downstreams.push_back({&retina1face, -1});
+            datasource->downstreams.push_back({retina1face, -1});
 
-            PipelineModel emotionnet = {
+            PipelineModel *emotionnet = new PipelineModel{
                 "server",
                 "emotionnet",
                 false,
                 {},
                 {},
                 {},
-                {{&retina1face, -1}}
+                {{retina1face, -1}}
             };
-            retina1face.downstreams.push_back({&emotionnet, -1});
+            retina1face->downstreams.push_back({emotionnet, -1});
 
-            PipelineModel age = {
+            PipelineModel *age = new PipelineModel{
                 "server",
                 "age",
                 false,
                 {},
                 {},
                 {},
-                {{&retina1face, -1}}
+                {{retina1face, -1}}
             };
-            retina1face.downstreams.push_back({&age, -1});
+            retina1face->downstreams.push_back({age, -1});
 
-            PipelineModel gender = {
+            PipelineModel *gender = new PipelineModel{
                 "server",
                 "gender",
                 false,
                 {},
                 {},
                 {},
-                {{&retina1face, -1}}
+                {{retina1face, -1}}
             };
-            retina1face.downstreams.push_back({&gender, -1});
+            retina1face->downstreams.push_back({gender, -1});
 
-            PipelineModel arcface = {
+            PipelineModel *arcface = new PipelineModel{
                 "server",
                 "arcface",
                 false,
                 {},
                 {},
                 {},
-                {{&retina1face, -1}}
+                {{retina1face, -1}}
             };
-            retina1face.downstreams.push_back({&arcface, -1});
+            retina1face->downstreams.push_back({arcface, -1});
 
-            PipelineModel sink = {
+            PipelineModel *sink = new PipelineModel{
                 "server",
                 "sink",
                 false,
                 {},
                 {},
                 {},
-                {{&emotionnet, -1}, {&age, -1}, {&gender, -1}, {&arcface, -1}}
+                {{emotionnet, -1}, {age, -1}, {gender, -1}, {arcface, -1}}
             };
-            emotionnet.downstreams.push_back({&sink, -1});
-            age.downstreams.push_back({&sink, -1});
-            gender.downstreams.push_back({&sink, -1});
-            arcface.downstreams.push_back({&sink, -1});
+            emotionnet->downstreams.push_back({sink, -1});
+            age->downstreams.push_back({sink, -1});
+            gender->downstreams.push_back({sink, -1});
+            arcface->downstreams.push_back({sink, -1});
 
-            return {&datasource, &retina1face, &emotionnet, &age, &gender, &arcface, &sink};
+            return {datasource, retina1face, emotionnet, age, gender, arcface, sink};
         }
         default:
             return {};
