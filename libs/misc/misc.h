@@ -227,6 +227,8 @@ struct ModelProfile {
 // we can use the stream name as the key to store the process records
 typedef std::map<std::string, ProcessRecord> ProcessRecordType;
 
+typedef std::map<std::string, ModelProfile> PerDeviceModelProfileType;
+
 struct HardwareMetrics {
     ClockType timestamp;
     CpuUtilType cpuUsage = 0;

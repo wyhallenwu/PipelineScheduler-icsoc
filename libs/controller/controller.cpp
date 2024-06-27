@@ -403,14 +403,15 @@ void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType
  * @param model infomation about the model
  * @param modelType 
  */
-void Controller::estimateModelLatency(PipelineModel &model, const ModelType modelType) {
-    uint64_t preprocessLatency = model.processProfile.p95prepLat;
+void Controller::estimateModelLatency(PipelineModel &model, const ModelType modelType, const std::string& deviceName) {
+    ModelProfile profile = model.processProfiles[deviceName];
+    uint64_t preprocessLatency = profile.p95prepLat;
     BatchSizeType batchSize = model.batchSize;
-    uint64_t inferLatency = InferTimeEstimator(modelType, batchSize);
-    uint64_t postprocessLatency =  model.processProfile.p95postLat;
+    uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
+    uint64_t postprocessLatency =  profile.p95postLat;
     float preprocessRate = 1000000.f / preprocessLatency;
 
-    model.expectedQueueingLatency = calculateQueuingLatency(model.arrivalProfile.arrivalRates, preprocessRate);
+    model.expectedQueueingLatency = calculateQueuingLatency(model.arrivalProfiles.arrivalRates, preprocessRate);
     model.expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
     model.expectedMaxProcessLatency = preprocessLatency * batchSize + inferLatency * batchSize + postprocessLatency * batchSize;
     model.estimatedPerQueryCost = model.expectedAvgPerQueryLatency + model.expectedQueueingLatency + model.expectedTransferLatency;
@@ -423,7 +424,7 @@ void Controller::estimateModelLatency(PipelineModel &model, const ModelType mode
  * @param currModel 
  */
 void Controller::estimatePipelineLatency(PipelineModelListType &pipeline, const ModelType &currModel, const uint64_t start2HereLatency) {
-    estimateModelLatency(pipeline.at(currModel), currModel);
+    estimateModelLatency(pipeline.at(currModel), currModel, pipeline.at(currModel).device);
 
     // Update the expected latency to reach the current model
     // In case a model has multiple upstreams, the expected latency to reach the model is the maximum of the expected latency 
@@ -451,12 +452,12 @@ void Controller::estimatePipelineLatency(PipelineModelListType &pipeline, const 
  * 
  * @param model 
  */
-void Controller::incNumReplicas(PipelineModel &model) {
+void Controller::incNumReplicas(PipelineModel &model, const std::string& deviceName) {
     uint8_t numReplicas = model.numReplicas;
-    uint64_t inferenceLatency = model.processProfile.batchInfer[model.batchSize].p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + model.processProfile.p95prepLat + model.processProfile.p95postLat);
+    uint64_t inferenceLatency = model.processProfiles[deviceName].batchInfer[model.batchSize].p95inferLat;
+    float indiProcessRate = 1 / (inferenceLatency + model.processProfiles[deviceName].p95prepLat + model.processProfiles[deviceName].p95postLat);
     float processRate = indiProcessRate * numReplicas;
-    while (processRate < model.arrivalProfile.arrivalRates) {
+    while (processRate < model.arrivalProfiles.arrivalRates) {
         numReplicas++;
         processRate = indiProcessRate * numReplicas;
     }
@@ -468,16 +469,16 @@ void Controller::incNumReplicas(PipelineModel &model) {
  * 
  * @param model 
  */
-void Controller::decNumReplicas(PipelineModel &model) {
+void Controller::decNumReplicas(PipelineModel &model, const std::string& deviceName) {
     uint8_t numReplicas = model.numReplicas;
-    uint64_t inferenceLatency = model.processProfile.batchInfer[model.batchSize].p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + model.processProfile.p95prepLat + model.processProfile.p95postLat);
+    uint64_t inferenceLatency = model.processProfiles[deviceName].batchInfer[model.batchSize].p95inferLat;
+    float indiProcessRate = 1 / (inferenceLatency + model.processProfiles[deviceName].p95prepLat + model.processProfiles[deviceName].p95postLat);
     float processRate = indiProcessRate * numReplicas;
     while (numReplicas > 1) {
         numReplicas--;
         processRate = indiProcessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if (processRate < model.arrivalProfile.arrivalRates) {
+        if (processRate < model.arrivalProfiles.arrivalRates) {
             numReplicas++;
             break;
         }
@@ -562,7 +563,7 @@ void Controller::getInitialBatchSizes(
 
     // Increase number of replicas to avoid bottlenecks
     for (auto &m: models) {
-        incNumReplicas(m.second);
+        incNumReplicas(m.second, m.second.device);
     }
 
     // Find near-optimal batch sizes
@@ -588,7 +589,7 @@ void Controller::getInitialBatchSizes(
                     continue;
                 }
                 // If increasing the batch size meets the SLO, we can try decreasing the number of replicas
-                decNumReplicas(m.second);
+                decNumReplicas(m.second, m.second.device);
                 estimatedE2Ecost = tmp_models.at(ModelType::Sink).estimatedStart2HereCost;
                 if (estimatedE2Ecost < bestCost) {
                     models = tmp_models;
@@ -640,12 +641,37 @@ void Controller::shiftModelToEdge(PipelineModelListType &models, const ModelType
 
 void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
-    // tasks.insert({t.name, {t.slo, t.type, {}}});
-    // TaskHandle *task = &tasks[t.name];
-    // NodeHandle *device = &devices[t.device];
-    // auto models = getModelsByPipelineType(t.type, t.device);
-    // ArrivalRateType arrival_rates;
+    tasks.insert({t.name, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
+    TaskHandle *task = &tasks[t.name];
+    NodeHandle *device = &devices[t.device];
+    PipelineModelListType models = getModelsByPipelineType(t.type, t.device);
 
+    std::vector<std::pair<std::string, std::string>> possibleDeviceList = {{"serv", "serv"}};
+    std::map<std::pair<std::string, std::string>, NetworkEntryType> possibleNetworkEntryPairs;
+
+    for (const auto &pair : possibleDeviceList) {
+        std::unique_lock lock(devices[pair.first].nodeHandleMutex);
+        possibleNetworkEntryPairs[pair] = devices[pair.first].latestNetworkEntries[pair.second];
+        lock.unlock();
+    }
+
+    for (auto &[modelType, modelObj]: models) {
+        std::string modelName = getContainerName(devices[t.device].type, modelType);
+        if (modelName.find("datasource") != std::string::npos || modelName.find("sink") != std::string::npos) {
+            continue;
+        }
+        modelObj.arrivalProfiles = queryModelArrivalProfile(
+            *ctrl_metricsServerConn,
+            ctrl_experimentName,
+            ctrl_systemName,
+            t.name,
+            t.source,
+            ctrl_containerLib[modelName].taskName,
+            ctrl_containerLib[modelName].modelName,
+            possibleDeviceList,
+            possibleNetworkEntryPairs
+        );
+    }
     // ScaleFactorType scale_factors;
     // // Query arrival rates of individual models
     // for (auto &m: models) {

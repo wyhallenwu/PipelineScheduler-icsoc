@@ -157,9 +157,9 @@ struct PipelineModel {
     // Whether the upstream is on another device
     bool isSplitPoint;
     //
-    ModelArrivalProfile arrivalProfile;
+    ModelArrivalProfile arrivalProfiles;
     // Latency profile of preprocessor, batch inferencer and postprocessor
-    ModelProfile processProfile;
+    PerDeviceModelProfileType processProfiles;
     // The downstream models and their classes of interest
     std::vector<std::pair<ModelType, int>> downstreams;
     std::vector<std::pair<ModelType, int>> upstreams;
@@ -185,7 +185,7 @@ struct PipelineModel {
 
 
 // Structure that whole information about the pipeline used for scheduling
-typedef std::map<ModelType, PipelineModel> PipelineModelListType;
+typedef std::unordered_map<ModelType, PipelineModel> PipelineModelListType;
 
 
 
@@ -224,13 +224,13 @@ public:
 private:
 
     NetworkEntryType initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
-    void incNumReplicas(PipelineModel &model);
-    void decNumReplicas(PipelineModel &model);
+    void incNumReplicas(PipelineModel &model, const std::string& deviceName);
+    void decNumReplicas(PipelineModel &model, const std::string& deviceName);
 
     void calculateQueueSizes(ContainerHandle &model, const ModelType modelType);
     uint64_t calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate);
 
-    void estimateModelLatency(PipelineModel &model, const ModelType modelType);
+    void estimateModelLatency(PipelineModel &model, const ModelType modelType, const std::string& deviceName);
     void estimatePipelineLatency(PipelineModelListType &pipeline, const ModelType &currModel, const uint64_t start2HereLatency);
 
     void getInitialBatchSizes(PipelineModelListType &models, uint64_t slo, int nObjects);
