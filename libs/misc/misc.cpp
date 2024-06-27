@@ -93,14 +93,15 @@ float queryArrivalRate(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &taskName,
+    const std::string &modelName,
     const std::vector<uint8_t> &periods //seconds
 ) {
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
-    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_infer");
+    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
 
     std::string periodQuery;
     for (const auto &period: periods) {
-        periodQuery += absl::StrFormat("recent_data.inference_rate_%ds,", period);
+        periodQuery += absl::StrFormat("recent_data.arrival_rate_%ds,", period);
     }
     periodQuery.pop_back();
 
@@ -110,15 +111,17 @@ float queryArrivalRate(
                         "   WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
                         "   LIMIT 1"
                         "), "
-                        "inference_rate AS ("
+                        "arrival_rate AS ("
                         "  SELECT GREATEST(%s) AS max_rate "
                         "  FROM recent_data "
-                        "  WHERE stream = '%s' "
+                        "  WHERE stream = '%s'"
                         ") "
-                        "SELECT MAX(max_rate) AS max_inference_rate "
-                        "FROM inference_rate;";
+                        "SELECT MAX(max_rate) AS max_arrival_rate "
+                        "FROM arrival_rate;";
     query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, periodQuery, streamName);
     pqxx::result res = pullSQL(metricsConn, query);
+
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
 
     if (res[0][0].is_null()) {
         // If there is no historical data, we look for the rate of the most recent profiled data
@@ -126,6 +129,7 @@ float queryArrivalRate(
         query = "WITH recent_data AS ("
                 "   SELECT * "
                 "   FROM %s "
+                "   WHERE model_name = '%s' "
                 "   LIMIT 10 "
                 "), "
                 "arrival_rate AS ("
@@ -134,7 +138,7 @@ float queryArrivalRate(
                 ") "
                 "SELECT MAX(max_rate) AS max_arrival_rate "
                 "FROM arrival_rate;";
-        query = absl::StrFormat(query.c_str(), profileTableName, periodQuery);
+        query = absl::StrFormat(query.c_str(), profileTableName, modelNameAbbr, periodQuery);
         res = pullSQL(metricsConn, query);
     }
     return res[0]["max_arrival_rate"].as<float>();
@@ -146,8 +150,8 @@ NetworkProfile queryNetworkProfile(
     const std::string &systemName,
     const std::string &pipelineName,
     const std::string &streamName,
-    const std::string &deviceName,
     const std::string &taskName,
+    const std::string &modelName,
     const std::string &senderHost,
     const std::string &receiverHost,
     const NetworkEntryType &networkEntries
@@ -156,7 +160,7 @@ NetworkProfile queryNetworkProfile(
     std::string receiverHostAbbr = abbreviate(receiverHost);
 
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
-    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_infer");
+    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
 
     NetworkProfile d2dNetworkProfile;
 
@@ -189,12 +193,14 @@ NetworkProfile queryNetworkProfile(
         return d2dNetworkProfile;
     }
 
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
+
     // If there is no historical data, we look for the rate of the most recent profiled data
     std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
     query = "WITH recent_data AS ("
     "   SELECT p95_out_queueing_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
     "   FROM %s "
-    "   WHERE receiver_host = '%s'"
+    "   WHERE receiver_host = '%s' AND model_name = '%s'"
     "   LIMIT 100"
     ") "
     "SELECT "
@@ -202,7 +208,7 @@ NetworkProfile queryNetworkProfile(
     "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
     "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
     "FROM recent_data;";
-    query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr);
+    query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr, abbreviate(modelNameAbbr));
     res = pullSQL(metricsConn, query);
 
     d2dNetworkProfile.p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
@@ -251,6 +257,8 @@ ModelArrivalProfile queryModelArrivalProfile(
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
 
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
+
     std::string periodQuery;
     for (const auto &period: periods) {
         periodQuery += absl::StrFormat("recent_data.arrival_rate_%ds,", period);
@@ -280,6 +288,7 @@ ModelArrivalProfile queryModelArrivalProfile(
         query = "WITH recent_data AS ("
                 "   SELECT * "
                 "   FROM %s "
+                "   WHERE model_name = '%s' "
                 "   LIMIT 10 "
                 "), "
                 "arrival_rate AS ("
@@ -288,7 +297,7 @@ ModelArrivalProfile queryModelArrivalProfile(
                 ") "
                 "SELECT MAX(max_rate) AS max_arrival_rate "
                 "FROM arrival_rate;";
-        query = absl::StrFormat(query.c_str(), profileTableName, periodQuery);
+        query = absl::StrFormat(query.c_str(), profileTableName, modelNameAbbr, periodQuery);
         res = pullSQL(metricsConn, query);
     }
     arrivalProfile.arrivalRates = res[0]["max_arrival_rate"].as<float>();
@@ -298,7 +307,7 @@ ModelArrivalProfile queryModelArrivalProfile(
         std::string senderHostAbbr = abbreviate(commPair.first);
         std::string receiverHostAbbr = abbreviate(commPair.second);
 
-        NetworkProfile *d2dNetworkProfile = &(arrivalProfile.d2dNetworkProfile[{senderHostAbbr, receiverHostAbbr}]);
+        NetworkProfile *d2dNetworkProfile = &(arrivalProfile.d2dNetworkProfile[std::make_pair(senderHostAbbr, receiverHostAbbr)]);
 
         /**
          * @brief Querying for the network profile from the data in the last 120 seconds.
@@ -334,7 +343,7 @@ ModelArrivalProfile queryModelArrivalProfile(
         query = "WITH recent_data AS ("
         "   SELECT p95_out_queueing_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
         "   FROM %s "
-        "   WHERE receiver_host = '%s'"
+        "   WHERE receiver_host = '%s' AND model_name = '%s'"
         "   LIMIT 100"
         ") "
         "SELECT "
@@ -342,7 +351,7 @@ ModelArrivalProfile queryModelArrivalProfile(
         "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
         "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
         "FROM recent_data;";
-        query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr);
+        query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr, modelNameAbbr);
         res = pullSQL(metricsConn, query);
 
         d2dNetworkProfile->p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
@@ -993,11 +1002,11 @@ bool isFileEmpty(const std::string& filePath) {
 }
 
 std::string getContainerName(const std::string& deviceTypeName, const std::string& modelName) {
-    return modelName + "-" + abbreviate(deviceTypeName);
+    return modelName + "-" + deviceTypeName;
 }
 
 std::string getContainerName(const SystemDeviceType& deviceType, const ModelType& modelType) {
-    std::string deviceAbbr = abbreviate(SystemDeviceTypeList.at(deviceType));
+    std::string deviceAbbr = SystemDeviceTypeList.at(deviceType);
     std::string modelAbbr = ModelTypeList.at(modelType);
     return modelAbbr + "-" + deviceAbbr;
 }

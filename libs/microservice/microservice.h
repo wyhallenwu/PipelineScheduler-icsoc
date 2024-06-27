@@ -438,7 +438,7 @@ public:
         std::string originDevice
     ) {
         std::unique_lock<std::mutex> lock(mutex);
-        ArrivalRecord * record = &records[{reqOriginStream, abbreviate(originDevice)}];
+        ArrivalRecord * record = &records[{reqOriginStream, originDevice}];
         auto transferDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count();
         // If transfer latency is 0 or negative, which only happens when time between devices are not properly synchronized
         if (timestamps[3] <= timestamps[2]) {

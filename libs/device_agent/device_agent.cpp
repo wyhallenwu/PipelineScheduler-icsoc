@@ -40,7 +40,7 @@ std::string getHostIP() {
 }
 
 DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type) {
-    dev_name = abbreviate(n);
+    dev_name = n;
     containers = std::map<std::string, DevContainerHandle>();
 
     dev_port_offset = absl::GetFlag(FLAGS_dev_port_offset);
@@ -97,8 +97,8 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
 
     dev_containerLib = getContainerLib(abbreviate(SystemDeviceTypeList[type]));
     dev_metricsServerConfigs.schema = abbreviate(dev_experiment_name + "_" + dev_system_name);
-    dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name + "_hw");
-    dev_networkTableName = dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name + "_netw");
+    dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_hw";
+    dev_networkTableName = dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_netw";
 
     if (!tableExists(*dev_metricsServerConn, dev_metricsServerConfigs.schema, dev_networkTableName)) {
         std::string sql = "CREATE TABLE IF NOT EXISTS " + dev_networkTableName + " ("

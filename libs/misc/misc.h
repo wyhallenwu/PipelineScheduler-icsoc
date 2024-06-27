@@ -363,7 +363,7 @@ enum ModelType {
     CarBrand
 };
 
-const extern std::map<std::string, std::string> keywordAbbrs;
+extern std::map<std::string, std::string> keywordAbbrs;
 extern std::map<SystemDeviceType, std::string> SystemDeviceTypeList;
 extern std::map<std::string, SystemDeviceType> SystemDeviceTypeReverseList;
 extern std::map<ModelType, std::string> ModelTypeList;
@@ -512,6 +512,7 @@ float queryArrivalRate(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &taskName,
+    const std::string &modelName,
     const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
 );
 
@@ -521,8 +522,8 @@ NetworkProfile queryNetworkProfile(
     const std::string &systemName,
     const std::string &pipelineName,
     const std::string &streamName,
-    const std::string &deviceName,
     const std::string &taskName,
+    const std::string &modelName,
     const std::string &senderHost,
     const std::string &receiverHost,
     const NetworkEntryType &networkEntries

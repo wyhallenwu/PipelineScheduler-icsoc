@@ -305,11 +305,11 @@ ContainerAgent::ContainerAgent(const json &configs) {
     json containerConfigs = configs["container"];
     //std::cout << containerConfigs.dump(4) << std::endl;
 
-    cont_experimentName = abbreviate(containerConfigs["cont_experimentName"].get<std::string>());
-    cont_name = abbreviate(containerConfigs["cont_name"].get<std::string>());
-    cont_pipeName = abbreviate(containerConfigs["cont_pipeName"].get<std::string>());
-    cont_taskName = abbreviate(containerConfigs["cont_taskName"].get<std::string>());
-    cont_hostDevice = abbreviate(containerConfigs["cont_hostDevice"].get<std::string>());
+    cont_experimentName = containerConfigs["cont_experimentName"].get<std::string>();
+    cont_name = containerConfigs["cont_name"].get<std::string>();
+    cont_pipeName = containerConfigs["cont_pipeName"].get<std::string>();
+    cont_taskName = containerConfigs["cont_taskName"].get<std::string>();
+    cont_hostDevice = containerConfigs["cont_hostDevice"].get<std::string>();
     cont_systemName = containerConfigs["cont_systemName"].get<std::string>();
 
     cont_deviceIndex = containerConfigs["cont_device"];
@@ -337,10 +337,10 @@ ContainerAgent::ContainerAgent(const json &configs) {
     //     cont_logDir = (std::string) containerConfigs["cont_logPath"];
     // }
 
-    if (cont_taskName != "dsrc") {
+    if (cont_taskName != "dsrc" && cont_taskName != "datasource") {
         cont_inferModel = abbreviate(containerConfigs["cont_inferModelName"].get<std::string>());
         cont_metricsServerConfigs.from_json(containerConfigs["cont_metricsServerConfigs"]);
-        cont_metricsServerConfigs.schema = cont_experimentName + "_" + cont_systemName;
+        cont_metricsServerConfigs.schema = abbreviate(cont_experimentName + "_" + cont_systemName);
         cont_metricsServerConfigs.user = "container_agent";
         cont_metricsServerConfigs.password = "agent";
 
@@ -354,28 +354,34 @@ ContainerAgent::ContainerAgent(const json &configs) {
         sql_statement = absl::StrFormat("CREATE SCHEMA IF NOT EXISTS %s;", cont_metricsServerConfigs.schema);
         pushSQL(*cont_metricsServerConn, sql_statement);
 
+        std::string cont_experimentNameAbbr = abbreviate(cont_experimentName);
+        std::string cont_pipeNameAbbr = abbreviate(cont_pipeName);
+        std::string cont_taskNameAbbr = abbreviate(cont_taskName);
+        std::string cont_hostDeviceAbbr = abbreviate(cont_hostDevice);
+
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
-            cont_batchInferProfileList = queryBatchInferLatency(
-                *cont_metricsServerConn,
-                cont_experimentName,
-                cont_systemName,
-                cont_pipeName,
-                cont_inferModel,
-                cont_hostDevice,
-                cont_inferModel
-            );
-            cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
-            cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
-            cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
-            cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
-            cont_networkTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" + cont_hostDevice + "_netw";
+            // cont_batchInferProfileList = queryBatchInferLatency(
+            //     *cont_metricsServerConn,
+            //     cont_experimentName,
+            //     cont_systemName,
+            //     cont_pipeName,
+            //     cont_inferModel,
+            //     cont_hostDevice,
+            //     cont_inferModel
+            // );
+            
+            cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "_" + cont_taskNameAbbr + "_arr";
+            cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_proc";
+            cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_batch";
+            cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_hw";
+            cont_networkTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" + cont_hostDeviceAbbr + "_netw";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
-            cont_arrivalTableName = cont_experimentName + "_" + cont_taskName +  "_arr";
-            cont_processTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
-            cont_batchInferTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
+            cont_arrivalTableName = cont_experimentNameAbbr + "_" + cont_taskNameAbbr +  "_arr";
+            cont_processTableName = cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_proc";
+            cont_batchInferTableName = cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_batch";
             cont_hwMetricsTableName =
-                    cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
-            cont_networkTableName = cont_experimentName + "_" + cont_hostDevice + "_netw";
+                    cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceAbbr + "_hw";
+            cont_networkTableName = cont_experimentNameAbbr + "_" + cont_hostDeviceAbbr + "_netw";
             cont_metricsServerConfigs.schema = "public";
 
             std::string question = absl::StrFormat("Do you want to remove old profile entries of %s?", cont_inferModel);
@@ -743,7 +749,7 @@ void ContainerAgent::collectRuntimeMetrics() {
     }
 
     while (run) {
-        if (cont_taskName == "dsrc") {
+        if (cont_taskName == "dsrc" || cont_taskName == "datasource") {
             std::this_thread::sleep_for(std::chrono::milliseconds(10000));
             continue;
         }
@@ -815,7 +821,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 }
 
                 std::string stream = keys.first;
-                std::string senderHost = keys.second;
+                std::string senderHostAbbr = abbreviate(keys.second);
                 
                 std::vector<uint8_t> percentiles = {95};
                 std::map<uint8_t, PercentilesArrivalRecord> percentilesRecord = records.findPercentileAll(percentiles);
@@ -831,8 +837,8 @@ void ContainerAgent::collectRuntimeMetrics() {
                                         timePointToEpochString(std::chrono::system_clock::now()), 
                                         stream,
                                         cont_inferModel,
-                                        senderHost,
-                                        cont_hostDevice);
+                                        senderHostAbbr,
+                                        abbreviate(cont_hostDevice));
                 for (auto &rate: requestRates) {
                     sql += ", " + std::to_string(rate);
                 }
@@ -844,24 +850,25 @@ void ContainerAgent::collectRuntimeMetrics() {
 
                 pushSQL(*cont_metricsServerConn, sql.c_str());
 
-                if (networkRecords.find(senderHost) == networkRecords.end()) {
-                    networkRecords[senderHost] = {
+                if (networkRecords.find(senderHostAbbr) == networkRecords.end()) {
+                    networkRecords[senderHostAbbr] = {
                         percentilesRecord[95].totalPkgSize,
                         percentilesRecord[95].transferDuration
                     };
                 } else {
-                    networkRecords[senderHost] = {
-                        std::max(percentilesRecord[95].totalPkgSize, networkRecords[senderHost].totalPkgSize),
-                        std::max(percentilesRecord[95].transferDuration, networkRecords[senderHost].transferDuration)
+                    networkRecords[senderHostAbbr] = {
+                        std::max(percentilesRecord[95].totalPkgSize, networkRecords[senderHostAbbr].totalPkgSize),
+                        std::max(percentilesRecord[95].transferDuration, networkRecords[senderHostAbbr].transferDuration)
                     };
                 }
             }
             for (auto &[senderHost, record]: networkRecords) {
+                std::string senderHostAbbr = abbreviate(senderHost);
                 sql = absl::StrFormat("INSERT INTO %s (timestamps, sender_host, p95_transfer_duration_us, p95_total_package_size_b) "
                                       "VALUES ('%s', '%s', %ld, %d);",
                                       cont_networkTableName,
                                       timePointToEpochString(std::chrono::system_clock::now()),
-                                      senderHost,
+                                      senderHostAbbr,
                                       record.transferDuration,
                                       record.totalPkgSize);
                 pushSQL(*cont_metricsServerConn, sql.c_str());
