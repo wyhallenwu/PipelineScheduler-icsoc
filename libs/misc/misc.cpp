@@ -673,17 +673,24 @@ bool tableExists(pqxx::connection &conn, const std::string &schemaName, const st
  * @param keyphrase 
  * @return std::string 
  */
-std::string abbreviate(const std::string &keyphrase) {
-    std::vector<std::string> words = splitString(keyphrase, "_");
+std::string abbreviate(const std::string &keyphrase, const std::string delimiter) {
+    std::vector<std::string> words = splitString(keyphrase, delimiter);
     std::string abbr = "";
     for (const auto &word : words) {
+        if (word.find("-") != std::string::npos) {
+            abbr += abbreviate(word, "-");
+            if (word != words.back()) {
+                abbr += delimiter;
+            }
+            continue;
+        }
         try {
             abbr += keywordAbbrs.at(word);
         } catch (const std::out_of_range &e) {
             abbr += word.substr(0, 4);
         }
         if (word != words.back()) {
-            abbr += "_";
+            abbr += delimiter;
         }
     }
     return abbr;

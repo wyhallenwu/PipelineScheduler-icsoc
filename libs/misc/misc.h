@@ -540,7 +540,7 @@ bool isHypertable(pqxx::connection &conn, const std::string &tableName);
 
 bool tableExists(pqxx::connection &conn, const std::string &schemaName, const std::string &tableName);
 
-std::string abbreviate(const std::string &keyphrase);
+std::string abbreviate(const std::string &keyphrase, const std::string delimiter = "_");
 
 bool confirmIntention(const std::string& message, const std::string& magicPhrase);
 
