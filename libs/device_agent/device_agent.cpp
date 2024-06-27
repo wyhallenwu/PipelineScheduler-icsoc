@@ -40,7 +40,7 @@ std::string getHostIP() {
 }
 
 DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type) {
-    dev_name = n;
+    dev_name = abbreviate(n);
     containers = std::map<std::string, DevContainerHandle>();
 
     dev_port_offset = absl::GetFlag(FLAGS_dev_port_offset);

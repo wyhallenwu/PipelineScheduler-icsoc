@@ -135,7 +135,8 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     } else if (status == PROCESS) {
         new DeviseAdvertisementHandler(service, cq, controller);
         std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), DEVICE_CONTROL_PORT + controller->ctrl_port_offset);
-        NodeHandle node{request.device_name(),
+        std::string deviceName = abbreviate(request.device_name());
+        NodeHandle node{deviceName,
                                      request.ip_address(),
                                      ControlCommunication::NewStub(
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
@@ -144,7 +145,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
                                      std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset, {}};
-        controller->devices.insert({request.device_name(), node});
+        controller->devices.insert({deviceName, node});
         reply.set_name(controller->ctrl_systemName);
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
@@ -1015,7 +1016,7 @@ void Controller::checkNetworkConditions() {
                 }
 
                 for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
-                    std::pair<uint32_t, uint64_t> entry = {row["p95_transfer_duration_us"].as<uint32_t>(), row["p95_total_package_size_b"].as<uint64_t>()};
+                    std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
                     ctrl_inDeviceNetworkEntries[deviceTypeName].emplace_back(entry);
                 }
             // If the entries for the device type exist, we use the latest network entries 
@@ -1031,7 +1032,7 @@ void Controller::checkNetworkConditions() {
         //Getting the latest network entries into the networkEntries map
         for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
             std::string sender_host = row["sender_host"].as<std::string>();
-            std::pair<uint32_t, uint64_t> entry = {row["p95_transfer_duration_us"].as<uint32_t>(), row["p95_total_package_size_b"].as<uint64_t>()};
+            std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
             networkEntries[sender_host].emplace_back(entry);
         }
 
