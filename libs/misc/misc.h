@@ -553,6 +553,29 @@ bool confirmIntention(const std::string& message, const std::string& magicPhrase
 // =======================================================================================================================================================
 // =======================================================================================================================================================
 
+float queryArrivalRate(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
+);
+
+NetworkProfile queryNetworkProfile(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &taskName,
+    const std::string &senderHost,
+    const std::string &receiverHost,
+    const NetworkEntryType &networkEntries
+);
+
 ModelArrivalProfile queryModelArrivalProfile(
     pqxx::connection &metricsConn,
     const std::string &experimentName,

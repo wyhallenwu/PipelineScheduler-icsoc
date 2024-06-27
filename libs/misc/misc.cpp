@@ -86,6 +86,136 @@ uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &tot
 // =======================================================================================================================================================
 // =======================================================================================================================================================
 
+float queryArrivalRate(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::vector<uint8_t> &periods //seconds
+) {
+    std::string schemaName = abbreviate(experimentName + "_" + systemName);
+    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_infer");
+
+    std::string periodQuery;
+    for (const auto &period: periods) {
+        periodQuery += absl::StrFormat("recent_data.inference_rate_%ds,", period);
+    }
+    periodQuery.pop_back();
+
+    std::string query = "WITH recent_data AS ("
+                        "   SELECT * "
+                        "   FROM %s "
+                        "   WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
+                        "   LIMIT 1"
+                        "), "
+                        "inference_rate AS ("
+                        "  SELECT GREATEST(%s) AS max_rate "
+                        "  FROM recent_data "
+                        "  WHERE stream = '%s' "
+                        ") "
+                        "SELECT MAX(max_rate) AS max_inference_rate "
+                        "FROM inference_rate;";
+    query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, periodQuery, streamName);
+    pqxx::result res = pullSQL(metricsConn, query);
+
+    if (res[0][0].is_null()) {
+        // If there is no historical data, we look for the rate of the most recent profiled data
+        std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
+        query = "WITH recent_data AS ("
+                "   SELECT * "
+                "   FROM %s "
+                "   LIMIT 10 "
+                "), "
+                "arrival_rate AS ("
+                "  SELECT GREATEST(%s) AS max_rate "
+                "  FROM recent_data "
+                ") "
+                "SELECT MAX(max_rate) AS max_arrival_rate "
+                "FROM arrival_rate;";
+        query = absl::StrFormat(query.c_str(), profileTableName, periodQuery);
+        res = pullSQL(metricsConn, query);
+    }
+    return res[0]["max_arrival_rate"].as<float>();
+}
+
+NetworkProfile queryNetworkProfile(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &deviceName,
+    const std::string &taskName,
+    const std::string &senderHost,
+    const std::string &receiverHost,
+    const NetworkEntryType &networkEntries
+) {
+    std::string senderHostAbbr = abbreviate(senderHost);
+    std::string receiverHostAbbr = abbreviate(receiverHost);
+
+    std::string schemaName = abbreviate(experimentName + "_" + systemName);
+    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_infer");
+
+    NetworkProfile d2dNetworkProfile;
+
+    /**
+     * @brief Querying for the network profile from the data in the last 120 seconds.
+     * 
+     */
+    std::string query = "WITH recent_data AS ("
+                        "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
+                        "   FROM %s "
+                        "   WHERE stream = '%s' AND sender_host = '%s' AND receiver_host = '%s' AND timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
+                        "   LIMIT 100"
+                        ") "
+                        "SELECT "
+                        "   MAX(p95_out_queueing_duration_us) AS p95_out_queueing_duration_us, "
+                        "   MAX(p95_transfer_duration_us) AS p95_transfer_duration_us, "
+                        "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
+                        "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
+                        "FROM recent_data;";
+    query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, streamName, senderHostAbbr, receiverHostAbbr);
+    pqxx::result res = pullSQL(metricsConn, query);
+
+    // if there are most current entries, then great, we update the profile and that's that
+    if (!res[0][0].is_null()) {
+        d2dNetworkProfile.p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
+        d2dNetworkProfile.p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
+        d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
+        d2dNetworkProfile.p95TransferDuration = res[0]["p95_transfer_duration_us"].as<uint64_t>();
+
+        return d2dNetworkProfile;
+    }
+
+    // If there is no historical data, we look for the rate of the most recent profiled data
+    std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
+    query = "WITH recent_data AS ("
+    "   SELECT p95_out_queueing_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
+    "   FROM %s "
+    "   WHERE receiver_host = '%s'"
+    "   LIMIT 100"
+    ") "
+    "SELECT "
+    "   MAX(p95_out_queueing_duration_us) AS p95_out_queueing_duration_us, "
+    "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
+    "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
+    "FROM recent_data;";
+    query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr);
+    res = pullSQL(metricsConn, query);
+
+    d2dNetworkProfile.p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
+    d2dNetworkProfile.p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
+    d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
+
+    // For network transfer duration, we estimate the latency using linear interpolation based on the package size
+    // The network entries are updated in a separate thread
+    d2dNetworkProfile.p95TransferDuration = estimateNetworkLatency(networkEntries, d2dNetworkProfile.p95PackageSize);
+
+    return d2dNetworkProfile;
+}
+
 /**
  * @brief query the rates, network profile of a model
  * 
