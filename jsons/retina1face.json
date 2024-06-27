@@ -4,12 +4,12 @@
         "cont_experimentName": "prof",
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
-        "cont_taskName": "retinaface",
+        "cont_taskName": "retina1face",
         "cont_hostDevice": "nx",
         "cont_name": "retinaface_0",
         "cont_pipeline": [
             {
-                "msvc_name": "::receiver",
+                "msvc_name": "receiver",
                 "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
@@ -20,7 +20,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::preprocessor",
+                        "nb_name": "preprocessor",
                         "nb_expectedShape": [
                             [
                                 -1,
@@ -61,7 +61,7 @@
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
             },
             {
-                "msvc_name": "::preprocessor",
+                "msvc_name": "preprocessor",
                 "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "../jsons/retinaface_preproc.json",
                 "msvc_dnstreamMicroservices": [
@@ -72,7 +72,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::inference",
+                        "nb_name": "inference",
                         "nb_expectedShape": [
                             [
                                 3,
@@ -98,7 +98,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::receiver",
+                        "nb_name": "receiver",
                         "nb_expectedShape": [
                             [
                                 -1,
@@ -126,7 +126,7 @@
 
             },
             {
-                "msvc_name": "::inference",
+                "msvc_name": "inference",
                 "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "../jsons/retinaface_trt.json",
                 "msvc_dnstreamMicroservices": [
@@ -137,7 +137,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::postprocessor",
+                        "nb_name": "postprocessor",
                         "nb_expectedShape": [
                             [
                                 1
@@ -171,7 +171,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::preprocessor",
+                        "nb_name": "preprocessor",
                         "nb_expectedShape": [
                             [
                                 0,
@@ -192,18 +192,18 @@
                 "prec": 4
             },
             {
-                "msvc_name": "::postprocessor",
+                "msvc_name": "postprocessor",
                 "msvc_idealBatchSize": 2,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::sender",
+                        "nb_name": "sender",
                         "nb_expectedShape": [
                             [
                                 0,
@@ -237,7 +237,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::inference",
+                        "nb_name": "inference",
                         "nb_expectedShape": [
                             [
                                 0,
@@ -250,15 +250,15 @@
                 "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice."
             },
             {
-                "msvc_name": "::sender",
+                "msvc_name": "sender",
                 "msvc_idealBatchSize": 4,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 2,
                         "nb_link": [
-                            "localhost:55015"
+                            "143.248.57.150:55055"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "dummy_receiver_0",
@@ -281,12 +281,12 @@
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::postprocessor",
+                        "nb_name": "postprocessor",
                         "nb_expectedShape": [
                             [
                                 0,

@@ -1,30 +1,5 @@
 #include "retinaface.h"
 
-#include <utility>
-
-RetinaFaceAgent::RetinaFaceAgent(
-        const json &configs
-) : ContainerAgent(configs) {
-    // for (uint16_t i = 4; i < msvcs.size(); i++) {
-    //     msvcs[i]->dispatchThread();
-    // }
-}
-
-RetinaFaceDataSource::RetinaFaceDataSource(
-        const json &configs
-) : ContainerAgent(configs) {
-
-    // msvcs = std::move(services);
-    // dynamic_cast<DataReader*>(msvcs[0])->dispatchThread();
-    // dynamic_cast<BaseReqBatcher*>(msvcs[1])->dispatchThread();
-    // dynamic_cast<BaseBatchInferencer*>(msvcs[2])->dispatchThread();
-    // dynamic_cast<BaseBBoxCropper*>(msvcs[3])->dispatchThread();
-    // for (uint16_t i = 4; i < msvcs.size(); i++) {
-    //     std::thread sender(&Sender::Process, dynamic_cast<Sender*>(msvcs[i]));
-    //     sender.detach();
-    // }
-}
-
 int main(int argc, char **argv) {
 
     json configs = loadRunArgs(argc, argv);
@@ -33,14 +8,14 @@ int main(int argc, char **argv) {
 
     json pipeConfigs = configs["container"]["cont_pipeline"];
 
-    if (pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
+    if (pipeConfigs[0].at("msvc_type") == MicroserviceType::DataReader) {
         agent = new RetinaFaceDataSource(configs);
     } else {
         agent = new RetinaFaceAgent(configs);
     }
 
     std::vector<Microservice *> msvcsList;
-    if (pipeConfigs[0].at("msvc_type") == MicroserviceType::DataSource) {
+    if (pipeConfigs[0].at("msvc_type") == MicroserviceType::DataReader) {
         msvcsList.push_back(new DataReader(pipeConfigs[0]));
     } else {
         msvcsList.push_back(new Receiver(pipeConfigs[0]));

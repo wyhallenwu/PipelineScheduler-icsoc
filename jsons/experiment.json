@@ -1,9 +1,0 @@
-[
-  {
-    "name": "test",
-    "slo": 500000000,
-    "type": 0,
-    "source": "../data/batch_test.mp4",
-    "device": "edge1"
-  }
-]

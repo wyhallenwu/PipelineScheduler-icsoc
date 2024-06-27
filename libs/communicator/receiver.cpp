@@ -67,7 +67,7 @@ Receiver::GpuPointerRequestHandler::GpuPointerRequestHandler(
     ThreadSafeFixSizedDoubleQueue *out,
     uint64_t &msvc_inReqCount, Receiver *receiver
 ) : RequestHandler(service, cq, out, msvc_inReqCount, receiver), responder(&ctx) {
-    Proceed();
+    GpuPointerRequestHandler::Proceed();
 }
 
 void Receiver::GpuPointerRequestHandler::Proceed() {
@@ -272,7 +272,7 @@ void Receiver::HandleRpcs() {
         if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
-        } else if (checkPause()) {
+        } else if (PAUSE_THREADS) {
             if (RELOADING) {
                 spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 setDevice();

@@ -9,7 +9,9 @@ package indevicecommunication;
 service InDeviceCommunication {
   rpc ReportMsvcStart(ProcessData) returns (ProcessData) {}
   rpc UpdateSender(Connection) returns (google.protobuf.Empty) {}
-  rpc UpdateBatchSize(BatchSize) returns (google.protobuf.Empty) {}
+  rpc UpdateBatchSize(Int32) returns (google.protobuf.Empty) {}
+  rpc SyncDatasources(Int32) returns (google.protobuf.Empty) {}
+  rpc SetStartFrame(Int32) returns (google.protobuf.Empty) {}
   rpc StopExecution(Signal) returns (google.protobuf.Empty) {}
 }
 
@@ -28,6 +30,6 @@ message ProcessData {
   uint32 pid = 2;
 }
 
-message BatchSize {
-  int32 size = 1;
+message Int32 {
+  int32 value = 1;
 }
