@@ -105,7 +105,7 @@ private:
 
     void SyncDatasources(const std::string &cont_name, const std::string &dsrc);
 
-    void Ready(const std::string &cont_name, const std::string &ip, SystemDeviceType type);
+    void Ready(const std::string &ip, SystemDeviceType type);
 
     void HandleDeviceRecvRpcs();
 

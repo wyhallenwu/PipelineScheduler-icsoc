@@ -74,7 +74,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     controller_sending_cq = new CompletionQueue();
 
     dev_profiler = new Profiler({});
-    Ready(dev_name, getHostIP(), type);
+    Ready(getHostIP(), type);
 
     dev_logPath += "/" + dev_experiment_name;
     std::filesystem::create_directories(
@@ -122,7 +122,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     if (!tableExists(*dev_metricsServerConn, dev_metricsServerConfigs.schema, dev_hwMetricsTableName)) {
         std::string sql = "CREATE TABLE IF NOT EXISTS " + dev_hwMetricsTableName + " ("
                                                                                     "   timestamps BIGINT NOT NULL,"
-                                                                                    "   cuda_device_id INT1 NOT NULL,"
+                                                                                    "   cuda_device_id INT2 NOT NULL,"
                                                                                     "   cpu_usage INT2 NOT NULL," // percentage (1-100)
                                                                                     "   mem_usage INT NOT NULL," // Megabytes
                                                                                     "   gpu_usage INT2 NOT NULL," // percentage (1-100)
@@ -414,13 +414,13 @@ void DeviceAgent::SyncDatasources(const std::string &cont_name, const std::strin
     finishGrpc(rpc, reply, status, containers[cont_name].cq);
 }
 
-void DeviceAgent::Ready(const std::string &cont_name, const std::string &ip, SystemDeviceType type) {
+void DeviceAgent::Ready(const std::string &ip, SystemDeviceType type) {
     ConnectionConfigs request;
     SystemInfo reply;
     ClientContext context;
     Status status;
     int processing_units;
-    request.set_device_name(cont_name);
+    request.set_device_name(dev_name);
     request.set_device_type(type);
     request.set_ip_address(ip);
     if (type == SystemDeviceType::Server) {
