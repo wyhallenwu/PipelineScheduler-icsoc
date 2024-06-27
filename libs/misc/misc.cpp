@@ -389,7 +389,8 @@ void queryPrePostLatency(
     ModelProfile &profile
 ) {
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
-    std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName + "_proc");
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front()); 
+    std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelNameAbbr + "__" + deviceName + "_proc");
     std::string query = absl::StrFormat("WITH recent_data AS ("
             "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
             "FROM %s "
@@ -406,7 +407,7 @@ void queryPrePostLatency(
     pqxx::result res = pullSQL(metricsConn, query);
     // If most current historical data is not available, we query profiled data
     if (res[0][0].is_null()) {
-        std::string profileTableName = abbreviate("prof__" + modelName +  "__" + deviceTypeName + "_proc");
+        std::string profileTableName = abbreviate("prof__" + modelNameAbbr +  "__" + deviceTypeName + "_proc");
         query = absl::StrFormat("WITH recent_data AS ("
                                 "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
                                 "FROM %s "
@@ -450,8 +451,9 @@ void queryBatchInferLatency(
     ModelProfile &profile
 ) {
     BatchInferProfileListType batchInferProfile;
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
-    std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName)  + "_batch";
+    std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelNameAbbr + "__" + deviceName)  + "_batch";
     std::string query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
                             "FROM %s "
                             "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
@@ -459,7 +461,7 @@ void queryBatchInferLatency(
 
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
-        std::string profileTableName = abbreviate("prof__" + modelName + "__" + deviceTypeName) + "_batch";
+        std::string profileTableName = abbreviate("prof__" + modelNameAbbr + "__" + deviceTypeName) + "_batch";
         query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
                                 "FROM %s "
                                 "GROUP BY infer_batch_size", profileTableName);
@@ -513,7 +515,8 @@ void queryResourceRequirements(
     const std::string &modelName,
     ModelProfile &profile
 ) {
-    std::string tableName = abbreviate("prof__" + modelName + "__" + deviceTypeName + "_hw");
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
+    std::string tableName = abbreviate("prof__" + modelNameAbbr + "__" + deviceTypeName + "_hw");
     std::string query = absl::StrFormat("SELECT batch_size, MAX(cpu_usage), MAX(mem_usage), MAX(rss_mem_usage), MAX(gpu_usage), MAX(gpu_mem_usage) "
                             "FROM %s "
                             "GROUP BY batch_size;", tableName);

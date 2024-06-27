@@ -8,17 +8,19 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
     Pipeline pipe = {getModelsByPipelineType(t.type, t.device)};
     ctrl_unscheduledPipelines.emplace_back(pipe);
 
-    std::vector<std::pair<std::string, std::string>> possibleDeviceList = {{"server", "server"}};
+    std::vector<std::pair<std::string, std::string>> possibleDevicePairList = {{"server", "server"}};
     std::map<std::pair<std::string, std::string>, NetworkEntryType> possibleNetworkEntryPairs;
 
-    for (const auto &pair : possibleDeviceList) {
+    for (const auto &pair : possibleDevicePairList) {
         std::unique_lock lock(devices[pair.first].nodeHandleMutex);
         possibleNetworkEntryPairs[pair] = devices[pair.first].latestNetworkEntries[pair.second];
         lock.unlock();
     }
 
+    std::vector<std::string> possibleDeviceList = {"server"};
+
     for (auto& model: ctrl_unscheduledPipelines.back().pipelineModels) {
-        std::string containerName = model->name + "-" + possibleDeviceList[0].second;
+        std::string containerName = model->name + "-" + possibleDevicePairList[0].second;
         if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos) {
             continue;
         }
@@ -31,7 +33,7 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
             ctrl_containerLib[containerName].taskName,
             ctrl_containerLib[containerName].modelName
         );
-        for (const auto &pair : possibleDeviceList) {
+        for (const auto &pair : possibleDevicePairList) {
             NetworkProfile test = queryNetworkProfile(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
@@ -45,6 +47,21 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
                 possibleNetworkEntryPairs[pair]
             );   
             model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
+        }
+
+        for (const auto deviceName : possibleDeviceList) {
+            std::string deviceTypeName = getDeviceTypeName(devices[deviceName].type);
+            ModelProfile profile = queryModelProfile(
+                *ctrl_metricsServerConn,
+                ctrl_experimentName,
+                ctrl_systemName,
+                t.name,
+                t.source,
+                deviceName,
+                deviceTypeName,
+                ctrl_containerLib[containerName].modelName
+            );
+            model->processProfiles[deviceTypeName] = profile;
         }
         
         // ModelArrivalProfile profile = queryModelArrivalProfile(
