@@ -21,12 +21,12 @@ void BaseSink::sink() {
     BatchSizeType batchSize;
 
     while (true) {
-        if (this->STOP_THREADS) {
-            if (this->STOP_THREADS) {
+        if (STOP_THREADS) {
+            if (STOP_THREADS) {
                 spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
                 break;
             }
-        } else if (this->PAUSE_THREADS) {
+        } else if (PAUSE_THREADS) {
             if (RELOADING) {
                 /**
                  * @brief Opening a new log file

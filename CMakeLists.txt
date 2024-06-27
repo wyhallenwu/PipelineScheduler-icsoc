@@ -61,6 +61,7 @@ if (NOT TensorRT_DIR)
 endif ()
 # Use the correct version of CUDA
 set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
+# set(CUDA_INCLUDE_DIRS "/usr/local/cuda/include")
 
 # Set LightGBM include directories
 set(LIGHTGBM_INCLUDE_DIR "/usr/include/LightGBM")
@@ -186,14 +187,14 @@ target_link_libraries(DeviceAgent device_agent)
 add_executable(Controller libs/controller/main.cpp)
 target_link_libraries(Controller controller)
 
-add_executable(Container_DataSource libs/data_source/data_source.cpp)
+add_executable(Container_DataSource libs/data_source/main.cpp)
 target_link_libraries(Container_DataSource data_source)
 
 add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
 target_link_libraries(Container_Yolov5 yolov5)
 
-add_executable(Container_Yolov5-plate libs/yolov5-plate/yolov5-plate.cpp)
-target_link_libraries(Container_Yolov5-plate yolov5-plate)
+add_executable(Container_PlateDet libs/yolov5-plate/yolov5-plate.cpp)
+target_link_libraries(Container_PlateDet yolov5-plate)
 
 add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
 target_link_libraries(convert_onnx2trt onnx2trt)

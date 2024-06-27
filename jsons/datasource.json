@@ -4,12 +4,12 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "every",
         "cont_taskName": "dsrc",
-        "cont_hostDevice": "agx",
+        "cont_hostDevice": "nx",
         "cont_name": "data_source_0",
         "cont_pipeline": [
             {
-                "msvc_name": "::data_reader",
-                "msvc_idealBatchSize": 30,
+                "msvc_name": "data_reader",
+                "msvc_idealBatchSize": 15,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
@@ -19,7 +19,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::sender",
+                        "nb_name": "sender",
                         "nb_expectedShape": [
                             [
                                 0,
@@ -31,9 +31,9 @@
                 ],
                 "msvc_dataShape": [
                     [
-                        0,
-                        0,
-                        0
+                        3,
+                        640,
+                        640
                     ]
                 ],
                 "msvc_svcLevelObjLatency": 999999,
@@ -59,7 +59,7 @@
                 "msvc_maxQueueSize": 100
             },
             {
-                "msvc_name": "::sender",
+                "msvc_name": "sender",
                 "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
@@ -97,7 +97,7 @@
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::data_reader",
+                        "nb_name": "data_reader",
                         "nb_expectedShape": [
                             [
                                 0,
@@ -121,6 +121,8 @@
         "profile_step": 0,
         "profile_templateModelPath": "",
         "profile_inputRandomizeScheme": 0,
-        "profile_numProfileFrames": 0
+        "profile_numWarmUpBatches": 0,
+        "profile_numProfileBatches": 0,
+        "profile_numProfileReqs": 0
     }
 }

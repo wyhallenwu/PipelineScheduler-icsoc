@@ -81,6 +81,7 @@ target_link_libraries(misc
         ${CMAKE_THREAD_LIBS_INIT}
         ${PostgreSQL_LIBRARIES}
         ${LIBPQXX_LIBRARIES}
+        ${_GRPC_GRPCPP}
 )
 
 # Here we configure variables specifying the target directories.

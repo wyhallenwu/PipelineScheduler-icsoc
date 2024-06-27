@@ -1,0 +1,21 @@
+{
+    "expName": "ex0",
+    "systemName": "jlf",
+    "runtime": 1,
+    "port_offset": 2000,
+    "initial_pipelines": [
+        {
+            "pipeline_name": "traffic",
+            "pipeline_target_slo": 50000000,
+            "pipeline_type": 0,
+            "video_source": "../data/preview/traffic_profiling.mp4",
+            "pipeline_source_device": "orinano1"
+        }, {
+            "pipeline_name": "people",
+            "pipeline_target_slo": 45000000,
+            "pipeline_type": 2,
+            "video_source": "../data/preview/people_profiling.mp4",
+            "pipeline_source_device": "orinano2"
+        }
+    ]
+}

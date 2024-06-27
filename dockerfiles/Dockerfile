@@ -84,8 +84,8 @@ RUN apt install libspdlog-dev libpqxx-dev -y
 RUN apt install postgresql-client -y
 
 # Store load time model
-ARG upload_model="upload_model_agx.txt"
-ARG download_model="download_model_agx.txt"
+ARG upload_model="upload_model_nx.txt"
+ARG download_model="download_model_nx.txt"
 COPY ${upload_model} /ltmodel
 COPY ${download_model} /ltmodel
 
