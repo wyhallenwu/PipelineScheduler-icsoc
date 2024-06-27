@@ -285,57 +285,6 @@ void saveGPUAsImg(const cv::cuda::GpuMat &img, std::string name = "test.jpg", fl
 
 void saveCPUAsImg(const cv::Mat &img, std::string name = "test.jpg", float scale = 1.f);
 
-const std::vector<std::string> cocoClassNames = {
-        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-        "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-        "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-        "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-        "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-        "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-        "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-        "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-        "hair drier", "toothbrush"
-};
-
-const std::map<std::string, std::string> keywordAbbrs {
-    {"batch", "batch"},
-    {"server", "serv"},
-    {"agxavier", "agx"},
-    {"agxavier1", "agx1"},
-    {"orinano", "orn"},
-    {"orinano1", "orn1"},
-    {"orinano2", "orn2"},
-    {"orinano3", "orn3"},
-    {"nxavier", "nx"},
-    {"nxavier1", "nx1"},
-    {"nxxavier", "nx2"},
-    {"nxavier3", "nx3"},
-    {"nxavier4", "nx4"},
-    {"nxavier5", "nx5"},
-    {"datasource", "dsrc"},
-    {"traffic", "trfc"},
-    {"building", "bldg"},
-    {"yolov5", "y5"},
-    {"yolov5n", "y5n"},
-    {"yolov5s", "y5s"},
-    {"yolov5m", "y5m"},
-    {"yolov5l", "y5l"},
-    {"yolov5x", "y5x"},
-    {"yolov5ndsrc", "y5nd"},
-    {"retina1face", "rt1f"},
-    {"arcface", "arcf"},
-    {"carbrand", "cbrd"},
-    {"gender", "gndr"},
-    {"emotion", "emtn"},
-    {"emotionnet", "emtn"},
-    {"platedet", "pldt"},
-    {"dynamic", "dyn"},
-    {"3090", "39"}, // GPU name
-    {"fp32", "32"},
-    {"fp16", "16"},
-    {"int8", "8"}
-};
-
 struct MetricsServerConfigs {
     std::string ip = "localhost";
     uint64_t port = 60004;
@@ -414,8 +363,11 @@ enum ModelType {
     CarBrand
 };
 
+const extern std::map<std::string, std::string> keywordAbbrs;
 extern std::map<SystemDeviceType, std::string> SystemDeviceTypeList;
+extern std::map<std::string, SystemDeviceType> SystemDeviceTypeReverseList;
 extern std::map<ModelType, std::string> ModelTypeList;
+extern std::map<std::string, ModelType> ModelTypeReverseList;
 
 struct ContainerInfo {
     std::string taskName;

@@ -864,11 +864,65 @@ bool confirmIntention(const std::string &message, const std::string &magicPhrase
     return true;
 }
 
+std::map<std::string, std::string> keywordAbbrs = {
+    {"batch", "batch"},
+    {"server", "serv"},
+    {"agxavier", "agx"},
+    {"agxavier1", "agx1"},
+    {"orinano", "orn"},
+    {"orinano1", "orn1"},
+    {"orinano2", "orn2"},
+    {"orinano3", "orn3"},
+    {"nxavier", "nx"},
+    {"nxavier1", "nx1"},
+    {"nxxavier", "nx2"},
+    {"nxavier3", "nx3"},
+    {"nxavier4", "nx4"},
+    {"nxavier5", "nx5"},
+    {"datasource", "dsrc"},
+    {"traffic", "trfc"},
+    {"building", "bldg"},
+    {"yolov5", "y5"},
+    {"yolov5n", "y5n"},
+    {"yolov5s", "y5s"},
+    {"yolov5m", "y5m"},
+    {"yolov5l", "y5l"},
+    {"yolov5x", "y5x"},
+    {"yolov5ndsrc", "y5nd"},
+    {"retina1face", "rt1f"},
+    {"retina1facedsrc", "rt1fd"},
+    {"age", "age"},
+    {"arcface", "arcf"},
+    {"carbrand", "cbrd"},
+    {"gender", "gndr"},
+    {"emotion", "emtn"},
+    {"emotionnet", "emtn"},
+    {"platedet", "pldt"},
+    {"dynamic", "dyn"},
+    {"movenet", "move"},
+    {"3090", "39"}, // GPU name
+    {"fp32", "32"},
+    {"fp16", "16"},
+    {"int8", "8"}
+};
+
 std::map<SystemDeviceType, std::string> SystemDeviceTypeList = {
     {Server, "server"},
     {NXXavier, "nxavier"},
     {AGXXavier, "agxavier"},
     {OrinNano, "orinano"}
+};
+
+// Reverse map for SystemDeviceTypeList
+std::map<std::string, SystemDeviceType> SystemDeviceTypeReverseList = {
+    {"server", Server},
+    {"serv", Server},
+    {"nxavier", NXXavier},
+    {"nx", NXXavier},
+    {"agxavier", AGXXavier},
+    {"agx", AGXXavier},
+    {"orinano", OrinNano},
+    {"orn", OrinNano}
 };
 
 std::map<ModelType, std::string> ModelTypeList = {
@@ -887,6 +941,43 @@ std::map<ModelType, std::string> ModelTypeList = {
     {Gender, "gender"},
     {Age, "age"},
     {CarBrand, "carbrand"}
+};
+
+std::map<std::string, ModelType> ModelTypeReverseList = {
+    {"datasource", DataSource},
+    {"dsrc", DataSource},
+    {"sink", Sink},
+    {"yolov5n", Yolov5n},
+    {"y5n", Yolov5n},
+    {"yolov5s", Yolov5s},
+    {"y5s", Yolov5s},
+    {"yolov5m", Yolov5m},
+    {"y5m", Yolov5m},
+    {"yolov5ndsrc", Yolov5nDsrc},
+    {"y5nd", Yolov5nDsrc},
+    {"arcface", Arcface},
+    {"arcf", Arcface},
+    {"retina1face", Retinaface},
+    {"rt1f", Retinaface},
+    {"retina1facedsrc", RetinafaceDsrc},
+    {"rt1fd", RetinafaceDsrc},
+    {"plateDet", PlateDet},
+    {"pldt", PlateDet},
+    {"emotionnet", Emotionnet},
+    {"emtn", Emotionnet},
+    {"yolov5ndsrc", Yolov5nDsrc},
+    {"y5nd", Yolov5nDsrc},
+    {"arcface", Arcface},
+    {"arcf", Arcface},
+    {"platedet", PlateDet},
+    {"pldt", PlateDet},
+    {"movenet", Movenet},
+    {"move", Movenet},
+    {"gender", Gender},
+    {"gndr", Gender},
+    {"age", Age},
+    {"carbrand", CarBrand},
+    {"cbrd", CarBrand}  
 };
 
 bool isFileEmpty(const std::string& filePath) {
