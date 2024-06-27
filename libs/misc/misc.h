@@ -179,6 +179,10 @@ struct PercentilesNetworkRecord {
 typedef std::map<std::string, PercentilesNetworkRecord> NetworkRecordType;
 typedef std::vector<std::pair<uint32_t, uint64_t>> NetworkEntryType;
 
+uint64_t calculateP95(std::vector<uint64_t> &values);
+
+NetworkEntryType aggregateNetworkEntries(const NetworkEntryType &res);
+
 uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &totalPkgSize);
 
 // Arrival rate coming to a certain model in the pipeline

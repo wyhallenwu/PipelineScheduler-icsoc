@@ -2,6 +2,38 @@
 
 using json = nlohmann::json;
 
+uint64_t calculateP95(std::vector<uint64_t> &values) {
+    if (values.empty()) {
+        throw std::invalid_argument("Values set is empty.");
+    }
+    std::sort(values.begin(), values.end());
+    size_t index = static_cast<size_t>(std::ceil(0.95 * values.size())) - 1;
+    return values[index];
+}
+
+NetworkEntryType aggregateNetworkEntries(const NetworkEntryType &res) {
+    std::map<uint32_t, std::vector<uint64_t>> groupedEntries;
+
+    // Group entries by package size
+    for (const auto &entry : res) {
+        groupedEntries[entry.first].push_back(entry.second);
+    }
+
+    // Calculate the p95 value for each group and create a new NetworkEntryType vector
+    NetworkEntryType uniqueEntries;
+    for (auto &group : groupedEntries) {
+        uint64_t p95 = calculateP95(group.second);
+        uniqueEntries.emplace_back(group.first, p95);
+    }
+
+    // Sort the uniqueEntries by package size
+    std::sort(uniqueEntries.begin(), uniqueEntries.end(), [](const auto &a, const auto &b) {
+        return a.first < b.first;
+    });
+
+    return uniqueEntries;
+}
+
 /**
  * @brief Estimate network latency of a package of size `totalPkgSize` using linear interpolation
  * 
@@ -13,27 +45,20 @@ uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &tot
     if (res.empty()) {
         throw std::invalid_argument("The result set is empty.");
     }
+
+    // Handle case where there is only one entry left
+    if (res.size() == 1) {
+        return res[0].second; // Directly return the latency of the single entry
+    }
+
     // Handle case where totalPkgSize is smaller than the smallest package size in res
     if (totalPkgSize <= res.front().first) {
-        uint32_t pkgSize1 = res.front().first;
-        uint32_t pkgSize2 = res[1].first;
-        uint64_t latency1 = res.front().second;
-        uint64_t latency2 = res[1].second;
-
-        double t = static_cast<double>(totalPkgSize - pkgSize1) / (pkgSize2 - pkgSize1);
-        return static_cast<uint64_t>(latency1 + t * (latency2 - latency1));
+        return res.front().second;
     }
 
     // Handle case where totalPkgSize is larger than the largest package size in res
     if (totalPkgSize >= res.back().first) {
-        size_t lastIndex = res.size() - 1;
-        uint32_t pkgSize1 = res[lastIndex - 1].first;
-        uint32_t pkgSize2 = res[lastIndex].first;
-        uint64_t latency1 = res[lastIndex - 1].second;
-        uint64_t latency2 = res[lastIndex].second;
-
-        double t = static_cast<double>(totalPkgSize - pkgSize1) / (pkgSize2 - pkgSize1);
-        return static_cast<uint64_t>(latency1 + t * (latency2 - latency1));
+        return res.back().second;
     }
 
     // Perform linear interpolation within the range
@@ -44,8 +69,11 @@ uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &tot
         uint64_t latency2 = res[i + 1].second;
 
         if (totalPkgSize >= pkgSize1 && totalPkgSize <= pkgSize2) {
-            double t = static_cast<double>(totalPkgSize - pkgSize1) / (pkgSize2 - pkgSize1);
-            return static_cast<uint64_t>(latency1 + t * (latency2 - latency1));
+            if (pkgSize1 == pkgSize2) {
+                return latency1; // If sizes are the same, return latency1
+            }
+
+            return std::max(latency2, latency1);
         }
     }
 
