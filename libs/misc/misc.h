@@ -319,6 +319,7 @@ const std::map<std::string, std::string> keywordAbbrs {
     {"yolov5m", "y5m"},
     {"yolov5l", "y5l"},
     {"yolov5x", "y5x"},
+    {"yolov5ndsrc", "y5nd"},
     {"retina1face", "rt1f"},
     {"arcface", "arcf"},
     {"carbrand", "cbrd"},

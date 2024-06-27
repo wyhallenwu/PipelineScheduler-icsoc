@@ -728,21 +728,21 @@ std::map<SystemDeviceType, std::string> SystemDeviceTypeList = {
 };
 
 std::map<ModelType, std::string> ModelTypeList = {
-    {DataSource, "DataSource"},
-    {Sink, "Sink"},
-    {Yolov5n, "Yolov5n"},
-    {Yolov5s, "Yolov5s"},
-    {Yolov5m, "Yolov5m"},
-    {Yolov5nDsrc, "Yolov5nDsrc"},
-    {Arcface, "Arcface"},
-    {Retinaface, "Retinaface"},
-    {RetinafaceDsrc, "RetinafaceDsrc"},
-    {PlateDet, "PlateDet"},
-    {Movenet, "Movenet"},
-    {Emotionnet, "Emotionnet"},
-    {Gender, "Gender"},
-    {Age, "Age"},
-    {CarBrand, "CarBrand"}
+    {DataSource, "datasource"},
+    {Sink, "sink"},
+    {Yolov5n, "yolov5n"},
+    {Yolov5s, "yolov5s"},
+    {Yolov5m, "yolov5m"},
+    {Yolov5nDsrc, "yolov5ndsrc"},
+    {Arcface, "arcface"},
+    {Retinaface, "retina1face"},
+    {RetinafaceDsrc, "retina1facedsrc"},
+    {PlateDet, "platedet"},
+    {Movenet, "movenet"},
+    {Emotionnet, "emotionnet"},
+    {Gender, "gender"},
+    {Age, "age"},
+    {CarBrand, "carbrand"}
 };
 
 bool isFileEmpty(const std::string& filePath) {
@@ -755,6 +755,10 @@ bool isFileEmpty(const std::string& filePath) {
     file.close();
 
     return size == 0;
+}
+
+std::string getContainerName(const std::string& deviceTypeName, const std::string& modelName) {
+    return modelName + "-" + abbreviate(deviceTypeName);
 }
 
 std::string getContainerName(const SystemDeviceType& deviceType, const ModelType& modelType) {
