@@ -256,10 +256,27 @@ private:
         void Proceed() final;
 
     private:
-        ContainerInt request;
+        ContainerInts request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
+
+    class UpdateResolutionRequestHandler : public ControlRequestHandler {
+    public:
+        UpdateResolutionRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                      DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        ContainerInts request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+    };
+
     ContainerLibType dev_containerLib;
     SystemDeviceType dev_type;
     DeviceInfoType dev_deviceInfo;

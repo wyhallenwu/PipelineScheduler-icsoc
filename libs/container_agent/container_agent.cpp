@@ -1045,6 +1045,7 @@ void ContainerAgent::HandleRecvRpcs() {
     new StopRequestHandler(&service, server_cq.get(), &run);
     new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
+    new UpdateResolutionRequestHandler(&service, server_cq.get(), this);
     new SyncDatasourcesRequestHandler(&service, server_cq.get(), this);
     void *tag;
     bool ok;
@@ -1136,6 +1137,30 @@ void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
         for (auto msvc : *msvcs) {
             msvc->msvc_idealBatchSize = request.value();
         }
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void ContainerAgent::UpdateResolutionRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateResolution(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateResolutionRequestHandler(service, cq, container_agent);
+        std::vector<int> resolution = {};
+        resolution.push_back(request.channels());
+        resolution.push_back(request.height());
+        resolution.push_back(request.width());
+        if (container_agent->cont_msvcsList[0]->msvc_type == msvcconfigs::MicroserviceType::DataReader){
+            container_agent->cont_msvcsList[0]->msvc_dataShape = {resolution};
+        } else {
+            container_agent->cont_msvcsList[1]->dnstreamMicroserviceList[0].expectedShape = {resolution};
+        }
+
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

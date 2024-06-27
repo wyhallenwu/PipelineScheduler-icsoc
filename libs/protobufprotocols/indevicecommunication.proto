@@ -10,6 +10,7 @@ service InDeviceCommunication {
   rpc ReportMsvcStart(ProcessData) returns (ProcessData) {}
   rpc UpdateSender(Connection) returns (google.protobuf.Empty) {}
   rpc UpdateBatchSize(Int32) returns (google.protobuf.Empty) {}
+  rpc UpdateResolution(Dimensions) returns (google.protobuf.Empty) {}
   rpc SyncDatasources(Int32) returns (google.protobuf.Empty) {}
   rpc SetStartFrame(Int32) returns (google.protobuf.Empty) {}
   rpc StopExecution(Signal) returns (google.protobuf.Empty) {}
@@ -23,6 +24,12 @@ message Connection {
   string name = 1;
   string ip = 2;
   int32 port = 3;
+}
+
+message Dimensions {
+  int32 channels = 1;
+  int32 height = 2;
+  int32 width = 3;
 }
 
 message ProcessData {

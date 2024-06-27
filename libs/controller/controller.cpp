@@ -338,14 +338,29 @@ void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
 
 void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica) {
     msvc->batch_size[replica - 1] = new_bs;
-    ContainerInt request;
+    ContainerInts request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
     request.set_name(msvc->name);
-    request.set_value(new_bs);
+    request.add_value(new_bs);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
+    finishGrpc(rpc, reply, status, msvc->device_agent->cq);
+}
+
+void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution, int replica = 1) {
+    msvc->dimensions = new_resolution;
+    ContainerInts request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(msvc->name);
+    request.add_value(new_resolution[0]);
+    request.add_value(new_resolution[1]);
+    request.add_value(new_resolution[2]);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            msvc->device_agent->stub->AsyncUpdateResolution(&context, request, msvc->device_agent->cq));
     finishGrpc(rpc, reply, status, msvc->device_agent->cq);
 }
 
