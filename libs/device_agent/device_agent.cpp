@@ -122,12 +122,13 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     if (!tableExists(*dev_metricsServerConn, dev_metricsServerConfigs.schema, dev_hwMetricsTableName)) {
         std::string sql = "CREATE TABLE IF NOT EXISTS " + dev_hwMetricsTableName + " ("
                                                                                     "   timestamps BIGINT NOT NULL,"
-                                                                                    "   cuda_device_id INT2 NOT NULL,"
-                                                                                    "   cpu_usage INT2 NOT NULL," // percentage (1-100)
-                                                                                    "   mem_usage INT NOT NULL," // Megabytes
-                                                                                    "   gpu_usage INT2 NOT NULL," // percentage (1-100)
-                                                                                    "   gpu_mem_usage INT NOT NULL," // Megabytes
-                                                                                    "   PRIMARY KEY (timestamps)"
+                                                                                    "   cpu_usage INT," // percentage (1-100)
+                                                                                    "   mem_usage INT,"; // Megabytes
+        for (auto i = 0; i < dev_numCudaDevices; i++) {
+            sql += "gpu_" + std::to_string(i) + "_usage INT," // percentage (1-100)
+                   "gpu_" + std::to_string(i) + "_mem_usage INT,"; // Megabytes
+        };
+        sql += "   PRIMARY KEY (timestamps)"
                                                                                     ");";
         pushSQL(*dev_metricsServerConn, sql);
 
@@ -137,6 +138,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
         sql = "CREATE INDEX ON " + dev_hwMetricsTableName + " (timestamps);";
         pushSQL(*dev_metricsServerConn, sql);
     }
+
     running = true;
     threads = std::vector<std::thread>();
     threads.emplace_back(&DeviceAgent::HandleDeviceRecvRpcs, this);
@@ -164,7 +166,7 @@ void DeviceAgent::collectRuntimeMetrics() {
         auto startTime = metricsStopwatch.getStartTime();
         uint64_t scrapeLatencyMillisec = 0;
         uint64_t timeDiff;
-
+        
 
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextHwMetricsScrapeTime)) {
@@ -203,7 +205,7 @@ void DeviceAgent::collectRuntimeMetrics() {
         startTime = metricsStopwatch.getStartTime();
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextMetricsReportTime)) {
-
+            
             if (dev_runtimeMetrics.size() == 0) {
                 spdlog::get("container_agent")->trace("{0:s} No runtime metrics to push to the database.", dev_name);
                 dev_metricsServerConfigs.nextMetricsReportTime = std::chrono::high_resolution_clock::now() +
@@ -213,7 +215,7 @@ void DeviceAgent::collectRuntimeMetrics() {
             }
             sql = "INSERT INTO " + dev_hwMetricsTableName +
                   " (timestamps, cpu_usage, mem_usage";
-
+            
             for (int i = 0; i < dev_numCudaDevices; i++) {
                 sql += ", gpu_" + std::to_string(i) + "_usage, gpu_" + std::to_string(i) + "_mem_usage";
             }
