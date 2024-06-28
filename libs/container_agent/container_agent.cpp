@@ -305,11 +305,12 @@ ContainerAgent::ContainerAgent(const json &configs) {
     json containerConfigs = configs["container"];
     //std::cout << containerConfigs.dump(4) << std::endl;
 
-    cont_experimentName = abbreviate(containerConfigs["cont_experimentName"].get<std::string>());
-    cont_name = abbreviate(containerConfigs["cont_name"].get<std::string>());
-    cont_pipeName = abbreviate(containerConfigs["cont_pipeName"].get<std::string>());
-    cont_taskName = abbreviate(containerConfigs["cont_taskName"].get<std::string>());
-    cont_hostDevice = abbreviate(containerConfigs["cont_hostDevice"].get<std::string>());
+    cont_experimentName = containerConfigs["cont_experimentName"].get<std::string>();
+    cont_name = containerConfigs["cont_name"].get<std::string>();
+    cont_pipeName = containerConfigs["cont_pipeName"].get<std::string>();
+    cont_taskName = containerConfigs["cont_taskName"].get<std::string>();
+    cont_hostDevice = containerConfigs["cont_hostDevice"].get<std::string>();
+    cont_hostDeviceType = containerConfigs["cont_hostDeviceType"].get<std::string>();
     cont_systemName = containerConfigs["cont_systemName"].get<std::string>();
 
     cont_deviceIndex = containerConfigs["cont_device"];
@@ -337,10 +338,10 @@ ContainerAgent::ContainerAgent(const json &configs) {
     //     cont_logDir = (std::string) containerConfigs["cont_logPath"];
     // }
 
-    if (cont_taskName != "dsrc") {
+    if (cont_taskName != "dsrc" && cont_taskName != "datasource") {
         cont_inferModel = abbreviate(containerConfigs["cont_inferModelName"].get<std::string>());
         cont_metricsServerConfigs.from_json(containerConfigs["cont_metricsServerConfigs"]);
-        cont_metricsServerConfigs.schema = cont_experimentName + "_" + cont_systemName;
+        cont_metricsServerConfigs.schema = abbreviate(cont_experimentName + "_" + cont_systemName);
         cont_metricsServerConfigs.user = "container_agent";
         cont_metricsServerConfigs.password = "agent";
 
@@ -354,28 +355,36 @@ ContainerAgent::ContainerAgent(const json &configs) {
         sql_statement = absl::StrFormat("CREATE SCHEMA IF NOT EXISTS %s;", cont_metricsServerConfigs.schema);
         pushSQL(*cont_metricsServerConn, sql_statement);
 
+        std::string cont_experimentNameAbbr = abbreviate(cont_experimentName);
+        std::string cont_pipeNameAbbr = abbreviate(cont_pipeName);
+        std::string cont_taskNameAbbr = abbreviate(cont_taskName);
+        std::string cont_hostDeviceAbbr = abbreviate(cont_hostDevice);
+        std::string cont_hostDeviceTypeAbbr = abbreviate(cont_hostDeviceType);
+
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
             cont_batchInferProfileList = queryBatchInferLatency(
                 *cont_metricsServerConn,
                 cont_experimentName,
                 cont_systemName,
                 cont_pipeName,
+                "stream",
                 cont_inferModel,
-                cont_hostDevice,
+                cont_hostDeviceType,
                 cont_inferModel
             );
-            cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "_" + cont_taskName + "_arr";
-            cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
-            cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
-            cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" +  cont_pipeName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
-            cont_networkTableName = cont_metricsServerConfigs.schema + "." + cont_experimentName + "_" + cont_hostDevice + "_netw";
+
+            cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "_" + cont_taskNameAbbr + "_arr";
+            cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_proc";
+            cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_batch";
+            cont_hwMetricsTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_hw";
+            cont_networkTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" + cont_hostDeviceAbbr + "_netw";
         } else if (cont_RUNMODE == RUNMODE::PROFILING) {
-            cont_arrivalTableName = cont_experimentName + "_" + cont_taskName +  "_arr";
-            cont_processTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_proc";
-            cont_batchInferTableName = cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_batch";
+            cont_arrivalTableName = cont_experimentNameAbbr + "_" + cont_taskNameAbbr +  "_arr";
+            cont_processTableName = cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_proc";
+            cont_batchInferTableName = cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_batch";
             cont_hwMetricsTableName =
-                    cont_experimentName + "__" + cont_inferModel + "__" + cont_hostDevice + "_hw";
-            cont_networkTableName = cont_experimentName + "_" + cont_hostDevice + "_netw";
+                    cont_experimentNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_hw";
+            cont_networkTableName = cont_experimentNameAbbr + "_" + cont_hostDeviceTypeAbbr + "_netw";
             cont_metricsServerConfigs.schema = "public";
 
             std::string question = absl::StrFormat("Do you want to remove old profile entries of %s?", cont_inferModel);
@@ -424,12 +433,12 @@ ContainerAgent::ContainerAgent(const json &configs) {
         //     pushSQL(*cont_metricsServerConn, sql_statement);
 
         //     sql_statement = "SELECT create_hypertable('" + tableName + "', 'arrival_timestamps', if_not_exists => TRUE);";
-
+            
         //     pushSQL(*cont_metricsServerConn, sql_statement);
 
         //     sql_statement = "CREATE INDEX ON " + tableName + " (arrival_timestamps);";
         //     pushSQL(*cont_metricsServerConn, sql_statement);
-
+            
         //     sql_statement = "CREATE INDEX ON " + tableName + " (stream);";
         //     pushSQL(*cont_metricsServerConn, sql_statement);
 
@@ -524,7 +533,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
         //     sql_statement = "SELECT create_hypertable('" + tableName + "', 'postprocess_timestamps', if_not_exists => TRUE);";
         //     pushSQL(*cont_metricsServerConn, sql_statement);
-
+            
         //     sql_statement = "CREATE INDEX ON " + tableName + " (postprocess_timestamps);";
         //     pushSQL(*cont_metricsServerConn, sql_statement);
 
@@ -564,12 +573,12 @@ ContainerAgent::ContainerAgent(const json &configs) {
             sql_statement = "CREATE INDEX ON " + cont_processTableName + " (stream);";
             pushSQL(*cont_metricsServerConn, sql_statement);
 
-
+        
         }
 
         /**
          * @brief Table for summarized batch infer records
-         *
+         * 
          */
         if (!tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, cont_batchInferTableName)) {
             sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_batchInferTableName + " ("
@@ -743,10 +752,11 @@ void ContainerAgent::collectRuntimeMetrics() {
     }
 
     while (run) {
-        if (cont_taskName == "dsrc") {
+        if (cont_taskName == "dsrc" || cont_taskName == "datasource") {
             std::this_thread::sleep_for(std::chrono::milliseconds(10000));
             continue;
         }
+        bool hwMetricsScraped = false;
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
         auto startTime = metricsStopwatch.getStartTime();
@@ -754,12 +764,13 @@ void ContainerAgent::collectRuntimeMetrics() {
         uint64_t timeDiff;
         if (reportHwMetrics) {
             if (timePointCastMillisecond(startTime) >= timePointCastMillisecond(cont_metricsServerConfigs.nextHwMetricsScrapeTime) && pid > 0) {
-	Profiler::sysStats stats = profiler->reportAtRuntime(pid);
-                cont_hwMetrics = {stats.cpuUsage, stats.processMemoryUsage, stats.processMemoryUsage, stats.gpuUtilization,
+                Profiler::sysStats stats = profiler->reportAtRuntime(getpid(), pid);
+                cont_hwMetrics = {stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
                                              stats.gpuMemoryUsage};
 
                 metricsStopwatch.stop();
                 scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
+                hwMetricsScraped = true;
                 cont_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() +
                     std::chrono::milliseconds(cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec - scrapeLatencyMillisec);
                 spdlog::get("container_agent")->trace("{0:s} SCRAPE hardware metrics. Latency {1:d}ms.",
@@ -770,7 +781,7 @@ void ContainerAgent::collectRuntimeMetrics() {
         }
 
         startTime = std::chrono::high_resolution_clock::now();
-        if (timePointCastMillisecond(startTime) >=
+        if (timePointCastMillisecond(startTime) >= 
                 timePointCastMillisecond(cont_metricsServerConfigs.nextMetricsReportTime)) {
             Stopwatch pushMetricsStopWatch;
             pushMetricsStopWatch.start();
@@ -813,7 +824,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 }
 
                 std::string stream = keys.first;
-                std::string senderHost = keys.second;
+                std::string senderHostAbbr = abbreviate(keys.second);
                 
                 std::vector<uint8_t> percentiles = {95};
                 std::map<uint8_t, PercentilesArrivalRecord> percentilesRecord = records.findPercentileAll(percentiles);
@@ -829,8 +840,8 @@ void ContainerAgent::collectRuntimeMetrics() {
                                         timePointToEpochString(std::chrono::system_clock::now()), 
                                         stream,
                                         cont_inferModel,
-                                        senderHost,
-                                        cont_hostDevice);
+                                        senderHostAbbr,
+                                        abbreviate(cont_hostDevice));
                 for (auto &rate: requestRates) {
                     sql += ", " + std::to_string(rate);
                 }
@@ -842,24 +853,25 @@ void ContainerAgent::collectRuntimeMetrics() {
 
                 pushSQL(*cont_metricsServerConn, sql.c_str());
 
-                if (networkRecords.find(senderHost) == networkRecords.end()) {
-                    networkRecords[senderHost] = {
+                if (networkRecords.find(senderHostAbbr) == networkRecords.end()) {
+                    networkRecords[senderHostAbbr] = {
                         percentilesRecord[95].totalPkgSize,
                         percentilesRecord[95].transferDuration
                     };
                 } else {
-                    networkRecords[senderHost] = {
-                        std::max(percentilesRecord[95].totalPkgSize, networkRecords[senderHost].totalPkgSize),
-                        std::max(percentilesRecord[95].transferDuration, networkRecords[senderHost].transferDuration)
+                    networkRecords[senderHostAbbr] = {
+                        std::max(percentilesRecord[95].totalPkgSize, networkRecords[senderHostAbbr].totalPkgSize),
+                        std::max(percentilesRecord[95].transferDuration, networkRecords[senderHostAbbr].transferDuration)
                     };
                 }
             }
             for (auto &[senderHost, record]: networkRecords) {
+                std::string senderHostAbbr = abbreviate(senderHost);
                 sql = absl::StrFormat("INSERT INTO %s (timestamps, sender_host, p95_transfer_duration_us, p95_total_package_size_b) "
                                       "VALUES ('%s', '%s', %ld, %d);",
                                       cont_networkTableName,
                                       timePointToEpochString(std::chrono::system_clock::now()),
-                                      senderHost,
+                                      senderHostAbbr,
                                       record.transferDuration,
                                       record.totalPkgSize);
                 pushSQL(*cont_metricsServerConn, sql.c_str());
@@ -906,7 +918,7 @@ void ContainerAgent::collectRuntimeMetrics() {
 
                 // Push the SQL statement
                 pushSQL(*cont_metricsServerConn, sql.c_str());
-            }
+            }            
             processRecords.clear();
             spdlog::get("container_agent")->trace("{0:s} pushed PROCESS METRICS to the database.", cont_name);
 
@@ -942,7 +954,7 @@ void ContainerAgent::collectRuntimeMetrics() {
             spdlog::get("container_agent")->trace("{0:s} pushed BATCH INFER METRICS to the database", cont_name);
             spdlog::get("container_agent")->trace("{0:s} pushed ALL METRICS to the database. Latency {1:d}ms. Next push in {2:d}ms",
                                                  cont_name,
-                                                 pushMetricsLatencyMillisec,
+                                                 pushMetricsLatencyMillisec, 
                                                  cont_metricsServerConfigs.metricsReportIntervalMillisec - pushMetricsLatencyMillisec);
             cont_metricsServerConfigs.nextMetricsReportTime += std::chrono::milliseconds(
                     cont_metricsServerConfigs.metricsReportIntervalMillisec - pushMetricsLatencyMillisec);
@@ -950,7 +962,7 @@ void ContainerAgent::collectRuntimeMetrics() {
         metricsStopwatch.stop();
         auto reportLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
         ClockType nextTime;
-        if (reportHwMetrics){
+        if (reportHwMetrics && hwMetricsScraped){
             nextTime = std::min(cont_metricsServerConfigs.nextMetricsReportTime,
                                 cont_metricsServerConfigs.nextHwMetricsScrapeTime);
         } else {
@@ -965,7 +977,7 @@ void ContainerAgent::collectRuntimeMetrics() {
 }
 
 void ContainerAgent::updateProfileTable() {
-    std::string profileTableName = abbreviate("prof__" + cont_inferModel + "__" + cont_hostDevice);
+    std::string profileTableName = abbreviate("prof__" + cont_inferModel + "__" + cont_hostDeviceType);
     std::string procTableName = profileTableName + "_proc";
     std::string hwTableName = profileTableName + "_hw";
     
@@ -1044,6 +1056,7 @@ void ContainerAgent::HandleRecvRpcs() {
     new StopRequestHandler(&service, server_cq.get(), &run);
     new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
+    new UpdateResolutionRequestHandler(&service, server_cq.get(), this);
     new SyncDatasourcesRequestHandler(&service, server_cq.get(), this);
     void *tag;
     bool ok;
@@ -1135,6 +1148,30 @@ void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
         for (auto msvc : *msvcs) {
             msvc->msvc_idealBatchSize = request.value();
         }
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void ContainerAgent::UpdateResolutionRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateResolution(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateResolutionRequestHandler(service, cq, container_agent);
+        std::vector<int> resolution = {};
+        resolution.push_back(request.channels());
+        resolution.push_back(request.height());
+        resolution.push_back(request.width());
+        if (container_agent->cont_msvcsList[0]->msvc_type == msvcconfigs::MicroserviceType::DataReader){
+            container_agent->cont_msvcsList[0]->msvc_dataShape = {resolution};
+        } else {
+            container_agent->cont_msvcsList[1]->dnstreamMicroserviceList[0].expectedShape = {resolution};
+        }
+
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

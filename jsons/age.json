@@ -4,7 +4,8 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "pedestrian",
         "cont_taskName": "age",
-        "cont_hostDevice": "nx",
+        "cont_hostDevice": "nx1",
+        "cont_hostDeviceType": "nx",
         "cont_name": "age_0",
         "cont_pipeline": [
             {

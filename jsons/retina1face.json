@@ -5,7 +5,8 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "retina1face",
-        "cont_hostDevice": "nx",
+        "cont_hostDevice": "nx1",
+        "cont_hostDeviceType": "nx",
         "cont_name": "retinaface_0",
         "cont_pipeline": [
             {
