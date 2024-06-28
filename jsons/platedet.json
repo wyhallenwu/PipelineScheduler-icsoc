@@ -4,7 +4,8 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "platedet",
-        "cont_hostDevice": "agx",
+        "cont_hostDevice": "agx1",
+        "cont_hostDeviceType": "agx",
         "cont_name": "yolov5_plate_0",
         "cont_pipeline": [
             {
