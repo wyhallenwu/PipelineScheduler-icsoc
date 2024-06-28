@@ -7,22 +7,23 @@ int main(int argc, char **argv) {
     std::string type = absl::GetFlag(FLAGS_device_type);
     std::string controller_url = absl::GetFlag(FLAGS_controller_url);
     SystemDeviceType deviceType;
-    if (type == "server")
+    if (type == "server") {
         deviceType = SystemDeviceType::Server;
-    else if (type == "edge")
-        deviceType = SystemDeviceType::Edge;
+    } else if (type == "nxavier") {
+        deviceType = SystemDeviceType::NXXavier;
+    } else if (type == "agxavier") {
+        deviceType = SystemDeviceType::AGXXavier;
+    } else if (type == "orinano") {
+        deviceType = SystemDeviceType::OrinNano;
+    }
     else {
-        std::cerr << "Invalid device type" << std::endl;
+        std::cerr << "Invalid device type, use [server, nxavier, agxavier, orinano]" << std::endl;
         exit(1);
     }
 
     auto *agent = new DeviceAgent(controller_url, name, deviceType);
     while (agent->isRunning()) {
-        std::string command;
-        std::cin >> command;
-        if (command == "exit") {
-            break;
-        }
+        agent->collectRuntimeMetrics();
     }
     delete agent;
     return 0;

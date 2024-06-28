@@ -1,23 +1,25 @@
 {
     "container": {
+        "cont_experimentName": "ex1",
+        "cont_systemName": "ppp",
         "cont_pipeName": "every",
-        "cont_taskName": "datasource",
+        "cont_taskName": "dsrc",
         "cont_hostDevice": "server",
         "cont_name": "data_source_0",
         "cont_pipeline": [
             {
-                "msvc_name": "::data_reader",
-                "msvc_idealBatchSize": 15,
+                "msvc_name": "data_reader",
+                "msvc_idealBatchSize": 30,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 3,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::sender",
+                        "nb_name": "sender",
                         "nb_expectedShape": [
                             [
                                 0,
@@ -29,19 +31,19 @@
                 ],
                 "msvc_dataShape": [
                     [
-                        0,
-                        0,
-                        0
+                        3,
+                        640,
+                        640
                     ]
                 ],
                 "msvc_svcLevelObjLatency": 999999,
-                "msvc_type": 3,
+                "msvc_type": 500,
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 4,
                         "nb_link": [
-                            "../data/preview/batch_test.mp4"
+                            "../data/preview/traffic_profiling.mp4"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "video_source",
@@ -57,7 +59,7 @@
                 "msvc_maxQueueSize": 100
             },
             {
-                "msvc_name": "::sender",
+                "msvc_name": "sender",
                 "msvc_idealBatchSize": 1,
                 "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
@@ -86,16 +88,16 @@
                     ]
                 ],
                 "msvc_svcLevelObjLatency": 999999,
-                "msvc_type": 4,
+                "msvc_type": 4000,
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,
-                        "nb_commMethod": 2,
+                        "nb_commMethod": 4,
                         "nb_link": [
                             ""
                         ],
                         "nb_maxQueueSize": 100,
-                        "nb_name": "::data_reader",
+                        "nb_name": "data_reader",
                         "nb_expectedShape": [
                             [
                                 0,
@@ -108,7 +110,9 @@
                 "msvc_maxQueueSize": 100
             }
         ],
-        "cont_metricServerConfigs": "../jsons/metricsserver.json"
+        "cont_metricServerConfigs": "../jsons/metricsserver.json",
+        "cont_numWarmUpBatches": 15,
+        "cont_allocationMode": 1
     },
     "profiling": {
         "profile_minBatch": 0,
@@ -118,6 +122,7 @@
         "profile_templateModelPath": "",
         "profile_inputRandomizeScheme": 0,
         "profile_numWarmUpBatches": 0,
-        "profile_numProfileBatches": 0
+        "profile_numProfileBatches": 0,
+        "profile_numProfileReqs": 0
     }
 }

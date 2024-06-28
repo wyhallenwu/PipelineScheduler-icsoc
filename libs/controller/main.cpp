@@ -1,16 +1,26 @@
 #include "controller.h"
 
-int main() {
-    auto controller = new Controller();
+int main(int argc, char **argv) {
+    auto controller = new Controller(argc, argv);
     std::thread receiver_thread(&Controller::HandleRecvRpcs, controller);
     receiver_thread.detach();
     std::thread scheduling_thread(&Controller::Scheduling, controller);
     scheduling_thread.detach();
-    std::ifstream file("/home/quang/PipelineScheduler/jsons/experiment.json");
-    std::vector<TaskDescription::TaskStruct> tasks = json::parse(file);
     std::string command;
 
     while (controller->isRunning()) {
+        while (true) {
+            // Get input from user
+            std::cout << "You need to connect the devices before adding task. Ready? (yes/no): " << std::endl;
+            std::cin >> command;
+            if (command == "yes") {
+                break;
+            } else if (command == "no") {
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+            } else {
+                std::cout << "Invalid command" << std::endl;
+            }
+        }
         TaskDescription::TaskStruct task;
         std::cout << "Enter command {init, traffic, video_call, people, exit): ";
         std::cin >> command;
@@ -18,9 +28,7 @@ int main() {
             controller->Stop();
             break;
         } else if (command == "init") {
-            for (auto &t: tasks) {
-                controller->AddTask(t);
-            }
+            controller->Init();
             continue;
         } else if (command == "traffic") {
             task.type = PipelineType::Traffic;

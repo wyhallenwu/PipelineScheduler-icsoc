@@ -27,10 +27,12 @@ ABSL_DECLARE_FLAG(std::optional<std::string>, json_path);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json_path);
 ABSL_DECLARE_FLAG(uint16_t, port);
+ABSL_DECLARE_FLAG(uint16_t, port_offset);
 ABSL_DECLARE_FLAG(int16_t, device);
 ABSL_DECLARE_FLAG(uint16_t, verbose);
+ABSL_DECLARE_FLAG(uint16_t, logging_mode);
 ABSL_DECLARE_FLAG(std::string, log_dir);
-ABSL_DECLARE_FLAG(bool, profiling_mode);
+ABSL_DECLARE_FLAG(uint16_t, profiling_mode);
 
 using json = nlohmann::ordered_json;
 
@@ -53,6 +55,9 @@ enum TransferMethod {
     GPU
 };
 
+std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::milliseconds> timePointCastMillisecond(
+    std::chrono::system_clock::time_point tp);
+
 namespace msvcconfigs {
 
     std::tuple<json, json> loadJson();
@@ -60,26 +65,18 @@ namespace msvcconfigs {
     std::vector<BaseMicroserviceConfigs> LoadFromJson();
 }
 
-struct contRunArgs {
-    std::string cont_name;
-    uint16_t cont_port;
-    int8_t cont_devIndex;
-    std::string cont_logPath;
-    RUNMODE cont_runmode;
-    json cont_pipeConfigs;
-    json cont_profilingConfigs;
-};
-
 json loadRunArgs(int argc, char **argv);
 
 void addProfileConfigs(json &msvcConfigs, const json &profileConfigs);
+
+std::vector<float> getRatesInPeriods(const std::vector<ClockType> &timestamps, const std::vector<uint32_t> &periodMillisec);
 
 
 class ContainerAgent {
 public:
     ContainerAgent(const json &configs);
 
-    ~ContainerAgent() {
+    virtual ~ContainerAgent() {
         for (auto msvc: cont_msvcsList) {
             delete msvc;
         }
@@ -96,7 +93,7 @@ public:
         for (auto msvc: cont_msvcsList) {
             msvc->unpauseThread();
         }
-        spdlog::info("=========================================== STARTS ===========================================");
+        spdlog::get("container_agent")->info("=========================================== STARTS ===========================================");
     }
 
     void PROFILING_START(BatchSizeType batch) {
@@ -104,7 +101,7 @@ public:
             msvc->unpauseThread();
         }
 
-        spdlog::info(
+        spdlog::get("container_agent")->info(
                 "======================================= PROFILING MODEL BATCH {0:d} =======================================",
                 batch);
     }
@@ -122,19 +119,19 @@ public:
     }
 
     void dispatchMicroservices() {
-        for (auto msvc: cont_msvcsList) {
+        for (auto &msvc: cont_msvcsList) {
             msvc->dispatchThread();
         }
     }
 
+    void transferFrameID(std::string url);
+
     void profiling(const json &pipeConfigs, const json &profileConfigs);
 
-    void loadProfilingConfigs();
-
-    void runService(const json &pipeConfigs, const json &configs);
+    virtual void runService(const json &pipeConfigs, const json &configs);
 
 protected:
-    uint8_t deviceIndex = -1;
+    void updateProfileTable();
 
     void ReportStart();
 
@@ -203,19 +200,37 @@ protected:
         void Proceed() final;
 
     private:
-        indevicecommunication::BatchSize request;
+        indevicecommunication::Int32 request;
         std::vector<Microservice *> *msvcs;
     };
 
-    void HandleRecvRpcs();
+    class SyncDatasourcesRequestHandler : public RequestHandler {
+    public:
+        SyncDatasourcesRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                      ContainerAgent *containerAgent)
+                : RequestHandler(service, cq), containerAgent(containerAgent) {
+            Proceed();
+        }
 
+        void Proceed() final;
+
+    private:
+        indevicecommunication::Int32 request;
+        ContainerAgent *containerAgent;
+    };
+
+    virtual void HandleRecvRpcs();
+
+    std::string cont_experimentName;
+    std::string cont_systemName;
     std::string cont_name;
     std::vector<Microservice *> cont_msvcsList;
     std::string cont_pipeName;
     std::string cont_taskName;
     // Name of the host where the container is running
     std::string cont_hostDevice;
-    float arrivalRate;
+    std::string cont_inferModel;
+
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
     InDeviceCommunication::AsyncService service;
@@ -223,19 +238,33 @@ protected:
     std::unique_ptr<InDeviceCommunication::Stub> stub;
     std::atomic<bool> run;
 
-    bool reportMetrics;
     unsigned int pid;
-    std::string cont_hwMetricsTableName;
-    HardwareMetrics cont_hwMetrics;
-    std::string cont_arrivalTableName;
-    std::string cont_processTableName;
     Profiler *profiler;
 
     std::string cont_logDir;
     RUNMODE cont_RUNMODE;
     uint8_t cont_deviceIndex;
+
+    /**
+     * @brief Metrics
+     */
+
+    bool reportHwMetrics;
+    std::string cont_hwMetricsTableName;
+    SummarizedHardwareMetrics cont_hwMetrics;
+    BatchInferProfileListType cont_batchInferProfileList;
+
+    std::string cont_batchInferTableName;
+    std::string cont_arrivalTableName;
+    std::string cont_processTableName;
+    std::string cont_networkTableName;
+
     MetricsServerConfigs cont_metricsServerConfigs;
     std::unique_ptr<pqxx::connection> cont_metricsServerConn = nullptr;
+
+    std::vector<spdlog::sink_ptr> cont_loggerSinks = {};
+    std::shared_ptr<spdlog::logger> cont_logger;    
+
 };
 
 #endif //CONTAINER_AGENT_H
