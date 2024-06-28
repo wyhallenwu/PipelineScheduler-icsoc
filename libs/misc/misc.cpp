@@ -81,6 +81,147 @@ uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &tot
     throw std::runtime_error("Failed to estimate network latency due to unexpected data range.");
 }
 
+// ================================================================== Queries functions ==================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+
+float queryArrivalRate(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::string &modelName,
+    const std::vector<uint8_t> &periods //seconds
+) {
+    std::string schemaName = abbreviate(experimentName + "_" + systemName);
+    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
+
+    std::string periodQuery;
+    for (const auto &period: periods) {
+        periodQuery += absl::StrFormat("recent_data.arrival_rate_%ds,", period);
+    }
+    periodQuery.pop_back();
+
+    std::string query = "WITH recent_data AS ("
+                        "   SELECT * "
+                        "   FROM %s "
+                        "   WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
+                        "   LIMIT 1"
+                        "), "
+                        "arrival_rate AS ("
+                        "  SELECT GREATEST(%s) AS max_rate "
+                        "  FROM recent_data "
+                        "  WHERE stream = '%s'"
+                        ") "
+                        "SELECT MAX(max_rate) AS max_arrival_rate "
+                        "FROM arrival_rate;";
+    query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, periodQuery, streamName);
+    pqxx::result res = pullSQL(metricsConn, query);
+
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
+
+    if (res[0][0].is_null()) {
+        // If there is no historical data, we look for the rate of the most recent profiled data
+        std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
+        query = "WITH recent_data AS ("
+                "   SELECT * "
+                "   FROM %s "
+                "   WHERE model_name = '%s' "
+                "   LIMIT 10 "
+                "), "
+                "arrival_rate AS ("
+                "  SELECT GREATEST(%s) AS max_rate "
+                "  FROM recent_data "
+                ") "
+                "SELECT MAX(max_rate) AS max_arrival_rate "
+                "FROM arrival_rate;";
+        query = absl::StrFormat(query.c_str(), profileTableName, modelNameAbbr, periodQuery);
+        res = pullSQL(metricsConn, query);
+    }
+    return res[0]["max_arrival_rate"].as<float>();
+}
+
+NetworkProfile queryNetworkProfile(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::string &modelName,
+    const std::string &senderHost,
+    const std::string &receiverHost,
+    const NetworkEntryType &networkEntries
+) {
+    std::string senderHostAbbr = abbreviate(senderHost);
+    std::string receiverHostAbbr = abbreviate(receiverHost);
+
+    std::string schemaName = abbreviate(experimentName + "_" + systemName);
+    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
+
+    NetworkProfile d2dNetworkProfile;
+
+    /**
+     * @brief Querying for the network profile from the data in the last 120 seconds.
+     * 
+     */
+    std::string query = "WITH recent_data AS ("
+                        "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
+                        "   FROM %s "
+                        "   WHERE stream = '%s' AND sender_host = '%s' AND receiver_host = '%s' AND timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
+                        "   LIMIT 100"
+                        ") "
+                        "SELECT "
+                        "   MAX(p95_out_queueing_duration_us) AS p95_out_queueing_duration_us, "
+                        "   MAX(p95_transfer_duration_us) AS p95_transfer_duration_us, "
+                        "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
+                        "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
+                        "FROM recent_data;";
+    query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, streamName, senderHostAbbr, receiverHostAbbr);
+    pqxx::result res = pullSQL(metricsConn, query);
+
+    // if there are most current entries, then great, we update the profile and that's that
+    if (!res[0][0].is_null()) {
+        d2dNetworkProfile.p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
+        d2dNetworkProfile.p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
+        d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
+        d2dNetworkProfile.p95TransferDuration = res[0]["p95_transfer_duration_us"].as<uint64_t>();
+
+        return d2dNetworkProfile;
+    }
+
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
+
+    // If there is no historical data, we look for the rate of the most recent profiled data
+    std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
+    query = "WITH recent_data AS ("
+    "   SELECT p95_out_queueing_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
+    "   FROM %s "
+    "   WHERE receiver_host = '%s' AND model_name = '%s'"
+    "   LIMIT 100"
+    ") "
+    "SELECT "
+    "   MAX(p95_out_queueing_duration_us) AS p95_out_queueing_duration_us, "
+    "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
+    "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
+    "FROM recent_data;";
+    query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr, abbreviate(modelNameAbbr));
+    res = pullSQL(metricsConn, query);
+
+    d2dNetworkProfile.p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
+    d2dNetworkProfile.p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
+    d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
+
+    // For network transfer duration, we estimate the latency using linear interpolation based on the package size
+    // The network entries are updated in a separate thread
+    d2dNetworkProfile.p95TransferDuration = estimateNetworkLatency(networkEntries, d2dNetworkProfile.p95PackageSize);
+
+    return d2dNetworkProfile;
+}
+
 /**
  * @brief query the rates, network profile of a model
  * 
@@ -116,6 +257,8 @@ ModelArrivalProfile queryModelArrivalProfile(
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
 
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
+
     std::string periodQuery;
     for (const auto &period: periods) {
         periodQuery += absl::StrFormat("recent_data.arrival_rate_%ds,", period);
@@ -145,6 +288,7 @@ ModelArrivalProfile queryModelArrivalProfile(
         query = "WITH recent_data AS ("
                 "   SELECT * "
                 "   FROM %s "
+                "   WHERE model_name = '%s' "
                 "   LIMIT 10 "
                 "), "
                 "arrival_rate AS ("
@@ -153,7 +297,7 @@ ModelArrivalProfile queryModelArrivalProfile(
                 ") "
                 "SELECT MAX(max_rate) AS max_arrival_rate "
                 "FROM arrival_rate;";
-        query = absl::StrFormat(query.c_str(), profileTableName, periodQuery);
+        query = absl::StrFormat(query.c_str(), profileTableName, modelNameAbbr, periodQuery);
         res = pullSQL(metricsConn, query);
     }
     arrivalProfile.arrivalRates = res[0]["max_arrival_rate"].as<float>();
@@ -163,7 +307,7 @@ ModelArrivalProfile queryModelArrivalProfile(
         std::string senderHostAbbr = abbreviate(commPair.first);
         std::string receiverHostAbbr = abbreviate(commPair.second);
 
-        NetworkProfile *d2dNetworkProfile = &(arrivalProfile.d2dNetworkProfile[{senderHostAbbr, receiverHostAbbr}]);
+        NetworkProfile *d2dNetworkProfile = &(arrivalProfile.d2dNetworkProfile[std::make_pair(senderHostAbbr, receiverHostAbbr)]);
 
         /**
          * @brief Querying for the network profile from the data in the last 120 seconds.
@@ -199,7 +343,7 @@ ModelArrivalProfile queryModelArrivalProfile(
         query = "WITH recent_data AS ("
         "   SELECT p95_out_queueing_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
         "   FROM %s "
-        "   WHERE receiver_host = '%s'"
+        "   WHERE receiver_host = '%s' AND model_name = '%s'"
         "   LIMIT 100"
         ") "
         "SELECT "
@@ -207,7 +351,7 @@ ModelArrivalProfile queryModelArrivalProfile(
         "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
         "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
         "FROM recent_data;";
-        query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr);
+        query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr, modelNameAbbr);
         res = pullSQL(metricsConn, query);
 
         d2dNetworkProfile->p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
@@ -220,7 +364,6 @@ ModelArrivalProfile queryModelArrivalProfile(
     }
     return arrivalProfile;
 }
-
 
 /**
  * @brief Query pre, post processing latency as well as input and output sizes
@@ -241,11 +384,13 @@ void queryPrePostLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 ) {
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
-    std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName + "_proc");
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front()); 
+    std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelNameAbbr + "__" + deviceName + "_proc");
     std::string query = absl::StrFormat("WITH recent_data AS ("
             "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
             "FROM %s "
@@ -262,7 +407,7 @@ void queryPrePostLatency(
     pqxx::result res = pullSQL(metricsConn, query);
     // If most current historical data is not available, we query profiled data
     if (res[0][0].is_null()) {
-        std::string profileTableName = abbreviate("prof__" + modelName +  "__" + deviceName + "_proc");
+        std::string profileTableName = abbreviate("prof__" + modelNameAbbr +  "__" + deviceTypeName + "_proc");
         query = absl::StrFormat("WITH recent_data AS ("
                                 "SELECT p95_prep_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
                                 "FROM %s "
@@ -301,12 +446,14 @@ void queryBatchInferLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 ) {
     BatchInferProfileListType batchInferProfile;
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
-    std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelName + "__" + deviceName)  + "_batch";
+    std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelNameAbbr + "__" + deviceName)  + "_batch";
     std::string query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
                             "FROM %s "
                             "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
@@ -314,7 +461,7 @@ void queryBatchInferLatency(
 
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
-        std::string profileTableName = abbreviate("prof__" + modelName + "__" + deviceName) + "_batch";
+        std::string profileTableName = abbreviate("prof__" + modelNameAbbr + "__" + deviceTypeName) + "_batch";
         query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
                                 "FROM %s "
                                 "GROUP BY infer_batch_size", profileTableName);
@@ -334,6 +481,7 @@ BatchInferProfileListType queryBatchInferLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName
 ) {
     ModelProfile modelProfile;
@@ -344,6 +492,7 @@ BatchInferProfileListType queryBatchInferLatency(
         pipelineName,
         streamName,
         deviceName,
+        deviceTypeName,
         modelName,
         modelProfile
     );
@@ -362,11 +511,12 @@ BatchInferProfileListType queryBatchInferLatency(
  */
 void queryResourceRequirements(
     pqxx::connection &metricsConn,
-    const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 ) {
-    std::string tableName = abbreviate("prof__" + modelName + "__" + deviceName + "_hw");
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
+    std::string tableName = abbreviate("prof__" + modelNameAbbr + "__" + deviceTypeName + "_hw");
     std::string query = absl::StrFormat("SELECT batch_size, MAX(cpu_usage), MAX(mem_usage), MAX(rss_mem_usage), MAX(gpu_usage), MAX(gpu_mem_usage) "
                             "FROM %s "
                             "GROUP BY batch_size;", tableName);
@@ -400,6 +550,7 @@ ModelProfile queryModelProfile(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName
 ) {
     ModelProfile profile;
@@ -425,21 +576,26 @@ ModelProfile queryModelProfile(
      * @brief Query pre, post processing profile
      * 
      */
-    queryPrePostLatency(metricsConn, experimentName, systemName, pipelineName, streamName, deviceName, modelName, profile);
+    queryPrePostLatency(metricsConn, experimentName, systemName, pipelineName, streamName, deviceName, deviceTypeName, modelName, profile);
 
     /**
      * @brief Query the batch inference profile
      * 
      */
-    queryBatchInferLatency(metricsConn, experimentName, systemName, pipelineName, streamName, deviceName, modelName, profile);
+    queryBatchInferLatency(metricsConn, experimentName, systemName, pipelineName, streamName, deviceName, deviceTypeName, modelName, profile);
 
     /**
      * @brief Query the batch resource consumptions
      * 
      */
-    queryResourceRequirements(metricsConn, deviceName, modelName, profile);
+    queryResourceRequirements(metricsConn, deviceTypeName, modelName, profile);
     return profile;
 }
+
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
 
 void trt::to_json(nlohmann::json &j, const trt::TRTConfigs &val) {
     j["path"] = val.path;
@@ -720,11 +876,65 @@ bool confirmIntention(const std::string &message, const std::string &magicPhrase
     return true;
 }
 
+std::map<std::string, std::string> keywordAbbrs = {
+    {"batch", "batch"},
+    {"server", "serv"},
+    {"agxavier", "agx"},
+    {"agxavier1", "agx1"},
+    {"orinano", "orn"},
+    {"orinano1", "orn1"},
+    {"orinano2", "orn2"},
+    {"orinano3", "orn3"},
+    {"nxavier", "nx"},
+    {"nxavier1", "nx1"},
+    {"nxxavier", "nx2"},
+    {"nxavier3", "nx3"},
+    {"nxavier4", "nx4"},
+    {"nxavier5", "nx5"},
+    {"datasource", "dsrc"},
+    {"traffic", "trfc"},
+    {"building", "bldg"},
+    {"yolov5", "y5"},
+    {"yolov5n", "y5n"},
+    {"yolov5s", "y5s"},
+    {"yolov5m", "y5m"},
+    {"yolov5l", "y5l"},
+    {"yolov5x", "y5x"},
+    {"yolov5ndsrc", "y5nd"},
+    {"retina1face", "rt1f"},
+    {"retina1facedsrc", "rt1fd"},
+    {"age", "age"},
+    {"arcface", "arcf"},
+    {"carbrand", "cbrd"},
+    {"gender", "gndr"},
+    {"emotion", "emtn"},
+    {"emotionnet", "emtn"},
+    {"platedet", "pldt"},
+    {"dynamic", "dyn"},
+    {"movenet", "move"},
+    {"3090", "39"}, // GPU name
+    {"fp32", "32"},
+    {"fp16", "16"},
+    {"int8", "8"}
+};
+
 std::map<SystemDeviceType, std::string> SystemDeviceTypeList = {
     {Server, "server"},
     {NXXavier, "nxavier"},
     {AGXXavier, "agxavier"},
     {OrinNano, "orinano"}
+};
+
+// Reverse map for SystemDeviceTypeList
+std::map<std::string, SystemDeviceType> SystemDeviceTypeReverseList = {
+    {"server", Server},
+    {"serv", Server},
+    {"nxavier", NXXavier},
+    {"nx", NXXavier},
+    {"agxavier", AGXXavier},
+    {"agx", AGXXavier},
+    {"orinano", OrinNano},
+    {"orn", OrinNano}
 };
 
 std::map<ModelType, std::string> ModelTypeList = {
@@ -745,6 +955,43 @@ std::map<ModelType, std::string> ModelTypeList = {
     {CarBrand, "carbrand"}
 };
 
+std::map<std::string, ModelType> ModelTypeReverseList = {
+    {"datasource", DataSource},
+    {"dsrc", DataSource},
+    {"sink", Sink},
+    {"yolov5n", Yolov5n},
+    {"y5n", Yolov5n},
+    {"yolov5s", Yolov5s},
+    {"y5s", Yolov5s},
+    {"yolov5m", Yolov5m},
+    {"y5m", Yolov5m},
+    {"yolov5ndsrc", Yolov5nDsrc},
+    {"y5nd", Yolov5nDsrc},
+    {"arcface", Arcface},
+    {"arcf", Arcface},
+    {"retina1face", Retinaface},
+    {"rt1f", Retinaface},
+    {"retina1facedsrc", RetinafaceDsrc},
+    {"rt1fd", RetinafaceDsrc},
+    {"plateDet", PlateDet},
+    {"pldt", PlateDet},
+    {"emotionnet", Emotionnet},
+    {"emtn", Emotionnet},
+    {"yolov5ndsrc", Yolov5nDsrc},
+    {"y5nd", Yolov5nDsrc},
+    {"arcface", Arcface},
+    {"arcf", Arcface},
+    {"platedet", PlateDet},
+    {"pldt", PlateDet},
+    {"movenet", Movenet},
+    {"move", Movenet},
+    {"gender", Gender},
+    {"gndr", Gender},
+    {"age", Age},
+    {"carbrand", CarBrand},
+    {"cbrd", CarBrand}  
+};
+
 bool isFileEmpty(const std::string& filePath) {
     std::ifstream file(filePath, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
@@ -758,11 +1005,11 @@ bool isFileEmpty(const std::string& filePath) {
 }
 
 std::string getContainerName(const std::string& deviceTypeName, const std::string& modelName) {
-    return modelName + "-" + abbreviate(deviceTypeName);
+    return modelName + "-" + deviceTypeName;
 }
 
 std::string getContainerName(const SystemDeviceType& deviceType, const ModelType& modelType) {
-    std::string deviceAbbr = abbreviate(SystemDeviceTypeList.at(deviceType));
+    std::string deviceAbbr = SystemDeviceTypeList.at(deviceType);
     std::string modelAbbr = ModelTypeList.at(modelType);
     return modelAbbr + "-" + deviceAbbr;
 }
@@ -800,4 +1047,8 @@ ContainerLibType getContainerLib(const std::string& deviceType) {
     }
     spdlog::get("container_agent")->info("Container Library Loaded");
     return containerLib;
+}
+
+std::string getDeviceTypeName(SystemDeviceType deviceType) {
+    return SystemDeviceTypeList[deviceType];
 }

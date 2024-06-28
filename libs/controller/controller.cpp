@@ -131,8 +131,8 @@ void Controller::Scheduling() {
 void Controller::queryInDeviceNetworkEntries(NodeHandle *node) {
     std::string deviceTypeName = SystemDeviceTypeList[node->type];
     std::string deviceTypeNameAbbr = abbreviate(deviceTypeName);
-    if (ctrl_inDeviceNetworkEntries.find(deviceTypeNameAbbr) == ctrl_inDeviceNetworkEntries.end()) {
-        std::string tableName = "prof_" + abbreviate(deviceTypeNameAbbr) + "_netw";
+    if (ctrl_inDeviceNetworkEntries.find(deviceTypeName) == ctrl_inDeviceNetworkEntries.end()) {
+        std::string tableName = "prof_" + deviceTypeNameAbbr + "_netw";
         std::string sql = absl::StrFormat("SELECT p95_transfer_duration_us, p95_total_package_size_b "
                                     "FROM %s ", tableName);
         pqxx::result res = pullSQL(*ctrl_metricsServerConn, sql);
@@ -142,13 +142,13 @@ void Controller::queryInDeviceNetworkEntries(NodeHandle *node) {
         }
         for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
             std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
-            ctrl_inDeviceNetworkEntries[deviceTypeNameAbbr].emplace_back(entry);
+            ctrl_inDeviceNetworkEntries[deviceTypeName].emplace_back(entry);
         }
         spdlog::get("container_agent")->info("Finished querying in-device network entries for device type {}.", deviceTypeName);
     }
     std::unique_lock lock(node->nodeHandleMutex);
-    node->latestNetworkEntries[deviceTypeNameAbbr] = aggregateNetworkEntries(ctrl_inDeviceNetworkEntries[deviceTypeNameAbbr]);
-    std::cout << node->latestNetworkEntries[deviceTypeNameAbbr].size() << std::endl;
+    node->latestNetworkEntries[deviceTypeName] = aggregateNetworkEntries(ctrl_inDeviceNetworkEntries[deviceTypeName]);
+    std::cout << node->latestNetworkEntries[deviceTypeName].size() << std::endl;
 }
 
 void Controller::DeviseAdvertisementHandler::Proceed() {
@@ -158,7 +158,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
     } else if (status == PROCESS) {
         new DeviseAdvertisementHandler(service, cq, controller);
         std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), DEVICE_CONTROL_PORT + controller->ctrl_port_offset);
-        std::string deviceName = abbreviate(request.device_name());
+        std::string deviceName = request.device_name();
         NodeHandle node{deviceName,
                                      request.ip_address(),
                                      ControlCommunication::NewStub(
@@ -338,14 +338,29 @@ void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
 
 void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica) {
     msvc->batch_size[replica - 1] = new_bs;
-    ContainerInt request;
+    ContainerInts request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
     request.set_name(msvc->name);
-    request.set_value(new_bs);
+    request.add_value(new_bs);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
+    finishGrpc(rpc, reply, status, msvc->device_agent->cq);
+}
+
+void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution, int replica = 1) {
+    msvc->dimensions = new_resolution;
+    ContainerInts request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(msvc->name);
+    request.add_value(new_resolution[0]);
+    request.add_value(new_resolution[1]);
+    request.add_value(new_resolution[2]);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            msvc->device_agent->stub->AsyncUpdateResolution(&context, request, msvc->device_agent->cq));
     finishGrpc(rpc, reply, status, msvc->device_agent->cq);
 }
 
@@ -397,38 +412,38 @@ void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType
     container.expectedThroughput = postprocess_thrpt;
 }
 
-void Controller::optimizeBatchSizeStep(
-        const Pipeline &models,
-        std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
-    ModelType candidate;
-    int max_saving = 0;
-    std::vector<ModelType> blacklist;
-    for (const auto &m: models) {
-        int saving;
-        if (max_saving == 0) {
-            saving =
-                    estimated_infer_times[m.first] - InferTimeEstimator(m.first, batch_sizes[m.first] * 2);
-        } else {
-            if (batch_sizes[m.first] == 64 ||
-                std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
-                continue;
-            }
-            for (const auto &d: m.second) {
-                if (batch_sizes[d.first] > batch_sizes[m.first]) {
-                    blacklist.push_back(d.first);
-                }
-            }
-            saving = estimated_infer_times[m.first] -
-                     (InferTimeEstimator(m.first, batch_sizes[m.first] * 2) * (nObjects / batch_sizes[m.first] * 2));
-        }
-        if (saving > max_saving) {
-            max_saving = saving;
-            candidate = m.first;
-        }
-    }
-    batch_sizes[candidate] *= 2;
-    estimated_infer_times[candidate] -= max_saving;
-}
+// void Controller::optimizeBatchSizeStep(
+//         const Pipeline &models,
+//         std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects) {
+//     ModelType candidate;
+//     int max_saving = 0;
+//     std::vector<ModelType> blacklist;
+//     for (const auto &m: models) {
+//         int saving;
+//         if (max_saving == 0) {
+//             saving =
+//                     estimated_infer_times[m.first] - InferTimeEstimator(m.first, batch_sizes[m.first] * 2);
+//         } else {
+//             if (batch_sizes[m.first] == 64 ||
+//                 std::find(blacklist.begin(), blacklist.end(), m.first) != blacklist.end()) {
+//                 continue;
+//             }
+//             for (const auto &d: m.second) {
+//                 if (batch_sizes[d.first] > batch_sizes[m.first]) {
+//                     blacklist.push_back(d.first);
+//                 }
+//             }
+//             saving = estimated_infer_times[m.first] -
+//                      (InferTimeEstimator(m.first, batch_sizes[m.first] * 2) * (nObjects / batch_sizes[m.first] * 2));
+//         }
+//         if (saving > max_saving) {
+//             max_saving = saving;
+//             candidate = m.first;
+//         }
+//     }
+//     batch_sizes[candidate] *= 2;
+//     estimated_infer_times[candidate] -= max_saving;
+// }
 
 double Controller::LoadTimeEstimator(const char *model_path, double input_mem_size) {
     // Load the pre-trained model
@@ -480,36 +495,36 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     return 0;
 }
 
-std::map<ModelType, std::vector<int>> Controller::InitialRequestCount(const std::string &input, const Pipeline &models,
-                                                                      int fps) {
-    std::map<ModelType, std::vector<int>> request_counts = {};
-    std::vector<int> fps_values = {fps, fps * 3, fps * 7, fps * 15, fps * 30, fps * 60};
+// std::map<ModelType, std::vector<int>> Controller::InitialRequestCount(const std::string &input, const Pipeline &models,
+//                                                                       int fps) {
+//     std::map<ModelType, std::vector<int>> request_counts = {};
+//     std::vector<int> fps_values = {fps, fps * 3, fps * 7, fps * 15, fps * 30, fps * 60};
 
-    request_counts[models[0].first] = fps_values;
-    json objectCount = json::parse(std::ifstream("../jsons/object_count.json"))[input];
+//     request_counts[models[0].first] = fps_values;
+//     json objectCount = json::parse(std::ifstream("../jsons/object_count.json"))[input];
 
-    for (const auto &m: models) {
-        if (m.first == ModelType::Sink) {
-            request_counts[m.first] = std::vector<int>(6, 0);
-            continue;
-        }
+//     for (const auto &m: models) {
+//         if (m.first == ModelType::Sink) {
+//             request_counts[m.first] = std::vector<int>(6, 0);
+//             continue;
+//         }
 
-        for (const auto &d: m.second) {
-            if (d.second == -1) {
-                request_counts[d.first] = request_counts[m.first];
-            } else {
-                std::vector<int> objects = (d.second == 0 ? objectCount["person"]
-                                                          : objectCount["car"]).get<std::vector<int>>();
+//         for (const auto &d: m.second) {
+//             if (d.second == -1) {
+//                 request_counts[d.first] = request_counts[m.first];
+//             } else {
+//                 std::vector<int> objects = (d.second == 0 ? objectCount["person"]
+//                                                           : objectCount["car"]).get<std::vector<int>>();
 
-                for (int j: fps_values) {
-                    int count = std::accumulate(objects.begin(), objects.begin() + j, 0);
-                    request_counts[d.first].push_back(request_counts[m.first][0] * count);
-                }
-            }
-        }
-    }
-    return request_counts;
-}
+//                 for (int j: fps_values) {
+//                     int count = std::accumulate(objects.begin(), objects.begin() + j, 0);
+//                     request_counts[d.first].push_back(request_counts[m.first][0] * count);
+//                 }
+//             }
+//         }
+//     }
+//     return request_counts;
+// }
 
 /**
  * @brief '
@@ -554,12 +569,12 @@ void Controller::checkNetworkConditions() {
         std::map<std::string, NetworkEntryType> networkEntries = {};
 
         for (auto &[deviceName, nodeHandle] : devices) {
-            if (deviceName == "serv") {
+            if (deviceName == "server") {
                 continue;
             }
             networkEntries[deviceName] = {};
         }
-        std::string tableName = abbreviate(ctrl_experimentName + "_" + ctrl_systemName) + "." + abbreviate(ctrl_experimentName + "_serv_netw");
+        std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
         std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
                             "FROM %s ", tableName);
 
@@ -567,6 +582,9 @@ void Controller::checkNetworkConditions() {
         //Getting the latest network entries into the networkEntries map
         for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
             std::string sender_host = row["sender_host"].as<std::string>();
+            if (sender_host == "server" || sender_host == "serv") {
+                continue;
+            }
             std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
             networkEntries[sender_host].emplace_back(entry);
         }
@@ -574,11 +592,11 @@ void Controller::checkNetworkConditions() {
         // Updating NodeHandle object with the latest network entries
         for (auto &[deviceName, entries] : networkEntries) {
             // If entry belongs to a device that is not in the list of devices, ignore it
-            if (devices.find(deviceName) == devices.end() || deviceName != "serv") {
+            if (devices.find(deviceName) == devices.end() || deviceName != "server") {
                 continue;
             }
             std::unique_lock<std::mutex> lock(devices[deviceName].nodeHandleMutex);
-            devices[deviceName].latestNetworkEntries["serv"] = aggregateNetworkEntries(entries);
+            devices[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
         }
 
         // If no network entries exist for a device, send a request to the device to perform network testing

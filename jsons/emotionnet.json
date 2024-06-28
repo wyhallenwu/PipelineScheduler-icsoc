@@ -5,6 +5,7 @@
         "cont_pipeName": "videocall",
         "cont_taskName": "emotionnet",
         "cont_hostDevice": "server",
+        "cont_hostDeviceType": "server",
         "cont_name": "emotionnet_0",
         "cont_pipeline": [
             {

@@ -6,6 +6,7 @@
         "cont_pipeName": "traffic",
         "cont_taskName": "retina1face",
         "cont_hostDevice": "server",
+        "cont_hostDeviceType": "server",
         "cont_name": "retinaface_0",
         "cont_pipeline": [
             {

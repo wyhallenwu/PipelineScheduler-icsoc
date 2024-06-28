@@ -13,7 +13,8 @@ service ControlCommunication {
   rpc StartContainer(ContainerConfig) returns (google.protobuf.Empty) {}
   rpc UpdateDownstream(ContainerLink) returns (google.protobuf.Empty) {}
   rpc SyncDatasource(ContainerLink) returns (google.protobuf.Empty) {}
-  rpc UpdateBatchSize(ContainerInt) returns (google.protobuf.Empty) {}
+  rpc UpdateBatchSize(ContainerInts) returns (google.protobuf.Empty) {}
+  rpc UpdateResolution(ContainerInts) returns (google.protobuf.Empty) {}
   rpc StopContainer(ContainerSignal) returns (google.protobuf.Empty) {}
 }
 
@@ -63,9 +64,9 @@ message ContainerSignal {
   bool forced = 2;
 }
 
-message ContainerInt {
+message ContainerInts {
   string name = 1;
-  int32 value = 2;
+  repeated int32 value = 2;
 }
 
 message LoopRange {

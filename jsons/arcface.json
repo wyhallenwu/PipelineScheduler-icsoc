@@ -6,6 +6,7 @@
         "cont_pipeName": "traffic",
         "cont_taskName": "arcface",
         "cont_hostDevice": "server",
+        "cont_hostDeviceType": "server",
         "cont_name": "arcface_0",
         "cont_pipeline": [
             {

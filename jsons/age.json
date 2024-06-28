@@ -5,6 +5,7 @@
         "cont_pipeName": "pedestrian",
         "cont_taskName": "age",
         "cont_hostDevice": "server",
+        "cont_hostDeviceType": "server",
         "cont_name": "age_0",
         "cont_pipeline": [
             {

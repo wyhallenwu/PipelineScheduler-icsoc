@@ -5,6 +5,7 @@
         "cont_pipeName": "every",
         "cont_taskName": "dsrc",
         "cont_hostDevice": "server",
+        "cont_hostDeviceType": "server",
         "cont_name": "data_source_0",
         "cont_pipeline": [
             {
