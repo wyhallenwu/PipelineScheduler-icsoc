@@ -247,9 +247,6 @@ bool Engine::build() {
         builderConfig->setFlag((BuilderFlag::kINT8));
 
         const auto input = network->getInput(0);
-        // TODO: remove potentially unused variables
-        const auto inputName = input->getName();
-        const auto inputDims = input->getDimensions();
         const auto calibrationFileName = m_engineName + ".calibration";
     }
 
@@ -275,6 +272,10 @@ bool Engine::build() {
     checkCudaErrorCode(cudaStreamDestroy(profileStream), __func__);
 
     return true;
+}
+
+std::string Engine::getEngineName() const {
+    return m_engineName;
 }
 
 /**
@@ -425,7 +426,7 @@ void Engine::copyToBuffer(
     cudaStream_t &inferenceStream
 ) {
     // Number of the batch predefined within the trt engine when built
-    spdlog::trace("[{0:s}] going in. ", __func__);
+    spdlog::get("container_agent")->trace("[{0:s}] going in. ", __func__);
     const auto numInputs = m_inputBuffers.size();
     // We need to copy batched data to all pre-defined batch
     for (std::size_t i = 0; i < numInputs; ++i) {
@@ -464,7 +465,7 @@ void Engine::copyToBuffer(
             inputBufferPtr += singleDataSize;
         }
     }
-    spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
+    spdlog::get("container_agent")->trace("[{0:s}] Finished. Comming out. ", __func__);
 }
 
 /**
@@ -478,7 +479,7 @@ void Engine::copyFromBuffer(
     const uint16_t batchSize,
     cudaStream_t &inferenceStream
 ) {
-    spdlog::trace("[{0:s}] going in. ", __func__);
+    spdlog::get("container_agent")->trace("[{0:s}] going in. ", __func__);
     for (std::size_t i = 0; i < m_outputBuffers.size(); ++i) {
         // After inference the 4 buffers, namely `num_detections`, `nmsed_boxes`, `nmsed_scores`, `nmsed_classes`
         // will be filled with inference results.
@@ -521,7 +522,7 @@ void Engine::copyFromBuffer(
             );
         }
     }
-    spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
+    spdlog::get("container_agent")->trace("[{0:s}] Finished. Comming out. ", __func__);
 }
 
 /**
@@ -545,7 +546,7 @@ bool Engine::runInference(
     }
     // saveGPUAsImg(batch[0], "in_reference.jpg", 255.f);
 
-    spdlog::trace("[{0:s}] going in. ", __func__);
+    spdlog::get("container_agent")->trace("[{0:s}] going in. ", __func__);
     // Cuda stream that will be used for inference
 
     // As we support dynamic batching, we need to reset the shape of the input binding everytime.
@@ -553,7 +554,7 @@ bool Engine::runInference(
     for (size_t i = 0; i < numInputs; ++i) {
         const auto& engineInputDims = m_inputDims[i];
         nvinfer1::Dims4 inputDims = {batchSize, engineInputDims.d[0], engineInputDims.d[1], engineInputDims.d[2]};
-        spdlog::trace("{0:s} has inputDims of [{1:d}, {2:d}, {3:d}, {4:d}] ", __func__, batchSize, engineInputDims.d[0], engineInputDims.d[1], engineInputDims.d[2]);
+        spdlog::get("container_agent")->trace("{0:s} has inputDims of [{1:d}, {2:d}, {3:d}, {4:d}] ", __func__, batchSize, engineInputDims.d[0], engineInputDims.d[1], engineInputDims.d[2]);
         m_context->setBindingDimensions(i, inputDims);
         // const void *dataPointer = batch.ptr<void>();
         // const int32_t inputMemSize = batchSize * engineInputDims.d[0] * engineInputDims.d[1] * engineInputDims.d[2] * sizeof(float);
@@ -582,7 +583,7 @@ bool Engine::runInference(
     // Synchronize the cuda stream
     checkCudaErrorCode(cudaStreamSynchronize(inferenceStream), __func__);
 
-    spdlog::trace("[{0:s}] Finished. Comming out. ", __func__);
+    spdlog::get("container_agent")->trace("[{0:s}] Finished. Comming out. ", __func__);
     return inferenceStatus;
 
 

@@ -9,9 +9,11 @@ package indevicecommunication;
 service InDeviceCommunication {
   rpc ReportMsvcStart(ProcessData) returns (ProcessData) {}
   rpc UpdateSender(Connection) returns (google.protobuf.Empty) {}
-  rpc UpdateBatchSize(BatchSize) returns (google.protobuf.Empty) {}
+  rpc UpdateBatchSize(Int32) returns (google.protobuf.Empty) {}
+  rpc UpdateResolution(Dimensions) returns (google.protobuf.Empty) {}
+  rpc SyncDatasources(Int32) returns (google.protobuf.Empty) {}
+  rpc SetStartFrame(Int32) returns (google.protobuf.Empty) {}
   rpc StopExecution(Signal) returns (google.protobuf.Empty) {}
-  rpc UpdateImageShape(ImageShape) returns (google.protobuf.Empty) {}
 }
 
 message Signal {
@@ -24,16 +26,17 @@ message Connection {
   int32 port = 3;
 }
 
+message Dimensions {
+  int32 channels = 1;
+  int32 height = 2;
+  int32 width = 3;
+}
+
 message ProcessData {
   string msvc_name = 1;
   uint32 pid = 2;
 }
 
-message BatchSize {
-  int32 size = 1;
-}
-
-message ImageShape {
-  int32 width = 1;
-  int32 height = 2;
+message Int32 {
+  int32 value = 1;
 }

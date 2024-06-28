@@ -71,9 +71,9 @@ int main(int argc, char *argv[]) {
         receiver.dispatchThread();
         run_receiver(receiver, false, size);
     } else {
-        auto *queue = new ThreadSafeFixSizedDoubleQueue(100, -1);
-        Sender *sender;
+        auto *queue = new ThreadSafeFixSizedDoubleQueue(100, -1, "sender");
         bool gpu = false;
+        Sender *sender;
         if (type == "gpu-sender") {
             gpu = true;
             sender = new GPUSender(json::parse(
@@ -111,16 +111,16 @@ int main(int argc, char *argv[]) {
                     "\"msvc_maxQueueSize\": 100, \"msvc_deviceIndex\": 0, \"msvc_containerLogPath\" : \"\", \"msvc_RUNMODE\" : 0}"));
             sender->SetInQueue({queue});
             sender->dispatchThread();
+            while (true) {
+                std::cin >> type;
+                if (type == "start") {
+                    // Needs this to make sender start running
+                    sender->PAUSE_THREADS = false;
+                    break;
+                }
+            }
         } else {
             std::cerr << "Invalid type of communicator" << std::endl;
-        }
-        while (true) {
-            std::cin >> type;
-            if (type == "start") {
-                // Needs this to make sender start running
-                sender->PAUSE_THREADS = false;
-                break;
-            }
         }
         if (gpu) {
             cv::cuda::GpuMat img;

@@ -28,6 +28,7 @@ endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES
         controller.h
+        scheduling-ppp.h
         ../json/json.h
 )
 
@@ -35,6 +36,7 @@ set(
 set(
         SOURCE_FILES
         controller.cpp
+        scheduling-ppp.cpp
 )
 
 # Here we define the library.
@@ -77,6 +79,8 @@ target_include_directories(controller
 target_link_libraries(controller
         PUBLIC
         control_grpc_proto
+        absl::flags
+        absl::flags_parse
         ${_GRPC_GRPCPP}
         ${_REFLECTION}
         ${_PROTOBUF_LIBPROTOBUF}

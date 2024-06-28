@@ -2,7 +2,7 @@
 
 using namespace spdlog;
 
-inline cv::Scalar vectorToScalar(const std::vector<float>& vec) {
+inline cv::Scalar vectorToScalar(const std::vector<float> &vec) {
     // Ensure the vector has exactly 4 elements
     if (vec.size() == 1) {
         return cv::Scalar(vec[0]);
@@ -22,13 +22,13 @@ inline cv::Scalar vectorToScalar(const std::vector<float>& vec) {
  * @param stream an opencv stream for asynchronous operation on cuda
  */
 inline cv::cuda::GpuMat normalize(
-    cv::cuda::GpuMat &input,
-    cv::cuda::Stream &stream,
-    const std::vector<float>& subVals,
-    const std::vector<float>& divVals,
-    const float normalized_scale
+        const cv::cuda::GpuMat &input,
+        cv::cuda::Stream &stream,
+        const std::vector<float> &subVals,
+        const std::vector<float> &divVals,
+        const float normalized_scale
 ) {
-    trace("Going into {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Going into {0:s}", __func__);
     cv::cuda::GpuMat normalized;
     cv::Scalar subValsScalar = vectorToScalar(subVals);
     cv::Scalar divValsScalar = vectorToScalar(divVals);
@@ -37,7 +37,7 @@ inline cv::cuda::GpuMat normalize(
         cv::cuda::subtract(normalized, subValsScalar, normalized, cv::noArray(), -1, stream);
         cv::cuda::divide(normalized, divValsScalar, normalized, 1, -1, stream);
     } else if (input.channels() == 3) {
-        input.convertTo(normalized, CV_32FC3, normalized_scale, stream);    
+        input.convertTo(normalized, CV_32FC3, normalized_scale, stream);
         cv::cuda::subtract(normalized, subValsScalar, normalized, cv::noArray(), -1, stream);
         cv::cuda::divide(normalized, divValsScalar, normalized, 1, -1, stream);
     } else {
@@ -45,18 +45,18 @@ inline cv::cuda::GpuMat normalize(
     }
 
     stream.waitForCompletion();
-    trace("Finished {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Finished {0:s}", __func__);
 
     return normalized;
 }
 
 inline cv::cuda::GpuMat cvtHWCToCHW(
-    cv::cuda::GpuMat &input,
-    cv::cuda::Stream &stream,
-    uint8_t IMG_TYPE
+        const cv::cuda::GpuMat &input,
+        cv::cuda::Stream &stream,
+        uint8_t IMG_TYPE
 ) {
 
-    trace("Going into {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Going into {0:s}", __func__);
     uint16_t height = input.rows;
     uint16_t width = input.cols;
     /**
@@ -71,27 +71,51 @@ inline cv::cuda::GpuMat cvtHWCToCHW(
     if (input.channels() == 1) {
         uint8_t IMG_SINGLE_CHANNEL_TYPE = IMG_TYPE;
         channels = {
-            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[0]))
+                cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[0]))
         };
     } else if (input.channels() == 3) {
         uint8_t IMG_SINGLE_CHANNEL_TYPE = IMG_TYPE ^ 16;
         size_t channel_mem_width = height * width;
-        
+
         channels = {
-            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[0])),
-            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width])),
-            cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width * 2]))
+                cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[0])),
+                cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width])),
+                cv::cuda::GpuMat(height, width, IMG_SINGLE_CHANNEL_TYPE, &(transposed.ptr()[channel_mem_width * 2]))
         };
     } else {
         throw std::runtime_error("Unsupported number of channels");
     }
     cv::cuda::split(input, channels, stream);
 
-    stream.waitForCompletion();    
+    stream.waitForCompletion();
 
-    trace("Finished {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Finished {0:s}", __func__);
 
     return transposed;
+}
+
+inline cv::cuda::GpuMat convertColor(
+        const cv::cuda::GpuMat &input,
+        uint8_t IMG_TYPE,
+        uint8_t COLOR_CVT_TYPE,
+        cv::cuda::Stream &stream
+) {
+    spdlog::get("container_agent")->trace("Going into {0:s}", __func__);
+    // If the image is grayscale, then the target image type should be 0
+    uint16_t TARGET_IMG_TYPE;
+    if (GRAYSCALE_CONVERSION_CODES.count(COLOR_CVT_TYPE)) {
+        TARGET_IMG_TYPE = 0;
+    } else {
+        TARGET_IMG_TYPE = IMG_TYPE;
+    }
+
+    cv::cuda::GpuMat color_cvt_image(input.rows, input.cols, TARGET_IMG_TYPE);
+    cv::cuda::cvtColor(input, color_cvt_image, COLOR_CVT_TYPE, 0, stream);
+
+    stream.waitForCompletion();
+    spdlog::get("container_agent")->trace("Finished {0:s}", __func__);
+
+    return color_cvt_image;
 }
 
 /**
@@ -104,41 +128,30 @@ inline cv::cuda::GpuMat cvtHWCToCHW(
  * @return cv::cuda::GpuMat 
  */
 inline cv::cuda::GpuMat resizePadRightBottom(
-    cv::cuda::GpuMat &input,
-    const size_t height,
-    const size_t width,
-    const std::vector<float> &bgcolor,
-    cv::cuda::Stream &stream,
-    uint8_t IMG_TYPE,
-    uint8_t COLOR_CVT_TYPE,
-    uint8_t RESIZE_INTERPOL_TYPE
+        const cv::cuda::GpuMat &input,
+        const size_t height,
+        const size_t width,
+        const std::vector<float> &bgcolor,
+        cv::cuda::Stream &stream,
+        uint8_t IMG_TYPE,
+        uint8_t COLOR_CVT_TYPE,
+        uint8_t RESIZE_INTERPOL_TYPE
 
 ) {
-    trace("Going into {0:s}", __func__);
-
-    uint16_t TARGET_IMG_TYPE;
-
-    // If the image is grayscale, then the target image type should be 0
-    if (GRAYSCALE_CONVERSION_CODES.count(COLOR_CVT_TYPE)) {
-        TARGET_IMG_TYPE = 0;
-    } else {
-        TARGET_IMG_TYPE = IMG_TYPE;
-    }
-    cv::cuda::GpuMat color_cvt_image(input.rows, input.cols, TARGET_IMG_TYPE);
-    cv::cuda::cvtColor(input, color_cvt_image, COLOR_CVT_TYPE, 0, stream);
+    spdlog::get("container_agent")->trace("Going into {0:s}", __func__);
 
     float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
     int unpad_h = r * input.rows;
     //Create a new GPU Mat 
-    cv::cuda::GpuMat resized(unpad_h, unpad_w, TARGET_IMG_TYPE);
-    cv::cuda::resize(color_cvt_image, resized, resized.size(), 0, 0, RESIZE_INTERPOL_TYPE, stream);
-    cv::cuda::GpuMat out(height, width, TARGET_IMG_TYPE, vectorToScalar(bgcolor));
+    cv::cuda::GpuMat resized(unpad_h, unpad_w, input.type());
+    cv::cuda::resize(input, resized, resized.size(), 0, 0, RESIZE_INTERPOL_TYPE, stream);
+    cv::cuda::GpuMat out(height, width, input.type(), vectorToScalar(bgcolor));
     // Creating an opencv stream for asynchronous operation on cuda
     resized.copyTo(out(cv::Rect(0, 0, resized.cols, resized.rows)), stream);
 
     stream.waitForCompletion();
-    trace("Finished {0:s}", __func__);
+    spdlog::get("container_agent")->trace("Finished {0:s}", __func__);
 
     return out;
 }
@@ -150,7 +163,7 @@ inline cv::cuda::GpuMat resizePadRightBottom(
  * @param index 
  * @return uint64_t 
  */
-inline uint64_t getNumberAtIndex(const std::string& str, int index) {
+inline uint64_t getNumberAtIndex(const std::string &str, int index) {
     int currentIndex = 0;
     int startPos = 0;
     uint64_t number = 0;
@@ -225,7 +238,7 @@ void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_imgNormScale = configs.msvc_imgNormScale;
     msvc_subVals = configs.msvc_subVals;
     msvc_divVals = configs.msvc_divVals;
-    msvc_arrivalRecords.setKeepLength((uint64_t)jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
+    msvc_arrivalRecords.setKeepLength((uint64_t) jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
 }
 
 /**
@@ -233,9 +246,11 @@ void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
  * 
  * @param configs 
  */
-BaseReqBatcher::BaseReqBatcher(const json &jsonConfigs) : Microservice(jsonConfigs){
+BaseReqBatcher::BaseReqBatcher(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs);
-    info("{0:s} is created.", msvc_name); 
+    //set to maximum value
+    oldestReqTime = std::chrono::high_resolution_clock::time_point::max();
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name);
 }
 
 void BaseReqBatcher::batchRequests() {
@@ -270,22 +285,18 @@ void BaseReqBatcher::batchRequests() {
 
     Request<LocalCPUReqDataType> currCPUReq;
 
-    // Request sent to a downstream microservice
-    Request<LocalGPUReqDataType> outReq;
-
     auto timeNow = std::chrono::high_resolution_clock::now();
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
-    info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name);
     cv::cuda::Stream *preProcStream;
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
-            info("{0:s} STOPS.", msvc_name);
+        if (STOP_THREADS) {
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
-        }
-        else if (this->PAUSE_THREADS) {
+        } else if (PAUSE_THREADS) {
             if (RELOADING) {
                 /**
                  * @brief Opening a new log file
@@ -307,7 +318,7 @@ void BaseReqBatcher::batchRequests() {
                 bufferData.clear();
                 prevData.clear();
 
-                info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
                 RELOADING = false;
                 READY = true;
             }
@@ -318,33 +329,53 @@ void BaseReqBatcher::batchRequests() {
         if (msvc_InQueue.at(0)->getActiveQueueIndex() != msvc_activeInQueueIndex.at(0)) {
             if (msvc_InQueue.at(0)->size(msvc_activeInQueueIndex.at(0)) == 0) {
                 msvc_activeInQueueIndex.at(0) = msvc_InQueue.at(0)->getActiveQueueIndex();
-                trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+                spdlog::get("container_agent")->trace("{0:s} Set current active queue index to {1:d}.", msvc_name,
+                                                      msvc_activeInQueueIndex.at(0));
             }
-            trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+            spdlog::get("container_agent")->trace("{0:s} Current active queue index {1:d}.", msvc_name,
+                                                  msvc_activeInQueueIndex.at(0));
         }
         if (msvc_activeInQueueIndex.at(0) == 1) {
-            currCPUReq = msvc_InQueue.at(0)->pop1();
+            currCPUReq = msvc_InQueue.at(0)->pop1(timeout);
             if (!validateRequest<LocalCPUReqDataType>(currCPUReq)) {
+                executeBatch(timeNow, outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
                 continue;
             }
             currReq = uploadReq(currCPUReq);
         } else if (msvc_activeInQueueIndex.at(0) == 2) {
-            currReq = msvc_InQueue.at(0)->pop2();
+            currReq = msvc_InQueue.at(0)->pop2(timeout);
             if (!validateRequest<LocalGPUReqDataType>(currReq)) {
+                executeBatch(timeNow, outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
                 continue;
             }
         }
-        
+
         msvc_inReqCount++;
 
+        uint32_t requestSize =
+                currReq.req_data[0].data.channels() * currReq.req_data[0].data.rows * currReq.req_data[0].data.cols *
+                CV_ELEM_SIZE1(currReq.req_data[0].data.type());
+
         // Keeping record of the arrival requests
-        msvc_arrivalRecords.addRecord(currReq.req_origGenTime[0], msvc_inReqCount);
+        // TODO: Add rpc batch size instead of hardcoding
+        if (msvc_batchCount >= msvc_numWarmupBatches) {
+            // Only start recording after the warmup period
+            msvc_arrivalRecords.addRecord(
+                    currReq.req_origGenTime[0],
+                    10,
+                    getArrivalPkgSize(currReq.req_travelPath[0]),
+                    requestSize,
+                    msvc_inReqCount,
+                    getOriginStream(currReq.req_travelPath[0]),
+                    getSenderHost(currReq.req_travelPath[0])
+            );
+        }
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_genTime = currReq.req_origGenTime[0][0];
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
 
         // After the communication-related timestamps have been kept in the arrival record, all except the very first one (genTime) are removed.
@@ -354,8 +385,10 @@ void BaseReqBatcher::batchRequests() {
         currReq_batchSize = currReq.req_batchSize;
 
         outBatch_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
-        outBatch_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_containerName + "_" + std::to_string(msvc_inReqCount) + "]");
-        trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
+        outBatch_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_hostDevice + "|" + msvc_containerName + "|" +
+                                   std::to_string(msvc_inReqCount));
+        spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.",
+                                              msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
         msvc_onBufferBatchSize++;
         // Resize the incoming request image the padd with the grey color
@@ -364,32 +397,46 @@ void BaseReqBatcher::batchRequests() {
 
         prevData.emplace_back(currReq.req_data[0]);
 
-        trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
-            msvc_name,
-            currReq.req_data[0].data.rows,
-            currReq.req_data[0].data.cols,
-            (this->msvc_outReqShape.at(0))[0][1],
-            (this->msvc_outReqShape.at(0))[0][2]
+        data.data = convertColor(
+                currReq.req_data[0].data,
+                msvc_imgType,
+                msvc_colorCvtType,
+                *preProcStream
         );
-        data.data = resizePadRightBottom(
-            currReq.req_data[0].data,
-            (this->msvc_outReqShape.at(0))[0][1],
-            (this->msvc_outReqShape.at(0))[0][2],
-            {128, 128, 128},
-            *preProcStream,
-            msvc_imgType,
-            msvc_colorCvtType,
-            msvc_resizeInterpolType
+
+        // Only resize if the output shape is not the same as the input shape
+        if (msvc_outReqShape.at(0)[0][1] != 0 && msvc_outReqShape.at(0)[0][2] != 0) {
+            if (data.data.rows != (msvc_outReqShape.at(0))[0][1] ||
+                data.data.cols != (msvc_outReqShape.at(0))[0][2]) {
+                data.data = resizePadRightBottom(
+                        data.data,
+                        (msvc_outReqShape.at(0))[0][1],
+                        (msvc_outReqShape.at(0))[0][2],
+                        {128, 128, 128},
+                        *preProcStream,
+                        msvc_imgType,
+                        msvc_colorCvtType,
+                        msvc_resizeInterpolType
+                );
+                spdlog::get("container_agent")->trace("{0:s} resized a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
+                                        msvc_name,
+                                        currReq.req_data[0].data.rows,
+                                        currReq.req_data[0].data.cols,
+                                        (this->msvc_outReqShape.at(0))[0][1],
+                                        (this->msvc_outReqShape.at(0))[0][2]
         );
+            }
+        }
 
         data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
 
         data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
-        trace("{0:s} finished resizing a frame", msvc_name);
-        data.shape = RequestDataShapeType({(this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
+        data.shape = RequestDataShapeType({(msvc_outReqShape.at(0))[0][1], (msvc_outReqShape.at(0))[0][1],
+                                           (msvc_outReqShape.at(0))[0][2]});
         bufferData.emplace_back(data);
-        trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
+        spdlog::get("container_agent")->trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name,
+                                              msvc_onBufferBatchSize);
 
         // Consider this the moment the request preprocessed and is waiting to be batched
         timeNow = std::chrono::high_resolution_clock::now();
@@ -398,42 +445,79 @@ void BaseReqBatcher::batchRequests() {
         outReq_genTime.emplace_back(timeNow);
         outBatch_genTime.emplace_back(outReq_genTime);
 
-        // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
-        // cudaFree(currReq.req_data[0].data.cudaPtr());
-        // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
-        // Waiting more means there is a higher chance the earliest request in the buffer will be late eventually.
-        if (this->isTimeToBatch()) {
-            // If true, copy the buffer data into the out queue
-            timeNow = std::chrono::high_resolution_clock::now();
-
-            for (auto& req_genTime : outBatch_genTime) {
-                req_genTime.emplace_back(timeNow);
-            }
-
-            outReq = {
-                outBatch_genTime,
-                outBatch_slo,
-                outBatch_path,
-                msvc_onBufferBatchSize,
-                bufferData,
-                prevData
-            };
-            trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
-            msvc_OutQueue[0]->emplace(outReq);
-            msvc_onBufferBatchSize = 0;
-            outBatch_genTime.clear();
-            outBatch_path.clear();
-            outBatch_slo.clear();
-            bufferData.clear();
-            prevData.clear();
+        /**
+         * @brief ONLY IN PROFILING MODE
+         * Check if the profiling is to be stopped, if true, then send a signal to the downstream microservice to stop profiling
+         */
+        if (checkProfileEnd(currReq.req_travelPath[0])) {
+            spdlog::get("container_agent")->info("{0:s} is stopping profiling.", msvc_name);
+            STOP_THREADS = true;
+            msvc_OutQueue[0]->emplace(
+                    Request<LocalGPUReqDataType>{
+                            {},
+                            {},
+                            {"STOP_PROFILING"},
+                            0,
+                            {},
+                            {}
+                    }
+            );
+            continue;
         }
-        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+
+        executeBatch(currReq_genTime, outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
     }
     msvc_logFile.close();
 }
 
-template <typename T>
+void BaseReqBatcher::executeBatch(ClockType time, BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
+                                  std::vector<RequestData<LocalGPUReqDataType>> &bufferData,
+                                  std::vector<RequestData<LocalGPUReqDataType>> &prevData) {
+    if (time < oldestReqTime) {
+        oldestReqTime = time;
+    }
+    // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
+    // cudaFree(currReq.req_data[0].data.cudaPtr());
+    // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
+    // Waiting more means there is a higher chance the earliest request in the buffer will be late eventually.
+    if (this->isTimeToBatch()) {
+        // If true, copy the buffer data into the out queue
+        ClockType timeNow = std::chrono::high_resolution_clock::now();
+
+        for (auto &req_genTime: genTime) {
+            req_genTime.emplace_back(timeNow);
+        }
+
+        Request<LocalGPUReqDataType> outReq = {
+                genTime,
+                slo,
+                path,
+                msvc_onBufferBatchSize,
+                bufferData,
+                prevData
+        };
+
+        msvc_batchCount++;
+
+        spdlog::get("container_agent")->trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name,
+                                              msvc_onBufferBatchSize);
+        msvc_OutQueue[0]->emplace(outReq);
+        msvc_onBufferBatchSize = 0;
+        genTime.clear();
+        path.clear();
+        slo.clear();
+        bufferData.clear();
+        prevData.clear();
+        timeout = 100;
+        oldestReqTime = std::chrono::high_resolution_clock::time_point::max();;
+    }
+
+    spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+    std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime)
+    );
+}
+
+template<typename T>
 bool BaseReqBatcher::validateRequest(Request<T> &req) {
     // Meaning the the timeout in pop() has been reached and no request was actually popped
     if (strcmp(req.req_travelPath[0].c_str(), "empty") == 0) {
@@ -475,22 +559,21 @@ void BaseReqBatcher::batchRequestsProfiling() {
     Request<LocalCPUReqDataType> currCPUReq;
 
     // Request sent to a downstream microservice
-    Request<LocalGPUReqDataType> outReq;   
+    Request<LocalGPUReqDataType> outReq;
 
     // Batch size of current request
     BatchSizeType currReq_batchSize;
-    info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name);
     cv::cuda::Stream *preProcStream;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
-            info("{0:s} STOPS.", msvc_name);
+        if (STOP_THREADS) {
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
-        }
-        else if (this->PAUSE_THREADS) {
-            if (this->RELOADING) {
+        } else if (PAUSE_THREADS) {
+            if (RELOADING) {
                 /**
                  * @brief Opening a new log file
                  * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
@@ -512,9 +595,9 @@ void BaseReqBatcher::batchRequestsProfiling() {
                 bufferData.clear();
                 prevData.clear();
 
-                this->RELOADING = false;
-                this->READY = true;
-                info("{0:s} is (RE)LOADED.", msvc_name);
+                RELOADING = false;
+                READY = true;
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
@@ -523,10 +606,11 @@ void BaseReqBatcher::batchRequestsProfiling() {
         if (msvc_InQueue.at(0)->getActiveQueueIndex() != msvc_activeInQueueIndex.at(0)) {
             if (msvc_InQueue.at(0)->size(msvc_activeInQueueIndex.at(0)) == 0) {
                 msvc_activeInQueueIndex.at(0) = msvc_InQueue.at(0)->getActiveQueueIndex();
-                // trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+                // spdlog::get("container_agent")->trace("{0:s} Set current active queue index to {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
             }
         }
-        trace("{0:s} Current active queue index {1:d}.", msvc_name, msvc_activeInQueueIndex.at(0));
+        spdlog::get("container_agent")->trace("{0:s} Current active queue index {1:d}.", msvc_name,
+                                              msvc_activeInQueueIndex.at(0));
         if (msvc_activeInQueueIndex.at(0) == 1) {
             currCPUReq = msvc_InQueue.at(0)->pop1();
             if (!validateRequest<LocalCPUReqDataType>(currCPUReq)) {
@@ -545,13 +629,14 @@ void BaseReqBatcher::batchRequestsProfiling() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_genTime = currReq.req_origGenTime[0][0];
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
 
         currReq_batchSize = currReq.req_batchSize;
 
-        trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.", msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
+        spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.",
+                                              msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
         // Resize the incoming request image the padd with the grey color
         // The resize image will be copied into a reserved buffer
@@ -559,32 +644,34 @@ void BaseReqBatcher::batchRequestsProfiling() {
 
         prevData.emplace_back(currReq.req_data[0]);
 
-        trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
-            msvc_name,
-            currReq.req_data[0].data.rows,
-            currReq.req_data[0].data.cols,
-            (this->msvc_outReqShape.at(0))[0][1],
-            (this->msvc_outReqShape.at(0))[0][2]
+        spdlog::get("container_agent")->trace("{0:s} resizing a frame of [{1:d}, {2:d}] -> [{3:d}, {4:d}]",
+                                              msvc_name,
+                                              currReq.req_data[0].data.rows,
+                                              currReq.req_data[0].data.cols,
+                                              (msvc_outReqShape.at(0))[0][1],
+                                              (msvc_outReqShape.at(0))[0][2]
         );
         data.data = resizePadRightBottom(
-            currReq.req_data[0].data,
-            (this->msvc_outReqShape.at(0))[0][1],
-            (this->msvc_outReqShape.at(0))[0][2],
-            {128, 128, 128},
-            *preProcStream,
-            msvc_imgType,
-            msvc_colorCvtType,
-            msvc_resizeInterpolType
+                currReq.req_data[0].data,
+                (msvc_outReqShape.at(0))[0][1],
+                (msvc_outReqShape.at(0))[0][2],
+                {128, 128, 128},
+                *preProcStream,
+                msvc_imgType,
+                msvc_colorCvtType,
+                msvc_resizeInterpolType
         );
 
         data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
 
         data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
-        trace("{0:s} finished resizing a frame", msvc_name);
-        data.shape = RequestDataShapeType({3, (this->msvc_outReqShape.at(0))[0][1], (this->msvc_outReqShape.at(0))[0][2]});
+        spdlog::get("container_agent")->trace("{0:s} finished resizing a frame", msvc_name);
+        data.shape = RequestDataShapeType(
+                {3, (msvc_outReqShape.at(0))[0][1], (msvc_outReqShape.at(0))[0][2]});
         bufferData.emplace_back(data);
-        trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name, msvc_onBufferBatchSize);
+        spdlog::get("container_agent")->trace("{0:s} put an image into buffer. Current batch size is {1:d} ", msvc_name,
+                                              msvc_onBufferBatchSize);
 
 
         /**
@@ -614,21 +701,22 @@ void BaseReqBatcher::batchRequestsProfiling() {
         if (this->isTimeToBatch()) { // If true, copy the buffer data into the out queue
 
             // Moment of batching
-            timeNow =  std::chrono::high_resolution_clock::now();
+            timeNow = std::chrono::high_resolution_clock::now();
 
-            for (auto& req_genTime : outBatch_genTime) {
+            for (auto &req_genTime: outBatch_genTime) {
                 req_genTime.emplace_back(timeNow); //FOURTH_TIMESTAMP
             }
 
             outReq = {
-                outBatch_genTime,
-                outBatch_slo,
-                outReq_path,
-                msvc_onBufferBatchSize,
-                bufferData,
-                prevData
+                    outBatch_genTime,
+                    outBatch_slo,
+                    outReq_path,
+                    msvc_onBufferBatchSize,
+                    bufferData,
+                    prevData
             };
-            trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name, msvc_onBufferBatchSize);
+            spdlog::get("container_agent")->trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name,
+                                                  msvc_onBufferBatchSize);
             msvc_OutQueue[0]->emplace(outReq);
             msvc_onBufferBatchSize = 0;
             outBatch_genTime.clear();
@@ -637,8 +725,8 @@ void BaseReqBatcher::batchRequestsProfiling() {
             bufferData.clear();
             prevData.clear();
         }
-        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+        spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
     }
     msvc_logFile.close();
 }
@@ -650,8 +738,21 @@ void BaseReqBatcher::batchRequestsProfiling() {
  * @return false if otherwise
  */
 bool BaseReqBatcher::isTimeToBatch() {
-    if (msvc_onBufferBatchSize == this->msvc_idealBatchSize) {
-        return true;
+    if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
+        if (msvc_onBufferBatchSize == msvc_idealBatchSize) {
+            return true;
+        }
+        // int diff = msvc_svcLevelObjLatency - std::chrono::duration_cast<TimePrecisionType>(
+        //         std::chrono::high_resolution_clock::now() - oldestReqTime).count() -
+        //            msvc_batchInferProfileList.at(msvc_onBufferBatchSize).p95inferLat * msvc_onBufferBatchSize;
+        // if (diff < 10) {
+        //     return true;
+        // }
+        // timeout = diff - 5;
+    } else {
+        if (msvc_onBufferBatchSize == msvc_idealBatchSize) {
+            return true;
+        }
     }
     return false;
 }
@@ -664,10 +765,15 @@ bool BaseReqBatcher::isTimeToBatch() {
  * @return false 
  */
 bool BaseReqBatcher::checkReqEligibility(std::vector<ClockType> &currReq_time) {
+    if (msvc_RUNMODE == RUNMODE::PROFILING) {
+        currReq_time.emplace_back(std::chrono::high_resolution_clock::now()); // SECOND_TIMESTAMP
+        return true;
+    }
     auto now = std::chrono::high_resolution_clock::now();
     auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - currReq_time[0]).count();
-    if (diff > this->msvc_svcLevelObjLatency) {
+    if (diff > msvc_svcLevelObjLatency) {
         this->droppedReqCount++;
+        spdlog::get("container_agent")->trace("{0:s} dropped the {1:d}th request.", msvc_name, this->droppedReqCount);
         return false;
     }
     // `currReq_recvTime` will also be used to measured how much for the req to sit in queue and
