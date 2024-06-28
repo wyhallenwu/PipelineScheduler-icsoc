@@ -212,6 +212,11 @@ public:
 
     void HandleRecvRpcs();
 
+    // Helper functions for the RIM algorithm
+    bool placeMDAGOnSingleWorker(const TaskHandle& task);
+    void placeModulesOnWorkers(const TaskHandle& task);
+    void performPlacement(const TaskHandle& task);
+
     void Scheduling();
 
     void Init() { for (auto &t: initialTasks) AddTask(t); }
