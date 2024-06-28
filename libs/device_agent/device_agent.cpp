@@ -73,7 +73,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
     controller_sending_cq = new CompletionQueue();
 
-    dev_profiler = new Profiler({getpid()}, "runtime");
+    dev_profiler = new Profiler({static_cast<unsigned int>(getpid())}, "runtime");
     Ready(getHostIP(), type);
 
     dev_logPath += "/" + dev_experiment_name;
