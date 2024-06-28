@@ -9,6 +9,18 @@ int main(int argc, char **argv) {
     std::string command;
 
     while (controller->isRunning()) {
+        while (true) {
+            // Get input from user
+            std::cout << "You need to connect the devices before adding task. Ready? (yes/no): " << std::endl;
+            std::cin >> command;
+            if (command == "yes") {
+                break;
+            } else if (command == "no") {
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+            } else {
+                std::cout << "Invalid command" << std::endl;
+            }
+        }
         TaskDescription::TaskStruct task;
         std::cout << "Enter command {init, traffic, video_call, people, exit): ";
         std::cin >> command;

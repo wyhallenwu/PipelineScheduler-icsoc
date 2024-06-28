@@ -5,7 +5,8 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "arcface",
-        "cont_hostDevice": "orn",
+        "cont_hostDevice": "orn1",
+        "cont_hostDeviceType": "orn",
         "cont_name": "arcface_0",
         "cont_pipeline": [
             {

@@ -4,7 +4,8 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "pedestrian",
         "cont_taskName": "movenet",
-        "cont_hostDevice": "orn",
+        "cont_hostDevice": "orn1",
+        "cont_hostDeviceType": "orn",
         "cont_name": "movenet_0",
         "cont_pipeline": [
             {

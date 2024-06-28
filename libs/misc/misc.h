@@ -179,6 +179,10 @@ struct PercentilesNetworkRecord {
 typedef std::map<std::string, PercentilesNetworkRecord> NetworkRecordType;
 typedef std::vector<std::pair<uint32_t, uint64_t>> NetworkEntryType;
 
+uint64_t calculateP95(std::vector<uint64_t> &values);
+
+NetworkEntryType aggregateNetworkEntries(const NetworkEntryType &res);
+
 uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &totalPkgSize);
 
 // Arrival rate coming to a certain model in the pipeline
@@ -222,6 +226,8 @@ struct ModelProfile {
 // Since each stream's content is unique, which causes unique process behaviors, 
 // we can use the stream name as the key to store the process records
 typedef std::map<std::string, ProcessRecord> ProcessRecordType;
+
+typedef std::map<std::string, ModelProfile> PerDeviceModelProfileType;
 
 struct HardwareMetrics {
     ClockType timestamp;
@@ -278,56 +284,6 @@ const std::unordered_set<uint16_t> GRAYSCALE_CONVERSION_CODES = {6, 7, 10, 11};
 void saveGPUAsImg(const cv::cuda::GpuMat &img, std::string name = "test.jpg", float scale = 1.f);
 
 void saveCPUAsImg(const cv::Mat &img, std::string name = "test.jpg", float scale = 1.f);
-
-const std::vector<std::string> cocoClassNames = {
-        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-        "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-        "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-        "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-        "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-        "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-        "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-        "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-        "hair drier", "toothbrush"
-};
-
-const std::map<std::string, std::string> keywordAbbrs {
-    {"batch", "batch"},
-    {"server", "serv"},
-    {"agxaviver", "agx"},
-    {"agxavier1", "agx1"},
-    {"orinano", "orn"},
-    {"orinano1", "orn1"},
-    {"orinano2", "orn2"},
-    {"orinano3", "orn3"},
-    {"nxavier", "nx"},
-    {"nxavier1", "nx1"},
-    {"nxxavier", "nx2"},
-    {"nxavier3", "nx3"},
-    {"nxavier4", "nx4"},
-    {"nxavier5", "nx5"},
-    {"datasource", "dsrc"},
-    {"traffic", "trfc"},
-    {"building", "bldg"},
-    {"yolov5", "y5"},
-    {"yolov5n", "y5n"},
-    {"yolov5s", "y5s"},
-    {"yolov5m", "y5m"},
-    {"yolov5l", "y5l"},
-    {"yolov5x", "y5x"},
-    {"retina1face", "rt1f"},
-    {"arcface", "arcf"},
-    {"carbrand", "cbrd"},
-    {"gender", "gndr"},
-    {"emotion", "emtn"},
-    {"emotionnet", "emtn"},
-    {"platedet", "pldt"},
-    {"dynamic", "dyn"},
-    {"3090", "39"}, // GPU name
-    {"fp32", "32"},
-    {"fp16", "16"},
-    {"int8", "8"}
-};
 
 struct MetricsServerConfigs {
     std::string ip = "localhost";
@@ -407,8 +363,11 @@ enum ModelType {
     CarBrand
 };
 
+extern std::map<std::string, std::string> keywordAbbrs;
 extern std::map<SystemDeviceType, std::string> SystemDeviceTypeList;
+extern std::map<std::string, SystemDeviceType> SystemDeviceTypeReverseList;
 extern std::map<ModelType, std::string> ModelTypeList;
+extern std::map<std::string, ModelType> ModelTypeReverseList;
 
 struct ContainerInfo {
     std::string taskName;
@@ -536,11 +495,28 @@ bool isHypertable(pqxx::connection &conn, const std::string &tableName);
 
 bool tableExists(pqxx::connection &conn, const std::string &schemaName, const std::string &tableName);
 
-std::string abbreviate(const std::string &keyphrase);
+std::string abbreviate(const std::string &keyphrase, const std::string delimiter = "_");
 
 bool confirmIntention(const std::string& message, const std::string& magicPhrase);
 
-ModelArrivalProfile queryModelArrivalProfile(
+
+// ================================================================== Queries functions ==================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+
+float queryArrivalRate(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::string &modelName,
+    const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
+);
+
+NetworkProfile queryNetworkProfile(
     pqxx::connection &metricsConn,
     const std::string &experimentName,
     const std::string &systemName,
@@ -550,6 +526,19 @@ ModelArrivalProfile queryModelArrivalProfile(
     const std::string &modelName,
     const std::string &senderHost,
     const std::string &receiverHost,
+    const NetworkEntryType &networkEntries
+);
+
+ModelArrivalProfile queryModelArrivalProfile(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::string &modelName,
+    const std::vector<std::pair<std::string, std::string>> &commPair,
+    const std::map<std::pair<std::string, std::string>, NetworkEntryType> &networkEntries,
     const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
 );
 
@@ -560,6 +549,7 @@ void queryBatchInferLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 );
@@ -571,6 +561,7 @@ BatchInferProfileListType queryBatchInferLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName
 );
 
@@ -581,13 +572,14 @@ void queryPrePostLatency(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 );
 
 void queryResourceRequirements(
     pqxx::connection &metricsConn,
-    const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName,
     ModelProfile &profile
 );
@@ -599,12 +591,19 @@ ModelProfile queryModelProfile(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &deviceName,
+    const std::string &deviceTypeName,
     const std::string &modelName
 );
+
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+// =======================================================================================================================================================
+
 bool isFileEmpty(const std::string& filePath);
 
 std::string getDeviceTypeAbbr(const SystemDeviceType &deviceType);
 
+std::string getContainerName(const std::string& deviceTypeName, const std::string& modelName);
 std::string getContainerName(const SystemDeviceType& deviceType, const ModelType& modelType);
 
 /**
@@ -624,5 +623,5 @@ void finishGrpc(std::unique_ptr<ClientAsyncResponseReader<T>> &rpc, T &reply, St
     GPR_ASSERT(ok);
 }
 
-
+std::string getDeviceTypeName(SystemDeviceType deviceType);
 #endif
