@@ -169,11 +169,11 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
                                      std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset, {}};
-        controller->devices.list.insert({deviceName, node});
         reply.set_name(controller->ctrl_systemName);
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
+        controller->devices.addDevice(deviceName, node);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
         controller->queryInDeviceNetworkEntries(&(controller->devices.list[deviceName]));
     } else {
@@ -569,7 +569,7 @@ void Controller::checkNetworkConditions() {
         stopwatch.start();
         std::map<std::string, NetworkEntryType> networkEntries = {};
 
-        for (auto &[deviceName, nodeHandle] : devices.list) {
+        for (auto &[deviceName, nodeHandle] : *(devices.getMap())) {
             if (deviceName == "server") {
                 continue;
             }
@@ -596,7 +596,7 @@ void Controller::checkNetworkConditions() {
             if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
                 continue;
             }
-            std::unique_lock<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
+            std::lock_guard<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
             devices.list[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
         }
 

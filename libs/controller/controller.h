@@ -39,76 +39,7 @@ ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
 
 struct ContainerHandle;
 
-struct TaskHandle {
-    std::string tk_name;
-    std::string tk_fullName;
-    PipelineType tk_type;
-    std::string tk_source;
-    int tk_slo;
-    ClockType tk_startTime;
-    int tk_lastLatency;
-    std::map<std::string, ContainerHandle*> tk_subTasks;
-    PipelineModelListType tk_pipelineModels;
-    mutable std::mutex tk_mutex;
-
-    TaskHandle() = default;
-
-    ~TaskHandle() {
-        // Ensure no other threads are using this object
-        std::lock_guard<std::mutex> lock(tk_mutex);
-        for (auto& model : tk_pipelineModels) {
-            delete model;
-        }
-    }
-
-    TaskHandle(const std::string& tk_name,
-               const std::string& tk_fullName,
-               PipelineType tk_type,
-               const std::string& tk_source,
-               int tk_slo,
-               ClockType tk_startTime,
-               int tk_lastLatency)
-    : tk_name(tk_name),
-      tk_type(tk_type),
-      tk_source(tk_source),
-      tk_slo(tk_slo),
-      tk_startTime(tk_startTime),
-      tk_lastLatency(tk_lastLatency) {}
-
-    TaskHandle(const TaskHandle& other) {
-        std::lock(tk_mutex, other.tk_mutex);
-        std::lock_guard<std::mutex> lock(other.tk_mutex);
-        std::lock_guard<std::mutex> lock2(tk_mutex);
-        tk_name = other.tk_name;
-        tk_fullName = other.tk_fullName;
-        tk_type = other.tk_type;
-        tk_source = other.tk_source;
-        tk_slo = other.tk_slo;
-        tk_startTime = other.tk_startTime;
-        tk_lastLatency = other.tk_lastLatency;
-        tk_subTasks = other.tk_subTasks;
-        tk_pipelineModels = other.tk_pipelineModels;
-    }
-
-    TaskHandle& operator=(const TaskHandle& other) {
-        if (this != &other) {
-            std::lock(tk_mutex, other.tk_mutex);
-            std::lock_guard<std::mutex> lock1(tk_mutex);
-            std::lock_guard<std::mutex> lock2(other.tk_mutex);
-            tk_name = other.tk_name;
-            tk_fullName = other.tk_fullName;
-            tk_type = other.tk_type;
-            tk_source = other.tk_source;
-            tk_slo = other.tk_slo;
-            tk_startTime = other.tk_startTime;
-            tk_lastLatency = other.tk_lastLatency;
-            tk_subTasks = other.tk_subTasks;
-            tk_pipelineModels = other.tk_pipelineModels;
-        }
-        return *this;
-    }
-};
-
+struct TaskHandle;
 struct NodeHandle {
     std::string name;
     std::string ip;
@@ -152,8 +83,8 @@ struct NodeHandle {
 
     NodeHandle(const NodeHandle &other) {
         std::lock(nodeHandleMutex, other.nodeHandleMutex);
-        std::lock_guard<std::mutex> lock(other.nodeHandleMutex);
-        std::lock_guard<std::mutex> lock2(nodeHandleMutex);
+        std::lock_guard<std::mutex> lock1(nodeHandleMutex, std::adopt_lock);
+        std::lock_guard<std::mutex> lock2(other.nodeHandleMutex, std::adopt_lock);
         name = other.name;
         ip = other.ip;
         stub = other.stub;
@@ -166,6 +97,27 @@ struct NodeHandle {
         next_free_port = other.next_free_port;
         containers = other.containers;
         latestNetworkEntries = other.latestNetworkEntries;
+    }
+
+    NodeHandle& operator=(const NodeHandle &other) {
+        if (this != &other) {
+            std::lock(nodeHandleMutex, other.nodeHandleMutex);
+            std::lock_guard<std::mutex> lock1(nodeHandleMutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(other.nodeHandleMutex, std::adopt_lock);
+            name = other.name;
+            ip = other.ip;
+            stub = other.stub;
+            cq = other.cq;
+            type = other.type;
+            num_processors = other.num_processors;
+            processors_utilization = other.processors_utilization;
+            mem_size = other.mem_size;
+            mem_utilization = other.mem_utilization;
+            next_free_port = other.next_free_port;
+            containers = other.containers;
+            latestNetworkEntries = other.latestNetworkEntries;
+        }
+        return *this;
     }
 };
 
@@ -384,11 +336,77 @@ struct PipelineModel {
     }
 };
 
-
-
-
-// Structure that whole information about the pipeline used for scheduling
 typedef std::vector<PipelineModel *> PipelineModelListType;
+
+struct TaskHandle {
+    std::string tk_name;
+    std::string tk_fullName;
+    PipelineType tk_type;
+    std::string tk_source;
+    int tk_slo;
+    ClockType tk_startTime;
+    int tk_lastLatency;
+    std::map<std::string, ContainerHandle*> tk_subTasks;
+    PipelineModelListType tk_pipelineModels;
+    mutable std::mutex tk_mutex;
+
+    TaskHandle() = default;
+
+    ~TaskHandle() {
+        // Ensure no other threads are using this object
+        std::lock_guard<std::mutex> lock(tk_mutex);
+        for (auto& model : tk_pipelineModels) {
+            delete model;
+        }
+    }
+
+    TaskHandle(const std::string& tk_name,
+               const std::string& tk_fullName,
+               PipelineType tk_type,
+               const std::string& tk_source,
+               int tk_slo,
+               ClockType tk_startTime,
+               int tk_lastLatency)
+    : tk_name(tk_name),
+      tk_type(tk_type),
+      tk_source(tk_source),
+      tk_slo(tk_slo),
+      tk_startTime(tk_startTime),
+      tk_lastLatency(tk_lastLatency) {}
+
+    TaskHandle(const TaskHandle& other) {
+        std::lock(tk_mutex, other.tk_mutex);
+        std::lock_guard<std::mutex> lock(other.tk_mutex);
+        std::lock_guard<std::mutex> lock2(tk_mutex);
+        tk_name = other.tk_name;
+        tk_fullName = other.tk_fullName;
+        tk_type = other.tk_type;
+        tk_source = other.tk_source;
+        tk_slo = other.tk_slo;
+        tk_startTime = other.tk_startTime;
+        tk_lastLatency = other.tk_lastLatency;
+        tk_subTasks = other.tk_subTasks;
+        tk_pipelineModels = other.tk_pipelineModels;
+    }
+
+    TaskHandle& operator=(const TaskHandle& other) {
+        if (this != &other) {
+            std::lock(tk_mutex, other.tk_mutex);
+            std::lock_guard<std::mutex> lock1(tk_mutex);
+            std::lock_guard<std::mutex> lock2(other.tk_mutex);
+            tk_name = other.tk_name;
+            tk_fullName = other.tk_fullName;
+            tk_type = other.tk_type;
+            tk_source = other.tk_source;
+            tk_slo = other.tk_slo;
+            tk_startTime = other.tk_startTime;
+            tk_lastLatency = other.tk_lastLatency;
+            tk_subTasks = other.tk_subTasks;
+            tk_pipelineModels = other.tk_pipelineModels;
+        }
+        return *this;
+    }
+};
 
 
 
@@ -579,6 +597,42 @@ private:
     };
 
     struct Devices {
+    public:
+        void addDevice(const std::string &name, const NodeHandle &node) {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            list[name] = node;
+        }
+
+        void removeDevice(const std::string &name) {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            list.erase(name);
+        }
+
+        NodeHandle *getDevice(const std::string &name) {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            return &list[name];
+        }
+
+        std::vector<NodeHandle *> getList() {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            std::vector<NodeHandle *> devices;
+            for (auto &d: list) {
+                devices.push_back(&d.second);
+            }
+            return devices;
+        }
+
+        std::map<std::string, NodeHandle> *getMap() {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            return &list;
+        }
+
+        bool hasDevice(const std::string &name) {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            return list.find(name) != list.end();
+        }
+    // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
+    public:
         std::map<std::string, NodeHandle> list = {};
         std::mutex devicesMutex;
     };
@@ -586,12 +640,85 @@ private:
     Devices devices;
 
     struct Tasks {
+    public:
+        void addTask(const std::string &name, const TaskHandle &task) {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            list[name] = task;
+        }
+
+        void removeTask(const std::string &name) {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            list.erase(name);
+        }
+
+        TaskHandle *getTask(const std::string &name) {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            return &list[name];
+        }
+
+        std::vector<TaskHandle *> getList() {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            std::vector<TaskHandle *> tasks;
+            for (auto &t: list) {
+                tasks.push_back(&t.second);
+            }
+            return tasks;
+        }
+
+        std::map<std::string, TaskHandle> *getMap() {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            return &list;
+        }
+
+        bool hasTask(const std::string &name) {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            return list.find(name) != list.end();
+        }
+
+    // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
+    public:
         std::map<std::string, TaskHandle> list = {};
         std::mutex tasksMutex;
     };
     Tasks ctrl_unscheduledPipelines, ctrl_scheduledPipelines;
 
     struct Containers {
+    public:
+        void addContainer(const std::string &name, const ContainerHandle &container) {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            list[name] = container;
+        }
+
+        void removeContainer(const std::string &name) {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            list.erase(name);
+        }
+
+        ContainerHandle *getContainer(const std::string &name) {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            return &list[name];
+        }
+
+        std::vector<ContainerHandle *> getList() {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            std::vector<ContainerHandle *> containers;
+            for (auto &c: list) {
+                containers.push_back(&c.second);
+            }
+            return containers;
+        }
+
+        std::map<std::string, ContainerHandle> *getMap() {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            return &list;
+        }
+
+        bool hasContainer(const std::string &name) {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            return list.find(name) != list.end();
+        }
+    //TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
+    public:
         std::map<std::string, ContainerHandle> list = {};
         std::mutex containersMutex;
     };
