@@ -277,6 +277,8 @@ struct PipelineModel {
 
     std::string deviceTypeName;
 
+    std::vector<std::string> possibleDevices;
+
     mutable std::mutex pipelineModelMutex;
 
         // Constructor with default parameters
@@ -293,7 +295,8 @@ struct PipelineModel {
                   uint64_t expectedQueueingLatency = 0,
                   uint64_t expectedAvgPerQueryLatency = 0,
                   uint64_t expectedMaxProcessLatency = 0,
-                  const std::string& deviceTypeName = "")
+                  const std::string& deviceTypeName = "",
+                  const std::vector<std::string>& possibleDevices = {})
         : device(device),
           name(name),
           isSplitPoint(isSplitPoint),
@@ -307,7 +310,8 @@ struct PipelineModel {
           expectedQueueingLatency(expectedQueueingLatency),
           expectedAvgPerQueryLatency(expectedAvgPerQueryLatency),
           expectedMaxProcessLatency(expectedMaxProcessLatency),
-          deviceTypeName(deviceTypeName) {}
+          deviceTypeName(deviceTypeName),
+          possibleDevices(possibleDevices) {}
 
     // Assignment operator
     PipelineModel& operator=(const PipelineModel& other) {
@@ -331,6 +335,7 @@ struct PipelineModel {
             estimatedPerQueryCost = other.estimatedPerQueryCost;
             estimatedStart2HereCost = other.estimatedStart2HereCost;
             deviceTypeName = other.deviceTypeName;
+            possibleDevices = other.possibleDevices;
         }
         return *this;
     }

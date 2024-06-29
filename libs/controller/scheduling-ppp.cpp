@@ -94,6 +94,8 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
     switch (type) {
         case PipelineType::Traffic: {
             PipelineModel *datasource = new PipelineModel{startDevice, "datasource", true, {}, {}};
+            datasource->possibleDevices = {startDevice};
+
             PipelineModel *yolov5n = new PipelineModel{
                 "server",
                 "yolov5n",
@@ -103,6 +105,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{datasource, -1}}
             };
+            yolov5n->possibleDevices = {startDevice, "server"};
             datasource->downstreams.push_back({yolov5n, -1});
 
             PipelineModel *retina1face = new PipelineModel{
@@ -114,6 +117,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{yolov5n, 0}}
             };
+            retina1face->possibleDevices = {startDevice, "server"};
             yolov5n->downstreams.push_back({retina1face, 0});
 
             PipelineModel *carbrand = new PipelineModel{
@@ -147,6 +151,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{retina1face, -1}, {carbrand, -1}, {platedet, -1}}
             };
+            sink->possibleDevices = {"server"};
             retina1face->downstreams.push_back({sink, -1});
             carbrand->downstreams.push_back({sink, -1});
             platedet->downstreams.push_back({sink, -1});
@@ -155,6 +160,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
         }
         case PipelineType::Building_Security: {
             PipelineModel *datasource = new PipelineModel{startDevice, "datasource", true, {}, {}};
+            datasource->possibleDevices = {startDevice};
             PipelineModel *yolov5n = new PipelineModel{
                 "server",
                 "yolov5n",
@@ -164,6 +170,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{datasource, -1}}
             };
+            yolov5n->possibleDevices = {startDevice, "server"};
             datasource->downstreams.push_back({yolov5n, -1});
 
             PipelineModel *retina1face = new PipelineModel{
@@ -175,6 +182,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{yolov5n, 0}}
             };
+            retina1face->possibleDevices = {startDevice, "server"};
             yolov5n->downstreams.push_back({retina1face, 0});
 
             PipelineModel *movenet = new PipelineModel{
@@ -186,6 +194,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{yolov5n, 0}}
             };
+            movenet->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({movenet, 0});
 
             PipelineModel *gender = new PipelineModel{
@@ -197,6 +206,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{retina1face, -1}}
             };
+            gender->possibleDevices = {"server"};
             retina1face->downstreams.push_back({gender, -1});
 
             PipelineModel *age = new PipelineModel{
@@ -208,6 +218,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{retina1face, -1}}
             };
+            age->possibleDevices = {"server"};
             retina1face->downstreams.push_back({age, -1});
 
             PipelineModel *sink = new PipelineModel{
@@ -219,6 +230,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{gender, -1}, {age, -1}, {movenet, -1}}
             };
+            sink->possibleDevices = {"server"};
             gender->downstreams.push_back({sink, -1});
             age->downstreams.push_back({sink, -1});
             movenet->downstreams.push_back({sink, -1});
@@ -227,6 +239,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
         }
         case PipelineType::Video_Call: {
             PipelineModel *datasource = new PipelineModel{startDevice, "datasource", true, {}, {}};
+            datasource->possibleDevices = {startDevice};
             PipelineModel *retina1face = new PipelineModel{
                 "server",
                 "retina1face",
@@ -236,6 +249,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{datasource, -1}}
             };
+            retina1face->possibleDevices = {startDevice, "server"};
             datasource->downstreams.push_back({retina1face, -1});
 
             PipelineModel *emotionnet = new PipelineModel{
@@ -247,6 +261,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{retina1face, -1}}
             };
+            emotionnet->possibleDevices = {"server"};
             retina1face->downstreams.push_back({emotionnet, -1});
 
             PipelineModel *age = new PipelineModel{
@@ -258,6 +273,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{retina1face, -1}}
             };
+            age->possibleDevices = {startDevice, "server"};
             retina1face->downstreams.push_back({age, -1});
 
             PipelineModel *gender = new PipelineModel{
@@ -269,6 +285,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{retina1face, -1}}
             };
+            gender->possibleDevices = {startDevice, "server"};
             retina1face->downstreams.push_back({gender, -1});
 
             PipelineModel *arcface = new PipelineModel{
@@ -280,6 +297,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{retina1face, -1}}
             };
+            arcface->possibleDevices = {"server"};
             retina1face->downstreams.push_back({arcface, -1});
 
             PipelineModel *sink = new PipelineModel{
@@ -291,6 +309,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 {},
                 {{emotionnet, -1}, {age, -1}, {gender, -1}, {arcface, -1}}
             };
+            sink->possibleDevices = {"server"};
             emotionnet->downstreams.push_back({sink, -1});
             age->downstreams.push_back({sink, -1});
             gender->downstreams.push_back({sink, -1});
