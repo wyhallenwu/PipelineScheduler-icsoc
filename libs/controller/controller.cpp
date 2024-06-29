@@ -445,43 +445,43 @@ void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType
 //     estimated_infer_times[candidate] -= max_saving;
 // }
 
-double Controller::LoadTimeEstimator(const char *model_path, double input_mem_size) {
-    // Load the pre-trained model
-    BoosterHandle booster;
-    int num_iterations = 1;
-    int ret = LGBM_BoosterCreateFromModelfile(model_path, &num_iterations, &booster);
+// double Controller::LoadTimeEstimator(const char *model_path, double input_mem_size) {
+//     // Load the pre-trained model
+//     BoosterHandle booster;
+//     int num_iterations = 1;
+//     int ret = LGBM_BoosterCreateFromModelfile(model_path, &num_iterations, &booster);
 
-    // Prepare the input data
-    std::vector<double> input_data = {input_mem_size};
+//     // Prepare the input data
+//     std::vector<double> input_data = {input_mem_size};
 
-    // Perform inference
-    int64_t out_len;
-    std::vector<double> out_result(1);
-    ret = LGBM_BoosterPredictForMat(booster,
-                                    input_data.data(),
-                                    C_API_DTYPE_FLOAT64,
-                                    1,  // Number of rows
-                                    1,  // Number of columns
-                                    1,  // Is row major
-                                    C_API_PREDICT_NORMAL,  // Predict type
-                                    0,  // Start iteration
-                                    -1,  // Number of iterations, -1 means use all
-                                    "",  // Parameter
-                                    &out_len,
-                                    out_result.data());
-    if (ret != 0) {
-        std::cout << "Failed to perform inference!" << std::endl;
-        exit(ret);
-    }
+//     // Perform inference
+//     int64_t out_len;
+//     std::vector<double> out_result(1);
+//     ret = LGBM_BoosterPredictForMat(booster,
+//                                     input_data.data(),
+//                                     C_API_DTYPE_FLOAT64,
+//                                     1,  // Number of rows
+//                                     1,  // Number of columns
+//                                     1,  // Is row major
+//                                     C_API_PREDICT_NORMAL,  // Predict type
+//                                     0,  // Start iteration
+//                                     -1,  // Number of iterations, -1 means use all
+//                                     "",  // Parameter
+//                                     &out_len,
+//                                     out_result.data());
+//     if (ret != 0) {
+//         std::cout << "Failed to perform inference!" << std::endl;
+//         exit(ret);
+//     }
 
-    // Print the predicted value
-    std::cout << "Predicted value: " << out_result[0] << std::endl;
+//     // Print the predicted value
+//     std::cout << "Predicted value: " << out_result[0] << std::endl;
 
-    // Free the booster handle
-    LGBM_BoosterFree(booster);
+//     // Free the booster handle
+//     LGBM_BoosterFree(booster);
 
-    return out_result[0];
-}
+//     return out_result[0];
+// }
 
 
 /**

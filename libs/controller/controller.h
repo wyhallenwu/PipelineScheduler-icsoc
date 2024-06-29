@@ -6,7 +6,6 @@
 #include "../json/json.h"
 #include <thread>
 #include "controlcommunication.grpc.pb.h"
-#include <LightGBM/c_api.h>
 #include <pqxx/pqxx>
 #include "absl/strings/str_format.h"
 #include "absl/flags/parse.h"
@@ -274,7 +273,7 @@ private:
 
     void readConfigFile(const std::string &config_path);
 
-    double LoadTimeEstimator(const char *model_path, double input_mem_size);
+    // double LoadTimeEstimator(const char *model_path, double input_mem_size);
     int InferTimeEstimator(ModelType model, int batch_size);
     // std::map<ModelType, std::vector<int>> InitialRequestCount(const std::string &input, const Pipeline &models,
     //                                                           int fps = 30);
