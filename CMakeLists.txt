@@ -58,7 +58,7 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 endif ()
 
 if (ON_HOST STREQUAL "ON")
-    message(STATUS "Building for host")
+    message(STATUS "Building for host======================================")
 
     # Use the correct version of CUDA
     set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
@@ -115,32 +115,6 @@ if (ON_HOST STREQUAL "ON")
     add_subdirectory(libs/communicator)
     add_subdirectory(libs/container_agent)
     add_subdirectory(libs/device_agent)
-
-    add_library(PipePlusPlusSink
-        src/main.cpp)
-
-    target_include_directories(PipePlusPlusSink PUBLIC
-        ${OpenCV_INCLUDE_DIRS}
-        ${CUDA_INCLUDE_DIRS}
-        ${TensorRT_INCLUDE_DIRS}
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
-    target_link_libraries(PipePlusPlusSink PUBLIC
-        data_grpc_proto
-        ${OpenCV_LIBS}
-        ${CUDA_LIBRARIES}
-        ${CMAKE_THREAD_LIBS_INIT}
-        ${TensorRT_LIBRARIES}
-        ${_GRPC_GRPCPP}
-        ${_REFLECTION}
-        ${_PROTOBUF_LIBPROTOBUF}
-        misc
-        microservice
-        communicator
-        trtengine
-        baseprocessors
-    )
-    add_executable(runSink src/main.cpp)
-    target_link_libraries(runSink PipePlusPlusSink)
 
     add_executable(Communicator libs/communicator/main.cpp)
     target_link_libraries(Communicator communicator)
