@@ -186,6 +186,8 @@ void Controller::Scheduling()
             // clear the upstream of that model
             m.model->upstreams.clear();
 
+            // TODO: leave another function to translate the changing of upstream, downstream to ContainerHandle
+
             // adjust downstream, upstream and resolution
             // CHECKME: vaildate the class of interest here, default to 1 for simplicity
             for (auto &client : selected_clients)
@@ -1304,6 +1306,8 @@ ModelInfoJF::ModelInfoJF(int bs, float il, int w, int h, std::string n, float ac
     inference_latency = il;
 
     // throughput is req/s
+    // CHECKME: validate the unit of the time stamp and the gcd of all throughputs,
+    // now the time stamp is us, and the gcd of all throughputs is 10, maybe need change to ease the dp table
     throughput = (int(bs / (il * 1e-6)) / 10) * 10; // round it to be devidisble by 10 for better dp computing
     width = w;
     height = h;
@@ -1325,16 +1329,6 @@ ClientInfoJF::ClientInfoJF(std::string _ip, float _budget, int _req_rate,
     transmission_latency = -1;
     network_pairs = _network_pairs;
 }
-
-// /**
-//  * @brief change the bandwidth in runtime
-//  *
-//  * @param bw
-//  */
-// void ClientInfoJF::set_bandwidth(float bw)
-// {
-//     this->bandwidth = bw;
-// }
 
 void ClientInfoJF::set_transmission_latency(int lat)
 {
@@ -1699,7 +1693,7 @@ std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models,
     int max_index = 0;
     for (const auto &model : models)
     {
-        // the inference time should be limited by (budget - transmission time)
+        // CHECKME: the inference time should be limited by (budget - transmission time)
         if (model.inference_latency * 2.0 < client.budget - client.transmission_latency &&
             model.batch_size > max_batch_size && model.batch_size <= max_available_batch_size)
         {
