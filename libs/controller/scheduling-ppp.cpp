@@ -1,6 +1,6 @@
 #include "scheduling-ppp.h"
 
-void Controller::AddTask(const TaskDescription::TaskStruct &t) {
+bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     tasks.insert({t.name, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
     TaskHandle *task = &tasks[t.name];
@@ -78,6 +78,7 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
         // std::cout << "sdfsdfasdf" << std::endl;
     }
     std::cout << "Task added: " << t.name << std::endl;
+    return true;
 }
 
 PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice) {

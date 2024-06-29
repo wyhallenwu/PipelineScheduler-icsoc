@@ -198,6 +198,7 @@ namespace TaskDescription {
         PipelineType type;
         std::string source;
         std::string device;
+        bool added = false;
     };
 
     void from_json(const nlohmann::json &j, TaskStruct &val);
@@ -215,9 +216,42 @@ public:
 
     void Scheduling();
 
-    void Init() { for (auto &t: initialTasks) AddTask(t); }
+    void Init() { 
+        bool allAdded = true;
+        for (auto &t: initialTasks) {
+            if (!t.added) {
+                t.added = AddTask(t);
+            }
+            if (!t.added) {
+                allAdded = false;
+            }
+            remainTasks.push_back(t);
+        }
+    }
 
-    void AddTask(const TaskDescription::TaskStruct &task);
+    void InitRemain() {
+        bool allAdded = true;
+        for (auto &t: remainTasks) {
+            if (!t.added) {
+                t.added = AddTask(t);
+            }
+            if (!t.added) {
+                allAdded = false;
+                continue;
+            }
+            // Remove the task from the remain list
+            remainTasks.erase(std::remove_if(remainTasks.begin(), remainTasks.end(),
+                                             [&t](const TaskDescription::TaskStruct &task) {
+                                                 return task.name == t.name;
+                                             }), remainTasks.end());
+        }
+    }
+
+    void addRemainTask(const TaskDescription::TaskStruct &task) {
+        remainTasks.push_back(task);
+    }
+
+    bool AddTask(const TaskDescription::TaskStruct &task);
 
     [[nodiscard]] bool isRunning() const { return running; };
 
@@ -355,6 +389,7 @@ private:
     std::string ctrl_experimentName;
     std::string ctrl_systemName;
     std::vector<TaskDescription::TaskStruct> initialTasks;
+    std::vector<TaskDescription::TaskStruct> remainTasks;
     uint16_t ctrl_runtime;
     uint16_t ctrl_port_offset;
 
