@@ -186,19 +186,28 @@ void Controller::Scheduling()
             // clear the upstream of that model
             m.model->upstreams.clear();
 
-            // adjust downstream and upstream
+            // adjust downstream, upstream and resolution
             // CHECKME: vaildate the class of interest here, default to 1 for simplicity
             for (auto &client : selected_clients)
             {
                 m.model->upstreams.push_back(std::make_pair(client.model, 1));
                 client.model->downstreams.clear();
                 client.model->downstreams.push_back(std::make_pair(m.model, 1));
-            }
 
-            // adjust the resolution of the client
-            int width = m.width;
-            int height = m.height;
-            // TODO: call adjust resolution
+                // retrieve new resolution
+                int width = m.width;
+                int height = m.height;
+
+                for (auto it = this->containers.begin(); it != this->containers.end(); ++it)
+                {
+                    if (it->first == client.ip)
+                    {
+                        // CHECKME: excute resolution adjustment
+                        std::vector<int> rs = {width, height, 3};
+                        AdjustResolution(&(it->second), rs, 1);
+                    }
+                }
+            }
         }
     }
 }
@@ -478,7 +487,7 @@ void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica)
     finishGrpc(rpc, reply, status, msvc->device_agent->cq);
 }
 
-void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution, int replica = 1)
+void Controller::AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution, int replica)
 {
     msvc->dimensions = new_resolution;
     ContainerInts request;
@@ -1398,7 +1407,6 @@ void ClientProfilesJF::sortBudgetDescending(std::vector<ClientInfoJF> &clients)
     std::sort(clients.begin(), clients.end(),
               [](const ClientInfoJF &a, const ClientInfoJF &b)
               {
-                  // FIXME: reduce networking latency here
                   return a.budget - a.transmission_latency > b.budget - b.transmission_latency;
               });
 }
@@ -1432,7 +1440,7 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
     std::cout << "available sorted clients: " << std::endl;
     for (auto &client : clients)
     {
-        std::cout << client.ip << " " << client.budget << " " << client.req_rate
+        std::cout << client.ip << " " << client.budget - client.transmission_latency << " " << client.req_rate
                   << std::endl;
     }
     std::cout << "available models: " << std::endl;
@@ -1691,7 +1699,8 @@ std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models,
     int max_index = 0;
     for (const auto &model : models)
     {
-        if (model.inference_latency * 2.0 < client.budget &&
+        // the inference time should be limited by (budget - transmission time)
+        if (model.inference_latency * 2.0 < client.budget - client.transmission_latency &&
             model.batch_size > max_batch_size && model.batch_size <= max_available_batch_size)
         {
             max_batch_size = model.batch_size;
