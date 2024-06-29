@@ -79,9 +79,6 @@ Controller::Controller(int argc, char **argv) {
     networkCheckThread.detach();
 
     running = true;
-    devices = std::map<std::string, NodeHandle>();
-    tasks = std::map<std::string, TaskHandle>();
-    containers = std::map<std::string, ContainerHandle>();
 
     std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", CONTROLLER_BASE_PORT + ctrl_port_offset);
     ServerBuilder builder;
@@ -92,10 +89,13 @@ Controller::Controller(int argc, char **argv) {
 }
 
 Controller::~Controller() {
-    for (auto &msvc: containers) {
+    std::unique_lock<std::mutex> lock(containers.containersMutex);
+    for (auto &msvc: containers.list) {
         StopContainer(msvc.first, msvc.second.device_agent, true);
     }
-    for (auto &device: devices) {
+
+    std::unique_lock<std::mutex> lock2(devices.devicesMutex);
+    for (auto &device: devices.list) {
         device.second.cq->Shutdown();
         void *got_tag;
         bool ok = false;
@@ -169,13 +169,13 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
                                      std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset, {}};
-        controller->devices.insert({deviceName, node});
+        controller->devices.list.insert({deviceName, node});
         reply.set_name(controller->ctrl_systemName);
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
-        controller->queryInDeviceNetworkEntries(&(controller->devices[deviceName]));
+        controller->queryInDeviceNetworkEntries(&(controller->devices.list[deviceName]));
     } else {
         GPR_ASSERT(status == FINISH);
         delete this;
@@ -208,7 +208,7 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
     ClientContext context;
     EmptyMessage reply;
     Status status;
-    request.set_pipeline_name(container.second->task->name);
+    request.set_pipeline_name(container.second->task->tk_name);
     request.set_model(container.second->model);
     request.set_model_file(container.second->model_file[replica -1]);
     request.set_batch_size(container.second->batch_size[replica -1]);
@@ -278,7 +278,7 @@ void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_dev
             }
         }
     } else {
-        device = &devices["server"];
+        device = &devices.list["server"];
         if (msvc->mergable) {
             start_dsrc = true;
             if (msvc->model == Yolov5nDsrc) {
@@ -293,11 +293,11 @@ void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_dev
     device->containers.insert({msvc->name, msvc});
     msvc->cuda_device[replica - 1] = cuda_device;
     std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
-    StartContainer(pair, msvc->task->slo, msvc->task->source, replica, !(start_dsrc || merge_dsrc));
+    StartContainer(pair, msvc->task->tk_slo, msvc->task->tk_source, replica, !(start_dsrc || merge_dsrc));
     for (auto upstr: msvc->upstreams) {
         if (start_dsrc) {
             std::pair<std::string, ContainerHandle *> dsrc_pair = {upstr->name, upstr};
-            StartContainer(dsrc_pair, upstr->task->slo, msvc->task->source, replica, false);
+            StartContainer(dsrc_pair, upstr->task->tk_slo, msvc->task->tk_source, replica, false);
             SyncDatasource(msvc, upstr);
         } else if (merge_dsrc) {
             SyncDatasource(upstr, msvc);
@@ -373,7 +373,7 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     request.set_name(name);
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            device->stub->AsyncStopContainer(&context, request, containers[name].device_agent->cq));
+            device->stub->AsyncStopContainer(&context, request, containers.list[name].device_agent->cq));
     finishGrpc(rpc, reply, status, device->cq);
 }
 
@@ -569,7 +569,7 @@ void Controller::checkNetworkConditions() {
         stopwatch.start();
         std::map<std::string, NetworkEntryType> networkEntries = {};
 
-        for (auto &[deviceName, nodeHandle] : devices) {
+        for (auto &[deviceName, nodeHandle] : devices.list) {
             if (deviceName == "server") {
                 continue;
             }
@@ -593,15 +593,15 @@ void Controller::checkNetworkConditions() {
         // Updating NodeHandle object with the latest network entries
         for (auto &[deviceName, entries] : networkEntries) {
             // If entry belongs to a device that is not in the list of devices, ignore it
-            if (devices.find(deviceName) == devices.end() || deviceName != "server") {
+            if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
                 continue;
             }
-            std::unique_lock<std::mutex> lock(devices[deviceName].nodeHandleMutex);
-            devices[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
+            std::unique_lock<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
+            devices.list[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
         }
 
         // If no network entries exist for a device, send a request to the device to perform network testing
-        for (auto &[deviceName, nodeHandle] : devices) {
+        for (auto &[deviceName, nodeHandle] : devices.list) {
             if (nodeHandle.latestNetworkEntries.size() == 0) {
                 // TODO: Send a request to the device to perform network testing
 
