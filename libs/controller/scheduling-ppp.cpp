@@ -2,8 +2,8 @@
 
 bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
-    tasks.insert({t.name, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
-    TaskHandle *task = &tasks[t.name];
+    tasks.insert({t.fullName, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
+    TaskHandle *task = &tasks[t.fullName];
     NodeHandle *device = &devices[t.device];
     Pipeline pipe = {getModelsByPipelineType(t.type, t.device)};
     ctrl_unscheduledPipelines.emplace_back(pipe);

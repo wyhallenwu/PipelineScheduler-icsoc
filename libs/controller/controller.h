@@ -193,7 +193,10 @@ typedef std::vector<PipelineModel *> PipelineModelListType;
 
 namespace TaskDescription {
     struct TaskStruct {
+        // Name of the task (e.g., traffic, video_call, people, etc.)
         std::string name;
+        // Full name to identify the task in the task list (which is a map)
+        std::string fullName;
         int slo;
         PipelineType type;
         std::string source;
