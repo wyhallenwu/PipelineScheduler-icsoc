@@ -46,6 +46,7 @@ struct TaskHandle {
     PipelineType type;
     std::string source;
     int slo;
+    int fps;
     ClockType start_time;
     int last_latency;
     std::map<std::string, ContainerHandle *> subtasks;
@@ -215,11 +216,6 @@ public:
 
     void HandleRecvRpcs();
 
-    // Helper functions for the RIM algorithm
-    bool placeMDAGOnSingleWorker(const TaskHandle& task);
-    void placeModulesOnWorkers(const TaskHandle& task);
-    void performPlacement(const TaskHandle& task);
-
     void Scheduling();
 
     void Init() { for (auto &t: initialTasks) AddTask(t); }
@@ -260,6 +256,27 @@ private:
     };
 
     std::vector<Pipeline> ctrl_unscheduledPipelines, ctrl_scheduledPipelines;
+
+    // Helper functions for the RIM algorithm
+    void performPlacement(TaskHandle& task);
+    std::tuple<bool, double, NodeHandle*, int> findBestFitForPipeline(const Pipeline& pipeline, const TaskHandle& task);
+    std::tuple<bool, double, NodeHandle*, int> findBestFitOnEdge(const Pipeline& pipeline, const TaskHandle& task);
+    std::tuple<bool, double, NodeHandle*, int> findBestFitOnServer(const Pipeline& pipeline, const TaskHandle& task);
+    std::tuple<bool, double, NodeHandle*, int> canFitPipeline(const Pipeline& pipeline, NodeHandle& node, const TaskHandle& task);
+    void placeModulesOnWorkers(Pipeline& pipeline, const TaskHandle& task);
+    std::tuple<bool, double, NodeHandle*, int> findBestFitForModule(const PipelineModel& model, const TaskHandle& task);
+    std::tuple<bool, double, NodeHandle*, int> findBestFitModuleOnEdge(const PipelineModel& model, const TaskHandle& task);
+    std::tuple<bool, double, NodeHandle*, int> findBestFitModuleOnServer(const PipelineModel& model, const TaskHandle& task);
+    std::tuple<bool, double, int> canFitModule(const PipelineModel& model, NodeHandle& node, const TaskHandle& task);
+    void placeMDAGOnNode(Pipeline& pipeline, NodeHandle& node, int processor, const TaskHandle& task);
+    void placeModelOnNode(PipelineModel* model, NodeHandle* node, int processor);
+    void updateContainerHandles(TaskHandle& task, const Pipeline& pipeline);
+    void copyContainerDataToModel(const ContainerHandle* container, PipelineModel* model);
+    int findProcessorForModel(const PipelineModel* model, const NodeHandle* node);
+    void estimateModelLatency(const PipelineModel* currModel, const std::string& deviceName);
+
+
+
 
     NetworkEntryType initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
     uint8_t incNumReplicas(const PipelineModel *model);

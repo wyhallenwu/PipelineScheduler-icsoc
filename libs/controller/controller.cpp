@@ -121,6 +121,9 @@ void Controller::HandleRecvRpcs() {
 void Controller::Scheduling() {
     // TODO: please out your scheduling loop inside of here
     while (running) {
+        for (auto& task_pair : tasks) {
+            performPlacement(task_pair.second);
+        }
         // use list of devices, tasks and containers to schedule depending on your algorithm
         // put helper functions as a private member function of the controller and write them at the bottom of this file.
         std::this_thread::sleep_for(std::chrono::milliseconds(
@@ -611,3 +614,4 @@ void Controller::checkNetworkConditions() {
         std::this_thread::sleep_for(TimePrecisionType(60 * 1000000 - stopwatch.elapsed_microseconds()));
     }
 }
+
