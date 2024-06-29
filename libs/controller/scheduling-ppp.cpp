@@ -4,20 +4,15 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     TaskHandle *task = new TaskHandle{t.name, t.fullName, t.type, t.source, t.slo, {}, 0};
 
-    std::unique_lock lock(devices.devicesMutex);
-    if (devices.list.find(t.device) == devices.list.end()) {
+    std::map<std::string, NodeHandle> *deviceList = devices.getMap();
+
+    if (devices.list.find(t.device) == deviceList->end()) {
         spdlog::error("Device {0:s} is not connected", t.device);
         return false;
     }
-
-    task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device);
-    std::unique_lock lock(ctrl_unscheduledPipelines.tasksMutex);
-
-    ctrl_unscheduledPipelines.list.insert({task->tk_name, *task});
-    lock.unlock();
     
 
-    std::vector<std::pair<std::string, std::string>> possibleDevicePairList = {{"server", "server"}};
+    std::vector<std::pair<std::string, std::string>> possibleDevicePairList;
     std::map<std::pair<std::string, std::string>, NetworkEntryType> possibleNetworkEntryPairs;
 
     for (const auto &pair : possibleDevicePairList) {
@@ -28,50 +23,61 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 
     std::vector<std::string> possibleDeviceList = {"server"};
 
-    // for (auto& model: ctrl_unscheduledPipelines.tk_pipelineModels) {
-    //     std::string containerName = model->name + "-" + possibleDevicePairList[0].second;
-    //     if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos) {
-    //         continue;
-    //     }
-    //     model->arrivalProfiles.arrivalRates = queryArrivalRate(
-    //         *ctrl_metricsServerConn,
-    //         ctrl_experimentName,
-    //         ctrl_systemName,
-    //         t.name,
-    //         t.source,
-    //         ctrl_containerLib[containerName].taskName,
-    //         ctrl_containerLib[containerName].modelName
-    //     );
-    //     for (const auto &pair : possibleDevicePairList) {
-    //         NetworkProfile test = queryNetworkProfile(
-    //             *ctrl_metricsServerConn,
-    //             ctrl_experimentName,
-    //             ctrl_systemName,
-    //             t.name,
-    //             t.source,
-    //             ctrl_containerLib[containerName].taskName,
-    //             ctrl_containerLib[containerName].modelName,
-    //             pair.first,
-    //             pair.second,
-    //             possibleNetworkEntryPairs[pair]
-    //         );   
-    //         model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
-    //     }
+    for (auto& model: task->tk_pipelineModels) {
+        std::string containerName = model->name + "-" + possibleDevicePairList[0].second;
+        if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos) {
+            continue;
+        }
+        model->arrivalProfiles.arrivalRates = queryArrivalRate(
+            *ctrl_metricsServerConn,
+            ctrl_experimentName,
+            ctrl_systemName,
+            t.name,
+            t.source,
+            ctrl_containerLib[containerName].taskName,
+            ctrl_containerLib[containerName].modelName
+        );
+        std::vector<std::string> upstreamPossibleDeviceList = model->upstreams.front().first->possibleDevices;
+        std::vector<std::string> thisPossibleDeviceList = model->possibleDevices;
+        for (const auto &deviceName : upstreamPossibleDeviceList) {
+            for (const auto &deviceName2 : thisPossibleDeviceList) {
+                if (deviceName == "server" && deviceName2 != deviceName) {
+                    continue;
+                }
+                possibleDevicePairList.push_back({deviceName, deviceName2});
+            }
+        }
 
-    //     for (const auto deviceName : possibleDeviceList) {
-    //         std::string deviceTypeName = getDeviceTypeName(devices[deviceName].type);
-    //         ModelProfile profile = queryModelProfile(
-    //             *ctrl_metricsServerConn,
-    //             ctrl_experimentName,
-    //             ctrl_systemName,
-    //             t.name,
-    //             t.source,
-    //             deviceName,
-    //             deviceTypeName,
-    //             ctrl_containerLib[containerName].modelName
-    //         );
-    //         model->processProfiles[deviceTypeName] = profile;
-    //     }
+        for (const auto &pair : possibleDevicePairList) {
+            NetworkProfile test = queryNetworkProfile(
+                *ctrl_metricsServerConn,
+                ctrl_experimentName,
+                ctrl_systemName,
+                t.name,
+                t.source,
+                ctrl_containerLib[containerName].taskName,
+                ctrl_containerLib[containerName].modelName,
+                pair.first,
+                pair.second,
+                possibleNetworkEntryPairs[pair]
+            );   
+            model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
+        }
+
+        for (const auto deviceName : possibleDeviceList) {
+            std::string deviceTypeName = getDeviceTypeName(deviceList->at(deviceName).type);
+            ModelProfile profile = queryModelProfile(
+                *ctrl_metricsServerConn,
+                ctrl_experimentName,
+                ctrl_systemName,
+                t.name,
+                t.source,
+                deviceName,
+                deviceTypeName,
+                ctrl_containerLib[containerName].modelName
+            );
+            model->processProfiles[deviceTypeName] = profile;
+        }
         
         // ModelArrivalProfile profile = queryModelArrivalProfile(
         //     *ctrl_metricsServerConn,
@@ -85,7 +91,10 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
         //     possibleNetworkEntryPairs
         // );
         // std::cout << "sdfsdfasdf" << std::endl;
-    // }
+    }
+    std::lock_guard lock2(ctrl_unscheduledPipelines.tasksMutex);
+    ctrl_unscheduledPipelines.list.insert({task->tk_name, *task});
+
     std::cout << "Task added: " << t.name << std::endl;
     return true;
 }
