@@ -1,68 +1,77 @@
 #include "scheduling-ppp.h"
 
-void Controller::AddTask(const TaskDescription::TaskStruct &t) {
+bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
-    tasks.insert({t.name, {t.name, t.type, t.source, t.slo, {}, 0, {}}});
-    TaskHandle *task = &tasks[t.name];
-    NodeHandle *device = &devices[t.device];
-    Pipeline pipe = {getModelsByPipelineType(t.type, t.device)};
-    ctrl_unscheduledPipelines.emplace_back(pipe);
+    TaskHandle *task = new TaskHandle{t.name, t.fullName, t.type, t.source, t.slo, {}, 0};
+
+    std::unique_lock lock(devices.devicesMutex);
+    if (devices.list.find(t.device) == devices.list.end()) {
+        spdlog::error("Device {0:s} is not connected", t.device);
+        return false;
+    }
+
+    task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device);
+    std::unique_lock lock(ctrl_unscheduledPipelines.tasksMutex);
+
+    ctrl_unscheduledPipelines.list.insert({task->tk_name, *task});
+    lock.unlock();
+    
 
     std::vector<std::pair<std::string, std::string>> possibleDevicePairList = {{"server", "server"}};
     std::map<std::pair<std::string, std::string>, NetworkEntryType> possibleNetworkEntryPairs;
 
     for (const auto &pair : possibleDevicePairList) {
-        std::unique_lock lock(devices[pair.first].nodeHandleMutex);
-        possibleNetworkEntryPairs[pair] = devices[pair.first].latestNetworkEntries[pair.second];
+        std::unique_lock lock(devices.list[pair.first].nodeHandleMutex);
+        possibleNetworkEntryPairs[pair] = devices.list[pair.first].latestNetworkEntries[pair.second];
         lock.unlock();
     }
 
     std::vector<std::string> possibleDeviceList = {"server"};
 
-    for (auto& model: ctrl_unscheduledPipelines.back().pipelineModels) {
-        std::string containerName = model->name + "-" + possibleDevicePairList[0].second;
-        if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos) {
-            continue;
-        }
-        model->arrivalProfiles.arrivalRates = queryArrivalRate(
-            *ctrl_metricsServerConn,
-            ctrl_experimentName,
-            ctrl_systemName,
-            t.name,
-            t.source,
-            ctrl_containerLib[containerName].taskName,
-            ctrl_containerLib[containerName].modelName
-        );
-        for (const auto &pair : possibleDevicePairList) {
-            NetworkProfile test = queryNetworkProfile(
-                *ctrl_metricsServerConn,
-                ctrl_experimentName,
-                ctrl_systemName,
-                t.name,
-                t.source,
-                ctrl_containerLib[containerName].taskName,
-                ctrl_containerLib[containerName].modelName,
-                pair.first,
-                pair.second,
-                possibleNetworkEntryPairs[pair]
-            );   
-            model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
-        }
+    // for (auto& model: ctrl_unscheduledPipelines.tk_pipelineModels) {
+    //     std::string containerName = model->name + "-" + possibleDevicePairList[0].second;
+    //     if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos) {
+    //         continue;
+    //     }
+    //     model->arrivalProfiles.arrivalRates = queryArrivalRate(
+    //         *ctrl_metricsServerConn,
+    //         ctrl_experimentName,
+    //         ctrl_systemName,
+    //         t.name,
+    //         t.source,
+    //         ctrl_containerLib[containerName].taskName,
+    //         ctrl_containerLib[containerName].modelName
+    //     );
+    //     for (const auto &pair : possibleDevicePairList) {
+    //         NetworkProfile test = queryNetworkProfile(
+    //             *ctrl_metricsServerConn,
+    //             ctrl_experimentName,
+    //             ctrl_systemName,
+    //             t.name,
+    //             t.source,
+    //             ctrl_containerLib[containerName].taskName,
+    //             ctrl_containerLib[containerName].modelName,
+    //             pair.first,
+    //             pair.second,
+    //             possibleNetworkEntryPairs[pair]
+    //         );   
+    //         model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
+    //     }
 
-        for (const auto deviceName : possibleDeviceList) {
-            std::string deviceTypeName = getDeviceTypeName(devices[deviceName].type);
-            ModelProfile profile = queryModelProfile(
-                *ctrl_metricsServerConn,
-                ctrl_experimentName,
-                ctrl_systemName,
-                t.name,
-                t.source,
-                deviceName,
-                deviceTypeName,
-                ctrl_containerLib[containerName].modelName
-            );
-            model->processProfiles[deviceTypeName] = profile;
-        }
+    //     for (const auto deviceName : possibleDeviceList) {
+    //         std::string deviceTypeName = getDeviceTypeName(devices[deviceName].type);
+    //         ModelProfile profile = queryModelProfile(
+    //             *ctrl_metricsServerConn,
+    //             ctrl_experimentName,
+    //             ctrl_systemName,
+    //             t.name,
+    //             t.source,
+    //             deviceName,
+    //             deviceTypeName,
+    //             ctrl_containerLib[containerName].modelName
+    //         );
+    //         model->processProfiles[deviceTypeName] = profile;
+    //     }
         
         // ModelArrivalProfile profile = queryModelArrivalProfile(
         //     *ctrl_metricsServerConn,
@@ -76,8 +85,9 @@ void Controller::AddTask(const TaskDescription::TaskStruct &t) {
         //     possibleNetworkEntryPairs
         // );
         // std::cout << "sdfsdfasdf" << std::endl;
-    }
+    // }
     std::cout << "Task added: " << t.name << std::endl;
+    return true;
 }
 
 PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice) {
@@ -300,7 +310,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
  * @param models 
  * @param slo
  */
-void Controller::shiftModelToEdge(Controller::Pipeline &models, const ModelType &currModel, uint64_t slo) {
+void Controller::shiftModelToEdge(TaskHandle &models, const ModelType &currModel, uint64_t slo) {
 }
 
 /**
@@ -312,7 +322,7 @@ void Controller::shiftModelToEdge(Controller::Pipeline &models, const ModelType 
  * @return std::map<ModelType, int> 
  */
 void Controller::getInitialBatchSizes(
-        Controller::Pipeline &models, uint64_t slo,
+        TaskHandle &models, uint64_t slo,
         int nObjects) {
 
     // for (auto &m: models) {
