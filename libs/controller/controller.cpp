@@ -346,7 +346,12 @@ void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs) {
     finishGrpc(rpc, reply, status, msvc->device_agent->cq);
 }
 
-void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution) {
+void Controller::AdjustCudaDevice(ContainerHandle *msvc, unsigned int new_device) {
+    msvc->cuda_device = new_device;
+    // TODO: also adjust actual running container
+}
+
+void Controller::AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution) {
     msvc->dimensions = new_resolution;
     ContainerInts request;
     ClientContext context;

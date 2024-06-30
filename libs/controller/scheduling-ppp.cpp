@@ -169,13 +169,13 @@ void Controller::ApplyScheduling() {
                         candidates.erase(candidates.begin() + i);
                     }
                 }
-                // TODO: check right configurations of all containers
+                // ensure right configurations of all containers
+                int i = 0;
                 for (auto *candidate: candidates){
-                    // batch size
-                    // downstreams
-                    // upstreams
-                    // cudaDevices
-
+                    if (candidate->batch_size != model->batchSize)
+                        AdjustBatchSize(candidate, model->batchSize);
+                    if (candidate->cuda_device != model->cudaDevices[i++])
+                        AdjustCudaDevice(candidate, model->cudaDevices[i-1]);
                 }
             }
         }

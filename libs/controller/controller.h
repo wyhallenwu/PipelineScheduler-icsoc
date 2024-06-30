@@ -550,6 +550,8 @@ private:
 
     void AdjustBatchSize(ContainerHandle *msvc, int new_bs);
 
+    void AdjustCudaDevice(ContainerHandle *msvc, unsigned int new_device);
+
     void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution);
 
     void StopContainer(std::string name, NodeHandle *device, bool forced = false);
