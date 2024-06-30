@@ -91,7 +91,7 @@ Controller::Controller(int argc, char **argv) {
 Controller::~Controller() {
     std::unique_lock<std::mutex> lock(containers.containersMutex);
     for (auto &msvc: containers.list) {
-        StopContainer(msvc.first, msvc.second.device_agent, true);
+        StopContainer(msvc.first, msvc.second->device_agent, true);
     }
 
     std::unique_lock<std::mutex> lock2(devices.devicesMutex);
@@ -201,34 +201,32 @@ void Controller::DummyDataRequestHandler::Proceed() {
     }
 }
 
-void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &container, int slo, std::string source,
-                                int replica, bool easy_allocation) {
-    std::cout << "Starting container: " << container.first << std::endl;
+void Controller::StartContainer(ContainerHandle *container, bool easy_allocation) {
+    std::cout << "Starting container: " << container->name << std::endl;
     ContainerConfig request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
-    request.set_pipeline_name(container.second->task->tk_name);
-    request.set_model(container.second->model);
-    request.set_model_file(container.second->model_file[replica -1]);
-    request.set_batch_size(container.second->batch_size[replica -1]);
-    request.set_replica_id(replica);
+    request.set_pipeline_name(container->task->tk_name);
+    request.set_model(container->model);
+    request.set_model_file(container->model_file);
+    request.set_batch_size(container->batch_size);
     request.set_allocation_mode(easy_allocation);
-    request.set_device(container.second->cuda_device[replica - 1]);
-    request.set_slo(slo);
-    for (auto dim: container.second->dimensions) {
+    request.set_device(container->cuda_device);
+    request.set_slo(container->inference_deadline);
+    for (auto dim: container->dimensions) {
         request.add_input_dimensions(dim);
     }
-    for (auto dwnstr: container.second->downstreams) {
+    for (auto dwnstr: container->downstreams) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name(dwnstr->name);
-        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port[replica - 1]));
+        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
         if (dwnstr->model == Sink) {
             dwn->set_gpu_connection(false);
         } else {
-            dwn->set_gpu_connection((container.second->device_agent == dwnstr->device_agent) &&
-                                    (container.second->cuda_device == dwnstr->cuda_device));
+            dwn->set_gpu_connection((container->device_agent == dwnstr->device_agent) &&
+                                    (container->cuda_device == dwnstr->cuda_device));
         }
     }
     if (request.downstream_size() == 0) {
@@ -238,32 +236,32 @@ void Controller::StartContainer(std::pair<std::string, ContainerHandle *> &conta
         dwn->set_class_of_interest(-1);
         dwn->set_gpu_connection(false);
     }
-    if (container.second->model == DataSource || container.second->model == Yolov5nDsrc || container.second->model == RetinafaceDsrc) {
+    if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinafaceDsrc) {
         Neighbor *up = request.add_upstream();
         up->set_name("video_source");
-        up->set_ip(source);
+        up->set_ip(container->task->tk_source);
         up->set_class_of_interest(-1);
         up->set_gpu_connection(false);
     } else {
-        for (auto upstr: container.second->upstreams) {
+        for (auto upstr: container->upstreams) {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
-            up->set_ip(absl::StrFormat("0.0.0.0:%d", container.second->recv_port[replica -1]));
+            up->set_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
             up->set_class_of_interest(-2);
-            up->set_gpu_connection((container.second->device_agent == upstr->device_agent) &&
-                                   (container.second->cuda_device == upstr->cuda_device));
+            up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
+                                   (container->cuda_device == upstr->cuda_device));
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            container.second->device_agent->stub->AsyncStartContainer(&context, request,
-                                                                      container.second->device_agent->cq));
-    finishGrpc(rpc, reply, status, container.second->device_agent->cq);
+            container->device_agent->stub->AsyncStartContainer(&context, request,
+                                                                      container->device_agent->cq));
+    finishGrpc(rpc, reply, status, container->device_agent->cq);
     if (!status.ok()) {
         std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
     }
 }
 
-void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device, int replica) {
+void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device) {
     NodeHandle *old_device = msvc->device_agent;
     NodeHandle *device;
     bool start_dsrc = false, merge_dsrc = false;
@@ -289,21 +287,19 @@ void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_dev
         }
     }
     msvc->device_agent = device;
-    msvc->recv_port[replica - 1] = device->next_free_port++;
+    msvc->recv_port = device->next_free_port++;
     device->containers.insert({msvc->name, msvc});
-    msvc->cuda_device[replica - 1] = cuda_device;
-    std::pair<std::string, ContainerHandle *> pair = {msvc->name, msvc};
-    StartContainer(pair, msvc->task->tk_slo, msvc->task->tk_source, replica, !(start_dsrc || merge_dsrc));
+    msvc->cuda_device = cuda_device;
+    StartContainer(msvc, !(start_dsrc || merge_dsrc));
     for (auto upstr: msvc->upstreams) {
         if (start_dsrc) {
-            std::pair<std::string, ContainerHandle *> dsrc_pair = {upstr->name, upstr};
-            StartContainer(dsrc_pair, upstr->task->tk_slo, msvc->task->tk_source, replica, false);
+            StartContainer(upstr, false);
             SyncDatasource(msvc, upstr);
         } else if (merge_dsrc) {
             SyncDatasource(upstr, msvc);
             StopContainer(upstr->name, old_device);
         } else {
-            AdjustUpstream(msvc->recv_port[replica - 1], upstr, device, msvc->name);
+            AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
         }
     }
     StopContainer(msvc->name, old_device);
@@ -337,8 +333,8 @@ void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
     finishGrpc(rpc, reply, status, curr->device_agent->cq);
 }
 
-void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica) {
-    msvc->batch_size[replica - 1] = new_bs;
+void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs) {
+    msvc->batch_size = new_bs;
     ContainerInts request;
     ClientContext context;
     EmptyMessage reply;
@@ -350,7 +346,7 @@ void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica)
     finishGrpc(rpc, reply, status, msvc->device_agent->cq);
 }
 
-void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution, int replica = 1) {
+void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution) {
     msvc->dimensions = new_resolution;
     ContainerInts request;
     ClientContext context;
@@ -373,7 +369,7 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
     request.set_name(name);
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            device->stub->AsyncStopContainer(&context, request, containers.list[name].device_agent->cq));
+            device->stub->AsyncStopContainer(&context, request, containers.list[name]->device_agent->cq));
     finishGrpc(rpc, reply, status, device->cq);
 }
 
@@ -386,7 +382,7 @@ void Controller::StopContainer(std::string name, NodeHandle *device, bool forced
 void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType modelType) {
     float preprocessRate = 1000000.f / container.expectedPreprocessLatency; // queries per second
     float postprocessRate = 1000000.f / container.expectedPostprocessLatency; // qps
-    float inferRate = 1000000.f / (container.expectedInferLatency * container.batch_size[0]); // batch per second
+    float inferRate = 1000000.f / (container.expectedInferLatency * container.batch_size); // batch per second
 
     QueueLengthType minimumQueueSize = 30;
 
@@ -398,15 +394,15 @@ void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType
 
     // Preprocessor to Inferencer
     // Utilization of inferencer
-    float infer_rho = preprocess_thrpt / container.batch_size[0] / inferRate;
+    float infer_rho = preprocess_thrpt / container.batch_size / inferRate;
     QueueLengthType infer_inQueueSize = std::max((QueueLengthType) std::ceil(infer_rho * infer_rho / (2 * (1 - infer_rho))), minimumQueueSize);
-    float infer_thrpt = std::min(inferRate, preprocess_thrpt / container.batch_size[0]); // batch per second
+    float infer_thrpt = std::min(inferRate, preprocess_thrpt / container.batch_size); // batch per second
 
-    float postprocess_rho = (infer_thrpt * container.batch_size[0]) / postprocessRate;
+    float postprocess_rho = (infer_thrpt * container.batch_size) / postprocessRate;
     QueueLengthType postprocess_inQueueSize = std::max((QueueLengthType) std::ceil(postprocess_rho * postprocess_rho / (2 * (1 - postprocess_rho))), minimumQueueSize);
-    float postprocess_thrpt = std::min(postprocessRate, infer_thrpt * container.batch_size[0]);
+    float postprocess_thrpt = std::min(postprocessRate, infer_thrpt * container.batch_size);
 
-    QueueLengthType sender_inQueueSize = postprocess_inQueueSize * container.batch_size[0];
+    QueueLengthType sender_inQueueSize = postprocess_inQueueSize * container.batch_size;
 
     container.queueSizes = {preprocess_inQueueSize, infer_inQueueSize, postprocess_inQueueSize, sender_inQueueSize};
 
