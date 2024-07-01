@@ -611,6 +611,9 @@ private:
     std::shared_ptr<spdlog::logger> ctrl_logger;
 
     std::map<std::string, NetworkEntryType> ctrl_inDeviceNetworkEntries;
+
+    // RIM implementation
+    
 };
 
 // ========================================================== added ================================================================
