@@ -356,6 +356,7 @@ struct TaskHandle {
     std::string tk_fullName;
     PipelineType tk_type;
     std::string tk_source;
+    std::string tk_src_device;
     int tk_slo;
     ClockType tk_startTime;
     int tk_lastLatency;
@@ -377,12 +378,14 @@ struct TaskHandle {
                const std::string& tk_fullName,
                PipelineType tk_type,
                const std::string& tk_source,
+               const std::string& tk_src_device,
                int tk_slo,
                ClockType tk_startTime,
                int tk_lastLatency)
     : tk_name(tk_name),
       tk_type(tk_type),
       tk_source(tk_source),
+      tk_src_device(tk_src_device),
       tk_slo(tk_slo),
       tk_startTime(tk_startTime),
       tk_lastLatency(tk_lastLatency) {}
@@ -395,6 +398,7 @@ struct TaskHandle {
         tk_fullName = other.tk_fullName;
         tk_type = other.tk_type;
         tk_source = other.tk_source;
+        tk_src_device = other.tk_src_device;
         tk_slo = other.tk_slo;
         tk_startTime = other.tk_startTime;
         tk_lastLatency = other.tk_lastLatency;
@@ -411,6 +415,7 @@ struct TaskHandle {
             tk_fullName = other.tk_fullName;
             tk_type = other.tk_type;
             tk_source = other.tk_source;
+            tk_src_device = other.tk_src_device;
             tk_slo = other.tk_slo;
             tk_startTime = other.tk_startTime;
             tk_lastLatency = other.tk_lastLatency;
@@ -583,7 +588,7 @@ private:
 
     void StartContainer(ContainerHandle *container, bool easy_allocation = true);
 
-    void MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device = 0);
+    void MoveContainer(ContainerHandle *container, NodeHandle *new_device);
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
 
@@ -709,7 +714,7 @@ private:
 
     struct Containers {
     public:
-        void addContainer(const std::string &name, const ContainerHandle &container) {
+        void addContainer(const std::string &name, ContainerHandle *container) {
             std::lock_guard<std::mutex> lock(containersMutex);
             list[name] = container;
         }
@@ -721,19 +726,19 @@ private:
 
         ContainerHandle *getContainer(const std::string &name) {
             std::lock_guard<std::mutex> lock(containersMutex);
-            return &list[name];
+            return list[name];
         }
 
         std::vector<ContainerHandle *> getList() {
             std::lock_guard<std::mutex> lock(containersMutex);
             std::vector<ContainerHandle *> containers;
             for (auto &c: list) {
-                containers.push_back(&c.second);
+                containers.push_back(c.second);
             }
             return containers;
         }
 
-        std::map<std::string, ContainerHandle> *getMap() {
+        std::map<std::string, ContainerHandle*> *getMap() {
             std::lock_guard<std::mutex> lock(containersMutex);
             return &list;
         }

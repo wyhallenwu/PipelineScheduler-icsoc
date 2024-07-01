@@ -261,49 +261,46 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     }
 }
 
-void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device) {
-    NodeHandle *old_device = msvc->device_agent;
-    NodeHandle *device;
+void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
+    NodeHandle *old_device = container->device_agent;
     bool start_dsrc = false, merge_dsrc = false;
-    if (to_edge) {
-        device = msvc->upstreams[0]->device_agent;
-        if (msvc->mergable) {
+    if (device->name != "server") {
+        if (container->mergable) {
             merge_dsrc = true;
-            if (msvc->model == Yolov5n) {
-                msvc->model = Yolov5nDsrc;
-            } else if (msvc->model == Retinaface) {
-                msvc->model = RetinafaceDsrc;
+            if (container->model == Yolov5n) {
+                container->model = Yolov5nDsrc;
+            } else if (container->model == Retinaface) {
+                container->model = RetinafaceDsrc;
             }
         }
     } else {
-        device = &devices.list["server"];
-        if (msvc->mergable) {
+        if (container->mergable) {
             start_dsrc = true;
-            if (msvc->model == Yolov5nDsrc) {
-                msvc->model = Yolov5n;
-            } else if (msvc->model == RetinafaceDsrc) {
-                msvc->model = Retinaface;
+            if (container->model == Yolov5nDsrc) {
+                container->model = Yolov5n;
+            } else if (container->model == RetinafaceDsrc) {
+                container->model = Retinaface;
             }
         }
     }
-    msvc->device_agent = device;
-    msvc->recv_port = device->next_free_port++;
-    device->containers.insert({msvc->name, msvc});
-    msvc->cuda_device = cuda_device;
-    StartContainer(msvc, !(start_dsrc || merge_dsrc));
-    for (auto upstr: msvc->upstreams) {
+    container->device_agent = device;
+    container->recv_port = device->next_free_port++;
+    device->containers.insert({container->name, container});
+    container->cuda_device = container->cuda_device;
+    StartContainer(container, !(start_dsrc || merge_dsrc));
+    for (auto upstr: container->upstreams) {
         if (start_dsrc) {
             StartContainer(upstr, false);
-            SyncDatasource(msvc, upstr);
+            SyncDatasource(container, upstr);
         } else if (merge_dsrc) {
-            SyncDatasource(upstr, msvc);
+            SyncDatasource(upstr, container);
             StopContainer(upstr, old_device);
         } else {
-            AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
+            AdjustUpstream(container->recv_port, upstr, device, container->name);
         }
     }
-    StopContainer(msvc, old_device);
-    old_device->containers.erase(msvc->name);
+    StopContainer(container, old_device);
+    old_device->containers.erase(container->name);
 }
 
 void Controller::AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *new_device,
