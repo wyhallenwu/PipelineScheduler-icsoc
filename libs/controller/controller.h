@@ -140,8 +140,8 @@ struct ContainerHandle {
     HardwareMetrics metrics;
     NodeHandle *device_agent;
     TaskHandle *task;
-    std::vector<ContainerHandle *> upstreams;
     std::vector<ContainerHandle *> downstreams;
+    std::vector<ContainerHandle *> upstreams;
     // Queue sizes of the model
     std::vector<QueueLengthType> queueSizes;
 
@@ -259,7 +259,7 @@ struct PipelineModel {
     // The batch size of the model
     BatchSizeType batchSize;
     // The number of replicas of the model
-    uint8_t numReplicas;
+    uint8_t numReplicas = -1;
     // Average latency to query to reach from the upstream
     uint64_t expectedTransferLatency;
     // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
@@ -277,6 +277,8 @@ struct PipelineModel {
 
     std::string deviceTypeName;
 
+    bool merged = false;
+
     std::vector<std::string> possibleDevices;
 
     mutable std::mutex pipelineModelMutex;
@@ -290,12 +292,13 @@ struct PipelineModel {
                   const std::vector<std::pair<PipelineModel*, int>>& downstreams = {},
                   const std::vector<std::pair<PipelineModel*, int>>& upstreams = {},
                   const BatchSizeType& batchSize = BatchSizeType(),
-                  uint8_t numReplicas = 1,
+                  uint8_t numReplicas = -1,
                   uint64_t expectedTransferLatency = 0,
                   uint64_t expectedQueueingLatency = 0,
                   uint64_t expectedAvgPerQueryLatency = 0,
                   uint64_t expectedMaxProcessLatency = 0,
                   const std::string& deviceTypeName = "",
+                  bool mergable = false,
                   const std::vector<std::string>& possibleDevices = {})
         : device(device),
           name(name),
@@ -311,6 +314,7 @@ struct PipelineModel {
           expectedAvgPerQueryLatency(expectedAvgPerQueryLatency),
           expectedMaxProcessLatency(expectedMaxProcessLatency),
           deviceTypeName(deviceTypeName),
+          merged(mergable),
           possibleDevices(possibleDevices) {}
 
     // Assignment operator
@@ -335,6 +339,7 @@ struct PipelineModel {
             estimatedPerQueryCost = other.estimatedPerQueryCost;
             estimatedStart2HereCost = other.estimatedStart2HereCost;
             deviceTypeName = other.deviceTypeName;
+            merged = other.merged;
             possibleDevices = other.possibleDevices;
         }
         return *this;
@@ -491,11 +496,18 @@ private:
     void calculateQueueSizes(ContainerHandle &model, const ModelType modelType);
     uint64_t calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate);
 
-    void estimateModelLatency(PipelineModel *currModel, const std::string& deviceName);
+    void estimateModelLatency(PipelineModel *currModel);
+    void estimateModelNetworkLatency(PipelineModel *currModel);
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
-    void getInitialBatchSizes(TaskHandle &models, uint64_t slo, int nObjects);
-    void shiftModelToEdge(TaskHandle &models, const ModelType &currModel, uint64_t slo);
+    void getInitialBatchSizes(TaskHandle &models, uint64_t slo);
+    void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
+
+    bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile);
+    bool mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, const PerDeviceModelProfileType &toBeMergedProfile);
+    bool mergeModels(PipelineModel *mergedModel, PipelineModel *tobeMergedModel);
+    TaskHandle mergePipelines(const std::string& taskName);
+    void mergePipelines();
 
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice);
 

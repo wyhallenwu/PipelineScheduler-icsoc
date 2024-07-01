@@ -331,6 +331,97 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
     }
 }
 
+bool Controller::mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile) {
+    mergedProfile.arrivalRates += toBeMergedProfile.arrivalRates;
+    auto mergedD2DProfile = &mergedProfile.d2dNetworkProfile;
+    auto toBeMergedD2DProfile = &toBeMergedProfile.d2dNetworkProfile;
+    for (const auto &[pair, profile] : toBeMergedProfile.d2dNetworkProfile) {
+        mergedD2DProfile->at(pair).p95TransferDuration = std::max(mergedD2DProfile->at(pair).p95TransferDuration,
+                                                                  toBeMergedD2DProfile->at(pair).p95TransferDuration);
+        mergedD2DProfile->at(pair).p95PackageSize = std::max(mergedD2DProfile->at(pair).p95PackageSize,
+                                                             toBeMergedD2DProfile->at(pair).p95PackageSize);
+        
+    }
+    return true;
+}
+
+bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, const PerDeviceModelProfileType &toBeMergedProfile) {
+    for (const auto &[deviceName, profile] : toBeMergedProfile) {
+        auto mergedProfileDevice = &mergedProfile[deviceName];
+        auto toBeMergedProfileDevice = &toBeMergedProfile.at(deviceName);
+
+        mergedProfileDevice->p95InputSize = std::max(mergedProfileDevice->p95InputSize, toBeMergedProfileDevice->p95InputSize);
+        mergedProfileDevice->p95OutputSize = std::max(mergedProfileDevice->p95OutputSize, toBeMergedProfileDevice->p95OutputSize);
+        mergedProfileDevice->p95prepLat = std::max(mergedProfileDevice->p95prepLat, toBeMergedProfileDevice->p95prepLat);
+        mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat, toBeMergedProfileDevice->p95postLat);
+
+        auto mergedBatchInfer = &mergedProfileDevice->batchInfer;
+        auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
+
+        for (const auto &[batchSize, profile] : toBeMergedProfileDevice->batchInfer) {
+            mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, profile.p95inferLat);
+            mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, profile.cpuUtil);
+            mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, profile.gpuUtil);
+            mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, profile.memUsage);
+            mergedBatchInfer->at(batchSize).rssMemUsage = std::max(mergedBatchInfer->at(batchSize).rssMemUsage, profile.rssMemUsage);
+            mergedBatchInfer->at(batchSize).gpuMemUsage = std::max(mergedBatchInfer->at(batchSize).gpuMemUsage, profile.gpuMemUsage);
+        }
+        
+    }
+    return true;
+}
+
+bool Controller::mergeModels(PipelineModel *mergedModel, PipelineModel* toBeMergedModel) {
+    // If the merged model is empty, we should just copy the model to be merged
+    if (mergedModel->numReplicas == -1) {
+        *mergedModel = *toBeMergedModel;
+        return true;
+    }
+    // If the devices are different, we should not merge the models
+    if (mergedModel->device != toBeMergedModel->device || toBeMergedModel->merged) {
+        return false;
+    }
+
+    mergeArrivalProfiles(mergedModel->arrivalProfiles, toBeMergedModel->arrivalProfiles);
+    mergeProcessProfiles(mergedModel->processProfiles, toBeMergedModel->processProfiles);
+    
+
+    bool merged = false;
+    toBeMergedModel->merged = true;
+
+}
+
+TaskHandle Controller::mergePipelines(const std::string& taskName) {
+    TaskHandle mergedPipeline;
+    auto mergedPipelineModels = &(mergedPipeline.tk_pipelineModels);
+
+    auto unscheduledTasks = ctrl_unscheduledPipelines.getMap();
+
+    TaskHandle mergedPipeline;
+    *mergedPipelineModels = getModelsByPipelineType(unscheduledTasks->at(taskName).tk_type, "server");
+    auto numModels = mergedPipeline.tk_pipelineModels.size();
+
+    for (auto i = 0; i < numModels; i++) {
+        if (mergedPipelineModels->at(i)->name == "datasource") {
+            continue;
+        }
+        for (const auto& task : *unscheduledTasks) {
+            if (task.first == taskName) {
+                continue;
+            }
+            mergeModels(mergedPipelineModels->at(i), task.second.tk_pipelineModels.at(i));
+        }
+    }
+}
+
+void Controller::mergePipelines() {
+    std::vector<std::string> toMerge = {"traffic", "people"};
+    TaskHandle mergedPipeline;
+    
+    for (const auto &taskName : toMerge) {
+        mergedPipeline = mergePipelines(taskName);
+    }
+}
 
 /**
  * @brief Recursively traverse the model tree and try shifting models to edge devices
@@ -338,7 +429,57 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
  * @param models 
  * @param slo
  */
-void Controller::shiftModelToEdge(TaskHandle &models, const ModelType &currModel, uint64_t slo) {
+void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice) {
+    if (currModel->name == "sink") {
+        return;
+    }
+    if (currModel->name == "datasource") {
+        if (currModel->device != edgeDevice) {
+            spdlog::get("container_agent")->warn("Edge device {0:s} is not identical to the datasource device {1:s}", edgeDevice, currModel->device);
+        }
+        return;
+    }
+
+    if (currModel->device == edgeDevice) {
+        for (auto &d: currModel->downstreams) {
+            shiftModelToEdge(pipeline, d.first, slo, edgeDevice);
+        }
+    }
+
+    // If the edge device is not in the list of possible devices, we should not consider it
+    if (std::find(currModel->possibleDevices.begin(), currModel->possibleDevices.end(), edgeDevice) == currModel->possibleDevices.end()) {
+        return;
+    }
+
+    std::string deviceTypeName = getDeviceTypeName(devices.list[edgeDevice].type);
+
+    uint32_t inputSize = currModel->processProfiles.at(deviceTypeName).p95InputSize;
+    uint32_t outputSize = currModel->processProfiles.at(deviceTypeName).p95OutputSize;
+
+    if (inputSize * 0.3 < outputSize) {
+        currModel->device = edgeDevice;
+        estimateModelLatency(currModel);
+        for (auto &downstream : currModel->downstreams) {
+            estimateModelLatency(downstream.first);
+        }
+        estimatePipelineLatency(currModel, currModel->expectedStart2HereLatency);
+        uint64_t expectedE2ELatency = pipeline.back()->expectedStart2HereLatency;
+        // if after shifting the model to the edge device, the pipeline still meets the SLO, we should keep it
+
+        // However, if the pipeline does not meet the SLO, we should shift reverse the model back to the server
+        if (expectedE2ELatency > slo) {
+            currModel->device = "server";
+            estimateModelLatency(currModel);
+            for (auto &downstream : currModel->downstreams) {
+                estimateModelLatency(downstream.first);
+            }
+            estimatePipelineLatency(currModel, currModel->expectedStart2HereLatency);
+        }
+    }
+    // Shift downstream models to the edge device
+    for (auto &d: currModel->downstreams) {
+        shiftModelToEdge(pipeline, d.first, slo, edgeDevice);
+    }
 }
 
 /**
@@ -349,64 +490,67 @@ void Controller::shiftModelToEdge(TaskHandle &models, const ModelType &currModel
  * @param nObjects 
  * @return std::map<ModelType, int> 
  */
-void Controller::getInitialBatchSizes(
-        TaskHandle &models, uint64_t slo,
-        int nObjects) {
+void Controller::getInitialBatchSizes(TaskHandle &task, uint64_t slo) {
 
-    // for (auto &m: models) {
-    //     ModelType modelType  = std::get<0>(m);
-    //     m.second.batchSize = 1;
-    //     m.second.numReplicas = 1;
-    // }
+    PipelineModelListType &models = task.tk_pipelineModels;
 
-    // // DFS-style recursively estimate the latency of a pipeline from source to sin
-    // estimatePipelineLatency(models, models.begin()->first, 0);
+    for (auto &m: models) {
+        m->batchSize = 1;
+        m->numReplicas = 1;
 
-    // uint64_t expectedE2ELatency = models.at(ModelType::Sink).expectedStart2HereLatency;
+        estimateModelLatency(m);
+    }
 
-    // if (slo < expectedE2ELatency) {
-    //     spdlog::info("SLO is too low for the pipeline to meet. Expected E2E latency: {0:d}, SLO: {1:d}", expectedE2ELatency, slo);
-    // }
 
-    // // Increase number of replicas to avoid bottlenecks
-    // for (auto &m: models) {
-    //     incNumReplicas(m.second, m.second.device);
-    // }
+    // DFS-style recursively estimate the latency of a pipeline from source to sink
+    // The first model should be the datasource
+    estimatePipelineLatency(models.front(), 0);
 
-    // // Find near-optimal batch sizes
-    // auto foundBest = true;
-    // while (foundBest) {
-    //     foundBest = false;
-    //     uint64_t bestCost = models.at(ModelType::Sink).estimatedStart2HereCost;
-    //     PipelineModelListType tmp_models = models;
-    //     for (auto &m: tmp_models) {
-    //         m.second.batchSize *= 2;
-    //         estimatePipelineLatency(tmp_models, tmp_models.begin()->first, 0);
-    //         expectedE2ELatency = tmp_models.at(ModelType::Sink).expectedStart2HereLatency;
-    //         if (expectedE2ELatency < slo) { 
-    //             // If increasing the batch size of model `m` creates a pipeline that meets the SLO, we should keep it
-    //             uint64_t estimatedE2Ecost = tmp_models.at(ModelType::Sink).estimatedStart2HereCost;
-    //             // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
-    //             if (estimatedE2Ecost < bestCost) {
-    //                 bestCost = estimatedE2Ecost;
-    //                 models = tmp_models;
-    //                 foundBest = true;
-    //             }
-    //             if (!foundBest) {
-    //                 continue;
-    //             }
-    //             // If increasing the batch size meets the SLO, we can try decreasing the number of replicas
-    //             decNumReplicas(m.second, m.second.device);
-    //             estimatedE2Ecost = tmp_models.at(ModelType::Sink).estimatedStart2HereCost;
-    //             if (estimatedE2Ecost < bestCost) {
-    //                 models = tmp_models;
-    //                 foundBest = true;
-    //             }
-    //         } else {
-    //             m.second.batchSize /= 2;
-    //         }
-    //     }   
-    // }
+    uint64_t expectedE2ELatency = models.back()->expectedStart2HereLatency;
+
+    if (slo < expectedE2ELatency) {
+        spdlog::info("SLO is too low for the pipeline to meet. Expected E2E latency: {0:d}, SLO: {1:d}", expectedE2ELatency, slo);
+    }
+
+    // Increase number of replicas to avoid bottlenecks
+    for (auto &m: models) {
+        auto numIncReplicas = incNumReplicas(m);
+        m->numReplicas += numIncReplicas;
+    }
+
+    // Find near-optimal batch sizes
+    auto foundBest = true;
+    while (foundBest) {
+        foundBest = false;
+        uint64_t bestCost = models.back()->estimatedStart2HereCost;
+        for (auto &m: models) {
+            BatchSizeType oldBatchsize = m->batchSize;
+            m->batchSize *= 2;
+            estimateModelLatency(m);
+            estimatePipelineLatency(models.front(), 0);
+            expectedE2ELatency = models.back()->expectedStart2HereLatency;
+            if (expectedE2ELatency < slo) { 
+                // If increasing the batch size of model `m` creates a pipeline that meets the SLO, we should keep it
+                uint64_t estimatedE2Ecost = models.back()->estimatedStart2HereCost;
+                // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
+                if (estimatedE2Ecost < bestCost) {
+                    bestCost = estimatedE2Ecost;
+                    foundBest = true;
+                } 
+                if (!foundBest) {
+                    m->batchSize = oldBatchsize;
+                    estimateModelLatency(m);
+                    continue;
+                }
+                // If increasing the batch size meets the SLO, we can try decreasing the number of replicas
+                auto numDecReplicas = decNumReplicas(m);
+                m->numReplicas -= numDecReplicas;
+            } else {
+                m->batchSize = oldBatchsize;
+                estimateModelLatency(m);
+            }
+        }   
+    }
 }
 
 /**
@@ -416,7 +560,16 @@ void Controller::getInitialBatchSizes(
  * @param model infomation about the model
  * @param modelType 
  */
-void Controller::estimateModelLatency(PipelineModel *currModel, const std::string& deviceName) {
+void Controller::estimateModelLatency(PipelineModel *currModel) {
+    std::string deviceName = currModel->device;
+    // We assume datasource and sink models have no latency
+    if (currModel->name == "datasource" || currModel->name == "sink") {
+        currModel->expectedQueueingLatency = 0;
+        currModel->expectedAvgPerQueryLatency = 0;
+        currModel->expectedMaxProcessLatency = 0;
+        currModel->estimatedPerQueryCost = 0;
+        return;
+    }
     ModelProfile profile = currModel->processProfiles[deviceName];
     uint64_t preprocessLatency = profile.p95prepLat;
     BatchSizeType batchSize = currModel->batchSize;
@@ -428,6 +581,15 @@ void Controller::estimateModelLatency(PipelineModel *currModel, const std::strin
     currModel->expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
     currModel->expectedMaxProcessLatency = preprocessLatency * batchSize + inferLatency * batchSize + postprocessLatency * batchSize;
     currModel->estimatedPerQueryCost = currModel->expectedAvgPerQueryLatency + currModel->expectedQueueingLatency + currModel->expectedTransferLatency;
+}
+
+void Controller::estimateModelNetworkLatency(PipelineModel *currModel) {
+    if (currModel->name == "datasource" || currModel->name == "sink") {
+        currModel->expectedTransferLatency = 0;
+        return;
+    }
+    
+    currModel->expectedTransferLatency = currModel->arrivalProfiles.d2dNetworkProfile[std::make_pair(currModel->device, currModel->upstreams[0].first->device)].p95TransferDuration;
 }
 
 /**
