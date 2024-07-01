@@ -11,7 +11,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     }
 
     task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device);
-    std::unique_lock lock(ctrl_unscheduledPipelines.tasksMutex);
+    std::unique_lock lock2(ctrl_unscheduledPipelines.tasksMutex);
 
     ctrl_unscheduledPipelines.list.insert({task->tk_name, *task});
     lock.unlock();
@@ -90,13 +90,120 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     return true;
 }
 
+bool CheckMergable(const std::string &m) {
+    return  m == "datasource" || m == "yolov5n" || m == "retina1face" || m == "yolov5ndsrc" || m == "retina1facedsrc";
+}
+
+ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i) {
+    auto *container = new ContainerHandle{abbreviate(model->task->tk_name + "_" + model->name),
+                                          model->upstreams[0].second,
+                                          ModelTypeReverseList[model->name],
+                                          CheckMergable(model->name),
+                                          {0},
+                                          model->estimatedStart2HereCost,
+                                          0.0,
+                                          model->batchSize,
+                                          model->cudaDevices[i],
+                                          device->next_free_port++,
+                                          ctrl_containerLib[model->name].modelPath,
+                                          device,
+                                          model->task};
+    if (model->name == "datasource" || model->name == "yolov5ndsrc" || model->name == "retina1facedsrc") {
+        container->dimensions = ctrl_containerLib[model->name].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0].get<std::vector<int>>();
+    } else if (model->name != "sink") {
+        container->dimensions = ctrl_containerLib[model->name].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
+    }
+    model->task->tk_subTasks[model->name].push_back(container);
+
+    for (auto &downstream: model->downstreams) {
+        for (auto &downstreamContainer: downstream.first->task->tk_subTasks[downstream.first->name]) {
+            if (downstreamContainer->device_agent == device) {
+                container->downstreams.push_back(downstreamContainer);
+                downstreamContainer->upstreams.push_back(container);
+            }
+        }
+    }
+    for (auto &upstream: model->upstreams) {
+        for (auto &upstreamContainer: upstream.first->task->tk_subTasks[upstream.first->name]) {
+            if (upstreamContainer->device_agent == device) {
+                container->upstreams.push_back(upstreamContainer);
+                upstreamContainer->downstreams.push_back(container);
+            }
+        }
+    }
+    return container;
+}
+
+/**
+ * @brief call this method after the pipeline models have been added to scheduled
+ *
+ */
+void Controller::ApplyScheduling() {
+    // collect all running containers by device and model name
+    std::map<NodeHandle *, std::map<std::string, std::vector<ContainerHandle *>>> running_containers;
+    std::vector<ContainerHandle *> new_containers;
+    std::unique_lock lock(devices.devicesMutex);
+    for (auto &device: devices.list) {
+        for (auto &container: device.second.containers) {
+            running_containers[&device.second][ModelTypeList[container.second->model]].push_back(container.second);
+        }
+    }
+
+    std::unique_lock lock2(ctrl_scheduledPipelines.tasksMutex);
+    std::unique_lock lock3(containers.containersMutex);
+    for (auto &pipe: ctrl_scheduledPipelines.list) {
+        for (auto &model: pipe.second.tk_pipelineModels) {
+            std::unique_lock lock_model(model->pipelineModelMutex);
+            NodeHandle *device = &devices.list[model->device];
+            // try to check if the model is already running on that device
+            if (running_containers[device].find(model->name) == running_containers[device].end()) {
+                for (unsigned int i = 0; i < model->numReplicas; i++) {
+                    ContainerHandle *container = TranslateToContainer(model, device, i);
+                    new_containers.push_back(container);
+                }
+            } else {
+                // make sure enough containers are running with the right configurations
+                std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
+                if (candidates.size() < model->numReplicas) {
+                    // start additional containers
+                    for (unsigned int i = candidates.size(); i < model->numReplicas; i++) {
+                        ContainerHandle *container = TranslateToContainer(model, device, i);
+                        new_containers.push_back(container);
+                    }
+                } else if (candidates.size() > model->numReplicas) {
+                    // remove the extra containers
+                    for (unsigned int i = model->numReplicas; i < candidates.size(); i++) {
+                        StopContainer(candidates[i], candidates[i]->device_agent);
+                        model->task->tk_subTasks[model->name].erase(std::remove(model->task->tk_subTasks[model->name].begin(), model->task->tk_subTasks[model->name].end(), candidates[i]), model->task->tk_subTasks[model->name].end());
+                        candidates.erase(candidates.begin() + i);
+                    }
+                }
+                // ensure right configurations of all containers
+                int i = 0;
+                for (auto *candidate: candidates){
+                    if (candidate->batch_size != model->batchSize)
+                        AdjustBatchSize(candidate, model->batchSize);
+                    if (candidate->cuda_device != model->cudaDevices[i++])
+                        AdjustCudaDevice(candidate, model->cudaDevices[i-1]);
+                }
+            }
+        }
+    }
+    for (auto container: new_containers) {
+        StartContainer(container);
+        containers.list.insert({container->name, container});
+    }
+
+}
+
 PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice) {
     switch (type) {
         case PipelineType::Traffic: {
-            PipelineModel *datasource = new PipelineModel{startDevice, "datasource", true, {}, {}};
-            PipelineModel *yolov5n = new PipelineModel{
+            auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
+            auto *yolov5n = new PipelineModel{
                 "server",
                 "yolov5n",
+                {},
                 true,
                 {},
                 {},
@@ -105,9 +212,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             datasource->downstreams.push_back({yolov5n, -1});
 
-            PipelineModel *retina1face = new PipelineModel{
+            auto *retina1face = new PipelineModel{
                 "server",
                 "retina1face",
+                {},
                 false,
                 {},
                 {},
@@ -116,9 +224,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             yolov5n->downstreams.push_back({retina1face, 0});
 
-            PipelineModel *carbrand = new PipelineModel{
+            auto *carbrand = new PipelineModel{
                 "server",
                 "carbrand",
+                {},
                 false,
                 {},
                 {},
@@ -127,9 +236,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             yolov5n->downstreams.push_back({carbrand, 2});
 
-            PipelineModel *platedet = new PipelineModel{
+            auto *platedet = new PipelineModel{
                 "server",
                 "platedet",
+                {},
                 false,
                 {},
                 {},
@@ -138,9 +248,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             yolov5n->downstreams.push_back({platedet, 2});
 
-            PipelineModel *sink = new PipelineModel{
+            auto *sink = new PipelineModel{
                 "server",
                 "sink",
+                {},
                 false,
                 {},
                 {},
@@ -154,10 +265,11 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             return {datasource, yolov5n, retina1face, carbrand, platedet, sink};
         }
         case PipelineType::Building_Security: {
-            PipelineModel *datasource = new PipelineModel{startDevice, "datasource", true, {}, {}};
-            PipelineModel *yolov5n = new PipelineModel{
+            auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
+            auto *yolov5n = new PipelineModel{
                 "server",
                 "yolov5n",
+                {},
                 true,
                 {},
                 {},
@@ -166,9 +278,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             datasource->downstreams.push_back({yolov5n, -1});
 
-            PipelineModel *retina1face = new PipelineModel{
+            auto *retina1face = new PipelineModel{
                 "server",
                 "retina1face",
+                {},
                 false,
                 {},
                 {},
@@ -177,9 +290,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             yolov5n->downstreams.push_back({retina1face, 0});
 
-            PipelineModel *movenet = new PipelineModel{
+            auto *movenet = new PipelineModel{
                 "server",
                 "movenet",
+                {},
                 false,
                 {},
                 {},
@@ -188,9 +302,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             yolov5n->downstreams.push_back({movenet, 0});
 
-            PipelineModel *gender = new PipelineModel{
+            auto *gender = new PipelineModel{
                 "server",
                 "gender",
+                {},
                 false,
                 {},
                 {},
@@ -199,9 +314,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({gender, -1});
 
-            PipelineModel *age = new PipelineModel{
+            auto *age = new PipelineModel{
                 "server",
                 "age",
+                {},
                 false,
                 {},
                 {},
@@ -210,9 +326,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({age, -1});
 
-            PipelineModel *sink = new PipelineModel{
+            auto *sink = new PipelineModel{
                 "server",
                 "sink",
+                {},
                 false,
                 {},
                 {},
@@ -226,10 +343,11 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             return {datasource, yolov5n, retina1face, movenet, gender, age, sink};
         }
         case PipelineType::Video_Call: {
-            PipelineModel *datasource = new PipelineModel{startDevice, "datasource", true, {}, {}};
-            PipelineModel *retina1face = new PipelineModel{
+            auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
+            auto *retina1face = new PipelineModel{
                 "server",
                 "retina1face",
+                {},
                 true,
                 {},
                 {},
@@ -238,9 +356,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             datasource->downstreams.push_back({retina1face, -1});
 
-            PipelineModel *emotionnet = new PipelineModel{
+            auto *emotionnet = new PipelineModel{
                 "server",
                 "emotionnet",
+                {},
                 false,
                 {},
                 {},
@@ -249,9 +368,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({emotionnet, -1});
 
-            PipelineModel *age = new PipelineModel{
+            auto *age = new PipelineModel{
                 "server",
                 "age",
+                {},
                 false,
                 {},
                 {},
@@ -260,9 +380,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({age, -1});
 
-            PipelineModel *gender = new PipelineModel{
+            auto *gender = new PipelineModel{
                 "server",
                 "gender",
+                {},
                 false,
                 {},
                 {},
@@ -271,9 +392,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({gender, -1});
 
-            PipelineModel *arcface = new PipelineModel{
+            auto *arcface = new PipelineModel{
                 "server",
                 "arcface",
+                {},
                 false,
                 {},
                 {},
@@ -282,9 +404,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({arcface, -1});
 
-            PipelineModel *sink = new PipelineModel{
+            auto *sink = new PipelineModel{
                 "server",
                 "sink",
+                {},
                 false,
                 {},
                 {},

@@ -39,6 +39,10 @@ ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
 
 
 struct ContainerHandle;
+struct PipelineModel;
+
+// Structure that whole information about the pipeline used for scheduling
+typedef std::vector<PipelineModel *> PipelineModelListType;
 
 struct TaskHandle {
     std::string tk_name;
@@ -48,7 +52,7 @@ struct TaskHandle {
     int tk_slo;
     ClockType tk_startTime;
     int tk_lastLatency;
-    std::map<std::string, ContainerHandle*> tk_subTasks;
+    std::map<std::string, std::vector<ContainerHandle*>> tk_subTasks;
     PipelineModelListType tk_pipelineModels;
     mutable std::mutex tk_mutex;
 
@@ -180,13 +184,11 @@ struct ContainerHandle {
 
     float arrival_rate;
 
-    int num_replicas;
-    std::vector<int> batch_size;
-    std::vector<int> cuda_device;
-    std::vector<int> recv_port;
-    std::vector<std::string> model_file;
+    int batch_size;
+    int cuda_device;
+    int recv_port;
+    std::string model_file;
 
-    HardwareMetrics metrics;
     NodeHandle *device_agent;
     TaskHandle *task;
     std::vector<ContainerHandle *> upstreams;
@@ -226,12 +228,10 @@ struct ContainerHandle {
                 const std::vector<int>& dimensions = {},
                 uint64_t inference_deadline = 0,
                 float arrival_rate = 0.0f,
-                int num_replicas = 1,
-                const std::vector<int>& batch_size = {},
-                const std::vector<int>& cuda_device = {},
-                const std::vector<int>& recv_port = {},
-                const std::vector<std::string>& model_file = {},
-                HardwareMetrics metrics = {},
+                const int batch_size = 0,
+                const int cuda_device = 0,
+                const int recv_port = 0,
+                const std::string model_file = "",
                 NodeHandle* device_agent = nullptr,
                 TaskHandle* task = nullptr,
                 const std::vector<ContainerHandle*>& upstreams = {},
@@ -244,12 +244,10 @@ struct ContainerHandle {
       dimensions(dimensions),
       inference_deadline(inference_deadline),
       arrival_rate(arrival_rate),
-      num_replicas(num_replicas),
       batch_size(batch_size),
       cuda_device(cuda_device),
       recv_port(recv_port),
       model_file(model_file),
-      metrics(metrics),
       device_agent(device_agent),
       task(task),
       upstreams(upstreams),
@@ -269,12 +267,10 @@ struct ContainerHandle {
             dimensions = other.dimensions;
             inference_deadline = other.inference_deadline;
             arrival_rate = other.arrival_rate;
-            num_replicas = other.num_replicas;
             batch_size = other.batch_size;
             cuda_device = other.cuda_device;
             recv_port = other.recv_port;
             model_file = other.model_file;
-            metrics = other.metrics;
             device_agent = other.device_agent;
             task = other.task;
             upstreams = other.upstreams;
@@ -296,6 +292,7 @@ struct ContainerHandle {
 struct PipelineModel {
     std::string device;
     std::string name;
+    TaskHandle *task;
     // Whether the upstream is on another device
     bool isSplitPoint;
     //
@@ -309,6 +306,8 @@ struct PipelineModel {
     BatchSizeType batchSize;
     // The number of replicas of the model
     uint8_t numReplicas;
+    // The assigned cuda device for each replica
+    std::vector<uint8_t> cudaDevices;
     // Average latency to query to reach from the upstream
     uint64_t expectedTransferLatency;
     // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
@@ -331,6 +330,7 @@ struct PipelineModel {
         // Constructor with default parameters
     PipelineModel(const std::string& device = "",
                   const std::string& name = "",
+                  TaskHandle *task = nullptr,
                   bool isSplitPoint = false,
                   const ModelArrivalProfile& arrivalProfiles = ModelArrivalProfile(),
                   const PerDeviceModelProfileType& processProfiles = PerDeviceModelProfileType(),
@@ -338,6 +338,7 @@ struct PipelineModel {
                   const std::vector<std::pair<PipelineModel*, int>>& upstreams = {},
                   const BatchSizeType& batchSize = BatchSizeType(),
                   uint8_t numReplicas = 1,
+                  std::vector<uint8_t> cudaDevices = {},
                   uint64_t expectedTransferLatency = 0,
                   uint64_t expectedQueueingLatency = 0,
                   uint64_t expectedAvgPerQueryLatency = 0,
@@ -345,6 +346,7 @@ struct PipelineModel {
                   const std::string& deviceTypeName = "")
         : device(device),
           name(name),
+          task(task),
           isSplitPoint(isSplitPoint),
           arrivalProfiles(arrivalProfiles),
           processProfiles(processProfiles),
@@ -352,6 +354,7 @@ struct PipelineModel {
           upstreams(upstreams),
           batchSize(batchSize),
           numReplicas(numReplicas),
+          cudaDevices(cudaDevices),
           expectedTransferLatency(expectedTransferLatency),
           expectedQueueingLatency(expectedQueueingLatency),
           expectedAvgPerQueryLatency(expectedAvgPerQueryLatency),
@@ -365,6 +368,7 @@ struct PipelineModel {
             std::lock_guard<std::mutex> lock2(other.pipelineModelMutex);
             device = other.device;
             name = other.name;
+            task = other.task;
             isSplitPoint = other.isSplitPoint;
             arrivalProfiles = other.arrivalProfiles;
             processProfiles = other.processProfiles;
@@ -372,6 +376,7 @@ struct PipelineModel {
             upstreams = other.upstreams;
             batchSize = other.batchSize;
             numReplicas = other.numReplicas;
+            cudaDevices = other.cudaDevices;
             expectedTransferLatency = other.expectedTransferLatency;
             expectedQueueingLatency = other.expectedQueueingLatency;
             expectedAvgPerQueryLatency = other.expectedAvgPerQueryLatency;
@@ -384,14 +389,6 @@ struct PipelineModel {
         return *this;
     }
 };
-
-
-
-
-// Structure that whole information about the pipeline used for scheduling
-typedef std::vector<PipelineModel *> PipelineModelListType;
-
-
 
 namespace TaskDescription {
     struct TaskStruct {
@@ -455,6 +452,10 @@ public:
     }
 
     bool AddTask(const TaskDescription::TaskStruct &task);
+
+    ContainerHandle *TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i);
+
+    void ApplyScheduling();
 
     [[nodiscard]] bool isRunning() const { return running; };
 
@@ -540,20 +541,21 @@ private:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
-    void StartContainer(std::pair<std::string, ContainerHandle *> &upstr, int slo,
-                        std::string source, int replica = 1, bool easy_allocation = true);
+    void StartContainer(ContainerHandle *container, bool easy_allocation = true);
 
-    void MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device = 0, int replica = 1);
+    void MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device = 0);
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
 
     static void SyncDatasource(ContainerHandle *prev, ContainerHandle *curr);
 
-    void AdjustBatchSize(ContainerHandle *msvc, int new_bs, int replica = 1);
+    void AdjustBatchSize(ContainerHandle *msvc, int new_bs);
 
-    void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution, int replica = 1);
+    void AdjustCudaDevice(ContainerHandle *msvc, unsigned int new_device);
 
-    void StopContainer(std::string name, NodeHandle *device, bool forced = false);
+    void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution);
+
+    void StopContainer(ContainerHandle *container, NodeHandle *device, bool forced = false);
 
     // void optimizeBatchSizeStep(
     //         const Pipeline &models,
@@ -593,7 +595,7 @@ private:
     Tasks ctrl_unscheduledPipelines, ctrl_scheduledPipelines;
 
     struct Containers {
-        std::map<std::string, ContainerHandle> list = {};
+        std::map<std::string, ContainerHandle*> list = {};
         std::mutex containersMutex;
     };
     Containers containers;
