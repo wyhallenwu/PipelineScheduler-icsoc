@@ -51,7 +51,7 @@ struct TaskHandle {
     int tk_slo;
     ClockType tk_startTime;
     int tk_lastLatency;
-    std::map<std::string, ContainerHandle*> tk_subTasks;
+    std::map<std::string, std::vector<ContainerHandle*>> tk_subTasks;
     PipelineModelListType tk_pipelineModels;
     mutable std::mutex tk_mutex;
 
@@ -554,7 +554,7 @@ private:
 
     void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution);
 
-    void StopContainer(std::string name, NodeHandle *device, bool forced = false);
+    void StopContainer(ContainerHandle *container, NodeHandle *device, bool forced = false);
 
     // void optimizeBatchSizeStep(
     //         const Pipeline &models,

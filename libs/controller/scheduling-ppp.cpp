@@ -113,9 +113,24 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     } else if (model->name != "sink") {
         container->dimensions = ctrl_containerLib[model->name].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
     }
-    // TODO: set upstream and downstreams
+    model->task->tk_subTasks[model->name].push_back(container);
 
-
+    for (auto &downstream: model->downstreams) {
+        for (auto &downstreamContainer: downstream.first->task->tk_subTasks[downstream.first->name]) {
+            if (downstreamContainer->device_agent == device) {
+                container->downstreams.push_back(downstreamContainer);
+                downstreamContainer->upstreams.push_back(container);
+            }
+        }
+    }
+    for (auto &upstream: model->upstreams) {
+        for (auto &upstreamContainer: upstream.first->task->tk_subTasks[upstream.first->name]) {
+            if (upstreamContainer->device_agent == device) {
+                container->upstreams.push_back(upstreamContainer);
+                upstreamContainer->downstreams.push_back(container);
+            }
+        }
+    }
     return container;
 }
 
@@ -148,13 +163,7 @@ void Controller::ApplyScheduling() {
                 }
             } else {
                 // make sure enough containers are running with the right configurations
-                std::vector<ContainerHandle *> candidates;
-                auto condition = [model](ContainerHandle *container) {
-                    return model->task->tk_name == container->task->tk_name;
-                };
-                std::copy_if(running_containers[device][model->name].begin(),
-                             running_containers[device][model->name].end(),
-                             std::back_inserter(candidates), condition);
+                std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
                 if (candidates.size() < model->numReplicas) {
                     // start additional containers
                     for (unsigned int i = candidates.size(); i < model->numReplicas; i++) {
@@ -164,8 +173,8 @@ void Controller::ApplyScheduling() {
                 } else if (candidates.size() > model->numReplicas) {
                     // remove the extra containers
                     for (unsigned int i = model->numReplicas; i < candidates.size(); i++) {
-                        StopContainer(candidates[i]->name, candidates[i]->device_agent);
-                        containers.list.erase(candidates[i]->name);
+                        StopContainer(candidates[i], candidates[i]->device_agent);
+                        model->task->tk_subTasks[model->name].erase(std::remove(model->task->tk_subTasks[model->name].begin(), model->task->tk_subTasks[model->name].end(), candidates[i]), model->task->tk_subTasks[model->name].end());
                         candidates.erase(candidates.begin() + i);
                     }
                 }
@@ -190,8 +199,8 @@ void Controller::ApplyScheduling() {
 PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice) {
     switch (type) {
         case PipelineType::Traffic: {
-            PipelineModel *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
-            PipelineModel *yolov5n = new PipelineModel{
+            auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
+            auto *yolov5n = new PipelineModel{
                 "server",
                 "yolov5n",
                 {},
@@ -203,7 +212,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             datasource->downstreams.push_back({yolov5n, -1});
 
-            PipelineModel *retina1face = new PipelineModel{
+            auto *retina1face = new PipelineModel{
                 "server",
                 "retina1face",
                 {},
@@ -215,7 +224,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             yolov5n->downstreams.push_back({retina1face, 0});
 
-            PipelineModel *carbrand = new PipelineModel{
+            auto *carbrand = new PipelineModel{
                 "server",
                 "carbrand",
                 {},
@@ -227,7 +236,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             yolov5n->downstreams.push_back({carbrand, 2});
 
-            PipelineModel *platedet = new PipelineModel{
+            auto *platedet = new PipelineModel{
                 "server",
                 "platedet",
                 {},
@@ -239,7 +248,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             yolov5n->downstreams.push_back({platedet, 2});
 
-            PipelineModel *sink = new PipelineModel{
+            auto *sink = new PipelineModel{
                 "server",
                 "sink",
                 {},
@@ -256,8 +265,8 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             return {datasource, yolov5n, retina1face, carbrand, platedet, sink};
         }
         case PipelineType::Building_Security: {
-            PipelineModel *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
-            PipelineModel *yolov5n = new PipelineModel{
+            auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
+            auto *yolov5n = new PipelineModel{
                 "server",
                 "yolov5n",
                 {},
@@ -269,7 +278,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             datasource->downstreams.push_back({yolov5n, -1});
 
-            PipelineModel *retina1face = new PipelineModel{
+            auto *retina1face = new PipelineModel{
                 "server",
                 "retina1face",
                 {},
@@ -281,7 +290,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             yolov5n->downstreams.push_back({retina1face, 0});
 
-            PipelineModel *movenet = new PipelineModel{
+            auto *movenet = new PipelineModel{
                 "server",
                 "movenet",
                 {},
@@ -293,7 +302,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             yolov5n->downstreams.push_back({movenet, 0});
 
-            PipelineModel *gender = new PipelineModel{
+            auto *gender = new PipelineModel{
                 "server",
                 "gender",
                 {},
@@ -305,7 +314,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({gender, -1});
 
-            PipelineModel *age = new PipelineModel{
+            auto *age = new PipelineModel{
                 "server",
                 "age",
                 {},
@@ -317,7 +326,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({age, -1});
 
-            PipelineModel *sink = new PipelineModel{
+            auto *sink = new PipelineModel{
                 "server",
                 "sink",
                 {},
@@ -334,8 +343,8 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             return {datasource, yolov5n, retina1face, movenet, gender, age, sink};
         }
         case PipelineType::Video_Call: {
-            PipelineModel *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
-            PipelineModel *retina1face = new PipelineModel{
+            auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
+            auto *retina1face = new PipelineModel{
                 "server",
                 "retina1face",
                 {},
@@ -347,7 +356,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             datasource->downstreams.push_back({retina1face, -1});
 
-            PipelineModel *emotionnet = new PipelineModel{
+            auto *emotionnet = new PipelineModel{
                 "server",
                 "emotionnet",
                 {},
@@ -359,7 +368,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({emotionnet, -1});
 
-            PipelineModel *age = new PipelineModel{
+            auto *age = new PipelineModel{
                 "server",
                 "age",
                 {},
@@ -371,7 +380,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({age, -1});
 
-            PipelineModel *gender = new PipelineModel{
+            auto *gender = new PipelineModel{
                 "server",
                 "gender",
                 {},
@@ -383,7 +392,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({gender, -1});
 
-            PipelineModel *arcface = new PipelineModel{
+            auto *arcface = new PipelineModel{
                 "server",
                 "arcface",
                 {},
@@ -395,7 +404,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             retina1face->downstreams.push_back({arcface, -1});
 
-            PipelineModel *sink = new PipelineModel{
+            auto *sink = new PipelineModel{
                 "server",
                 "sink",
                 {},

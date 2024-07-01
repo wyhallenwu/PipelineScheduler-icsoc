@@ -91,7 +91,7 @@ Controller::Controller(int argc, char **argv) {
 Controller::~Controller() {
     std::unique_lock<std::mutex> lock(containers.containersMutex);
     for (auto &msvc: containers.list) {
-        StopContainer(msvc.first, msvc.second->device_agent, true);
+        StopContainer(msvc.second, msvc.second->device_agent, true);
     }
 
     std::unique_lock<std::mutex> lock2(devices.devicesMutex);
@@ -297,12 +297,12 @@ void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_dev
             SyncDatasource(msvc, upstr);
         } else if (merge_dsrc) {
             SyncDatasource(upstr, msvc);
-            StopContainer(upstr->name, old_device);
+            StopContainer(upstr, old_device);
         } else {
             AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
         }
     }
-    StopContainer(msvc->name, old_device);
+    StopContainer(msvc, old_device);
     old_device->containers.erase(msvc->name);
 }
 
@@ -366,16 +366,24 @@ void Controller::AdjustResolution(ContainerHandle *msvc, std::vector<int> new_re
     finishGrpc(rpc, reply, status, msvc->device_agent->cq);
 }
 
-void Controller::StopContainer(std::string name, NodeHandle *device, bool forced) {
+void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, bool forced) {
     ContainerSignal request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
-    request.set_name(name);
+    request.set_name(container->name);
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            device->stub->AsyncStopContainer(&context, request, containers.list[name]->device_agent->cq));
+            device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
     finishGrpc(rpc, reply, status, device->cq);
+    containers.list.erase(container->name);
+    container->device_agent->containers.erase(container->name);
+    for (auto upstr: container->upstreams) {
+        upstr->downstreams.erase(std::remove(upstr->downstreams.begin(), upstr->downstreams.end(), container), upstr->downstreams.end());
+    }
+    for (auto dwnstr: container->downstreams) {
+        dwnstr->upstreams.erase(std::remove(dwnstr->upstreams.begin(), dwnstr->upstreams.end(), container), dwnstr->upstreams.end());
+    }
 }
 
 /**
