@@ -23,11 +23,11 @@ void Controller::readConfigFile(const std::string &path) {
 
 void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskStruct &val) {
     j.at("pipeline_name").get_to(val.name);
-    val.fullName = val.name + "_" + val.device;
     j.at("pipeline_target_slo").get_to(val.slo);
     j.at("pipeline_type").get_to(val.type);
     j.at("video_source").get_to(val.source);
     j.at("pipeline_source_device").get_to(val.device);
+    val.fullName = val.name + "_" + val.device;
 }
 
 Controller::Controller(int argc, char **argv) {
