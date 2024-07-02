@@ -1,13 +1,11 @@
 #include "controller.h"
 
-int main() {
-    auto controller = new Controller();
+int main(int argc, char **argv) {
+    auto controller = new Controller(argc, argv);
     std::thread receiver_thread(&Controller::HandleRecvRpcs, controller);
     receiver_thread.detach();
     std::thread scheduling_thread(&Controller::Scheduling, controller);
     scheduling_thread.detach();
-    std::ifstream file("../jsons/experiment.json");
-    std::vector<TaskDescription::TaskStruct> tasks = json::parse(file);
     std::string command;
     //////////////////////////////////////distream add////////////////////////////////////////////
     //init partitioner
@@ -54,18 +52,31 @@ int main() {
     ////////////////////////////////////////////////////end//////////////////////////////////////////////
 
     while (controller->isRunning()) {
+        while (true) {
+            // Get input from user
+            std::cout << "You need to connect the devices before adding task. Ready? (yes/no): " << std::endl;
+            std::cin >> command;
+            if (command == "yes") {
+                break;
+            } else if (command == "no") {
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+            } else {
+                std::cout << "Invalid command" << std::endl;
+            }
+        }
         TaskDescription::TaskStruct task;
-        std::cout << "Enter command {init, traffic, video_call, people, exit): ";
+        std::cout << "Enter command {init, init_remain, traffic, video_call, people, exit): ";
         std::cin >> command;
         if (command == "exit") {
             controller->Stop();
             break;
         } else if (command == "init") {
-            for (auto &t: tasks) {
-                controller->AddTask(t);
-            }
+            controller->Init();
             continue;
-        } else if (command == "traffic") {
+        } else if (command == "init_remain") {
+            controller->InitRemain();
+            continue;
+        }  else if (command == "traffic") {
             task.type = PipelineType::Traffic;
         } else if (command == "video_call") {
             task.type = PipelineType::Video_Call;
@@ -83,7 +94,11 @@ int main() {
         std::cin >> task.source;
         std::cout << "Enter name of source device: ";
         std::cin >> task.device;
-        controller->AddTask(task);
+        bool added = controller->AddTask(task);
+        if (!added) {
+            std::cout << "Failed to add task" << std::endl;
+            controller->addRemainTask(task);
+        }
     }
     delete controller;
     return 0;

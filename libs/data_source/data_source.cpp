@@ -1,30 +1,40 @@
 #include "data_source.h"
 
-// DataSourceAgent::DataSourceAgent(
-//         const std::string &name,
-//         uint16_t own_port,
-//         int8_t devIndex,
-//         std::string logPath,
-//         RUNMODE runmode,
-//         const json &profiling_configs,
-//         const json &cont_configs
-// ) : ContainerAgent(name, own_port, devIndex, logPath, runmode, profiling_configs) {
+void DataSourceAgent::runService(const json &pipeConfigs, const json &configs) {
+    if (configs["cont_allocationMode"] == 0) {
+        while (!cont_msvcsList[0]->checkReady()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000 / pipeConfigs[0]["msvc_idealBatchSize"].get<int>()));
+        }
+    } else {
+        cont_msvcsList[0]->setReady();
+    }
+    this->dispatchMicroservices();
 
-// }
+    this->waitReady();
+    this->START();
+    collectRuntimeMetrics();
 
-DataSourceAgent::DataSourceAgent(
-    const json &configs
-) : ContainerAgent(configs) {
-    json pipeConfigs = configs["container"]["cont_pipeline"];
-    cont_msvcsList.push_back(new DataReader(pipeConfigs[0]));
-    cont_msvcsList.push_back(new RemoteCPUSender(pipeConfigs[1]));
-    cont_msvcsList[1]->SetInQueue(cont_msvcsList[0]->GetOutQueue());
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    exit(0);
 }
 
-int main(int argc, char **argv) {
-    json configs = loadRunArgs(argc, argv);
-    ContainerAgent *agent = new DataSourceAgent(configs);
-    agent->runService("", configs);
-    delete agent;
-    return 0;
+
+void DataSourceAgent::SetStartFrameRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestSetStartFrame(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        msvcs->front()->SetCurrFrameID(request.value() - 1);
+        msvcs->front()->setReady();
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void DataSourceAgent::HandleRecvRpcs() {
+    new SetStartFrameRequestHandler(&service, server_cq.get(), &cont_msvcsList);
+    ContainerAgent::HandleRecvRpcs();
 }

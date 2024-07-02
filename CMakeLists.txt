@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.18)
 project(PipePlusPlus)
 
+option(ON_HOST "Enable Test Builds" OFF)
+
 # Use ccache to speed up rebuilds
 include(cmake/ccache.cmake)
 
@@ -55,104 +57,169 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     endif ()
 endif ()
 
-# Specify the path to TensorRT root dir
-if (NOT TensorRT_DIR)
-    set(TensorRT_DIR /TensorRT/)
-endif ()
-# Use the correct version of CUDA
-set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
+if (ON_HOST STREQUAL "ON")
+    message(STATUS "Building for host======================================")
 
-# Set LightGBM include directories
-set(LIGHTGBM_INCLUDE_DIR "/usr/include/LightGBM")
-include_directories(${LIGHTGBM_INCLUDE_DIR})
+    # Use the correct version of CUDA
+    set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
 
-# Find LightGBM library
-find_library(LIGHTGBM_LIBRARY
+    find_package(Threads REQUIRED)
+
+    find_package(CUDA REQUIRED)
+    find_package(OpenCV REQUIRED)
+    find_package(CUDAToolkit REQUIRED)
+    # find_package(LightGBM REQUIRED)
+
+    # Find Protobuf installation
+    option(protobuf_MODULE_COMPATIBLE TRUE)
+    find_package(Protobuf CONFIG REQUIRED)
+    message(STATUS "Using protobuf ${Protobuf_VERSION}")
+
+    set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
+    set(_REFLECTION gRPC::grpc++_reflection)
+    if (CMAKE_CROSSCOMPILING)
+    find_program(_PROTOBUF_PROTOC protoc)
+    else ()
+    set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
+    endif ()
+
+    # Find Boost installation
+    find_package(Boost REQUIRED)
+    include_directories(${Boost_INCLUDE_DIR})
+
+    # Find gRPC installation
+    # Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
+    find_package(gRPC CONFIG REQUIRED)
+    message(STATUS "Using gRPC ${gRPC_VERSION}")
+
+    set(_GRPC_GRPCPP gRPC::grpc++)
+    if (CMAKE_CROSSCOMPILING)
+    find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+    else ()
+    set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
+    endif ()
+
+    find_package(spdlog REQUIRED)
+
+    find_package(PostgreSQL REQUIRED)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBPQXX REQUIRED libpqxx)
+
+    # Manually specify the path to the protobufprotocols
+    set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
+
+    add_subdirectory(libs/misc)
+    add_subdirectory(libs/microservice)
+    add_subdirectory(libs/protobufprotocols)
+    add_subdirectory(libs/controller)
+    add_subdirectory(libs/communicator)
+    add_subdirectory(libs/container_agent)
+    add_subdirectory(libs/device_agent)
+
+    add_executable(Communicator libs/communicator/main.cpp)
+    target_link_libraries(Communicator communicator)
+
+    add_executable(DeviceAgent libs/device_agent/main.cpp)
+    target_link_libraries(DeviceAgent device_agent)
+else()
+    # Specify the path to TensorRT root dir
+    if (NOT TensorRT_DIR)
+        set(TensorRT_DIR /TensorRT/)
+    endif ()
+    # Use the correct version of CUDA
+    set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
+
+    # Set LightGBM include directories
+    set(LIGHTGBM_INCLUDE_DIR "/usr/include/LightGBM")
+    include_directories(${LIGHTGBM_INCLUDE_DIR})
+
+    # Find LightGBM library
+    find_library(LIGHTGBM_LIBRARY
     NAMES lib_lightgbm.so
     PATHS "/usr/lib"
     NO_DEFAULT_PATH)
 
-if(NOT LIGHTGBM_LIBRARY)
-    message(FATAL_ERROR "LightGBM library not found.")
-endif()
+    if(NOT LIGHTGBM_LIBRARY)
+        message(FATAL_ERROR "LightGBM library not found.")
+    endif()
 
-find_package(Threads REQUIRED)
+    find_package(Threads REQUIRED)
 
-# We require CUDA, OpenCV, and TensorRT
-find_package(TensorRT REQUIRED)
-find_package(CUDA REQUIRED)
-find_package(OpenCV REQUIRED)
-find_package(CUDAToolkit REQUIRED)
-# find_package(LightGBM REQUIRED)
+    # We require CUDA, OpenCV, and TensorRT
+    find_package(TensorRT REQUIRED)
+    find_package(CUDA REQUIRED)
+    find_package(OpenCV REQUIRED)
+    find_package(CUDAToolkit REQUIRED)
+    # find_package(LightGBM REQUIRED)
 
-# Find Protobuf installation
-option(protobuf_MODULE_COMPATIBLE TRUE)
-find_package(Protobuf CONFIG REQUIRED)
-message(STATUS "Using protobuf ${Protobuf_VERSION}")
+    # Find Protobuf installation
+    option(protobuf_MODULE_COMPATIBLE TRUE)
+    find_package(Protobuf CONFIG REQUIRED)
+    message(STATUS "Using protobuf ${Protobuf_VERSION}")
 
-set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
-set(_REFLECTION gRPC::grpc++_reflection)
-if (CMAKE_CROSSCOMPILING)
+    set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
+    set(_REFLECTION gRPC::grpc++_reflection)
+    if (CMAKE_CROSSCOMPILING)
     find_program(_PROTOBUF_PROTOC protoc)
-else ()
+    else ()
     set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
-endif ()
+    endif ()
 
-# Find Boost installation
-find_package(Boost REQUIRED)
-include_directories(${Boost_INCLUDE_DIR})
+    # Find Boost installation
+    find_package(Boost REQUIRED)
+    include_directories(${Boost_INCLUDE_DIR})
 
-# Find gRPC installation
-# Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
-find_package(gRPC CONFIG REQUIRED)
-message(STATUS "Using gRPC ${gRPC_VERSION}")
+    # Find gRPC installation
+    # Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
+    find_package(gRPC CONFIG REQUIRED)
+    message(STATUS "Using gRPC ${gRPC_VERSION}")
 
-set(_GRPC_GRPCPP gRPC::grpc++)
-if (CMAKE_CROSSCOMPILING)
+    set(_GRPC_GRPCPP gRPC::grpc++)
+    if (CMAKE_CROSSCOMPILING)
     find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-else ()
+    else ()
     set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
-endif ()
+    endif ()
 
-find_package(spdlog REQUIRED)
+    find_package(spdlog REQUIRED)
 
-find_package(PostgreSQL REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBPQXX REQUIRED libpqxx)
+    find_package(PostgreSQL REQUIRED)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBPQXX REQUIRED libpqxx)
 
-# Manually specify the path to the protobufprotocols
-set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
+    # Manually specify the path to the protobufprotocols
+    set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
 
-add_subdirectory(libs/misc)
-add_subdirectory(libs/microservice)
-add_subdirectory(libs/protobufprotocols)
-add_subdirectory(libs/controller)
-add_subdirectory(libs/communicator)
-add_subdirectory(libs/container_agent)
-add_subdirectory(libs/trtengine)
-add_subdirectory(libs/onnx2trt)
-add_subdirectory(libs/baseprocessors)
-add_subdirectory(libs/data_source)
-add_subdirectory(libs/yolov5)
-add_subdirectory(libs/yolov5-plate)
-add_subdirectory(libs/retinaface)
-add_subdirectory(libs/arcface)
-add_subdirectory(libs/movenet)
-add_subdirectory(libs/emotionnet)
-add_subdirectory(libs/gender)
-add_subdirectory(libs/age)
-add_subdirectory(libs/carbrand)
-add_subdirectory(libs/device_agent)
+    add_subdirectory(libs/misc)
+    add_subdirectory(libs/microservice)
+    add_subdirectory(libs/protobufprotocols)
+    add_subdirectory(libs/controller)
+    add_subdirectory(libs/communicator)
+    add_subdirectory(libs/container_agent)
+    add_subdirectory(libs/trtengine)
+    add_subdirectory(libs/onnx2trt)
+    add_subdirectory(libs/baseprocessors)
+    add_subdirectory(libs/data_source)
+    add_subdirectory(libs/yolov5)
+    add_subdirectory(libs/yolov5-plate)
+    add_subdirectory(libs/retinaface)
+    add_subdirectory(libs/arcface)
+    add_subdirectory(libs/movenet)
+    add_subdirectory(libs/emotionnet)
+    add_subdirectory(libs/gender)
+    add_subdirectory(libs/age)
+    add_subdirectory(libs/carbrand)
+    add_subdirectory(libs/device_agent)
 
-add_library(PipePlusPlusSink
-         src/main.cpp)
+    add_library(PipePlusPlusSink
+        src/main.cpp)
 
-target_include_directories(PipePlusPlusSink PUBLIC
+    target_include_directories(PipePlusPlusSink PUBLIC
         ${OpenCV_INCLUDE_DIRS}
         ${CUDA_INCLUDE_DIRS}
         ${TensorRT_INCLUDE_DIRS}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../libs/protobufprotocols>)
-target_link_libraries(PipePlusPlusSink PUBLIC
+    target_link_libraries(PipePlusPlusSink PUBLIC
         data_grpc_proto
         ${OpenCV_LIBS}
         ${CUDA_LIBRARIES}
@@ -166,48 +233,50 @@ target_link_libraries(PipePlusPlusSink PUBLIC
         communicator
         trtengine
         baseprocessors
-)
-add_executable(runSink src/main.cpp)
-target_link_libraries(runSink PipePlusPlusSink)
+    )
+    add_executable(runSink src/main.cpp)
+    target_link_libraries(runSink PipePlusPlusSink)
 
-add_executable(Communicator libs/communicator/main.cpp)
-target_link_libraries(Communicator communicator)
+    add_executable(Communicator libs/communicator/main.cpp)
+    target_link_libraries(Communicator communicator)
 
-add_executable(DeviceAgent libs/device_agent/main.cpp)
-target_link_libraries(DeviceAgent device_agent)
+    add_executable(DeviceAgent libs/device_agent/main.cpp)
+    target_link_libraries(DeviceAgent device_agent)
 
-add_executable(Controller libs/controller/main.cpp)
-target_link_libraries(Controller controller)
+    add_executable(Controller libs/controller/main.cpp)
+    target_link_libraries(Controller controller)
 
-add_executable(Container_DataSource libs/data_source/data_source.cpp)
-target_link_libraries(Container_DataSource data_source)
+    add_executable(Container_DataSource libs/data_source/main.cpp)
+    target_link_libraries(Container_DataSource data_source)
 
-add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
-target_link_libraries(Container_Yolov5 yolov5)
+    add_executable(Container_Yolov5 libs/yolov5/yolov5.cpp)
+    target_link_libraries(Container_Yolov5 yolov5)
 
-add_executable(Container_Yolov5-plate libs/yolov5-plate/yolov5-plate.cpp)
-target_link_libraries(Container_Yolov5-plate yolov5-plate)
+    add_executable(Container_PlateDet libs/yolov5-plate/yolov5-plate.cpp)
+    target_link_libraries(Container_PlateDet yolov5-plate)
 
-add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
-target_link_libraries(convert_onnx2trt onnx2trt)
+    add_executable(convert_onnx2trt libs/onnx2trt/onnx2trt.cpp)
+    target_link_libraries(convert_onnx2trt onnx2trt)
 
-add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
-target_link_libraries(Container_RetinaFace retinaface)
+    add_executable(Container_RetinaFace libs/retinaface/retinaface.cpp)
+    target_link_libraries(Container_RetinaFace retinaface)
 
-add_executable(Container_ArcFace libs/arcface/arcface.cpp)
-target_link_libraries(Container_ArcFace arcface)
+    add_executable(Container_ArcFace libs/arcface/arcface.cpp)
+    target_link_libraries(Container_ArcFace arcface)
 
-add_executable(Container_MoveNet libs/movenet/movenet.cpp)
-target_link_libraries(Container_MoveNet movenet)
+    add_executable(Container_MoveNet libs/movenet/movenet.cpp)
+    target_link_libraries(Container_MoveNet movenet)
 
-add_executable(Container_EmotionNet libs/emotionnet/emotionnet.cpp)
-target_link_libraries(Container_EmotionNet emotionnet)
+    add_executable(Container_EmotionNet libs/emotionnet/emotionnet.cpp)
+    target_link_libraries(Container_EmotionNet emotionnet)
 
-add_executable(Container_Gender libs/gender/gender.cpp)
-target_link_libraries(Container_Gender gender)
+    add_executable(Container_Gender libs/gender/gender.cpp)
+    target_link_libraries(Container_Gender gender)
 
-add_executable(Container_Age libs/age/age.cpp)
-target_link_libraries(Container_Age age)
+    add_executable(Container_Age libs/age/age.cpp)
+    target_link_libraries(Container_Age age)
 
-add_executable(Container_CarBrand libs/carbrand/carbrand.cpp)
-target_link_libraries(Container_CarBrand carbrand)
+    add_executable(Container_CarBrand libs/carbrand/carbrand.cpp)
+    target_link_libraries(Container_CarBrand carbrand)
+    
+endif()

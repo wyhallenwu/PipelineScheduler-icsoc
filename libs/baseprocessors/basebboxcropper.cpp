@@ -122,16 +122,16 @@ inline void cropOneBox(
 }
 
 void BaseBBoxCropper::loadConfigs(const json &jsonConfigs, bool isConstructing) {
-    spdlog::trace("{0:s} is LOANDING configs...", __func__);
+    spdlog::get("container_agent")->trace("{0:s} is LOANDING configs...", __func__);
     if (!isConstructing) { // If this is not called from the constructor
         BasePostprocessor::loadConfigs(jsonConfigs, isConstructing);
     }
-    spdlog::trace("{0:s} FINISHED loading configs...", __func__);
+    spdlog::get("container_agent")->trace("{0:s} FINISHED loading configs...", __func__);
 }
 
 BaseBBoxCropper::BaseBBoxCropper(const json &jsonConfigs) : BasePostprocessor(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
-    info("{0:s} is created.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name); 
 }
 
 void BaseBBoxCropper::cropping() {
@@ -163,7 +163,7 @@ void BaseBBoxCropper::cropping() {
 
     // Shape of cropped bounding boxes
     RequestDataShapeType bboxShape;
-    info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name); 
 
 
     cudaStream_t postProcStream;
@@ -205,14 +205,14 @@ void BaseBBoxCropper::cropping() {
 
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
-            info("{0:s} STOPS.", msvc_name);
+        if (STOP_THREADS) {
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
-        else if (this->PAUSE_THREADS) {
+        else if (PAUSE_THREADS) {
             if (RELOADING){
                 READY = false;
-                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 /**
                  * @brief Opening a new log file
                  * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
@@ -239,10 +239,17 @@ void BaseBBoxCropper::cropping() {
                 delete nmsed_scores;
                 delete nmsed_classes;
 
-                num_detections = new int32_t[msvc_idealBatchSize];
-                nmsed_boxes = new float[msvc_idealBatchSize * maxNumDets * 4];
-                nmsed_scores = new float[msvc_idealBatchSize * maxNumDets];
-                nmsed_classes = new float[msvc_idealBatchSize * maxNumDets];
+                BatchSizeType batchSize;
+                if (msvc_allocationMode == AllocationMode::Conservative) {
+                    batchSize = msvc_idealBatchSize;
+                } else if (msvc_allocationMode == AllocationMode::Aggressive) {
+                    batchSize = msvc_maxBatchSize;
+                }
+                num_detections = new int32_t[batchSize];
+                nmsed_boxes = new float[batchSize * maxNumDets * 4];
+                nmsed_scores = new float[batchSize * maxNumDets];
+                nmsed_classes = new float[batchSize * maxNumDets];
+                
 
                 ptrList = {nmsed_boxes, nmsed_scores, nmsed_classes};
 
@@ -250,7 +257,7 @@ void BaseBBoxCropper::cropping() {
 
                 RELOADING = false;
                 READY = true;
-                info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
@@ -275,16 +282,16 @@ void BaseBBoxCropper::cropping() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (this->msvc_inReqCount > 1) {
-            this->updateReqRate(currReq_genTime);
+        if (msvc_inReqCount > 1) {
+            updateReqRate(currReq_genTime);
         }
         currReq_batchSize = currReq.req_batchSize;
-        trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
+        spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
         currReq_data = currReq.req_data;
 
         for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
-            bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
+            bufferSize = msvc_modelDataType * (size_t)currReq_batchSize;
             RequestDataShapeType shape = currReq_data[i].shape;
             for (uint8_t j = 0; j < shape.size(); ++j) {
                 bufferSize *= shape[j];
@@ -309,7 +316,7 @@ void BaseBBoxCropper::cropping() {
         }
 
         checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
-        trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
+        spdlog::get("container_agent")->trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
 
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
@@ -342,10 +349,12 @@ void BaseBBoxCropper::cropping() {
             orig_w = imageList[i].shape[2];
 
             crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
-            trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
+            spdlog::get("container_agent")->trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             uint32_t totalInMem = imageList[i].data.channels() * imageList[i].data.rows * imageList[i].data.cols * CV_ELEM_SIZE1(imageList[i].data.type());
             uint32_t totalOutMem = 0;
+
+            std::vector<PerQueueOutRequest> outReqList(msvc_OutQueue.size());
 
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {
@@ -362,16 +371,19 @@ void BaseBBoxCropper::cropping() {
                     continue;
                 }
 
-                if (bboxClass == 0 || bboxClass == 2) {
-                    saveGPUAsImg(singleImageBBoxList[j], "bbox_" + std::to_string(j) + ".jpg");
-                }
+                // if (bboxClass == 0 || bboxClass == 2) {
+                //     saveGPUAsImg(singleImageBBoxList[j], "bbox_" + std::to_string(j) + ".jpg");
+                // }
 
                 // Putting the bounding box into an `outReq` to be sent out
                 bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};
 
                 for (auto qIndex : queueIndex) {
+                    outReqList.at(qIndex).used = true;
+                    std::string path = currReq_path;
+                    path += "|" + std::to_string(numDetsInFrame) + "|" + std::to_string(j);
                     // Put the correct type of outreq for the downstream, a sender, which expects either LocalGPU or localCPU
-                    if (this->msvc_activeOutQueueIndex.at(qIndex) == 1) { //Local CPU
+                    if (msvc_activeOutQueueIndex.at(qIndex) == 1) { //Local CPU
                         cv::Mat out(singleImageBBoxList[j].size(), singleImageBBoxList[j].type());
                         checkCudaErrorCode(cudaMemcpyAsync(
                             out.ptr(),
@@ -388,39 +400,67 @@ void BaseBBoxCropper::cropping() {
                             out
                         };
 
-                        msvc_OutQueue.at(qIndex)->emplace(
-                            Request<LocalCPUReqDataType>{
-                                {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
-                                {currReq.req_e2eSLOLatency[i]},
-                                {currReq_path},
-                                1,
-                                {reqDataCPU} //req_data
-                                // currReq.req_data // upstreamReq_data
-                            }
-                        );
 
-                        trace("{0:s} emplaced a bbox of class {1:d} to CPU queue {2:d}.", msvc_name, bboxClass, qIndex);
+                        outReqList.at(qIndex).cpuReq.req_origGenTime.emplace_back(RequestTimeType{currReq.req_origGenTime[i].front()});
+                        outReqList.at(qIndex).cpuReq.req_e2eSLOLatency.emplace_back(currReq.req_e2eSLOLatency[i]);
+                        outReqList.at(qIndex).cpuReq.req_travelPath.emplace_back(path);
+                        outReqList.at(qIndex).cpuReq.req_data.emplace_back(reqDataCPU);
+                        outReqList.at(qIndex).cpuReq.req_batchSize = 1;
+
+                        spdlog::get("container_agent")->trace("{0:s} emplaced a bbox of class {1:d} to CPU queue {2:d}.", msvc_name, bboxClass, qIndex);
                     } else {
-                        reqData = {
-                            bboxShape,
-                            singleImageBBoxList[j].clone()
-                        };
-                        msvc_OutQueue.at(qIndex)->emplace(
-                            Request<LocalGPUReqDataType>{
-                                {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
-                                {currReq.req_e2eSLOLatency[i]},
-                                {currReq_path},
-                                1,
-                                {reqData} //req_data
-                                // currReq.req_data // upstreamReq_data
-                            }
-                        );
-                        trace("{0:s} emplaced a bbox of class {1:d} to GPU queue {2:d}.", msvc_name, bboxClass, qIndex);
+                        cv::cuda::GpuMat out(singleImageBBoxList[j].size(), singleImageBBoxList[j].type());
+                        checkCudaErrorCode(cudaMemcpyAsync(
+                            out.cudaPtr(),
+                            singleImageBBoxList[j].cudaPtr(),
+                            singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type()),
+                            cudaMemcpyDeviceToDevice,
+                            postProcStream
+                        ), __func__);
+
+                        outReqList.at(qIndex).gpuReq.req_origGenTime.emplace_back(RequestTimeType{currReq.req_origGenTime[i].front()});
+                        outReqList.at(qIndex).gpuReq.req_e2eSLOLatency.emplace_back(currReq.req_e2eSLOLatency[i]);
+                        outReqList.at(qIndex).gpuReq.req_travelPath.emplace_back(path);
+                        outReqList.at(qIndex).gpuReq.req_data.emplace_back(reqData);
+                        outReqList.at(qIndex).gpuReq.req_batchSize = 1;
+
+                        spdlog::get("container_agent")->trace("{0:s} emplaced a bbox of class {1:d} to GPU queue {2:d}.", msvc_name, bboxClass, qIndex);
                     }
-                    totalOutMem += singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type());
+                    uint32_t imageMemSize = singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type());
+                    outReqList.at(qIndex).totalSize += imageMemSize;
+                    totalOutMem += imageMemSize;
                 }
                 queueIndex.clear();
             }
+
+            NumQueuesType qIndex = 0;
+            for (auto &outReq : outReqList) {
+                if (outReq.used) {
+                    if (msvc_activeOutQueueIndex.at(qIndex) == 1) { //Local CPU GPU
+                        // Add the total size of bounding boxes heading to this queue
+                        for (auto &path : outReq.cpuReq.req_travelPath) {
+                            path += "|" + std::to_string(outReq.totalSize) + "]";
+                        }
+                        // Make sure the time is uniform across all the bounding boxes
+                        for (auto &time : outReq.cpuReq.req_origGenTime) {
+                            time.emplace_back(std::chrono::high_resolution_clock::now());
+                        }
+                        msvc_OutQueue.at(qIndex)->emplace(outReq.cpuReq);
+                    } else { //Local GPU Queue
+                        // Add the total size of bounding boxes heading to this queue
+                        for (auto &path : outReq.gpuReq.req_travelPath) {
+                            path += "|" + std::to_string(outReq.totalSize) + "]";
+                        }
+                        // Make sure the time is uniform across all the bounding boxes
+                        for (auto &time : outReq.gpuReq.req_origGenTime) {
+                            time.emplace_back(std::chrono::high_resolution_clock::now());
+                        }
+                        msvc_OutQueue.at(qIndex)->emplace(outReq.gpuReq);
+                    }
+                }
+                qIndex++;
+            }
+
             // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
             // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
             // Clearing out data of the vector
@@ -436,12 +476,11 @@ void BaseBBoxCropper::cropping() {
              * 7. When each request was completed by the postprocessor
              */
 
-            msvc_batchCount++;
             // If the number of warmup batches has been passed, we start to record the latency
             if (msvc_batchCount > msvc_numWarmupBatches) {
                 currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
                 // TODO: Add the request number
-                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0);
+                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0, getOriginStream(currReq.req_travelPath[i]));
             }
 
             singleImageBBoxList.clear();
@@ -451,10 +490,10 @@ void BaseBBoxCropper::cropping() {
         //     checkCudaErrorCode(cudaFree(currReq_data.at(i).data.cudaPtr()));
         // }
 
-
+        msvc_batchCount++;
         
-        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+        spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
         // Synchronize the cuda stream
     }
 
@@ -530,7 +569,7 @@ void BaseBBoxCropper::cropProfiling() {
 
     // Shape of cropped bounding boxes
     RequestDataShapeType bboxShape;
-    info("{0:s} STARTS.", msvc_name); 
+    spdlog::get("container_agent")->info("{0:s} STARTS.", msvc_name); 
 
 
     cudaStream_t postProcStream;
@@ -582,14 +621,14 @@ void BaseBBoxCropper::cropProfiling() {
 
     while (true) {
         // Allowing this thread to naturally come to an end
-        if (this->STOP_THREADS) {
-            info("{0:s} STOPS.", msvc_name);
+        if (STOP_THREADS) {
+            spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
         }
-        else if (this->PAUSE_THREADS) {
+        else if (PAUSE_THREADS) {
             if (RELOADING){
                 READY = false;
-                spdlog::trace("{0:s} is BEING (re)loaded...", msvc_name);
+                spdlog::get("container_agent")->trace("{0:s} is BEING (re)loaded...", msvc_name);
                 /**
                  * @brief Opening a new log file
                  * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
@@ -633,7 +672,7 @@ void BaseBBoxCropper::cropProfiling() {
 
                 RELOADING = false;
                 READY = true;
-                info("{0:s} is (RE)LOADED.", msvc_name);
+                spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
             //info("{0:s} is being PAUSED.", msvc_name);
             continue;
@@ -651,12 +690,12 @@ void BaseBBoxCropper::cropProfiling() {
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
         currReq_batchSize = currReq.req_batchSize;
-        trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
+        spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
         currReq_data = currReq.req_data;
 
         for (std::size_t i = 0; i < (currReq_data.size() - 1); ++i) {
-            bufferSize = this->msvc_modelDataType * (size_t)currReq_batchSize;
+            bufferSize = msvc_modelDataType * (size_t)currReq_batchSize;
             shape = currReq_data[i].shape;
             for (uint8_t j = 0; j < shape.size(); ++j) {
                 bufferSize *= shape[j];
@@ -681,7 +720,7 @@ void BaseBBoxCropper::cropProfiling() {
         }
 
         checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
-        trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
+        spdlog::get("container_agent")->trace("{0:s} unloaded 4 buffers to CPU {1:d}", msvc_name, currReq_batchSize);
 
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
@@ -706,7 +745,7 @@ void BaseBBoxCropper::cropProfiling() {
             orig_w = imageList[i].shape[2];
 
             crop(imageList[i].data, orig_h, orig_w, infer_h, infer_w, numDetsInFrame, nmsed_boxes + i * maxNumDets * 4, singleImageBBoxList);
-            // trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
+            // spdlog::get("container_agent")->trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {
@@ -739,7 +778,7 @@ void BaseBBoxCropper::cropProfiling() {
 
 
                 // msvc_OutQueue.at(queueIndex)->emplace(outReq);
-                // trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, bboxClass, queueIndex);
+                // spdlog::get("container_agent")->trace("{0:s} emplaced a bbox of class {1:d} to queue {2:d}.", msvc_name, bboxClass, queueIndex);
             }
             // // After cropping is done for this image in the batch, the image's cuda memory can be freed.
             // checkCudaErrorCode(cudaFree(imageList[i].data.cudaPtr()));
@@ -789,9 +828,9 @@ void BaseBBoxCropper::cropProfiling() {
 
         // If the current req batch is for warming up (signified by empty request paths), time is not calculated.
         
-        trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+        spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(this->msvc_interReqTime));
+        std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
         // Synchronize the cuda stream
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
