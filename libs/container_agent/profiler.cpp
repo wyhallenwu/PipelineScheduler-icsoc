@@ -218,14 +218,16 @@ int Profiler::getDeviceCPUInfo() {
         std::getline(stream, line);
         std::istringstream linestream(line);
         linestream >> cpu;
-        long total_active = 0;
-        for (int i = 0; i < 10; ++i) {
+        long active = 0, total = 0;
+        for (int i = 0; i < 8; ++i) {
             linestream >> cpu;
-            total_active += std::stol(cpu);
+            if (i < 3 || i > 4) {
+                active += std::stol(cpu);
+            }
+            total += std::stol(cpu);
         }
-        long idle = std::stol(cpu);
-        double cpuUsage = 100.0 * (double) (total_active - prevCpuTimes[0].front().first) / (total_active - idle);
-        prevCpuTimes[0].push(std::make_pair(total_active, idle));
+        double cpuUsage = 100.0 * (double) (active - prevCpuTimes[0].front().first) / (total - prevCpuTimes[0].front().second);
+        prevCpuTimes[0].push(std::make_pair(active, total));
         if (std::isinf(cpuUsage) || std::isnan(cpuUsage)) {
             return 0.0;
         }
