@@ -229,8 +229,8 @@ struct ContainerHandle {
     ContainerHandle& operator=(const ContainerHandle& other) {
         if (this != &other) {
             std::lock(containerHandleMutex, other.containerHandleMutex);
-            std::lock_guard<std::mutex> lock(containerHandleMutex);
-            std::lock_guard<std::mutex> lock2(other.containerHandleMutex);
+            std::lock_guard<std::mutex> lock1(containerHandleMutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(other.containerHandleMutex, std::adopt_lock);
             name = other.name;
             class_of_interest = other.class_of_interest;
             model = other.model;
@@ -349,8 +349,9 @@ struct PipelineModel {
     // Assignment operator
     PipelineModel& operator=(const PipelineModel& other) {
         if (this != &other) {
-            std::lock_guard<std::mutex> lock(pipelineModelMutex);
-            std::lock_guard<std::mutex> lock2(other.pipelineModelMutex);
+            std::lock(pipelineModelMutex, other.pipelineModelMutex);
+            std::lock_guard<std::mutex> lock1(pipelineModelMutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(other.pipelineModelMutex, std::adopt_lock);
             device = other.device;
             name = other.name;
             task = other.task;
@@ -419,8 +420,8 @@ struct TaskHandle {
 
     TaskHandle(const TaskHandle& other) {
         std::lock(tk_mutex, other.tk_mutex);
-        std::lock_guard<std::mutex> lock(other.tk_mutex);
-        std::lock_guard<std::mutex> lock2(tk_mutex);
+        std::lock_guard<std::mutex> lock1(other.tk_mutex, std::adopt_lock);
+        std::lock_guard<std::mutex> lock2(tk_mutex, std::adopt_lock);
         tk_name = other.tk_name;
         tk_fullName = other.tk_fullName;
         tk_type = other.tk_type;
@@ -436,8 +437,8 @@ struct TaskHandle {
     TaskHandle& operator=(const TaskHandle& other) {
         if (this != &other) {
             std::lock(tk_mutex, other.tk_mutex);
-            std::lock_guard<std::mutex> lock1(tk_mutex);
-            std::lock_guard<std::mutex> lock2(other.tk_mutex);
+            std::lock_guard<std::mutex> lock1(tk_mutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(other.tk_mutex, std::adopt_lock);
             tk_name = other.tk_name;
             tk_fullName = other.tk_fullName;
             tk_type = other.tk_type;
