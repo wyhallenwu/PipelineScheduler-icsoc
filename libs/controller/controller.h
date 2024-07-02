@@ -264,7 +264,6 @@ struct ContainerHandle {
 };
 
 struct PipelineModel {
-    std::string device;
     std::string name;
     TaskHandle *task;
     // Whether the upstream is on another device
@@ -297,7 +296,9 @@ struct PipelineModel {
     // The estimated latency of the model
     uint64_t estimatedStart2HereCost = 0;
 
+    std::string device;
     std::string deviceTypeName;
+    NodeHandle *deviceAgent;
 
     bool merged = false;
 
