@@ -55,6 +55,8 @@ public:
 
     sysStats reportAtRuntime(unsigned int pid) {
         std::lock_guard<std::mutex> lock(m); return stats[pid]; };
+    sysStats reportAnyMetrics() {
+        std::lock_guard<std::mutex> lock(m); return stats.begin()->second; };
 
     int getDeviceCPUInfo();
 
