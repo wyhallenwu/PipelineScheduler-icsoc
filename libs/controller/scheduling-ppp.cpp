@@ -155,17 +155,11 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
  */
 void Controller::ApplyScheduling() {
     // collect all running containers by device and model name
-    std::map<NodeHandle *, std::map<std::string, std::vector<ContainerHandle *>>> running_containers;
     std::vector<ContainerHandle *> new_containers;
-    std::unique_lock lock(devices.devicesMutex);
-    for (auto &device: devices.list) {
-        for (auto &container: device.second.containers) {
-            running_containers[&device.second][ModelTypeList[container.second->model]].push_back(container.second);
-        }
-    }
+    std::unique_lock lock_devices(devices.devicesMutex);
+    std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
+    std::unique_lock lock_containers(containers.containersMutex);
 
-    std::unique_lock lock2(ctrl_scheduledPipelines.tasksMutex);
-    std::unique_lock lock3(containers.containersMutex);
     for (auto &pipe: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe.second.tk_pipelineModels) {
             std::unique_lock lock_model(model->pipelineModelMutex);
