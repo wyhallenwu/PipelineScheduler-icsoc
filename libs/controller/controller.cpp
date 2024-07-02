@@ -86,6 +86,8 @@ Controller::Controller(int argc, char **argv) {
     builder.RegisterService(&service);
     cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
+
+    ctrl_nextSchedulingTime = std::chrono::system_clock::now();
 }
 
 Controller::~Controller() {
