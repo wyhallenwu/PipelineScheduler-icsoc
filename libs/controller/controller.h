@@ -40,6 +40,15 @@ ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
 struct ContainerHandle;
 struct PipelineModel;
 
+struct GPULane {
+    std::uint16_t gpuNum;
+    std::uint64_t dutyCycle = 9999999999999999999;
+    std::uint64_t start = 0;
+    std::uint64_t end = 9999999999999999999;
+    GPULane* next = nullptr;
+    GPULane* prev = nullptr;
+};
+
 // Structure that whole information about the pipeline used for scheduling
 typedef std::vector<PipelineModel *> PipelineModelListType;
 
@@ -58,6 +67,11 @@ struct NodeHandle {
     std::map<std::string, ContainerHandle *> containers;
     // The latest network entries to determine the network conditions and latencies of transferring data
     std::map<std::string, NetworkEntryType> latestNetworkEntries = {};
+    //
+    uint8_t numGPULanes;
+    //
+    std::vector<GPULane*> gpuPortions;
+
     mutable std::mutex nodeHandleMutex;
 
     NodeHandle() = default;
@@ -167,6 +181,12 @@ struct ContainerHandle {
     // Expected throughput
     float expectedThroughput = 0;
     //
+    uint64_t startTime;
+    //
+    uint64_t endTime;
+    //
+    GPULane *executionLane = nullptr;
+    //
     mutable std::mutex containerHandleMutex;
 
     ContainerHandle() = default;
@@ -235,6 +255,9 @@ struct ContainerHandle {
             expectedInferLatency = other.expectedInferLatency;
             expectedPostprocessLatency = other.expectedPostprocessLatency;
             expectedThroughput = other.expectedThroughput;
+            startTime = other.startTime;
+            endTime = other.endTime;
+            executionLane = other.executionLane;
         }
         return *this;
     }
@@ -279,6 +302,8 @@ struct PipelineModel {
     bool merged = false;
 
     std::vector<std::string> possibleDevices;
+    // The list of containers that will be created for this model
+    std::vector<ContainerHandle *> manifestations;
 
     mutable std::mutex pipelineModelMutex;
 
@@ -346,6 +371,7 @@ struct PipelineModel {
             deviceTypeName = other.deviceTypeName;
             merged = other.merged;
             possibleDevices = other.possibleDevices;
+            manifestations = other.manifestations;
         }
         return *this;
     }
@@ -500,6 +526,8 @@ public:
     void Stop() { running = false; };
 
 private:
+
+    void initiateGPULanes(NodeHandle &node);
 
     NetworkEntryType initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
     uint8_t incNumReplicas(const PipelineModel *model);
@@ -738,7 +766,7 @@ private:
             return containers;
         }
 
-        std::map<std::string, ContainerHandle*> *getMap() {
+        std::map<std::string, ContainerHandle *> *getMap() {
             std::lock_guard<std::mutex> lock(containersMutex);
             return &list;
         }

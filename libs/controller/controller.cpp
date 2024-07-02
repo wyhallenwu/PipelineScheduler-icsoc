@@ -173,6 +173,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
+        controller->initiateGPULanes(node);
         controller->devices.addDevice(deviceName, node);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
         controller->queryInDeviceNetworkEntries(&(controller->devices.list[deviceName]));

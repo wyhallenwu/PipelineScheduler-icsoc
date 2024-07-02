@@ -1,5 +1,25 @@
 #include "scheduling-ppp.h"
 
+void Controller::initiateGPULanes(NodeHandle &node) {
+    if (node.name == "server") {
+        node.numGPULanes = NUM_GPUS * NUM_LANES_PER_GPU;
+    } else {
+        node.numGPULanes = 1;
+    }
+
+    // Initialize the GPU execution portions
+    for (auto i = 0; i < node.numGPULanes; i++) {
+        GPULane *gpuLane = new GPULane{i / node.numGPULanes};
+        if (i > 0) {
+            gpuLane->prev = node.gpuPortions[i - 1];
+            node.gpuPortions[i - 1]->next = gpuLane;
+        }
+        if (i == node.numGPULanes - 1 && node.numGPULanes > 1) {
+            node.gpuPortions[0]->prev = gpuLane;
+        }
+    }
+}
+
 bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     TaskHandle *task = new TaskHandle{t.name, t.fullName, t.type, t.source, t.device, t.slo, {}, 0};
