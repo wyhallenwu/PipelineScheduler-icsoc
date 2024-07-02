@@ -179,6 +179,10 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         controller->devices.addDevice(deviceName, node);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
         controller->queryInDeviceNetworkEntries(&(controller->devices.list[deviceName]));
+
+        if (deviceName != "server") {
+            controller->initNetworkCheck(node, 500, 2000000, 10);
+        }
     } else {
         GPR_ASSERT(status == FINISH);
         delete this;
