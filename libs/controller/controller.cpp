@@ -98,10 +98,10 @@ Controller::~Controller() {
 
     std::unique_lock<std::mutex> lock2(devices.devicesMutex);
     for (auto &device: devices.list) {
-        device.second.cq->Shutdown();
+        device.second->cq->Shutdown();
         void *got_tag;
         bool ok = false;
-        while (device.second.cq->Next(&got_tag, &ok));
+        while (device.second->cq->Next(&got_tag, &ok));
     }
     server->Shutdown();
     cq->Shutdown();
@@ -118,16 +118,6 @@ void Controller::HandleRecvRpcs() {
         }
         GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
-    }
-}
-
-void Controller::Scheduling() {
-    // TODO: please out your scheduling loop inside of here
-    while (running) {
-        // use list of devices, tasks and containers to schedule depending on your algorithm
-        // put helper functions as a private member function of the controller and write them at the bottom of this file.
-        std::this_thread::sleep_for(std::chrono::milliseconds(
-                5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
     }
 }
 
@@ -162,7 +152,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         new DeviseAdvertisementHandler(service, cq, controller);
         std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), DEVICE_CONTROL_PORT + controller->ctrl_port_offset);
         std::string deviceName = request.device_name();
-        NodeHandle node{deviceName,
+        NodeHandle *node = new NodeHandle{deviceName,
                                      request.ip_address(),
                                      ControlCommunication::NewStub(
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
@@ -177,7 +167,12 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         responder.Finish(reply, Status::OK, this);
         controller->devices.addDevice(deviceName, node);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
-        controller->queryInDeviceNetworkEntries(&(controller->devices.list[deviceName]));
+        controller->queryInDeviceNetworkEntries(controller->devices.list.at(deviceName));
+
+        if (deviceName != "server") {
+            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.list[deviceName])), 1000, 1200000, 30);
+            networkCheck.detach();
+        }
     } else {
         GPR_ASSERT(status == FINISH);
         delete this;
@@ -544,7 +539,7 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
  * @param numLoops 
  * @return NetworkEntryType 
  */
-NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize, uint32_t numLoops) {
+NetworkEntryType Controller::initNetworkCheck(NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize, uint32_t numLoops) {
     LoopRange request;
     EmptyMessage reply;
     ClientContext context;
@@ -561,7 +556,13 @@ NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t m
     }
 
     NetworkEntryType entries = network_check_buffer[node.name];
+    entries = aggregateNetworkEntries(entries);
     network_check_buffer[node.name].clear();
+    spdlog::get("container_agent")->info("Finished network check for device {}.", node.name);
+    std::lock_guard lock(node.nodeHandleMutex);
+    node.initialNetworkCheck = true;
+    node.latestNetworkEntries["server"] = entries;
+    node.lastNetworkCheckTime = std::chrono::system_clock::now();
     return entries;
 };
 
@@ -577,46 +578,54 @@ void Controller::checkNetworkConditions() {
         stopwatch.start();
         std::map<std::string, NetworkEntryType> networkEntries = {};
 
-        for (auto &[deviceName, nodeHandle] : *(devices.getMap())) {
-            if (deviceName == "server") {
+        
+        for (auto [deviceName, nodeHandle] : devices.getMap()) {
+            std::unique_lock<std::mutex> lock(nodeHandle->nodeHandleMutex);
+            bool initialNetworkCheck = nodeHandle->initialNetworkCheck;
+            uint64_t timeSinceLastCheck = std::chrono::duration_cast<TimePrecisionType>(
+                    std::chrono::system_clock::now() - nodeHandle->lastNetworkCheckTime).count() / 1000000;
+            lock.unlock();
+            if (deviceName == "server" || (initialNetworkCheck && timeSinceLastCheck < 60)) {
+                spdlog::get("container_agent")->info("Skipping network check for device {}.", deviceName);
                 continue;
             }
-            networkEntries[deviceName] = {};
+            initNetworkCheck(*nodeHandle, 1000, 1200000, 30);
         }
-        std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
-        std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
-                            "FROM %s ", tableName);
+        // std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
+        // std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
+        //                     "FROM %s ", tableName);
 
-        pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
-        //Getting the latest network entries into the networkEntries map
-        for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
-            std::string sender_host = row["sender_host"].as<std::string>();
-            if (sender_host == "server" || sender_host == "serv") {
-                continue;
-            }
-            std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
-            networkEntries[sender_host].emplace_back(entry);
-        }
+        // pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
+        // //Getting the latest network entries into the networkEntries map
+        // for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
+        //     std::string sender_host = row["sender_host"].as<std::string>();
+        //     if (sender_host == "server" || sender_host == "serv") {
+        //         continue;
+        //     }
+        //     std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
+        //     networkEntries[sender_host].emplace_back(entry);
+        // }
 
-        // Updating NodeHandle object with the latest network entries
-        for (auto &[deviceName, entries] : networkEntries) {
-            // If entry belongs to a device that is not in the list of devices, ignore it
-            if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
-                continue;
-            }
-            std::lock_guard<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
-            devices.list[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
-        }
+        // // Updating NodeHandle object with the latest network entries
+        // for (auto &[deviceName, entries] : networkEntries) {
+        //     // If entry belongs to a device that is not in the list of devices, ignore it
+        //     if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
+        //         continue;
+        //     }
+        //     std::lock_guard<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
+        //     devices.list[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
+        // }
 
-        // If no network entries exist for a device, send a request to the device to perform network testing
-        for (auto &[deviceName, nodeHandle] : devices.list) {
-            if (nodeHandle.latestNetworkEntries.size() == 0) {
-                // TODO: Send a request to the device to perform network testing
+        // // If no network entries exist for a device, send a request to the device to perform network testing
+        // for (auto &[deviceName, nodeHandle] : devices.list) {
+        //     if (nodeHandle.latestNetworkEntries.size() == 0) {
+        //         // TODO: Send a request to the device to perform network testing
 
-            }
-        }
+        //     }
+        // }
 
         stopwatch.stop();
-        std::this_thread::sleep_for(TimePrecisionType(60 * 1000000 - stopwatch.elapsed_microseconds()));
+        uint64_t sleepTimeUs = 60 * 1000000 - stopwatch.elapsed_microseconds();
+        std::this_thread::sleep_for(TimePrecisionType(sleepTimeUs));
     }
 }
