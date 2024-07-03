@@ -40,52 +40,34 @@ void Controller::initiateGPULanes(NodeHandle &node) {
         }
     }
 }
-
 bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     TaskHandle *task = new TaskHandle{t.name, t.fullName, t.type, t.source, t.device, t.slo, {}, 0};
 
-    std::map<std::string, NodeHandle> *deviceList = devices.getMap();
+    std::map<std::string, NodeHandle*> deviceList = devices.getMap();
 
-    if (devices.list.find(t.device) == deviceList->end()) {
+    if (deviceList.find(t.device) == deviceList.end()) {
         spdlog::error("Device {0:s} is not connected", t.device);
         return false;
     }
 
-    task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device);
-    std::unique_lock lock(ctrl_unscheduledPipelines.tasksMutex);
-
-    ctrl_unscheduledPipelines.list.insert({task->tk_name, *task});
-    lock.unlock();
-
-
-    std::vector<std::pair<std::string, std::string>> possibleDevicePairList = {{"server", "server"}};
-    std::map<std::pair<std::string, std::string>, NetworkEntryType> possibleNetworkEntryPairs;
-
-    for (const auto &pair: possibleDevicePairList) {
-        std::unique_lock lock(devices.list[pair.first].nodeHandleMutex);
-        possibleNetworkEntryPairs[pair] = devices.list[pair.first].latestNetworkEntries[pair.second];
-        lock.unlock();
+    while (!deviceList.at(t.device)->initialNetworkCheck) {
+        spdlog::get("container_agent")->info("Waiting for device {0:s} to finish network check", t.device);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    std::vector<std::string> possibleDeviceList = {"server"};
+    task->tk_src_device = t.device;
+
+    task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device);
 
     for (auto& model: task->tk_pipelineModels) {
-        std::string containerName = model->name + "-" + possibleDevicePairList[0].second;
-        if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos) {
+        if (model->name.find("datasource") != std::string::npos || model->name.find("sink") != std::string::npos) {
             continue;
         }
-        model->arrivalProfiles.arrivalRates = queryArrivalRate(
-            *ctrl_metricsServerConn,
-            ctrl_experimentName,
-            ctrl_systemName,
-            t.name,
-            t.source,
-            ctrl_containerLib[containerName].taskName,
-            ctrl_containerLib[containerName].modelName
-        );
+        model->deviceTypeName = getDeviceTypeName(deviceList.at(model->device)->type);
         std::vector<std::string> upstreamPossibleDeviceList = model->upstreams.front().first->possibleDevices;
         std::vector<std::string> thisPossibleDeviceList = model->possibleDevices;
+        std::vector<std::pair<std::string, std::string>> possibleDevicePairList;
         for (const auto &deviceName : upstreamPossibleDeviceList) {
             for (const auto &deviceName2 : thisPossibleDeviceList) {
                 if (deviceName == "server" && deviceName2 != deviceName) {
@@ -202,14 +184,14 @@ void Controller::ApplyScheduling() {
     std::unique_lock lock_containers(containers.containersMutex);
 
     for (auto &pipe: ctrl_scheduledPipelines.list) {
-        for (auto &model: pipe.second.tk_pipelineModels) {
+        for (auto &model: pipe.second->tk_pipelineModels) {
             std::unique_lock lock_model(model->pipelineModelMutex);
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
             // make sure enough containers are running with the right configurations
             if (candidates.size() < model->numReplicas) {
                 // start additional containers
                 for (unsigned int i = candidates.size(); i < model->numReplicas; i++) {
-                    ContainerHandle *container = TranslateToContainer(model, &devices.list[model->device], i);
+                    ContainerHandle *container = TranslateToContainer(model, devices.list[model->device], i);
                     new_containers.push_back(container);
                 }
             } else if (candidates.size() > model->numReplicas) {
@@ -230,7 +212,7 @@ void Controller::ApplyScheduling() {
                 if (candidate->device_agent->name != model->device) {
                     candidate->batch_size = model->batchSize;
                     candidate->cuda_device = model->cudaDevices[i++];
-                    MoveContainer(candidate, &devices.list[model->device]);
+                    MoveContainer(candidate, devices.list[model->device]);
                     continue;
                 }
                 if (candidate->batch_size != model->batchSize)
@@ -366,7 +348,7 @@ void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel
         return;
     }
 
-    std::string deviceTypeName = getDeviceTypeName(devices.list[edgeDevice].type);
+    std::string deviceTypeName = getDeviceTypeName(devices.list[edgeDevice]->type);
 
     uint32_t inputSize = currModel->processProfiles.at(deviceTypeName).p95InputSize;
     uint32_t outputSize = currModel->processProfiles.at(deviceTypeName).p95OutputSize;

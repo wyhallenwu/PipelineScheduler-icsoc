@@ -98,10 +98,10 @@ Controller::~Controller() {
 
     std::unique_lock<std::mutex> lock2(devices.devicesMutex);
     for (auto &device: devices.list) {
-        device.second.cq->Shutdown();
+        device.second->cq->Shutdown();
         void *got_tag;
         bool ok = false;
-        while (device.second.cq->Next(&got_tag, &ok));
+        while (device.second->cq->Next(&got_tag, &ok));
     }
     server->Shutdown();
     cq->Shutdown();
@@ -152,7 +152,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         new DeviseAdvertisementHandler(service, cq, controller);
         std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), DEVICE_CONTROL_PORT + controller->ctrl_port_offset);
         std::string deviceName = request.device_name();
-        NodeHandle node{deviceName,
+        NodeHandle *node = new NodeHandle{deviceName,
                                      request.ip_address(),
                                      ControlCommunication::NewStub(
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
@@ -165,13 +165,13 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
-        controller->initiateGPULanes(node);
+        controller->initiateGPULanes(*node);
         controller->devices.addDevice(deviceName, node);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
-        controller->queryInDeviceNetworkEntries(&(controller->devices.list[deviceName]));
+        controller->queryInDeviceNetworkEntries(controller->devices.list.at(deviceName));
 
         if (deviceName != "server") {
-            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(controller->devices.list[deviceName]), 1000, 1200000, 30);
+            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.list[deviceName])), 1000, 1200000, 30);
             networkCheck.detach();
         }
     } else {
@@ -579,17 +579,18 @@ void Controller::checkNetworkConditions() {
         stopwatch.start();
         std::map<std::string, NetworkEntryType> networkEntries = {};
 
-        for (auto &[deviceName, nodeHandle] : *(devices.getMap())) {
-            std::unique_lock<std::mutex> lock(nodeHandle.nodeHandleMutex);
-            bool initialNetworkCheck = nodeHandle.initialNetworkCheck;
+        
+        for (auto [deviceName, nodeHandle] : devices.getMap()) {
+            std::unique_lock<std::mutex> lock(nodeHandle->nodeHandleMutex);
+            bool initialNetworkCheck = nodeHandle->initialNetworkCheck;
             uint64_t timeSinceLastCheck = std::chrono::duration_cast<TimePrecisionType>(
-                    std::chrono::system_clock::now() - nodeHandle.lastNetworkCheckTime).count() / 1000000;
+                    std::chrono::system_clock::now() - nodeHandle->lastNetworkCheckTime).count() / 1000000;
             lock.unlock();
             if (deviceName == "server" || (initialNetworkCheck && timeSinceLastCheck < 60)) {
                 spdlog::get("container_agent")->info("Skipping network check for device {}.", deviceName);
                 continue;
             }
-            initNetworkCheck(nodeHandle, 1000, 1200000, 30);
+            initNetworkCheck(*nodeHandle, 1000, 1200000, 30);
         }
         // std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
         // std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "

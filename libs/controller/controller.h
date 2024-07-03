@@ -672,7 +672,7 @@ private:
 
     struct Devices {
     public:
-        void addDevice(const std::string &name, const NodeHandle &node) {
+        void addDevice(const std::string &name, NodeHandle *node) {
             std::lock_guard<std::mutex> lock(devicesMutex);
             list[name] = node;
         }
@@ -684,21 +684,21 @@ private:
 
         NodeHandle *getDevice(const std::string &name) {
             std::lock_guard<std::mutex> lock(devicesMutex);
-            return &list[name];
+            return list[name];
         }
 
         std::vector<NodeHandle *> getList() {
             std::lock_guard<std::mutex> lock(devicesMutex);
             std::vector<NodeHandle *> devices;
             for (auto &d: list) {
-                devices.push_back(&d.second);
+                devices.push_back(d.second);
             }
             return devices;
         }
 
-        std::map<std::string, NodeHandle> *getMap() {
+        std::map<std::string, NodeHandle*> getMap() {
             std::lock_guard<std::mutex> lock(devicesMutex);
-            return &list;
+            return list;
         }
 
         bool hasDevice(const std::string &name) {
@@ -707,7 +707,7 @@ private:
         }
     // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
     public:
-        std::map<std::string, NodeHandle> list = {};
+        std::map<std::string, NodeHandle*> list = {};
         std::mutex devicesMutex;
     };
     
@@ -715,7 +715,7 @@ private:
 
     struct Tasks {
     public:
-        void addTask(const std::string &name, const TaskHandle &task) {
+        void addTask(const std::string &name, TaskHandle *task) {
             std::lock_guard<std::mutex> lock(tasksMutex);
             list[name] = task;
         }
@@ -727,21 +727,21 @@ private:
 
         TaskHandle *getTask(const std::string &name) {
             std::lock_guard<std::mutex> lock(tasksMutex);
-            return &list[name];
+            return list[name];
         }
 
         std::vector<TaskHandle *> getList() {
             std::lock_guard<std::mutex> lock(tasksMutex);
             std::vector<TaskHandle *> tasks;
             for (auto &t: list) {
-                tasks.push_back(&t.second);
+                tasks.push_back(t.second);
             }
             return tasks;
         }
 
-        std::map<std::string, TaskHandle> *getMap() {
+        std::map<std::string, TaskHandle*> getMap() {
             std::lock_guard<std::mutex> lock(tasksMutex);
-            return &list;
+            return list;
         }
 
         bool hasTask(const std::string &name) {
@@ -751,7 +751,7 @@ private:
 
     // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
     public:
-        std::map<std::string, TaskHandle> list = {};
+        std::map<std::string, TaskHandle*> list = {};
         std::mutex tasksMutex;
     };
     Tasks ctrl_unscheduledPipelines, ctrl_scheduledPipelines;
@@ -782,9 +782,9 @@ private:
             return containers;
         }
 
-        std::map<std::string, ContainerHandle *> *getMap() {
+        std::map<std::string, ContainerHandle *> getMap() {
             std::lock_guard<std::mutex> lock(containersMutex);
-            return &list;
+            return list;
         }
 
         bool hasContainer(const std::string &name) {
