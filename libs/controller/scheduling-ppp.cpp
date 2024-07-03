@@ -7,15 +7,36 @@ void Controller::initiateGPULanes(NodeHandle &node) {
         node.numGPULanes = 1;
     }
 
+    for (auto &lane : node.gpuLanes) {
+        delete lane;
+    }
+
+    node.gpuLanes.clear();
+    for (auto &portion : node.freeGPUPortions.list) {
+        delete portion;
+    }
+    node.freeGPUPortions.list.clear();
+    node.freeGPUPortions = {};
+
     // Initialize the GPU execution portions
     for (auto i = 0; i < node.numGPULanes; i++) {
-        GPULane *gpuLane = new GPULane{i / node.numGPULanes};
-        if (i > 0) {
-            gpuLane->prev = node.gpuPortions[i - 1];
-            node.gpuPortions[i - 1]->next = gpuLane;
+        GPULane *gpuLane = new GPULane{i / node.numGPULanes, i};
+        node.gpuLanes.push_back(gpuLane);
+    }
+
+    // Initialize the GPU portions
+    GPUPortion *prevPortion = nullptr;
+    for (auto i = 0; i < node.numGPULanes; i++) {
+        GPUPortion *gpuPortion = new GPUPortion{};
+        gpuPortion->lane = node.gpuLanes[i];
+        node.freeGPUPortions.list.push_back(gpuPortion);
+        if (i == 0) {
+            node.freeGPUPortions.head = gpuPortion;
         }
-        if (i == node.numGPULanes - 1 && node.numGPULanes > 1) {
-            node.gpuPortions[0]->prev = gpuLane;
+        prevPortion = gpuPortion;
+        if (i > 0) {
+            gpuPortion->prev = prevPortion;
+            prevPortion->next = gpuPortion;
         }
     }
 }

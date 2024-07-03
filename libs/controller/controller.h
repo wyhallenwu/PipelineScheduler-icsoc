@@ -40,13 +40,25 @@ ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
 struct ContainerHandle;
 struct PipelineModel;
 
+struct GPUPortion;
+
 struct GPULane {
     std::uint16_t gpuNum;
+    std::uint16_t laneNum;
     std::uint64_t dutyCycle = 9999999999999999999;
+};
+
+struct GPUPortion : GPULane {
     std::uint64_t start = 0;
     std::uint64_t end = 9999999999999999999;
-    GPULane* next = nullptr;
-    GPULane* prev = nullptr;
+    GPULane * lane = nullptr;
+    GPUPortion* next = nullptr;
+    GPUPortion* prev = nullptr;
+};
+
+struct GPUPortionList {
+    GPUPortion *head = nullptr;
+    std::vector<GPUPortion *> list;
 };
 
 // Structure that whole information about the pipeline used for scheduling
@@ -70,7 +82,11 @@ struct NodeHandle {
     //
     uint8_t numGPULanes;
     //
-    std::vector<GPULane*> gpuPortions;
+    std::vector<GPULane *> gpuLanes;
+    GPUPortionList freeGPUPortions;
+
+
+    
 
     mutable std::mutex nodeHandleMutex;
 
@@ -185,7 +201,7 @@ struct ContainerHandle {
     //
     uint64_t endTime;
     //
-    GPULane *executionLane = nullptr;
+    GPUPortion *executionLane = nullptr;
     //
     mutable std::mutex containerHandleMutex;
 
@@ -325,7 +341,7 @@ struct PipelineModel {
                   uint64_t expectedAvgPerQueryLatency = 0,
                   uint64_t expectedMaxProcessLatency = 0,
                   const std::string& deviceTypeName = "",
-                  bool mergable = false,
+                  bool merged = false,
                   const std::vector<std::string>& possibleDevices = {})
         : device(device),
           name(name),
@@ -343,7 +359,7 @@ struct PipelineModel {
           expectedAvgPerQueryLatency(expectedAvgPerQueryLatency),
           expectedMaxProcessLatency(expectedMaxProcessLatency),
           deviceTypeName(deviceTypeName),
-          merged(mergable),
+          merged(merged),
           possibleDevices(possibleDevices) {}
 
     // Assignment operator
