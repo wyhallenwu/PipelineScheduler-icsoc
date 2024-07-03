@@ -1,45 +1,13 @@
 #include "scheduling-ppp.h"
 
-void Controller::initiateGPULanes(NodeHandle &node) {
-    if (node.name == "server") {
-        node.numGPULanes = NUM_GPUS * NUM_LANES_PER_GPU;
+std::string DeviceNameToType(std::string name) {
+    if (name == "server") {
+        return "server";
     } else {
-        node.numGPULanes = 1;
-    }
-
-    for (auto &lane : node.gpuLanes) {
-        delete lane;
-    }
-
-    node.gpuLanes.clear();
-    for (auto &portion : node.freeGPUPortions.list) {
-        delete portion;
-    }
-    node.freeGPUPortions.list.clear();
-    node.freeGPUPortions = {};
-
-    // Initialize the GPU execution portions
-    for (auto i = 0; i < node.numGPULanes; i++) {
-        GPULane *gpuLane = new GPULane{i / node.numGPULanes, i};
-        node.gpuLanes.push_back(gpuLane);
-    }
-
-    // Initialize the GPU portions
-    GPUPortion *prevPortion = nullptr;
-    for (auto i = 0; i < node.numGPULanes; i++) {
-        GPUPortion *gpuPortion = new GPUPortion{};
-        gpuPortion->lane = node.gpuLanes[i];
-        node.freeGPUPortions.list.push_back(gpuPortion);
-        if (i == 0) {
-            node.freeGPUPortions.head = gpuPortion;
-        }
-        prevPortion = gpuPortion;
-        if (i > 0) {
-            gpuPortion->prev = prevPortion;
-            prevPortion->next = gpuPortion;
-        }
+        return name.substr(0, name.size() - 1);
     }
 }
+
 bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     TaskHandle *task = new TaskHandle{t.name, t.fullName, t.type, t.source, t.device, t.slo, {}, 0};
@@ -191,6 +159,12 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     return container;
 }
 
+void Controller::Scheduling() {
+    while (running) {
+        
+    }
+}
+
 /**
  * @brief call this method after the pipeline models have been added to scheduled
  *
@@ -273,15 +247,15 @@ bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, 
         mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat, toBeMergedProfileDevice->p95postLat);
 
         auto mergedBatchInfer = &mergedProfileDevice->batchInfer;
-        auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
+        // auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
 
-        for (const auto &[batchSize, profile] : toBeMergedProfileDevice->batchInfer) {
-            mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, profile.p95inferLat);
-            mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, profile.cpuUtil);
-            mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, profile.gpuUtil);
-            mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, profile.memUsage);
-            mergedBatchInfer->at(batchSize).rssMemUsage = std::max(mergedBatchInfer->at(batchSize).rssMemUsage, profile.rssMemUsage);
-            mergedBatchInfer->at(batchSize).gpuMemUsage = std::max(mergedBatchInfer->at(batchSize).gpuMemUsage, profile.gpuMemUsage);
+        for (const auto &[batchSize, p] : toBeMergedProfileDevice->batchInfer) {
+            mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, p.p95inferLat);
+            mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, p.cpuUtil);
+            mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, p.gpuUtil);
+            mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, p.memUsage);
+            mergedBatchInfer->at(batchSize).rssMemUsage = std::max(mergedBatchInfer->at(batchSize).rssMemUsage, p.rssMemUsage);
+            mergedBatchInfer->at(batchSize).gpuMemUsage = std::max(mergedBatchInfer->at(batchSize).gpuMemUsage, p.gpuMemUsage);
         }
 
     }
@@ -290,7 +264,7 @@ bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, 
 
 bool Controller::mergeModels(PipelineModel *mergedModel, PipelineModel* toBeMergedModel) {
     // If the merged model is empty, we should just copy the model to be merged
-    if (mergedModel->numReplicas == -1) {
+    if (mergedModel->numReplicas == 0) {
         *mergedModel = *toBeMergedModel;
         return true;
     }
@@ -314,18 +288,18 @@ TaskHandle Controller::mergePipelines(const std::string& taskName) {
 
     auto unscheduledTasks = ctrl_unscheduledPipelines.getMap();
 
-    *mergedPipelineModels = getModelsByPipelineType(unscheduledTasks->at(taskName).tk_type, "server");
+    *mergedPipelineModels = getModelsByPipelineType(unscheduledTasks.at(taskName)->tk_type, "server");
     auto numModels = mergedPipeline.tk_pipelineModels.size();
 
     for (auto i = 0; i < numModels; i++) {
         if (mergedPipelineModels->at(i)->name == "datasource") {
             continue;
         }
-        for (const auto& task : *unscheduledTasks) {
+        for (const auto& task : unscheduledTasks) {
             if (task.first == taskName) {
                 continue;
             }
-            mergeModels(mergedPipelineModels->at(i), task.second.tk_pipelineModels.at(i));
+            mergeModels(mergedPipelineModels->at(i), task.second->tk_pipelineModels.at(i));
         }
     }
 }
