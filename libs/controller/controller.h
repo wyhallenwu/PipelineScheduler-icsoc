@@ -482,14 +482,10 @@ public:
 
     void Scheduling();
 
-    void Init() { 
-        bool allAdded = true;
+    void Init() {
         for (auto &t: initialTasks) {
             if (!t.added) {
                 t.added = AddTask(t);
-            }
-            if (!t.added) {
-                allAdded = false;
             }
             remainTasks.push_back(t);
         }
