@@ -186,6 +186,14 @@ void DeviceAgent::collectRuntimeMetrics() {
                     metrics.gpuMemUsage.emplace_back(stats.deviceMemoryUsage);
                 }
             }
+            if (metrics.gpuUsage.size() == 0) {
+                Profiler::sysStats stats = dev_profiler->reportAnyMetrics();
+                metrics.timestamp = std::chrono::high_resolution_clock::now();
+                metrics.memUsage = stats.deviceMemoryUsage;
+                metrics.rssMemUsage = stats.deviceMemoryUsage;
+                metrics.gpuUsage.emplace_back(stats.gpuUtilization);
+                metrics.gpuMemUsage.emplace_back(stats.deviceMemoryUsage);
+            }
             metrics.cpuUsage = dev_profiler->getDeviceCPUInfo();
             dev_runtimeMetrics.emplace_back(metrics);
             metricsStopwatch.stop();
@@ -575,7 +583,6 @@ void DeviceAgent::StopContainerRequestHandler::Proceed() {
             return;
         }
         DeviceAgent::StopContainer(device_agent->containers[request.name()], request.forced());
-        unsigned int pid = device_agent->containers[request.name()].pid;
         device_agent->containers.erase(request.name());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
