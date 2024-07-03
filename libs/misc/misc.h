@@ -525,7 +525,9 @@ NetworkProfile queryNetworkProfile(
     const std::string &taskName,
     const std::string &modelName,
     const std::string &senderHost,
+    const std::string &senderDeviceType,
     const std::string &receiverHost,
+    const std::string &receiverDeviceType,
     const NetworkEntryType &networkEntries
 );
 

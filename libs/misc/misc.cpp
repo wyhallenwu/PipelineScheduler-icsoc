@@ -153,11 +153,16 @@ NetworkProfile queryNetworkProfile(
     const std::string &taskName,
     const std::string &modelName,
     const std::string &senderHost,
+    const std::string &senderDeviceType,
     const std::string &receiverHost,
+    const std::string &receiverDeviceType,
     const NetworkEntryType &networkEntries
 ) {
     std::string senderHostAbbr = abbreviate(senderHost);
     std::string receiverHostAbbr = abbreviate(receiverHost);
+
+    std::string senderDeviceTypeAbbr = abbreviate(senderDeviceType);
+    std::string receiverDeviceTypeAbbr = abbreviate(receiverDeviceType);    
 
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
@@ -208,7 +213,7 @@ NetworkProfile queryNetworkProfile(
     "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
     "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
     "FROM recent_data;";
-    query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr, abbreviate(modelNameAbbr));
+    query = absl::StrFormat(query.c_str(), profileTableName, receiverDeviceTypeAbbr, abbreviate(modelNameAbbr));
     res = pullSQL(metricsConn, query);
 
     d2dNetworkProfile.p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
