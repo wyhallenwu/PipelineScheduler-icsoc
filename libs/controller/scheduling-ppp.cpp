@@ -1,5 +1,14 @@
 #include "scheduling-ppp.h"
 
+std::string DeviceNameToType(std::string name) {
+    if (name == "server") {
+        return "server";
+    } else {
+        return name.substr(0, name.size() - 1);
+    }
+}
+
+
 bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     TaskHandle *task = new TaskHandle{t.name, t.fullName, t.type, t.source, t.device, t.slo, {}, 0};
@@ -28,73 +37,72 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 
     std::vector<std::string> possibleDeviceList = {"server"};
 
-    for (auto& model: task->tk_pipelineModels) {
+    for (auto &model: task->tk_pipelineModels) {
         std::string containerName = model->name + "-" + possibleDevicePairList[0].second;
         if (containerName.find("sink") != std::string::npos) {
             continue;
         } else if (containerName.find("datasource") != std::string::npos) {
             model->arrivalProfiles.arrivalRates = 30;
-            this->client_profiles_jf.add(containerName, task->tk_slo, model->arrivalProfiles.arrivalRates, model,
-                                         task->tk_name, task->tk_source, possibleNetworkEntryPairs);
+            this->client_profiles_jf.add(model, possibleNetworkEntryPairs);
             continue;
         }
         model->arrivalProfiles.arrivalRates = queryArrivalRate(
-            *ctrl_metricsServerConn,
-            ctrl_experimentName,
-            ctrl_systemName,
-            t.name,
-            t.source,
-            ctrl_containerLib[containerName].taskName,
-            ctrl_containerLib[containerName].modelName
-        );
-        std::vector<std::string> upstreamPossibleDeviceList = model->upstreams.front().first->possibleDevices;
-        std::vector<std::string> thisPossibleDeviceList = model->possibleDevices;
-        for (const auto &deviceName : upstreamPossibleDeviceList) {
-            for (const auto &deviceName2 : thisPossibleDeviceList) {
-                if (deviceName == "server" && deviceName2 != deviceName) {
-                    continue;
-                }
-                possibleDevicePairList.push_back({deviceName, deviceName2});
-            }
-        }
-
-        for (const auto &pair : possibleDevicePairList) {
-            NetworkProfile test = queryNetworkProfile(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
                 ctrl_systemName,
                 t.name,
                 t.source,
                 ctrl_containerLib[containerName].taskName,
-                ctrl_containerLib[containerName].modelName,
-                pair.first,
-                pair.second,
-                possibleNetworkEntryPairs[pair]
+                ctrl_containerLib[containerName].modelName
+        );
+        std::vector<std::string> upstreamPossibleDeviceList = model->upstreams.front().first->possibleDevices;
+        std::vector<std::string> thisPossibleDeviceList = model->possibleDevices;
+        for (const auto &deviceName: upstreamPossibleDeviceList) {
+            for (const auto &deviceName2: thisPossibleDeviceList) {
+                if (deviceName == "server" && deviceName2 != deviceName) {
+                    continue;
+                }
+                possibleDevicePairList.emplace_back(deviceName, deviceName2);
+            }
+        }
+
+        for (const auto &pair: possibleDevicePairList) {
+            NetworkProfile test = queryNetworkProfile(
+                    *ctrl_metricsServerConn,
+                    ctrl_experimentName,
+                    ctrl_systemName,
+                    t.name,
+                    t.source,
+                    ctrl_containerLib[containerName].taskName,
+                    ctrl_containerLib[containerName].modelName,
+                    pair.first,
+                    DeviceNameToType(pair.first),
+                    pair.second,
+                    DeviceNameToType(pair.second),
+                    possibleNetworkEntryPairs[pair]
             );
             model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
         }
 
-        for (const auto deviceName : possibleDeviceList) {
+        for (const auto deviceName: possibleDeviceList) {
             std::string deviceTypeName = getDeviceTypeName(deviceList->at(deviceName).type);
             ModelProfile profile = queryModelProfile(
-                *ctrl_metricsServerConn,
-                ctrl_experimentName,
-                ctrl_systemName,
-                t.name,
-                t.source,
-                deviceName,
-                deviceTypeName,
-                ctrl_containerLib[containerName].modelName
+                    *ctrl_metricsServerConn,
+                    ctrl_experimentName,
+                    ctrl_systemName,
+                    t.name,
+                    t.source,
+                    deviceName,
+                    deviceTypeName,
+                    ctrl_containerLib[containerName].modelName
             );
             model->processProfiles[deviceTypeName] = profile;
 
             // MODIFICATION
             // collect the very first model of the pipeline, just use the yolo which is always the very first
-            if (containerName.find("yolo"))
-            {
+            if (containerName.find("yolo")) {
                 // add all available batch_size profiling into consideration
-                for (auto it = profile.batchInfer.begin(); it != profile.batchInfer.end(); ++it)
-                {
+                for (auto it = profile.batchInfer.begin(); it != profile.batchInfer.end(); ++it) {
                     BatchSizeType batch_size = it->first;
                     BatchInferProfile &batch_profile = it->second;
 
@@ -102,8 +110,10 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
                     int width = std::stoi(model->name.substr(model->name.length() - 3));
 
                     // check the accuracy indicator, use dummy value just to reflect the capacity of the model(evaluate their performance in general)
-                    this->model_profiles_jf.add(model->name, ACC_LEVEL_MAP.at(model->name), static_cast<int>(batch_size),
-                                                static_cast<float>(batch_profile.p95inferLat), width, width, model); // height and width are the same
+                    this->model_profiles_jf.add(model->name, ACC_LEVEL_MAP.at(model->name),
+                                                static_cast<int>(batch_size),
+                                                static_cast<float>(batch_profile.p95inferLat), width, width,
+                                                model); // height and width are the same
                 }
             }
         }
@@ -465,11 +475,12 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
     }
 }
 
-bool Controller::mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile) {
+bool
+Controller::mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile) {
     mergedProfile.arrivalRates += toBeMergedProfile.arrivalRates;
     auto mergedD2DProfile = &mergedProfile.d2dNetworkProfile;
     auto toBeMergedD2DProfile = &toBeMergedProfile.d2dNetworkProfile;
-    for (const auto &[pair, profile] : toBeMergedProfile.d2dNetworkProfile) {
+    for (const auto &[pair, profile]: toBeMergedProfile.d2dNetworkProfile) {
         mergedD2DProfile->at(pair).p95TransferDuration = std::max(mergedD2DProfile->at(pair).p95TransferDuration,
                                                                   toBeMergedD2DProfile->at(pair).p95TransferDuration);
         mergedD2DProfile->at(pair).p95PackageSize = std::max(mergedD2DProfile->at(pair).p95PackageSize,
@@ -479,33 +490,44 @@ bool Controller::mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const 
     return true;
 }
 
-bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, const PerDeviceModelProfileType &toBeMergedProfile) {
-    for (const auto &[deviceName, profile] : toBeMergedProfile) {
+bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile,
+                                      const PerDeviceModelProfileType &toBeMergedProfile) {
+    for (const auto &[deviceName, profile]: toBeMergedProfile) {
         auto mergedProfileDevice = &mergedProfile[deviceName];
         auto toBeMergedProfileDevice = &toBeMergedProfile.at(deviceName);
 
-        mergedProfileDevice->p95InputSize = std::max(mergedProfileDevice->p95InputSize, toBeMergedProfileDevice->p95InputSize);
-        mergedProfileDevice->p95OutputSize = std::max(mergedProfileDevice->p95OutputSize, toBeMergedProfileDevice->p95OutputSize);
-        mergedProfileDevice->p95prepLat = std::max(mergedProfileDevice->p95prepLat, toBeMergedProfileDevice->p95prepLat);
-        mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat, toBeMergedProfileDevice->p95postLat);
+        mergedProfileDevice->p95InputSize = std::max(mergedProfileDevice->p95InputSize,
+                                                     toBeMergedProfileDevice->p95InputSize);
+        mergedProfileDevice->p95OutputSize = std::max(mergedProfileDevice->p95OutputSize,
+                                                      toBeMergedProfileDevice->p95OutputSize);
+        mergedProfileDevice->p95prepLat = std::max(mergedProfileDevice->p95prepLat,
+                                                   toBeMergedProfileDevice->p95prepLat);
+        mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat,
+                                                   toBeMergedProfileDevice->p95postLat);
 
         auto mergedBatchInfer = &mergedProfileDevice->batchInfer;
         auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
 
-        for (const auto &[batchSize, profile] : toBeMergedProfileDevice->batchInfer) {
-            mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, profile.p95inferLat);
-            mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, profile.cpuUtil);
-            mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, profile.gpuUtil);
-            mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, profile.memUsage);
-            mergedBatchInfer->at(batchSize).rssMemUsage = std::max(mergedBatchInfer->at(batchSize).rssMemUsage, profile.rssMemUsage);
-            mergedBatchInfer->at(batchSize).gpuMemUsage = std::max(mergedBatchInfer->at(batchSize).gpuMemUsage, profile.gpuMemUsage);
+        for (const auto &[batchSize, profile]: toBeMergedProfileDevice->batchInfer) {
+            mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat,
+                                                                   profile.p95inferLat);
+            mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil,
+                                                               profile.cpuUtil);
+            mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil,
+                                                               profile.gpuUtil);
+            mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage,
+                                                                profile.memUsage);
+            mergedBatchInfer->at(batchSize).rssMemUsage = std::max(mergedBatchInfer->at(batchSize).rssMemUsage,
+                                                                   profile.rssMemUsage);
+            mergedBatchInfer->at(batchSize).gpuMemUsage = std::max(mergedBatchInfer->at(batchSize).gpuMemUsage,
+                                                                   profile.gpuMemUsage);
         }
 
     }
     return true;
 }
 
-bool Controller::mergeModels(PipelineModel *mergedModel, PipelineModel* toBeMergedModel) {
+bool Controller::mergeModels(PipelineModel *mergedModel, PipelineModel *toBeMergedModel) {
     // If the merged model is empty, we should just copy the model to be merged
     if (mergedModel->numReplicas == -1) {
         *mergedModel = *toBeMergedModel;
@@ -525,7 +547,7 @@ bool Controller::mergeModels(PipelineModel *mergedModel, PipelineModel* toBeMerg
 
 }
 
-TaskHandle Controller::mergePipelines(const std::string& taskName) {
+TaskHandle Controller::mergePipelines(const std::string &taskName) {
     TaskHandle mergedPipeline;
     auto mergedPipelineModels = &(mergedPipeline.tk_pipelineModels);
 
@@ -538,7 +560,7 @@ TaskHandle Controller::mergePipelines(const std::string& taskName) {
         if (mergedPipelineModels->at(i)->name == "datasource") {
             continue;
         }
-        for (const auto& task : *unscheduledTasks) {
+        for (const auto &task: *unscheduledTasks) {
             if (task.first == taskName) {
                 continue;
             }
@@ -551,7 +573,7 @@ void Controller::mergePipelines() {
     std::vector<std::string> toMerge = {"traffic", "people"};
     TaskHandle mergedPipeline;
 
-    for (const auto &taskName : toMerge) {
+    for (const auto &taskName: toMerge) {
         mergedPipeline = mergePipelines(taskName);
     }
 }
@@ -562,7 +584,8 @@ void Controller::mergePipelines() {
  * @param models 
  * @param slo
  */
-void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice) {
+void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo,
+                                  const std::string &edgeDevice) {
 }
 
 /**
@@ -644,7 +667,7 @@ void Controller::getInitialBatchSizes(TaskHandle &task, uint64_t slo) {
  * @param modelType 
  */
 void Controller::estimateModelLatency(PipelineModel *currModel) {
-    std::string deviceName= currModel->device;
+    std::string deviceName = currModel->device;
     // We assume datasource and sink models have no latency
     if (currModel->name == "datasource" || currModel->name == "sink") {
         currModel->expectedQueueingLatency = 0;
@@ -675,7 +698,8 @@ void Controller::estimateModelNetworkLatency(PipelineModel *currModel) {
         return;
     }
 
-    currModel->expectedTransferLatency = currModel->arrivalProfiles.d2dNetworkProfile[std::make_pair(currModel->device, currModel->upstreams[0].first->device)].p95TransferDuration;
+    currModel->expectedTransferLatency = currModel->arrivalProfiles.d2dNetworkProfile[std::make_pair(currModel->device,
+                                                                                                     currModel->upstreams[0].first->device)].p95TransferDuration;
 }
 
 /**
@@ -774,55 +798,14 @@ uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const fl
 // ----------------------------------------------------------------------------------------------------------------
 //                                             implementations
 // ----------------------------------------------------------------------------------------------------------------
-ModelInfoJF::ModelInfoJF() {}
 
-ModelInfoJF::ModelInfoJF(int bs, float il, int w, int h, std::string n, float acc, PipelineModel *m)
-{
-    batch_size = bs;
 
-    // the inference_latency is us
-    inference_latency = il;
-
-    // throughput is req/s
-    // CHECKME: validate the unit of the time stamp and the gcd of all throughputs,
-    // now the time stamp is us, and the gcd of all throughputs is 10, maybe need change to ease the dp table
-    throughput = (int(bs / (il * 1e-6)) / 10) * 10; // round it to be devidisble by 10 for better dp computing
-    width = w;
-    height = h;
-    name = n;
-    accuracy = acc;
-    model = m;
-}
-
-ClientInfoJF::ClientInfoJF(std::string _ip, float _budget, int _req_rate,
-                           PipelineModel *_model, std::string _task_name, std::string _task_source,
-                           std::map<std::pair<std::string, std::string>, NetworkEntryType> _network_pairs)
-{
-    ip = _ip;
-    budget = _budget;
-    req_rate = _req_rate;
-    model = _model;
-    task_name = _task_name;
-    task_source = _task_source;
-    transmission_latency = -1;
-    network_pairs = _network_pairs;
-}
-
-void ClientInfoJF::set_transmission_latency(int lat)
-{
-    this->transmission_latency = lat;
-}
 
 bool ModelSetCompare::operator()(
         const std::tuple<std::string, float> &lhs,
-        const std::tuple<std::string, float> &rhs) const
-{
+        const std::tuple<std::string, float> &rhs) const {
     return std::get<1>(lhs) < std::get<1>(rhs);
 }
-
-// -------------------------------------------------------------------------------------------
-//                               implementation of ModelProfilesJF
-// -------------------------------------------------------------------------------------------
 
 /**
  * @brief add profiled information of model
@@ -833,33 +816,36 @@ bool ModelSetCompare::operator()(
  * @param inference_latency
  * @param throughput
  */
-void ModelProfilesJF::add(std::string name, float accuracy, int batch_size, float inference_latency, int width, int height, PipelineModel *m)
-{
+void
+ModelProfilesJF::add(std::string name, float accuracy, int batch_size, float inference_latency, int width, int height,
+                     PipelineModel *m) {
     auto key = std::tuple<std::string, float>{name, accuracy};
-    ModelInfoJF value(batch_size, inference_latency, width, height, name, accuracy, m);
-    infos[key].push_back(value);
+    m->batchSize = batch_size;
+    m->expectedMaxProcessLatency = inference_latency;
+    m->throughput = (int(batch_size / (inference_latency * 1e-6)) / 10) * 10;
+    m->width = width;
+    m->height = height;
+    m->name = name;
+    m->accuracy = accuracy;
+    infos[key].push_back(m);
 }
 
-void ModelProfilesJF::add(const ModelInfoJF &model_info)
-{
+void ModelProfilesJF::add(PipelineModel *model_info) {
     auto key =
-            std::tuple<std::string, float>{model_info.name, model_info.accuracy};
+            std::tuple<std::string, float>{model_info->name, model_info->accuracy};
     infos[key].push_back(model_info);
 }
 
-void ModelProfilesJF::debugging()
-{
+void ModelProfilesJF::debugging() {
     std::cout << "======================ModelProfiles Debugging=======================" << std::endl;
-    for (auto it = infos.begin(); it != infos.end(); ++it)
-    {
+    for (auto it = infos.begin(); it != infos.end(); ++it) {
         auto key = it->first;
         auto profilings = it->second;
         std::cout << "*********************************************" << std::endl;
         std::cout << "Model: " << std::get<0>(key) << ", Accuracy: " << std::get<1>(key) << std::endl;
-        for (const auto &model_info : profilings)
-        {
-            std::cout << "batch size: " << model_info.batch_size << ", latency: " << model_info.inference_latency
-                      << ", width: " << model_info.width << ", height: " << model_info.height << std::endl;
+        for (const auto &model_info: profilings) {
+            std::cout << "batch size: " << model_info->batchSize << ", latency: " << model_info->expectedMaxProcessLatency
+                      << ", width: " << model_info->width << ", height: " << model_info->height << std::endl;
         }
         std::cout << "*********************************************" << std::endl;
     }
@@ -874,28 +860,23 @@ void ModelProfilesJF::debugging()
  *
  * @param clients
  */
-void ClientProfilesJF::sortBudgetDescending(std::vector<ClientInfoJF> & clients)
-{
+void ClientProfilesJF::sortBudgetDescending(std::vector<PipelineModel *> &clients) {
     std::sort(clients.begin(), clients.end(),
-              [](const ClientInfoJF &a, const ClientInfoJF &b)
-              {
-                  return a.budget - a.transmission_latency > b.budget - b.transmission_latency;
+              [](const PipelineModel *a, const PipelineModel *b) {
+                  return a->task->tk_slo - a->expectedTransferLatency > b->task->tk_slo - b->expectedTransferLatency;
               });
 }
 
-void ClientProfilesJF::add(const std::string &ip, float budget, int req_rate,
-                           PipelineModel *model, std::string task_name, std::string task_source,
-                           std::map<std::pair<std::string, std::string>, NetworkEntryType> network_pairs)
-{
-    infos.push_back(ClientInfoJF(ip, budget, req_rate, model, task_name, task_source, network_pairs));
+void ClientProfilesJF::add(PipelineModel *m, std::map<std::pair<std::string, std::string>, NetworkEntryType> network_pairs) {
+    m->possibleNetworkEntryPairs = network_pairs;
+    models.push_back(m);
 }
 
-void ClientProfilesJF::debugging()
-{
+void ClientProfilesJF::debugging() {
     std::cout << "===================================ClientProfiles Debugging==========================" << std::endl;
-    for (const auto &client_info : infos)
-    {
-        std::cout << "Unique id: " << client_info.ip << ", buget: " << client_info.budget << ", req_rate: " << client_info.req_rate << std::endl;
+    for (const auto &client_model: models) {
+        std::cout << "Unique id: " << client_model->device << ", buget: " << client_model->task->tk_slo << ", req_rate: "
+                  << client_model->arrivalProfiles.arrivalRates << std::endl;
     }
 }
 
@@ -903,22 +884,113 @@ void ClientProfilesJF::debugging()
 //                               implementation of scheduling algorithms
 // -------------------------------------------------------------------------------------------
 
-std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &models,
-                                             std::vector<ClientInfoJF> &clients)
-{
+void Controller::Scheduling() {
+    while (running) {
+        // update the networking time for each client-server pair
+        // there is only one server in JellyFish, so get the server device from any recorded yolo model.
+        // note: it's not allowed to be empty here, or it will cause the UB
+        if (this->model_profiles_jf.infos.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+            continue;
+        }
+
+        PipelineModel *model = this->model_profiles_jf.infos.begin()->second[0];
+        std::unique_lock<std::mutex> lock(model->pipelineModelMutex);
+        std::string server_device = model->device;
+        lock.unlock();
+
+        for (auto &client_model: client_profiles_jf.models) {
+            std::unique_lock<std::mutex> client_lock(client_model->pipelineModelMutex);
+            std::string client_device = client_model->device;
+            client_lock.unlock();
+            NetworkProfile network_proflie = queryNetworkProfile(
+                    *ctrl_metricsServerConn,
+                    ctrl_experimentName,
+                    ctrl_systemName,
+                    client_model->task->tk_name,
+                    client_model->task->tk_source,
+                    ctrl_containerLib[client_model->device].taskName,
+                    ctrl_containerLib[client_model->device].modelName,
+                    client_device,
+                    DeviceNameToType(client_device),
+                    server_device,
+                    DeviceNameToType(server_device),
+                    client_model->possibleNetworkEntryPairs[std::make_pair(client_device, server_device)]);
+            auto lat = network_proflie.p95TransferDuration;
+            client_model->expectedTransferLatency = lat;
+        }
+
+        // start scheduling
+
+        auto mappings = mapClient(this->client_profiles_jf, this->model_profiles_jf);
+
+        for (auto &mapping: mappings) {
+            // retrieve the mapping for one model and its paired clients
+            auto model_info = std::get<0>(mapping);
+            auto selected_clients = std::get<1>(mapping);
+            int batch_size = std::get<2>(mapping);
+
+            // find the PipelineModel* of that model
+            PipelineModel *m = this->model_profiles_jf.infos[model_info][0];
+            for (auto &model: this->model_profiles_jf.infos[model_info]) {
+                if (model->batchSize == batch_size) {
+                    // note: if occurs core dump, it's possible that there is no matchable pointer
+                    // and the p is null
+                    m = model;
+                    break;
+                }
+            }
+            // clear the upstream of that model
+            std::unique_lock<std::mutex> model_lock(m->pipelineModelMutex);
+            m->upstreams.clear();
+
+            // TODO: leave another function to translate the changing of upstream, downstream to ContainerHandle
+
+            // adjust downstream, upstream and resolution
+            // CHECKME: vaildate the class of interest here, default to 1 for simplicity
+            for (auto &client: selected_clients) {
+                m->upstreams.push_back(std::make_pair(client, -1));
+                std::unique_lock<std::mutex> client_lock(client->pipelineModelMutex);
+                client->downstreams.clear();
+                client->downstreams.push_back(std::make_pair(m, -1));
+
+                // retrieve new resolution
+                int width = m->width;
+                int height = m->height;
+
+                client_lock.unlock();
+
+                std::unique_lock<std::mutex> container_lock(this->containers.containersMutex);
+                for (auto it = this->containers.list.begin(); it != this->containers.list.end(); ++it) {
+                    if (it->first == client->device) {
+                        std::vector<int> rs = {3, height, width};
+                        AdjustResolution(it->second, rs);
+                    }
+                }
+                container_lock.unlock();
+            }
+        }
+        // use list of devices, tasks and containers to schedule depending on your algorithm
+        // put helper functions as a private member function of the controller and write them at the bottom of this file.
+        std::this_thread::sleep_for(std::chrono::milliseconds(
+                5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
+    }
+}
+
+std::vector<PipelineModel *> findOptimalClients(std::vector<PipelineModel *> &models,
+                                             std::vector<PipelineModel *> &clients) {
     // sort clients
     ClientProfilesJF::sortBudgetDescending(clients);
     std::cout << "findOptimal start" << std::endl;
     std::cout << "available sorted clients: " << std::endl;
-    for (auto &client : clients)
-    {
-        std::cout << client.ip << " " << client.budget - client.transmission_latency << " " << client.req_rate
+    for (auto &client: clients) {
+        std::cout << client->device << " " << client->task->tk_slo - client->expectedTransferLatency << " " << client->arrivalProfiles.arrivalRates
                   << std::endl;
     }
     std::cout << "available models: " << std::endl;
-    for (auto &model : models)
-    {
-        std::cout << model.name << " " << model.accuracy << " " << model.batch_size << " " << model.throughput << " " << model.inference_latency << std::endl;
+    for (auto &model: models) {
+        std::cout << model->name << " " << model->accuracy << " " << model->batchSize << " " << model->throughput << " "
+                  << model->expectedMaxProcessLatency << std::endl;
     }
     std::tuple<int, int> best_cell;
     int best_value = 0;
@@ -936,11 +1008,9 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
     int h = 10; // assume gcd of all clients' req rate
     // find max throughput
     int max_throughput = 0;
-    for (auto &model : models)
-    {
-        if (model.throughput > max_throughput)
-        {
-            max_throughput = model.throughput;
+    for (auto &model: models) {
+        if (model->throughput > max_throughput) {
+            max_throughput = model->throughput;
         }
     }
     // init matrix
@@ -949,53 +1019,43 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
     std::cout << "row: " << rows << " cols: " << cols << std::endl;
     std::vector<std::vector<int>> dp_mat(rows, std::vector<int>(cols, 0));
     // iterating
-    for (int client_index = 1; client_index < clients.size(); client_index++)
-    {
+    for (int client_index = 1; client_index < clients.size(); client_index++) {
         auto &client = clients[client_index];
         auto result = findMaxBatchSize(models, client, max_batch_size);
         max_batch_size = std::get<0>(result);
         max_index = std::get<1>(result);
-        std::cout << "client ip: " << client.ip << ", max_batch_size: " << max_batch_size << ", max_index: "
+        std::cout << "client ip: " << client->device << ", max_batch_size: " << max_batch_size << ", max_index: "
                   << max_index << std::endl;
-        if (max_batch_size <= 0)
-        {
+        if (max_batch_size <= 0) {
             break;
         }
-        int cols_upperbound = int(models[max_index].throughput / h);
-        int lambda_i = client.req_rate;
-        int v_i = client.req_rate;
+        int cols_upperbound = int(models[max_index]->throughput / h);
+        int lambda_i = client->arrivalProfiles.arrivalRates;
+        int v_i = client->arrivalProfiles.arrivalRates;
         std::cout << "cols_up " << cols_upperbound << ", req " << lambda_i
                   << std::endl;
-        for (int k = 1; k <= cols_upperbound; k++)
-        {
+        for (int k = 1; k <= cols_upperbound; k++) {
 
             int w_k = k * h;
-            if (lambda_i <= w_k)
-            {
+            if (lambda_i <= w_k) {
                 int k_prime = (w_k - lambda_i) / h;
                 int v = v_i + dp_mat[client_index - 1][k_prime];
-                if (v > dp_mat[client_index - 1][k])
-                {
+                if (v > dp_mat[client_index - 1][k]) {
                     dp_mat[client_index][k] = v;
                 }
-                if (v > best_value)
-                {
+                if (v > best_value) {
                     best_cell = std::make_tuple(client_index, k);
                     best_value = v;
                 }
-            }
-            else
-            {
+            } else {
                 dp_mat[client_index][k] = dp_mat[client_index - 1][k];
             }
         }
     }
 
     std::cout << "updated dp_mat" << std::endl;
-    for (auto &row : dp_mat)
-    {
-        for (auto &v : row)
-        {
+    for (auto &row: dp_mat) {
+        for (auto &v: row) {
             std::cout << v << " ";
         }
         std::cout << std::endl;
@@ -1004,23 +1064,19 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
     // perform backtracing from (row, col)
     // using dp_mat, best_cell, best_value
 
-    std::vector<ClientInfoJF> selected_clients;
+    std::vector<PipelineModel *> selected_clients;
 
     auto [row, col] = best_cell;
 
     std::cout << "best cell: " << row << " " << col << std::endl;
     int w = dp_mat[row][col];
-    while (row > 0 && col > 0)
-    {
+    while (row > 0 && col > 0) {
         std::cout << row << " " << col << std::endl;
-        if (dp_mat[row][col] == dp_mat[row - 1][col])
-        {
+        if (dp_mat[row][col] == dp_mat[row - 1][col]) {
             row--;
-        }
-        else
-        {
+        } else {
             auto c = clients[row - 1];
-            int w_i = c.req_rate;
+            int w_i = c->arrivalProfiles.arrivalRates;
             row = row - 1;
             col = int((w - w_i) / h);
             w = col * h;
@@ -1031,9 +1087,8 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
 
     std::cout << "findOptimal end" << std::endl;
     std::cout << "selected clients" << std::endl;
-    for (auto &sc : selected_clients)
-    {
-        std::cout << sc.ip << " " << sc.budget << " " << sc.req_rate << std::endl;
+    for (auto sc: selected_clients) {
+        std::cout << sc->device << " " << sc->task->tk_slo << " " << sc->arrivalProfiles.arrivalRates << std::endl;
     }
 
     return selected_clients;
@@ -1047,75 +1102,72 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
  * @return a vector of [ (model_name, accuracy), vec[clients], batch_size ]
  */
 std::vector<
-        std::tuple<std::tuple<std::string, float>, std::vector<ClientInfoJF>, int>>
-mapClient(ClientProfilesJF client_profile, ModelProfilesJF model_profiles)
-{
+        std::tuple<std::tuple<std::string, float>, std::vector<PipelineModel* >, int>>
+mapClient(ClientProfilesJF client_profile, ModelProfilesJF model_profiles) {
     std::cout << " ======================= mapClient ==========================" << std::endl;
 
     std::vector<
-            std::tuple<std::tuple<std::string, float>, std::vector<ClientInfoJF>, int>>
+            std::tuple<std::tuple<std::string, float>, std::vector<PipelineModel *>, int>>
             mappings;
-    std::vector<ClientInfoJF> clients = client_profile.infos;
+    std::vector<PipelineModel *> clients = client_profile.models;
 
     int map_size = model_profiles.infos.size();
     int key_index = 0;
     for (auto it = model_profiles.infos.begin(); it != model_profiles.infos.end();
-         ++it)
-    {
+         ++it) {
         key_index++;
         std::cout << "before filtering" << std::endl;
-        for (auto &c : clients)
-        {
-            std::cout << c.ip << " " << c.budget << " " << c.req_rate << std::endl;
+        for (auto &c: clients) {
+            std::cout << c->device << " " << c->task->tk_slo << " " << c->arrivalProfiles.arrivalRates << std::endl;
         }
 
         auto selected_clients = findOptimalClients(it->second, clients);
 
         // tradeoff:
         // assign all left clients to the last available model
-        if (key_index == map_size)
-        {
+        if (key_index == map_size) {
             std::cout << "assign all rest clients" << std::endl;
             selected_clients = clients;
             clients.clear();
             std::cout << "selected clients assgined" << std::endl;
-            for (auto &c : selected_clients)
-            {
-                std::cout << c.ip << " " << c.budget << " " << c.req_rate << std::endl;
+            for (auto &c: selected_clients) {
+                std::cout << c->device << " " << c->task->tk_slo << " " << c->arrivalProfiles.arrivalRates << std::endl;
             }
             assert(clients.size() == 0);
         }
 
         int batch_size = check_and_assign(it->second, selected_clients);
 
-        std::cout << "model throughput: " << it->second[0].throughput << std::endl;
+        std::cout << "model throughput: " << it->second[0]->throughput << std::endl;
         std::cout << "batch size: " << batch_size << std::endl;
 
         mappings.push_back(
                 std::make_tuple(it->first, selected_clients, batch_size));
         std::cout << "start removing collected clients" << std::endl;
-        differenceClients(clients, selected_clients);
-        std::cout << "after filtering" << std::endl;
-        for (auto &c : clients)
-        {
-            std::cout << c.ip << " " << c.budget << " " << c.req_rate << std::endl;
+        for (auto &sc: selected_clients) {
+            clients.erase(std::remove_if(clients.begin(), clients.end(),
+                                         [&sc](const PipelineModel *c) {
+                                             return c->device == sc->device;
+                                         }), clients.end());
         }
-        if (clients.size() == 0)
-        {
+        std::cout << "after filtering" << std::endl;
+        for (auto &c: clients) {
+            std::cout << c->device << " " << c->task->tk_slo << " " << c->arrivalProfiles.arrivalRates << std::endl;
+        }
+        if (clients.size() == 0) {
             break;
         }
     }
 
     std::cout << "mapping relation" << std::endl;
-    for (auto &t : mappings)
-    {
+    for (auto &t: mappings) {
         std::cout << "======================" << std::endl;
         auto [model_info, clients, batch_size] = t;
         std::cout << std::get<0>(model_info) << " " << std::get<1>(model_info)
                   << " " << batch_size << std::endl;
-        for (auto &client : clients)
-        {
-            std::cout << "client name: " << client.ip << ", req rate: " << client.req_rate << ", budget-lat: " << client.budget << std::endl;
+        for (auto &client: clients) {
+            std::cout << "client name: " << client->device << ", req rate: " << client->arrivalProfiles.arrivalRates << ", budget-lat: "
+                      << client->task->tk_slo << std::endl;
         }
         std::cout << "======================" << std::endl;
     }
@@ -1131,23 +1183,49 @@ mapClient(ClientProfilesJF client_profile, ModelProfilesJF model_profiles)
  * @param selected_clients
  * @return int
  */
-int check_and_assign(std::vector<ModelInfoJF> & model,
-                     std::vector<ClientInfoJF> & selected_clients)
+int check_and_assign(std::vector<PipelineModel> &model,
+                     std::vector<PipelineModel> &selected_clients) {
+    int total_req_rate = 0;
+    // sum all selected req rate
+    for (auto &client: selected_clients) {
+        total_req_rate += client.arrivalProfiles.arrivalRates;
+    }
+    int max_batch_size = 1;
+
+    for (auto &model_info: model) {
+        if (model_info.throughput > total_req_rate &&
+            max_batch_size < model_info.batchSize) {
+            max_batch_size = model_info.batchSize;
+        }
+    }
+    return max_batch_size;
+}
+
+/**
+ * @brief find the max available batch size for the associated clients of
+ * corresponding model
+ *
+ * @param model
+ * @param selected_clients
+ * @return int
+ */
+int check_and_assign(std::vector<PipelineModel*> & model,
+                     std::vector<PipelineModel*> & selected_clients)
 {
     int total_req_rate = 0;
     // sum all selected req rate
     for (auto &client : selected_clients)
     {
-        total_req_rate += client.req_rate;
+        total_req_rate += client->arrivalProfiles.arrivalRates;
     }
     int max_batch_size = 1;
 
-    for (auto &model_info : model)
+    for (auto model_info : model)
     {
-        if (model_info.throughput > total_req_rate &&
-            max_batch_size < model_info.batch_size)
+        if (model_info->throughput > total_req_rate &&
+            max_batch_size < model_info->batchSize)
         {
-            max_batch_size = model_info.batch_size;
+            max_batch_size = model_info->batchSize;
         }
     }
     return max_batch_size;
@@ -1162,41 +1240,21 @@ int check_and_assign(std::vector<ModelInfoJF> & model,
  * @param budget
  * @return max_batch_size, index
  */
-std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models,
-                                      const ClientInfoJF &client, int max_available_batch_size)
-{
+std::tuple<int, int> findMaxBatchSize(const std::vector<PipelineModel *> &models,
+                                      const PipelineModel *client, int max_available_batch_size) {
     int max_batch_size = 0;
-    float budget = client.budget;
     int index = 0;
     int max_index = 0;
-    for (const auto &model : models)
-    {
+    for (const auto &model: models) {
         // CHECKME: the inference time should be limited by (budget - transmission time)
-        if (model.inference_latency * 2.0 < client.budget - client.transmission_latency &&
-            model.batch_size > max_batch_size && model.batch_size <= max_available_batch_size)
-        {
-            max_batch_size = model.batch_size;
+        if (model->expectedMaxProcessLatency * 2.0 < client->task->tk_slo - client->expectedTransferLatency &&
+            model->batchSize > max_batch_size && model->batchSize <= max_available_batch_size) {
+            max_batch_size = model->batchSize;
             max_index = index;
         }
         index++;
     }
     return std::make_tuple(max_batch_size, max_index);
-}
-
-/**
- * @brief remove the selected clients
- *
- * @param src
- * @param diff
- */
-void differenceClients(std::vector<ClientInfoJF> & src,
-                       const std::vector<ClientInfoJF> &diff)
-{
-    auto is_in_diff = [&diff](const ClientInfoJF &client)
-    {
-        return std::find(diff.begin(), diff.end(), client) != diff.end();
-    };
-    src.erase(std::remove_if(src.begin(), src.end(), is_in_diff), src.end());
 }
 
 // -------------------------------------------------------------------------------------------

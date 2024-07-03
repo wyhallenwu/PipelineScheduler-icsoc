@@ -1,6 +1,6 @@
 #include "controller.h"
 
-ABSL_FLAG(std::string, ctrl_configPath, "../jsons/experiments/base-experiment.json",
+ABSL_FLAG(std::string, ctrl_configPath, "../jsons/experiments/jellyfish-intro.json",
           "Path to the configuration file for this experiment.");
 ABSL_FLAG(uint16_t, ctrl_verbose, 0, "Verbosity level of the controller.");
 ABSL_FLAG(uint16_t, ctrl_loggingMode, 0, "Logging mode of the controller. 0:stdout, 1:file, 2:both");
@@ -66,11 +66,13 @@ Controller::Controller(int argc, char **argv) {
     pushSQL(*ctrl_metricsServerConn, sql);
     sql = "GRANT USAGE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
     pushSQL(*ctrl_metricsServerConn, sql);
-    sql = "GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
+    sql = "GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA " + ctrl_metricsServerConfigs.schema +
+          " TO device_agent, container_agent;";
     pushSQL(*ctrl_metricsServerConn, sql);
     sql = "GRANT CREATE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
     pushSQL(*ctrl_metricsServerConn, sql);
-    sql = "ALTER DEFAULT PRIVILEGES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " GRANT SELECT, INSERT ON TABLES TO device_agent, container_agent;";
+    sql = "ALTER DEFAULT PRIVILEGES IN SCHEMA " + ctrl_metricsServerConfigs.schema +
+          " GRANT SELECT, INSERT ON TABLES TO device_agent, container_agent;";
     pushSQL(*ctrl_metricsServerConn, sql);
 
     std::thread networkCheckThread(&Controller::checkNetworkConditions, this);
@@ -95,20 +97,17 @@ Controller::~Controller() {
     }
 
     std::unique_lock<std::mutex> lock2(devices.devicesMutex);
-    for (auto &device : devices.list)
-    {
+    for (auto &device: devices.list) {
         device.second.cq->Shutdown();
         void *got_tag;
         bool ok = false;
-        while (device.second.cq->Next(&got_tag, &ok))
-            ;
+        while (device.second.cq->Next(&got_tag, &ok));
     }
     server->Shutdown();
     cq->Shutdown();
 }
 
-void Controller::HandleRecvRpcs()
-{
+void Controller::HandleRecvRpcs() {
     new DeviseAdvertisementHandler(&service, cq.get(), this);
     new DummyDataRequestHandler(&service, cq.get(), this);
     void *tag;
@@ -122,125 +121,26 @@ void Controller::HandleRecvRpcs()
     }
 }
 
-void Controller::Scheduling()
-{
-    // TODO: please out your scheduling loop inside of here
-    while (running)
-    {
-        // use list of devices, tasks and containers to schedule depending on your algorithm
-        // put helper functions as a private member function of the controller and write them at the bottom of this file.
-        std::this_thread::sleep_for(std::chrono::milliseconds(
-                5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
-
-        // update the networking time for each client-server pair
-        // there is only one server in JellyFish, so get the server device from any recorded yolo model.
-        // note: it's not allowed to be empty here, or it will cause the UB
-
-        auto model = this->model_profiles_jf.infos.begin()->second[0].model;
-        std::unique_lock<std::mutex> lock(model->pipelineModelMutex);
-        auto server_device = model->device;
-        lock.unlock();
-
-        for (auto &client_info : client_profiles_jf.infos)
-        {
-            auto client_model = client_info.model;
-            std::unique_lock<std::mutex> client_lock(client_model->pipelineModelMutex);
-            auto client_device = client_info.model->device;
-            client_lock.unlock();
-            NetworkProfile network_proflie = queryNetworkProfile(
-                    *ctrl_metricsServerConn,
-                    ctrl_experimentName,
-                    ctrl_systemName,
-                    client_info.task_name,
-                    client_info.task_source,
-                    ctrl_containerLib[client_info.ip].taskName,
-                    ctrl_containerLib[client_info.ip].modelName,
-                    client_device,
-                    server_device,
-                    client_info.network_pairs[std::make_pair(client_device, server_device)]);
-            auto lat = network_proflie.p95TransferDuration;
-            client_info.set_transmission_latency(lat);
-        }
-
-        // start scheduling
-
-        auto mappings = mapClient(this->client_profiles_jf, this->model_profiles_jf);
-
-        for (auto &mapping : mappings)
-        {
-            // retrieve the mapping for one model and its paired clients
-            auto model_info = std::get<0>(mapping);
-            auto selected_clients = std::get<1>(mapping);
-            int batch_size = std::get<2>(mapping);
-
-            // find the PipelineModel* of that model
-            ModelInfoJF m = this->model_profiles_jf.infos[model_info][0];
-            for (auto &model : this->model_profiles_jf.infos[model_info])
-            {
-                if (model.batch_size == batch_size)
-                {
-                    // note: if occurs core dump, it's possible that there is no matchable pointer
-                    // and the p is null
-                    m = model;
-                    break;
-                }
-            }
-            // clear the upstream of that model
-            // CHECKME: lock correctness here
-            std::unique_lock<std::mutex> model_lock(m.model->pipelineModelMutex);
-            m.model->upstreams.clear();
-
-            // TODO: leave another function to translate the changing of upstream, downstream to ContainerHandle
-
-            // adjust downstream, upstream and resolution
-            // CHECKME: vaildate the class of interest here, default to 1 for simplicity
-            for (auto &client : selected_clients)
-            {
-                m.model->upstreams.push_back(std::make_pair(client.model, 1));
-                std::unique_lock<std::mutex> client_lock(client.model->pipelineModelMutex);
-                client.model->downstreams.clear();
-                client.model->downstreams.push_back(std::make_pair(m.model, 1));
-
-                // retrieve new resolution
-                int width = m.width;
-                int height = m.height;
-
-                client_lock.unlock();
-
-                std::unique_lock<std::mutex> container_lock(this->containers.containersMutex);
-                for (auto it = this->containers.list.begin(); it != this->containers.list.end(); ++it)
-                {
-                    if (it->first == client.ip)
-                    {
-                        // CHECKME: excute resolution adjustment
-                        std::vector<int> rs = {3, height, width};
-                        AdjustResolution(it->second, rs);
-                    }
-                }
-                container_lock.unlock();
-            }
-            model_lock.unlock();
-        }
-    }
-}
-
 void Controller::queryInDeviceNetworkEntries(NodeHandle *node) {
     std::string deviceTypeName = SystemDeviceTypeList[node->type];
     std::string deviceTypeNameAbbr = abbreviate(deviceTypeName);
     if (ctrl_inDeviceNetworkEntries.find(deviceTypeName) == ctrl_inDeviceNetworkEntries.end()) {
         std::string tableName = "prof_" + deviceTypeNameAbbr + "_netw";
         std::string sql = absl::StrFormat("SELECT p95_transfer_duration_us, p95_total_package_size_b "
-                                    "FROM %s ", tableName);
+                                          "FROM %s ", tableName);
         pqxx::result res = pullSQL(*ctrl_metricsServerConn, sql);
         if (res.empty()) {
-            spdlog::get("container_agent")->error("No in-device network entries found for device type {}.", deviceTypeName);
+            spdlog::get("container_agent")->error("No in-device network entries found for device type {}.",
+                                                  deviceTypeName);
             return;
         }
         for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
-            std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
+            std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(),
+                                                   row["p95_transfer_duration_us"].as<uint64_t>()};
             ctrl_inDeviceNetworkEntries[deviceTypeName].emplace_back(entry);
         }
-        spdlog::get("container_agent")->info("Finished querying in-device network entries for device type {}.", deviceTypeName);
+        spdlog::get("container_agent")->info("Finished querying in-device network entries for device type {}.",
+                                             deviceTypeName);
     }
     std::unique_lock lock(node->nodeHandleMutex);
     node->latestNetworkEntries[deviceTypeName] = aggregateNetworkEntries(ctrl_inDeviceNetworkEntries[deviceTypeName]);
@@ -253,17 +153,19 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         service->RequestAdvertiseToController(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new DeviseAdvertisementHandler(service, cq, controller);
-        std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), DEVICE_CONTROL_PORT + controller->ctrl_port_offset);
+        std::string target_str = absl::StrFormat("%s:%d", request.ip_address(),
+                                                 DEVICE_CONTROL_PORT + controller->ctrl_port_offset);
         std::string deviceName = request.device_name();
         NodeHandle node{deviceName,
-                                     request.ip_address(),
-                                     ControlCommunication::NewStub(
-                                             grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
-                                     new CompletionQueue(),
-                                     static_cast<SystemDeviceType>(request.device_type()),
-                                     request.processors(), std::vector<double>(request.processors(), 0.0),
-                                     std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
-                                     std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset, {}};
+                        request.ip_address(),
+                        ControlCommunication::NewStub(
+                                grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
+                        new CompletionQueue(),
+                        static_cast<SystemDeviceType>(request.device_type()),
+                        request.processors(), std::vector<double>(request.processors(), 0.0),
+                        std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
+                        std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset,
+                        {}};
         reply.set_name(controller->ctrl_systemName);
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
@@ -285,7 +187,8 @@ void Controller::DummyDataRequestHandler::Proceed() {
         new DummyDataRequestHandler(service, cq, controller);
         ClockType now = std::chrono::system_clock::now();
         unsigned long diff = std::chrono::duration_cast<TimePrecisionType>(
-                now - std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(request.gen_time()))).count();
+                now -
+                std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(request.gen_time()))).count();
         unsigned int size = request.data().size();
         controller->network_check_buffer[request.origin_name()].push_back({size, diff});
         status = FINISH;
@@ -349,7 +252,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container->device_agent->stub->AsyncStartContainer(&context, request,
-                                                                      container->device_agent->cq));
+                                                               container->device_agent->cq));
     finishGrpc(rpc, reply, status, container->device_agent->cq);
     if (!status.ok()) {
         std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
@@ -471,10 +374,12 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     containers.list.erase(container->name);
     container->device_agent->containers.erase(container->name);
     for (auto upstr: container->upstreams) {
-        upstr->downstreams.erase(std::remove(upstr->downstreams.begin(), upstr->downstreams.end(), container), upstr->downstreams.end());
+        upstr->downstreams.erase(std::remove(upstr->downstreams.begin(), upstr->downstreams.end(), container),
+                                 upstr->downstreams.end());
     }
     for (auto dwnstr: container->downstreams) {
-        dwnstr->upstreams.erase(std::remove(dwnstr->upstreams.begin(), dwnstr->upstreams.end(), container), dwnstr->upstreams.end());
+        dwnstr->upstreams.erase(std::remove(dwnstr->upstreams.begin(), dwnstr->upstreams.end(), container),
+                                dwnstr->upstreams.end());
     }
 }
 
@@ -494,17 +399,22 @@ void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType
     // Receiver to Preprocessor
     // Utilization of preprocessor
     float preprocess_rho = container.arrival_rate / preprocessRate;
-    QueueLengthType preprocess_inQueueSize = std::max((QueueLengthType) std::ceil(preprocess_rho * preprocess_rho / (2 * (1 - preprocess_rho))), minimumQueueSize);
+    QueueLengthType preprocess_inQueueSize = std::max(
+            (QueueLengthType) std::ceil(preprocess_rho * preprocess_rho / (2 * (1 - preprocess_rho))),
+            minimumQueueSize);
     float preprocess_thrpt = std::min(preprocessRate, container.arrival_rate);
 
     // Preprocessor to Inferencer
     // Utilization of inferencer
     float infer_rho = preprocess_thrpt / container.batch_size / inferRate;
-    QueueLengthType infer_inQueueSize = std::max((QueueLengthType) std::ceil(infer_rho * infer_rho / (2 * (1 - infer_rho))), minimumQueueSize);
+    QueueLengthType infer_inQueueSize = std::max(
+            (QueueLengthType) std::ceil(infer_rho * infer_rho / (2 * (1 - infer_rho))), minimumQueueSize);
     float infer_thrpt = std::min(inferRate, preprocess_thrpt / container.batch_size); // batch per second
 
     float postprocess_rho = (infer_thrpt * container.batch_size) / postprocessRate;
-    QueueLengthType postprocess_inQueueSize = std::max((QueueLengthType) std::ceil(postprocess_rho * postprocess_rho / (2 * (1 - postprocess_rho))), minimumQueueSize);
+    QueueLengthType postprocess_inQueueSize = std::max(
+            (QueueLengthType) std::ceil(postprocess_rho * postprocess_rho / (2 * (1 - postprocess_rho))),
+            minimumQueueSize);
     float postprocess_thrpt = std::min(postprocessRate, infer_thrpt * container.batch_size);
 
     QueueLengthType sender_inQueueSize = postprocess_inQueueSize * container.batch_size;
@@ -637,7 +547,8 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
  * @param numLoops
  * @return NetworkEntryType
  */
-NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize, uint32_t numLoops) {
+NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize,
+                                              uint32_t numLoops) {
     LoopRange request;
     EmptyMessage reply;
     ClientContext context;
@@ -670,7 +581,7 @@ void Controller::checkNetworkConditions() {
         stopwatch.start();
         std::map<std::string, NetworkEntryType> networkEntries = {};
 
-        for (auto &[deviceName, nodeHandle] : *(devices.getMap())) {
+        for (auto &[deviceName, nodeHandle]: *(devices.getMap())) {
             if (deviceName == "server") {
                 continue;
             }
@@ -678,7 +589,7 @@ void Controller::checkNetworkConditions() {
         }
         std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
         std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
-                            "FROM %s ", tableName);
+                                            "FROM %s ", tableName);
 
         pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
         //Getting the latest network entries into the networkEntries map
@@ -687,12 +598,13 @@ void Controller::checkNetworkConditions() {
             if (sender_host == "server" || sender_host == "serv") {
                 continue;
             }
-            std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
+            std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(),
+                                                   row["p95_transfer_duration_us"].as<uint64_t>()};
             networkEntries[sender_host].emplace_back(entry);
         }
 
         // Updating NodeHandle object with the latest network entries
-        for (auto &[deviceName, entries] : networkEntries) {
+        for (auto &[deviceName, entries]: networkEntries) {
             // If entry belongs to a device that is not in the list of devices, ignore it
             if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
                 continue;
@@ -702,7 +614,7 @@ void Controller::checkNetworkConditions() {
         }
 
         // If no network entries exist for a device, send a request to the device to perform network testing
-        for (auto &[deviceName, nodeHandle] : devices.list) {
+        for (auto &[deviceName, nodeHandle]: devices.list) {
             if (nodeHandle.latestNetworkEntries.size() == 0) {
                 // TODO: Send a request to the device to perform network testing
 

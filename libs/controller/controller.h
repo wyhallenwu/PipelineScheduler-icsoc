@@ -276,6 +276,13 @@ struct PipelineModel {
 
     std::string deviceTypeName;
 
+    // ============ Jellyfish Scheduling ============
+    int throughput;
+    int width;
+    int height;
+    float accuracy;
+    std::map<std::pair<std::string, std::string>, NetworkEntryType> possibleNetworkEntryPairs;
+
     bool merged = false;
 
     std::vector<std::string> possibleDevices;
@@ -319,6 +326,31 @@ struct PipelineModel {
           deviceTypeName(deviceTypeName),
           merged(mergable),
           possibleDevices(possibleDevices) {}
+
+
+    PipelineModel(PipelineModel const &model) {
+        device = model.device;
+        name = model.name;
+        task = model.task;
+        isSplitPoint = model.isSplitPoint;
+        arrivalProfiles = model.arrivalProfiles;
+        processProfiles = model.processProfiles;
+        downstreams = model.downstreams;
+        upstreams = model.upstreams;
+        batchSize = model.batchSize;
+        numReplicas = model.numReplicas;
+        cudaDevices = model.cudaDevices;
+        expectedTransferLatency = model.expectedTransferLatency;
+        expectedQueueingLatency = model.expectedQueueingLatency;
+        expectedAvgPerQueryLatency = model.expectedAvgPerQueryLatency;
+        expectedMaxProcessLatency = model.expectedMaxProcessLatency;
+        expectedStart2HereLatency = model.expectedStart2HereLatency;
+        estimatedPerQueryCost = model.estimatedPerQueryCost;
+        estimatedStart2HereCost = model.estimatedStart2HereCost;
+        deviceTypeName = model.deviceTypeName;
+        merged = model.merged;
+        possibleDevices = model.possibleDevices;
+    }
 
     // Assignment operator
     PipelineModel& operator=(const PipelineModel& other) {
@@ -467,25 +499,6 @@ const std::map<std::string, float> ACC_LEVEL_MAP = {
 };
 
 /**
- * @brief ModelInfo is a collection of a single running model. A helper class for scheduling algorithm
- *
- */
-struct ModelInfoJF
-{
-    int batch_size;
-    float inference_latency;
-    int throughput;
-    int width;
-    int height;
-    std::string name;
-    float accuracy;
-    PipelineModel *model;
-
-    ModelInfoJF();
-    ModelInfoJF(int bs, float il, int w, int h, std::string n, float acc, PipelineModel *m);
-};
-
-/**
  * @brief comparison of the key of ModelProfiles, for sorting in the ModelProfiles::infos
  *
  */
@@ -502,60 +515,27 @@ class ModelProfilesJF
 {
 public:
     // key: (model type, accuracy) value: (model_info)
-    std::map<std::tuple<std::string, float>, std::vector<ModelInfoJF>, ModelSetCompare> infos;
+    std::map<std::tuple<std::string, float>, std::vector<PipelineModel*>, ModelSetCompare> infos;
 
-    void add(std::string name, float accuracy, int batch_size, float inference_latency, int width, int height, PipelineModel *model);
-    void add(const ModelInfoJF &model_info);
+    void add(std::string name, float accuracy, int batch_size, float inference_latency, int width, int height,
+             PipelineModel *model);
+
+    void add(PipelineModel *model_info);
 
     void debugging();
-};
-
-/**
- * @brief ClientInfo is a collection of single client's information. A helper class for scheduling algorithm
- *
- */
-struct ClientInfoJF
-{
-    std::string ip;           // can be anything, just a unique identification for differenct clients(datasource)
-    float budget;             // slo
-    int req_rate;             // request rate (how many frame are sent to remote per second)
-    PipelineModel *model;     // pointer to that component
-    int transmission_latency; // networking time, useful for scheduling
-
-    std::string task_name;
-    std::string task_source;
-    std::map<std::pair<std::string, std::string>, NetworkEntryType> network_pairs;
-
-    ClientInfoJF(std::string _ip, float _budget, int _req_rate,
-                 PipelineModel *_model, std::string _task_name, std::string _task_source,
-                 std::map<std::pair<std::string, std::string>, NetworkEntryType> _network_pairs);
-
-    bool operator==(const ClientInfoJF &other) const
-    {
-        return ip == other.ip &&
-               budget == other.budget &&
-               req_rate == other.req_rate;
-    }
-
-    void set_transmission_latency(int lat);
-
-    // void set_bandwidth(float bw);
 };
 
 /**
  * @brief ClientProfiles is a collection of all clients' profile.
  *
  */
-class ClientProfilesJF
-{
+class ClientProfilesJF {
 public:
-    std::vector<ClientInfoJF> infos;
+    std::vector<PipelineModel *> models;
 
-    static void sortBudgetDescending(std::vector<ClientInfoJF> &clients);
+    static void sortBudgetDescending(std::vector<PipelineModel *> &clients);
 
-    void add(const std::string &ip, float budget, int req_rate,
-             PipelineModel *model, std::string task_name, std::string task_source,
-             std::map<std::pair<std::string, std::string>, NetworkEntryType> network_pairs);
+    void add(PipelineModel *m, std::map<std::pair<std::string, std::string>, NetworkEntryType> network_pairs);
 
     void debugging();
 };
@@ -564,14 +544,18 @@ public:
 //                                      jellyfish scheduling functions
 // --------------------------------------------------------------------------------------------------------
 
-std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfoJF>, int>> mapClient(ClientProfilesJF client_profile, ModelProfilesJF model_profiles);
-std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &models, std::vector<ClientInfoJF> &clients);
-int check_and_assign(std::vector<ModelInfoJF> &model, std::vector<ClientInfoJF> &selected_clients);
+std::vector<std::tuple<std::tuple<std::string, float>, std::vector<PipelineModel*>, int>>
+mapClient(ClientProfilesJF client_profile, ModelProfilesJF model_profiles);
+
+std::vector<PipelineModel>
+findOptimalClients(const std::vector<PipelineModel *> &models, std::vector<PipelineModel *> &clients);
+
+int check_and_assign(std::vector<PipelineModel *> &model, std::vector<PipelineModel *> &selected_clients);
 
 // helper functions
 
-std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models, const ClientInfoJF &client, int max_available_batch_size = 64);
-void differenceClients(std::vector<ClientInfoJF> &src, const std::vector<ClientInfoJF> &diff);
+std::tuple<int, int>
+findMaxBatchSize(const std::vector<PipelineModel *> &models, const PipelineModel *client, int max_available_batch_size = 64);
 
 // --------------------------------------------------------------------------------------------------------
 //                                      end of jellyfish scheduling functions
@@ -587,7 +571,7 @@ public:
 
     void Scheduling();
 
-    void Init() { 
+    void Init() {
         bool allAdded = true;
         for (auto &t: initialTasks) {
             if (!t.added) {
@@ -646,7 +630,9 @@ private:
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
     void getInitialBatchSizes(TaskHandle &models, uint64_t slo);
-    void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
+
+    void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo,
+                          const std::string &edgeDevice);
 
     bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile);
     bool mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, const PerDeviceModelProfileType &toBeMergedProfile);
@@ -799,7 +785,7 @@ private:
         std::map<std::string, NodeHandle> list = {};
         std::mutex devicesMutex;
     };
-    
+
     Devices devices;
 
     struct Tasks {
@@ -838,7 +824,7 @@ private:
             return list.find(name) != list.end();
         }
 
-    // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
+        // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
     public:
         std::map<std::string, TaskHandle> list = {};
         std::mutex tasksMutex;
