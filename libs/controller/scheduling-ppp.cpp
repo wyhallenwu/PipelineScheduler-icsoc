@@ -1,5 +1,13 @@
 #include "scheduling-ppp.h"
 
+std::string DeviceNameToType(std::string name) {
+    if (name == "server") {
+        return "server";
+    } else {
+        return name.substr(0, name.size() - 1);
+    }
+}
+
 bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     TaskHandle *task = new TaskHandle{t.name, t.fullName, t.type, t.source, t.device, t.slo, {}, 0};
@@ -22,9 +30,9 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::map<std::pair<std::string, std::string>, NetworkEntryType> possibleNetworkEntryPairs;
 
     for (const auto &pair: possibleDevicePairList) {
-        std::unique_lock lock(devices.list[pair.first].nodeHandleMutex);
+        std::unique_lock lock_device(devices.list[pair.first].nodeHandleMutex);
         possibleNetworkEntryPairs[pair] = devices.list[pair.first].latestNetworkEntries[pair.second];
-        lock.unlock();
+        lock_device.unlock();
     }
 
     std::vector<std::string> possibleDeviceList = {"server"};
@@ -64,13 +72,15 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
                 pair.first,
+                DeviceNameToType(pair.first),
                 pair.second,
+                DeviceNameToType(pair.second),
                 possibleNetworkEntryPairs[pair]
             );
             model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
         }
 
-        for (const auto deviceName : possibleDeviceList) {
+        for (const auto &deviceName : possibleDeviceList) {
             std::string deviceTypeName = getDeviceTypeName(deviceList->at(deviceName).type);
             ModelProfile profile = queryModelProfile(
                 *ctrl_metricsServerConn,
@@ -480,15 +490,15 @@ bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, 
         mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat, toBeMergedProfileDevice->p95postLat);
 
         auto mergedBatchInfer = &mergedProfileDevice->batchInfer;
-        auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
+        // auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
 
-        for (const auto &[batchSize, profile] : toBeMergedProfileDevice->batchInfer) {
-            mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, profile.p95inferLat);
-            mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, profile.cpuUtil);
-            mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, profile.gpuUtil);
-            mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, profile.memUsage);
-            mergedBatchInfer->at(batchSize).rssMemUsage = std::max(mergedBatchInfer->at(batchSize).rssMemUsage, profile.rssMemUsage);
-            mergedBatchInfer->at(batchSize).gpuMemUsage = std::max(mergedBatchInfer->at(batchSize).gpuMemUsage, profile.gpuMemUsage);
+        for (const auto &[batchSize, p] : toBeMergedProfileDevice->batchInfer) {
+            mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, p.p95inferLat);
+            mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, p.cpuUtil);
+            mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, p.gpuUtil);
+            mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, p.memUsage);
+            mergedBatchInfer->at(batchSize).rssMemUsage = std::max(mergedBatchInfer->at(batchSize).rssMemUsage, p.rssMemUsage);
+            mergedBatchInfer->at(batchSize).gpuMemUsage = std::max(mergedBatchInfer->at(batchSize).gpuMemUsage, p.gpuMemUsage);
         }
 
     }
@@ -497,7 +507,7 @@ bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, 
 
 bool Controller::mergeModels(PipelineModel *mergedModel, PipelineModel* toBeMergedModel) {
     // If the merged model is empty, we should just copy the model to be merged
-    if (mergedModel->numReplicas == -1) {
+    if (mergedModel->numReplicas == 0) {
         *mergedModel = *toBeMergedModel;
         return true;
     }
