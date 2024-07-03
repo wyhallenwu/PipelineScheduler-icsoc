@@ -15,7 +15,10 @@ NetworkEntryType aggregateNetworkEntries(const NetworkEntryType &res) {
     std::map<uint32_t, std::vector<uint64_t>> groupedEntries;
 
     // Group entries by package size
-    for (const auto &entry : res) {
+    for (const auto entry : res) {
+        if (entry.second > 10000000) {
+            continue;
+        }
         groupedEntries[entry.first].push_back(entry.second);
     }
 
