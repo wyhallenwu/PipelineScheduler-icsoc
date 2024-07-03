@@ -45,12 +45,12 @@ struct GPUPortion;
 struct GPULane {
     std::uint16_t gpuNum;
     std::uint16_t laneNum;
-    std::uint64_t dutyCycle = 9999999999999999999;
+    std::uint64_t dutyCycle = 9999999999999999;
 };
 
 struct GPUPortion : GPULane {
     std::uint64_t start = 0;
-    std::uint64_t end = 9999999999999999999;
+    std::uint64_t end = 9999999999999999;
     GPULane * lane = nullptr;
     GPUPortion* next = nullptr;
     GPUPortion* prev = nullptr;
@@ -364,6 +364,36 @@ struct PipelineModel {
           merged(merged),
           possibleDevices(possibleDevices) {}
 
+    // Copy constructor
+    PipelineModel(const PipelineModel& other) {
+        std::lock(pipelineModelMutex, other.pipelineModelMutex);
+        std::lock_guard<std::mutex> lock1(other.pipelineModelMutex, std::adopt_lock);
+        std::lock_guard<std::mutex> lock2(pipelineModelMutex, std::adopt_lock);
+        device = other.device;
+        name = other.name;
+        task = other.task;
+        isSplitPoint = other.isSplitPoint;
+        arrivalProfiles = other.arrivalProfiles;
+        processProfiles = other.processProfiles;
+        downstreams = other.downstreams;
+        upstreams = other.upstreams;
+        batchSize = other.batchSize;
+        numReplicas = other.numReplicas;
+        cudaDevices = other.cudaDevices;
+        expectedTransferLatency = other.expectedTransferLatency;
+        expectedQueueingLatency = other.expectedQueueingLatency;
+        expectedAvgPerQueryLatency = other.expectedAvgPerQueryLatency;
+        expectedMaxProcessLatency = other.expectedMaxProcessLatency;
+        expectedStart2HereLatency = other.expectedStart2HereLatency;
+        estimatedPerQueryCost = other.estimatedPerQueryCost;
+        estimatedStart2HereCost = other.estimatedStart2HereCost;
+        deviceTypeName = other.deviceTypeName;
+        merged = other.merged;
+        possibleDevices = other.possibleDevices;
+        manifestations = other.manifestations;
+        deviceAgent = other.deviceAgent;
+    }
+
     // Assignment operator
     PipelineModel& operator=(const PipelineModel& other) {
         if (this != &other) {
@@ -392,6 +422,7 @@ struct PipelineModel {
             merged = other.merged;
             possibleDevices = other.possibleDevices;
             manifestations = other.manifestations;
+            deviceAgent = other.deviceAgent;
         }
         return *this;
     }
