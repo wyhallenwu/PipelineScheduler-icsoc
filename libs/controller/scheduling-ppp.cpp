@@ -76,8 +76,24 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
                 possibleDevicePairList.push_back({deviceName, deviceName2});
             }
         }
+        std::string containerName = model->name + "-" + model->deviceTypeName;
+        model->arrivalProfiles.arrivalRates = queryArrivalRate(
+            *ctrl_metricsServerConn,
+            ctrl_experimentName,
+            ctrl_systemName,
+            t.name,
+            t.source,
+            ctrl_containerLib[containerName].taskName,
+            ctrl_containerLib[containerName].modelName
+        );
 
         for (const auto &pair : possibleDevicePairList) {
+            std::string senderDeviceType = getDeviceTypeName(deviceList.at(pair.first)->type);
+            std::string receiverDeviceType = getDeviceTypeName(deviceList.at(pair.second)->type);
+            containerName = model->name + "-" + receiverDeviceType;
+            std::unique_lock lock(devices.list[pair.first]->nodeHandleMutex);
+            NetworkEntryType entry = devices.list[pair.first]->latestNetworkEntries[receiverDeviceType];
+            lock.unlock();
             NetworkProfile test = queryNetworkProfile(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
@@ -87,14 +103,17 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
                 pair.first,
+                senderDeviceType,
                 pair.second,
-                possibleNetworkEntryPairs[pair]
+                receiverDeviceType,
+                entry
             );
             model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
         }
 
-        for (const auto deviceName : possibleDeviceList) {
-            std::string deviceTypeName = getDeviceTypeName(deviceList->at(deviceName).type);
+        for (const auto deviceName : model->possibleDevices) {
+            std::string deviceTypeName = getDeviceTypeName(deviceList.at(deviceName)->type);
+            containerName = model->name + "-" + deviceTypeName;
             ModelProfile profile = queryModelProfile(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
@@ -122,7 +141,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
         // std::cout << "sdfsdfasdf" << std::endl;
     }
     std::lock_guard lock2(ctrl_unscheduledPipelines.tasksMutex);
-    ctrl_unscheduledPipelines.list.insert({task->tk_name, *task});
+    ctrl_unscheduledPipelines.list.insert({task->tk_name, task});
 
     std::cout << "Task added: " << t.name << std::endl;
     return true;
@@ -631,6 +650,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 2}}
             };
+            carbrand->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({carbrand, 2});
 
             auto *platedet = new PipelineModel{
@@ -643,6 +663,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 2}}
             };
+            platedet->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({platedet, 2});
 
             auto *sink = new PipelineModel{
