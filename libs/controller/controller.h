@@ -85,6 +85,8 @@ struct NodeHandle {
     std::vector<GPULane *> gpuLanes;
     GPUPortionList freeGPUPortions;
 
+    bool initialNetworkCheck = false;
+    ClockType lastNetworkCheckTime;
 
     
 
@@ -543,7 +545,7 @@ private:
 
     void initiateGPULanes(NodeHandle &node);
 
-    NetworkEntryType initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
+    NetworkEntryType initNetworkCheck(NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
     uint8_t incNumReplicas(const PipelineModel *model);
     uint8_t decNumReplicas(const PipelineModel *model);
 
