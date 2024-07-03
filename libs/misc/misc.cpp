@@ -220,6 +220,11 @@ NetworkProfile queryNetworkProfile(
     d2dNetworkProfile.p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
     d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
 
+    if ((senderHost != "server") && (senderHost == receiverHost) && (taskName.find("yolo") != std::string::npos)) {
+        d2dNetworkProfile.p95PackageSize = 0;
+        return d2dNetworkProfile;
+    }
+
     // For network transfer duration, we estimate the latency using linear interpolation based on the package size
     // The network entries are updated in a separate thread
     d2dNetworkProfile.p95TransferDuration = estimateNetworkLatency(networkEntries, d2dNetworkProfile.p95PackageSize);
