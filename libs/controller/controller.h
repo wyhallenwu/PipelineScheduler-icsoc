@@ -242,6 +242,41 @@ struct ContainerHandle {
       upstreams(upstreams),
       downstreams(downstreams),
       queueSizes(queueSizes) {}
+    
+    // Copy constructor
+    ContainerHandle(const ContainerHandle& other) {
+        std::lock(containerHandleMutex, other.containerHandleMutex);
+        std::lock_guard<std::mutex> lock1(containerHandleMutex, std::adopt_lock);
+        std::lock_guard<std::mutex> lock2(other.containerHandleMutex, std::adopt_lock);
+
+        name = other.name;
+        class_of_interest = other.class_of_interest;
+        model = other.model;
+        mergable = other.mergable;
+        dimensions = other.dimensions;
+        inference_deadline = other.inference_deadline;
+        arrival_rate = other.arrival_rate;
+        batch_size = other.batch_size;
+        cuda_device = other.cuda_device;
+        recv_port = other.recv_port;
+        model_file = other.model_file;
+        device_agent = other.device_agent;
+        task = other.task;
+        upstreams = other.upstreams;
+        downstreams = other.downstreams;
+        queueSizes = other.queueSizes;
+        running = other.running;
+        numMicroservices = other.numMicroservices;
+        expectedTransferLatency = other.expectedTransferLatency;
+        expectedQueueingLatency = other.expectedQueueingLatency;
+        expectedPreprocessLatency = other.expectedPreprocessLatency;
+        expectedInferLatency = other.expectedInferLatency;
+        expectedPostprocessLatency = other.expectedPostprocessLatency;
+        expectedThroughput = other.expectedThroughput;
+        startTime = other.startTime;
+        endTime = other.endTime;
+        executionLane = other.executionLane;
+    }
 
     // Copy assignment operator
     ContainerHandle& operator=(const ContainerHandle& other) {
