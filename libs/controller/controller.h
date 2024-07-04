@@ -641,10 +641,6 @@ private:
     bool modelTemporalScheduling(PipelineModel *pipelineModel);
     void temporalScheduling();
 
-    bool containerTemporalScheduling(ContainerHandle *container);
-    bool modelTemporalScheduling(PipelineModel *pipelineModel);
-    void temporalScheduling();
-
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "");
 
     void checkNetworkConditions();

@@ -36,17 +36,13 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     link = jsonConfigs.at("msvc_upstreamMicroservices")[0].at("nb_link")[0];
     source = cv::VideoCapture(link);
     msvc_currFrameID = 0;
-    std::cout << jsonConfigs.dump(4) << std::endl;
     wait_time_ms = 1000 / jsonConfigs.at("msvc_idealBatchSize").get<int>();
-    skip_count = (jsonConfigs.at("msvc_idealBatchSize").get<int>() == 30) ? 1 :
-            30 / (30 - jsonConfigs.at("msvc_idealBatchSize").get<int>());
     skipRatio = 30.f / jsonConfigs.at("msvc_idealBatchSize").get<int>();
     link = link.substr(link.find_last_of('/') + 1);
 };
 
 void DataReader::Process() {
     int frameCount = 0;
-    bool notSkip = false;
     uint16_t readFrames = 0;
     while (true) {
         if (STOP_THREADS) {
@@ -76,7 +72,6 @@ void DataReader::Process() {
         if (std::fmod(frameCount, skipRatio) < 1) {
             readFrames++;
             msvc_currFrameID = (int) source.get(cv::CAP_PROP_POS_FRAMES);
-            // std::cout << "Frame ID: " << msvc_currFrameID << std::endl;
             frame = resizePadRightBottom(frame, msvc_dataShape[0][1], msvc_dataShape[0][2],
                                          {128, 128, 128}, cv::INTER_AREA);
             RequestMemSizeType frameMemSize = frame.channels() * frame.rows * frame.cols * CV_ELEM_SIZE1(frame.type());
