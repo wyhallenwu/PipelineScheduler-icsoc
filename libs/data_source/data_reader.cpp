@@ -36,6 +36,7 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     link = jsonConfigs.at("msvc_upstreamMicroservices")[0].at("nb_link")[0];
     source = cv::VideoCapture(link);
     msvc_currFrameID = 0;
+    std::cout << jsonConfigs.dump(4) << std::endl;
     wait_time_ms = 1000 / jsonConfigs.at("msvc_idealBatchSize").get<int>();
     skip_count = (jsonConfigs.at("msvc_idealBatchSize").get<int>() == 30) ? 1 :
             30 / (30 - jsonConfigs.at("msvc_idealBatchSize").get<int>());
@@ -60,8 +61,13 @@ void DataReader::Process() {
         cv::Mat frame;
         source >> frame;
         if (frame.empty()) {
-            std::cout << "No more frames to read, exiting Video Processing." << std::endl;
-            return;
+            if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
+                spdlog::get("container_agent")->info("No more frames to read, exiting Video Processing.");
+                return;
+            }
+            spdlog::get("container_agent")->info("Resetting Video Processing.");
+            source.set(cv::CAP_PROP_POS_FRAMES, 0);
+            source >> frame;
         }
         if (skip_count > 1 && i++ >= skip_count) {
             i = 1;

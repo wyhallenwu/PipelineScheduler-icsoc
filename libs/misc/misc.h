@@ -46,6 +46,9 @@ typedef unsigned int GpuUtilType;
 typedef int MemUsageType;
 typedef unsigned int GpuMemUsageType;
 
+const uint8_t NUM_LANES_PER_GPU = 3;
+const uint8_t NUM_GPUS = 4;
+
 struct BatchInferProfile {
     uint64_t p95inferLat;
     
@@ -107,6 +110,7 @@ typedef std::map<std::pair<std::string, std::string>, ArrivalRecord> ArrivalReco
 struct PercentilesProcessRecord {
     uint64_t prepDuration;
     uint64_t batchDuration;
+    uint64_t inferQueueingDuration;
     uint64_t inferDuration;
     uint64_t postDuration;
     uint32_t inputSize;
@@ -121,6 +125,7 @@ struct PercentilesProcessRecord {
 struct ProcessRecord : public Record {
     std::vector<uint64_t> prepDuration;
     std::vector<uint64_t> batchDuration;
+    std::vector<uint64_t> inferQueueingDuration;
     std::vector<uint64_t> inferDuration;
     std::vector<uint64_t> postDuration;
     std::vector<uint32_t> inputSize;
@@ -134,6 +139,7 @@ struct ProcessRecord : public Record {
             results[percent] = {
                 findPercentile<uint64_t>(prepDuration, percent),
                 findPercentile<uint64_t>(batchDuration, percent),
+                findPercentile<uint64_t>(inferQueueingDuration, percent),
                 findPercentile<uint64_t>(inferDuration, percent),
                 findPercentile<uint64_t>(postDuration, percent),
                 findPercentile<uint32_t>(inputSize, percent),
@@ -525,7 +531,9 @@ NetworkProfile queryNetworkProfile(
     const std::string &taskName,
     const std::string &modelName,
     const std::string &senderHost,
+    const std::string &senderDeviceType,
     const std::string &receiverHost,
+    const std::string &receiverDeviceType,
     const NetworkEntryType &networkEntries
 );
 
