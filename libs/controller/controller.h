@@ -606,6 +606,10 @@ public:
 
     void Stop() { running = false; };
 
+    void readInitialObjectCount(
+        const std::string& path 
+    );
+
 private:
 
     void initiateGPULanes(NodeHandle &node);
@@ -630,7 +634,7 @@ private:
     TaskHandle mergePipelines(const std::string& taskName);
     void mergePipelines();
 
-    PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice);
+    PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "");
 
     void checkNetworkConditions();
 
@@ -880,6 +884,8 @@ private:
     // TODO: Read from config file
     std::uint64_t ctrl_schedulingIntervalSec = 600;
     ClockType ctrl_nextSchedulingTime;
+
+    std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
 };
 
 

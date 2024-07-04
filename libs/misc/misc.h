@@ -231,7 +231,7 @@ struct ModelProfile {
 //<reqOriginStream, Record>
 // Since each stream's content is unique, which causes unique process behaviors, 
 // we can use the stream name as the key to store the process records
-typedef std::map<std::string, ProcessRecord> ProcessRecordType;
+typedef std::map<std::pair<std::string, BatchSizeType>, ProcessRecord> ProcessRecordType;
 
 typedef std::map<std::string, ModelProfile> PerDeviceModelProfileType;
 
