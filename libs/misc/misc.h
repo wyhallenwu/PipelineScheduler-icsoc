@@ -46,6 +46,9 @@ typedef unsigned int GpuUtilType;
 typedef int MemUsageType;
 typedef unsigned int GpuMemUsageType;
 
+const uint8_t NUM_LANES_PER_GPU = 3;
+const uint8_t NUM_GPUS = 4;
+
 struct BatchInferProfile {
     uint64_t p95inferLat;
     
@@ -525,7 +528,9 @@ NetworkProfile queryNetworkProfile(
     const std::string &taskName,
     const std::string &modelName,
     const std::string &senderHost,
+    const std::string &senderDeviceType,
     const std::string &receiverHost,
+    const std::string &receiverDeviceType,
     const NetworkEntryType &networkEntries
 );
 
