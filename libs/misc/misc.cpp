@@ -15,7 +15,10 @@ NetworkEntryType aggregateNetworkEntries(const NetworkEntryType &res) {
     std::map<uint32_t, std::vector<uint64_t>> groupedEntries;
 
     // Group entries by package size
-    for (const auto &entry : res) {
+    for (const auto entry : res) {
+        if (entry.second > 10000000) {
+            continue;
+        }
         groupedEntries[entry.first].push_back(entry.second);
     }
 
@@ -153,11 +156,16 @@ NetworkProfile queryNetworkProfile(
     const std::string &taskName,
     const std::string &modelName,
     const std::string &senderHost,
+    const std::string &senderDeviceType,
     const std::string &receiverHost,
+    const std::string &receiverDeviceType,
     const NetworkEntryType &networkEntries
 ) {
     std::string senderHostAbbr = abbreviate(senderHost);
     std::string receiverHostAbbr = abbreviate(receiverHost);
+
+    std::string senderDeviceTypeAbbr = abbreviate(senderDeviceType);
+    std::string receiverDeviceTypeAbbr = abbreviate(receiverDeviceType);    
 
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
@@ -208,12 +216,17 @@ NetworkProfile queryNetworkProfile(
     "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
     "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
     "FROM recent_data;";
-    query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr, abbreviate(modelNameAbbr));
+    query = absl::StrFormat(query.c_str(), profileTableName, receiverDeviceTypeAbbr, abbreviate(modelNameAbbr));
     res = pullSQL(metricsConn, query);
 
     d2dNetworkProfile.p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
     d2dNetworkProfile.p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
     d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
+
+    if ((senderHost != "server") && (senderHost == receiverHost) && (taskName.find("yolo") != std::string::npos)) {
+        d2dNetworkProfile.p95PackageSize = 0;
+        return d2dNetworkProfile;
+    }
 
     // For network transfer duration, we estimate the latency using linear interpolation based on the package size
     // The network entries are updated in a separate thread
@@ -320,10 +333,10 @@ ModelArrivalProfile queryModelArrivalProfile(
                 "   LIMIT 100"
                 ") "
                 "SELECT "
-                "   MAX(p95_out_queueing_duration_us) AS p95_out_queueing_duration_us, "
-                "   MAX(p95_transfer_duration_us) AS p95_transfer_duration_us, "
-                "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
-                "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
+                "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_out_queueing_duration_us) AS p95_out_queueing_duration_us, "
+                "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_transfer_duration_us) AS p95_transfer_duration_us, "
+                "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_queueing_duration_us) AS p95_queueing_duration_us, "
+                "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_total_package_size_b) AS p95_total_package_size_b "
                 "FROM recent_data;";
         query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, streamName, senderHostAbbr, receiverHostAbbr);
         res = pullSQL(metricsConn, query);
@@ -347,9 +360,9 @@ ModelArrivalProfile queryModelArrivalProfile(
         "   LIMIT 100"
         ") "
         "SELECT "
-        "   MAX(p95_out_queueing_duration_us) AS p95_out_queueing_duration_us, "
-        "   MAX(p95_queueing_duration_us) AS p95_queuing_duration_us, "
-        "   MAX(p95_total_package_size_b) AS p95_total_package_size_b "
+        "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_out_queueing_duration_us) AS p95_out_queueing_duration_us, "
+        "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_queueing_duration_us) AS p95_queueing_duration_us, "
+        "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_total_package_size_b) AS p95_total_package_size_b "
         "FROM recent_data;";
         query = absl::StrFormat(query.c_str(), profileTableName, receiverHostAbbr, modelNameAbbr);
         res = pullSQL(metricsConn, query);
@@ -397,10 +410,10 @@ void queryPrePostLatency(
             "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
             ")"
             "SELECT "
-            "   MAX(p95_prep_duration_us) AS p95_prep_duration_us_all, "
-            "   MAX(p95_post_duration_us) AS p95_post_duration_us_all, "
-            "   MAX(p95_input_size_b) AS p95_input_size_b_all, "
-            "   MAX(p95_output_size_b) AS p95_output_size_b_all "
+            "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_prep_duration_us) AS p95_prep_duration_us_all,"
+            "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_post_duration_us) AS p95_post_duration_us_all,"
+            "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_input_size_b) AS p95_input_size_b_all,"
+            "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_output_size_b) AS p95_output_size_b_all "
             "FROM recent_data;", tableName, streamName);
 
 
@@ -414,10 +427,10 @@ void queryPrePostLatency(
                                 "LIMIT 100 "
                                 ") "
                                 "SELECT "
-                                "   MAX(p95_prep_duration_us) AS p95_prep_duration_us_all, "
-                                "   MAX(p95_post_duration_us) AS p95_post_duration_us_all, "
-                                "   MAX(p95_input_size_b) AS p95_input_size_b_all, "
-                                "   MAX(p95_output_size_b) AS p95_output_size_b_all "
+                                "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_prep_duration_us) AS p95_prep_duration_us_all,"
+                                "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_post_duration_us) AS p95_post_duration_us_all,"
+                                "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_input_size_b) AS p95_input_size_b_all,"
+                                "   percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_output_size_b) AS p95_output_size_b_all "
                                 "FROM recent_data;", profileTableName);
         res = pullSQL(metricsConn, query);
     }
@@ -454,7 +467,7 @@ void queryBatchInferLatency(
     std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelNameAbbr + "__" + deviceName)  + "_batch";
-    std::string query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
+    std::string query = absl::StrFormat("SELECT infer_batch_size, percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_infer_duration_us) AS p95_infer_duration_us "
                             "FROM %s "
                             "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
                             "GROUP BY infer_batch_size;", tableName, streamName);
@@ -462,7 +475,7 @@ void queryBatchInferLatency(
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
         std::string profileTableName = abbreviate("prof__" + modelNameAbbr + "__" + deviceTypeName) + "_batch";
-        query = absl::StrFormat("SELECT infer_batch_size, MAX(p95_infer_duration_us) "
+        query = absl::StrFormat("SELECT infer_batch_size, percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_infer_duration_us) AS p95_infer_duration_us "
                                 "FROM %s "
                                 "GROUP BY infer_batch_size", profileTableName);
         res = pullSQL(metricsConn, query);

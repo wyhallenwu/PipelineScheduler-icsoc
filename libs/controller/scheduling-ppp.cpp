@@ -1,53 +1,50 @@
 #include "scheduling-ppp.h"
 
+std::string DeviceNameToType(std::string name)
+{
+    if (name == "server")
+    {
+        return "server";
+    }
+    else
+    {
+        return name.substr(0, name.size() - 1);
+    }
+}
+
 bool Controller::AddTask(const TaskDescription::TaskStruct &t)
 {
     std::cout << "Adding task: " << t.name << std::endl;
     TaskHandle *task = new TaskHandle{t.name, t.fullName, t.type, t.source, t.device, t.slo, {}, 0};
 
-    std::map<std::string, NodeHandle> *deviceList = devices.getMap();
+    std::map<std::string, NodeHandle *> deviceList = devices.getMap();
 
-    if (devices.list.find(t.device) == deviceList->end())
+    if (deviceList.find(t.device) == deviceList.end())
     {
         spdlog::error("Device {0:s} is not connected", t.device);
         return false;
     }
 
-    task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device);
-    std::unique_lock lock(ctrl_unscheduledPipelines.tasksMutex);
-
-    ctrl_unscheduledPipelines.list.insert({task->tk_name, *task});
-    lock.unlock();
-
-    std::vector<std::pair<std::string, std::string>> possibleDevicePairList = {{"server", "server"}};
-    std::map<std::pair<std::string, std::string>, NetworkEntryType> possibleNetworkEntryPairs;
-
-    for (const auto &pair : possibleDevicePairList)
+    while (!deviceList.at(t.device)->initialNetworkCheck)
     {
-        std::unique_lock lock(devices.list[pair.first].nodeHandleMutex);
-        possibleNetworkEntryPairs[pair] = devices.list[pair.first].latestNetworkEntries[pair.second];
-        lock.unlock();
+        spdlog::get("container_agent")->info("Waiting for device {0:s} to finish network check", t.device);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    std::vector<std::string> possibleDeviceList = {"server"};
+    task->tk_src_device = t.device;
+
+    task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device);
 
     for (auto &model : task->tk_pipelineModels)
     {
-        std::string containerName = model->name + "-" + possibleDevicePairList[0].second;
-        if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos)
+        if (model->name.find("datasource") != std::string::npos || model->name.find("sink") != std::string::npos)
         {
             continue;
         }
-        model->arrivalProfiles.arrivalRates = queryArrivalRate(
-            *ctrl_metricsServerConn,
-            ctrl_experimentName,
-            ctrl_systemName,
-            t.name,
-            t.source,
-            ctrl_containerLib[containerName].taskName,
-            ctrl_containerLib[containerName].modelName);
+        model->deviceTypeName = getDeviceTypeName(deviceList.at(model->device)->type);
         std::vector<std::string> upstreamPossibleDeviceList = model->upstreams.front().first->possibleDevices;
         std::vector<std::string> thisPossibleDeviceList = model->possibleDevices;
+        std::vector<std::pair<std::string, std::string>> possibleDevicePairList;
         for (const auto &deviceName : upstreamPossibleDeviceList)
         {
             for (const auto &deviceName2 : thisPossibleDeviceList)
@@ -59,9 +56,24 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t)
                 possibleDevicePairList.push_back({deviceName, deviceName2});
             }
         }
+        std::string containerName = model->name + "-" + model->deviceTypeName;
+        model->arrivalProfiles.arrivalRates = queryArrivalRate(
+            *ctrl_metricsServerConn,
+            ctrl_experimentName,
+            ctrl_systemName,
+            t.name,
+            t.source,
+            ctrl_containerLib[containerName].taskName,
+            ctrl_containerLib[containerName].modelName);
 
         for (const auto &pair : possibleDevicePairList)
         {
+            std::string senderDeviceType = getDeviceTypeName(deviceList.at(pair.first)->type);
+            std::string receiverDeviceType = getDeviceTypeName(deviceList.at(pair.second)->type);
+            containerName = model->name + "-" + receiverDeviceType;
+            std::unique_lock lock(devices.list[pair.first]->nodeHandleMutex);
+            NetworkEntryType entry = devices.list[pair.first]->latestNetworkEntries[receiverDeviceType];
+            lock.unlock();
             NetworkProfile test = queryNetworkProfile(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
@@ -71,14 +83,17 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t)
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
                 pair.first,
+                senderDeviceType,
                 pair.second,
-                possibleNetworkEntryPairs[pair]);
+                receiverDeviceType,
+                entry);
             model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
         }
 
-        for (const auto deviceName : possibleDeviceList)
+        for (const auto deviceName : model->possibleDevices)
         {
-            std::string deviceTypeName = getDeviceTypeName(deviceList->at(deviceName).type);
+            std::string deviceTypeName = getDeviceTypeName(deviceList.at(deviceName)->type);
+            containerName = model->name + "-" + deviceTypeName;
             ModelProfile profile = queryModelProfile(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
@@ -105,7 +120,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t)
         // std::cout << "sdfsdfasdf" << std::endl;
     }
     std::lock_guard lock2(ctrl_unscheduledPipelines.tasksMutex);
-    ctrl_unscheduledPipelines.list.insert({task->tk_name, *task});
+    ctrl_unscheduledPipelines.list.insert({task->tk_name, task});
 
     std::cout << "Task added: " << t.name << std::endl;
     return true;
@@ -166,6 +181,13 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     return container;
 }
 
+void Controller::Scheduling()
+{
+    while (running)
+    {
+    }
+}
+
 /**
  * @brief call this method after the pipeline models have been added to scheduled
  *
@@ -180,7 +202,7 @@ void Controller::ApplyScheduling()
 
     for (auto &pipe : ctrl_scheduledPipelines.list)
     {
-        for (auto &model : pipe.second.tk_pipelineModels)
+        for (auto &model : pipe.second->tk_pipelineModels)
         {
             std::unique_lock lock_model(model->pipelineModelMutex);
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
@@ -190,7 +212,7 @@ void Controller::ApplyScheduling()
                 // start additional containers
                 for (unsigned int i = candidates.size(); i < model->numReplicas; i++)
                 {
-                    ContainerHandle *container = TranslateToContainer(model, &devices.list[model->device], i);
+                    ContainerHandle *container = TranslateToContainer(model, devices.list[model->device], i);
                     new_containers.push_back(container);
                 }
             }
@@ -216,7 +238,7 @@ void Controller::ApplyScheduling()
                 {
                     candidate->batch_size = model->batchSize;
                     candidate->cuda_device = model->cudaDevices[i++];
-                    MoveContainer(candidate, &devices.list[model->device]);
+                    MoveContainer(candidate, devices.list[model->device]);
                     continue;
                 }
                 if (candidate->batch_size != model->batchSize)
@@ -231,243 +253,6 @@ void Controller::ApplyScheduling()
     {
         StartContainer(container);
         containers.list.insert({container->name, container});
-    }
-}
-
-PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice)
-{
-    switch (type)
-    {
-    case PipelineType::Traffic:
-    {
-        auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
-        datasource->possibleDevices = {startDevice};
-
-        auto *yolov5n = new PipelineModel{
-            "edge",
-            "yolov5n",
-            {},
-            true,
-            {},
-            {},
-            {},
-            {{datasource, -1}}};
-        yolov5n->possibleDevices = {startDevice, "server"};
-        datasource->downstreams.push_back({yolov5n, -1});
-
-        auto *retina1face = new PipelineModel{
-            "server",
-            "retina1face",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{yolov5n, 0}}};
-        retina1face->possibleDevices = {startDevice, "server"};
-        yolov5n->downstreams.push_back({retina1face, 0});
-
-        auto *carbrand = new PipelineModel{
-            "server",
-            "carbrand",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{yolov5n, 2}}};
-        yolov5n->downstreams.push_back({carbrand, 2});
-
-        auto *platedet = new PipelineModel{
-            "server",
-            "platedet",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{yolov5n, 2}}};
-        yolov5n->downstreams.push_back({platedet, 2});
-
-        auto *sink = new PipelineModel{
-            "server",
-            "sink",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{retina1face, -1}, {carbrand, -1}, {platedet, -1}}};
-        sink->possibleDevices = {"server"};
-        retina1face->downstreams.push_back({sink, -1});
-        carbrand->downstreams.push_back({sink, -1});
-        platedet->downstreams.push_back({sink, -1});
-
-        return {datasource, yolov5n, retina1face, carbrand, platedet, sink};
-    }
-    case PipelineType::Building_Security:
-    {
-        auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
-        datasource->possibleDevices = {startDevice};
-        auto *yolov5n = new PipelineModel{
-            "edge",
-            "yolov5n",
-            {},
-            true,
-            {},
-            {},
-            {},
-            {{datasource, -1}}};
-        yolov5n->possibleDevices = {startDevice, "server"};
-        datasource->downstreams.push_back({yolov5n, -1});
-
-        auto *retina1face = new PipelineModel{
-            "server",
-            "retina1face",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{yolov5n, 0}}};
-        retina1face->possibleDevices = {startDevice, "server"};
-        yolov5n->downstreams.push_back({retina1face, 0});
-
-        auto *movenet = new PipelineModel{
-            "server",
-            "movenet",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{yolov5n, 0}}};
-        movenet->possibleDevices = {"server"};
-        yolov5n->downstreams.push_back({movenet, 0});
-
-        auto *gender = new PipelineModel{
-            "server",
-            "gender",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{retina1face, -1}}};
-        gender->possibleDevices = {"server"};
-        retina1face->downstreams.push_back({gender, -1});
-
-        auto *age = new PipelineModel{
-            "server",
-            "age",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{retina1face, -1}}};
-        age->possibleDevices = {"server"};
-        retina1face->downstreams.push_back({age, -1});
-
-        auto *sink = new PipelineModel{
-            "server",
-            "sink",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{gender, -1}, {age, -1}, {movenet, -1}}};
-        sink->possibleDevices = {"server"};
-        gender->downstreams.push_back({sink, -1});
-        age->downstreams.push_back({sink, -1});
-        movenet->downstreams.push_back({sink, -1});
-
-        return {datasource, yolov5n, retina1face, movenet, gender, age, sink};
-    }
-    case PipelineType::Video_Call:
-    {
-        auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
-        datasource->possibleDevices = {startDevice};
-        auto *retina1face = new PipelineModel{
-            "server",
-            "retina1face",
-            {},
-            true,
-            {},
-            {},
-            {},
-            {{datasource, -1}}};
-        retina1face->possibleDevices = {startDevice, "server"};
-        datasource->downstreams.push_back({retina1face, -1});
-
-        auto *emotionnet = new PipelineModel{
-            "server",
-            "emotionnet",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{retina1face, -1}}};
-        emotionnet->possibleDevices = {"server"};
-        retina1face->downstreams.push_back({emotionnet, -1});
-
-        auto *age = new PipelineModel{
-            "server",
-            "age",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{retina1face, -1}}};
-        age->possibleDevices = {startDevice, "server"};
-        retina1face->downstreams.push_back({age, -1});
-
-        auto *gender = new PipelineModel{
-            "server",
-            "gender",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{retina1face, -1}}};
-        gender->possibleDevices = {startDevice, "server"};
-        retina1face->downstreams.push_back({gender, -1});
-
-        auto *arcface = new PipelineModel{
-            "server",
-            "arcface",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{retina1face, -1}}};
-        arcface->possibleDevices = {"server"};
-        retina1face->downstreams.push_back({arcface, -1});
-
-        auto *sink = new PipelineModel{
-            "server",
-            "sink",
-            {},
-            false,
-            {},
-            {},
-            {},
-            {{emotionnet, -1}, {age, -1}, {gender, -1}, {arcface, -1}}};
-        sink->possibleDevices = {"server"};
-        emotionnet->downstreams.push_back({sink, -1});
-        age->downstreams.push_back({sink, -1});
-        gender->downstreams.push_back({sink, -1});
-        arcface->downstreams.push_back({sink, -1});
-
-        return {datasource, retina1face, emotionnet, age, gender, arcface, sink};
-    }
-    default:
-        return {};
     }
 }
 
@@ -499,16 +284,16 @@ bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, 
         mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat, toBeMergedProfileDevice->p95postLat);
 
         auto mergedBatchInfer = &mergedProfileDevice->batchInfer;
-        auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
+        // auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
 
-        for (const auto &[batchSize, profile] : toBeMergedProfileDevice->batchInfer)
+        for (const auto &[batchSize, p] : toBeMergedProfileDevice->batchInfer)
         {
-            mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, profile.p95inferLat);
-            mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, profile.cpuUtil);
-            mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, profile.gpuUtil);
-            mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, profile.memUsage);
-            mergedBatchInfer->at(batchSize).rssMemUsage = std::max(mergedBatchInfer->at(batchSize).rssMemUsage, profile.rssMemUsage);
-            mergedBatchInfer->at(batchSize).gpuMemUsage = std::max(mergedBatchInfer->at(batchSize).gpuMemUsage, profile.gpuMemUsage);
+            mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, p.p95inferLat);
+            mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, p.cpuUtil);
+            mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, p.gpuUtil);
+            mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, p.memUsage);
+            mergedBatchInfer->at(batchSize).rssMemUsage = std::max(mergedBatchInfer->at(batchSize).rssMemUsage, p.rssMemUsage);
+            mergedBatchInfer->at(batchSize).gpuMemUsage = std::max(mergedBatchInfer->at(batchSize).gpuMemUsage, p.gpuMemUsage);
         }
     }
     return true;
@@ -517,7 +302,7 @@ bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, 
 bool Controller::mergeModels(PipelineModel *mergedModel, PipelineModel *toBeMergedModel)
 {
     // If the merged model is empty, we should just copy the model to be merged
-    if (mergedModel->numReplicas == -1)
+    if (mergedModel->numReplicas == 0)
     {
         *mergedModel = *toBeMergedModel;
         return true;
@@ -542,7 +327,7 @@ TaskHandle Controller::mergePipelines(const std::string &taskName)
 
     auto unscheduledTasks = ctrl_unscheduledPipelines.getMap();
 
-    *mergedPipelineModels = getModelsByPipelineType(unscheduledTasks->at(taskName).tk_type, "server");
+    *mergedPipelineModels = getModelsByPipelineType(unscheduledTasks.at(taskName)->tk_type, "server");
     auto numModels = mergedPipeline.tk_pipelineModels.size();
 
     for (auto i = 0; i < numModels; i++)
@@ -551,13 +336,13 @@ TaskHandle Controller::mergePipelines(const std::string &taskName)
         {
             continue;
         }
-        for (const auto &task : *unscheduledTasks)
+        for (const auto &task : unscheduledTasks)
         {
             if (task.first == taskName)
             {
                 continue;
             }
-            mergeModels(mergedPipelineModels->at(i), task.second.tk_pipelineModels.at(i));
+            mergeModels(mergedPipelineModels->at(i), task.second->tk_pipelineModels.at(i));
         }
     }
 }
@@ -608,7 +393,7 @@ void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel
         return;
     }
 
-    std::string deviceTypeName = getDeviceTypeName(devices.list[edgeDevice].type);
+    std::string deviceTypeName = getDeviceTypeName(devices.list[edgeDevice]->type);
 
     uint32_t inputSize = currModel->processProfiles.at(deviceTypeName).p95InputSize;
     uint32_t outputSize = currModel->processProfiles.at(deviceTypeName).p95OutputSize;
@@ -871,19 +656,263 @@ uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const fl
     return (uint64_t)(averageQueueLength / arrival_rate * 1000000);
 }
 
+// ============================================================================================================================================
+// ============================================================================================================================================
+// ============================================================================================================================================
+// ============================================================================================================================================
+
+PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice)
+{
+    switch (type)
+    {
+    case PipelineType::Traffic:
+    {
+        auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
+        datasource->possibleDevices = {startDevice};
+
+        auto *yolov5n = new PipelineModel{
+            "edge",
+            "yolov5n",
+            {},
+            true,
+            {},
+            {},
+            {},
+            {{datasource, -1}}};
+        yolov5n->possibleDevices = {startDevice, "server"};
+        datasource->downstreams.push_back({yolov5n, -1});
+
+        auto *retina1face = new PipelineModel{
+            "server",
+            "retina1face",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{yolov5n, 0}}};
+        retina1face->possibleDevices = {startDevice, "server"};
+        yolov5n->downstreams.push_back({retina1face, 0});
+
+        auto *carbrand = new PipelineModel{
+            "server",
+            "carbrand",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{yolov5n, 2}}};
+        carbrand->possibleDevices = {"server"};
+        yolov5n->downstreams.push_back({carbrand, 2});
+
+        auto *platedet = new PipelineModel{
+            "server",
+            "platedet",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{yolov5n, 2}}};
+        platedet->possibleDevices = {"server"};
+        yolov5n->downstreams.push_back({platedet, 2});
+
+        auto *sink = new PipelineModel{
+            "server",
+            "sink",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{retina1face, -1}, {carbrand, -1}, {platedet, -1}}};
+        sink->possibleDevices = {"server"};
+        retina1face->downstreams.push_back({sink, -1});
+        carbrand->downstreams.push_back({sink, -1});
+        platedet->downstreams.push_back({sink, -1});
+
+        return {datasource, yolov5n, retina1face, carbrand, platedet, sink};
+    }
+    case PipelineType::Building_Security:
+    {
+        auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
+        datasource->possibleDevices = {startDevice};
+        auto *yolov5n = new PipelineModel{
+            "edge",
+            "yolov5n",
+            {},
+            true,
+            {},
+            {},
+            {},
+            {{datasource, -1}}};
+        yolov5n->possibleDevices = {startDevice, "server"};
+        datasource->downstreams.push_back({yolov5n, -1});
+
+        auto *retina1face = new PipelineModel{
+            "server",
+            "retina1face",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{yolov5n, 0}}};
+        retina1face->possibleDevices = {startDevice, "server"};
+        yolov5n->downstreams.push_back({retina1face, 0});
+
+        auto *movenet = new PipelineModel{
+            "server",
+            "movenet",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{yolov5n, 0}}};
+        movenet->possibleDevices = {"server"};
+        yolov5n->downstreams.push_back({movenet, 0});
+
+        auto *gender = new PipelineModel{
+            "server",
+            "gender",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{retina1face, -1}}};
+        gender->possibleDevices = {"server"};
+        retina1face->downstreams.push_back({gender, -1});
+
+        auto *age = new PipelineModel{
+            "server",
+            "age",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{retina1face, -1}}};
+        age->possibleDevices = {"server"};
+        retina1face->downstreams.push_back({age, -1});
+
+        auto *sink = new PipelineModel{
+            "server",
+            "sink",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{gender, -1}, {age, -1}, {movenet, -1}}};
+        sink->possibleDevices = {"server"};
+        gender->downstreams.push_back({sink, -1});
+        age->downstreams.push_back({sink, -1});
+        movenet->downstreams.push_back({sink, -1});
+
+        return {datasource, yolov5n, retina1face, movenet, gender, age, sink};
+    }
+    case PipelineType::Video_Call:
+    {
+        auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
+        datasource->possibleDevices = {startDevice};
+        auto *retina1face = new PipelineModel{
+            "server",
+            "retina1face",
+            {},
+            true,
+            {},
+            {},
+            {},
+            {{datasource, -1}}};
+        retina1face->possibleDevices = {startDevice, "server"};
+        datasource->downstreams.push_back({retina1face, -1});
+
+        auto *emotionnet = new PipelineModel{
+            "server",
+            "emotionnet",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{retina1face, -1}}};
+        emotionnet->possibleDevices = {"server"};
+        retina1face->downstreams.push_back({emotionnet, -1});
+
+        auto *age = new PipelineModel{
+            "server",
+            "age",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{retina1face, -1}}};
+        age->possibleDevices = {startDevice, "server"};
+        retina1face->downstreams.push_back({age, -1});
+
+        auto *gender = new PipelineModel{
+            "server",
+            "gender",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{retina1face, -1}}};
+        gender->possibleDevices = {startDevice, "server"};
+        retina1face->downstreams.push_back({gender, -1});
+
+        auto *arcface = new PipelineModel{
+            "server",
+            "arcface",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{retina1face, -1}}};
+        arcface->possibleDevices = {"server"};
+        retina1face->downstreams.push_back({arcface, -1});
+
+        auto *sink = new PipelineModel{
+            "server",
+            "sink",
+            {},
+            false,
+            {},
+            {},
+            {},
+            {{emotionnet, -1}, {age, -1}, {gender, -1}, {arcface, -1}}};
+        sink->possibleDevices = {"server"};
+        emotionnet->downstreams.push_back({sink, -1});
+        age->downstreams.push_back({sink, -1});
+        gender->downstreams.push_back({sink, -1});
+        arcface->downstreams.push_back({sink, -1});
+
+        return {datasource, retina1face, emotionnet, age, gender, arcface, sink};
+    }
+    default:
+        return {};
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////distream_scheduling////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Controller::deepCopyTasks(Tasks& source, Tasks& destination) {
+void Controller::deepCopyTasks(Tasks &source, Tasks &destination)
+{
     std::lock_guard<std::mutex> lockSrc(source.tasksMutex);
     std::lock_guard<std::mutex> lockDest(destination.tasksMutex);
 
     destination.list.clear();
-    for (const auto& pair : source.list) {
+    for (const auto &pair : source.list)
+    {
         destination.list[pair.first] = pair.second;
     }
 }
-
-
 
 std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> Controller::categorizeNodes(const std::vector<NodeHandle> &nodes)
 {
@@ -975,7 +1004,7 @@ int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool i
     {
         const auto &task = taskPair.second; // everyTaskHandle
 
-        for (const auto &model : task.tk_pipelineModels)
+        for (const auto &model : task->tk_pipelineModels)
         { // every model
             std::string containerName = model->name + "-" + deviceType;
             if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos)
@@ -1005,21 +1034,21 @@ int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool i
                 ctrl_containerLib[containerName].modelName);
 
             // queryNetworkProfile
-            for (const auto &pair : possibleDevicePairList)
-            {
-                NetworkProfile networkProfile = queryNetworkProfile(
-                    *ctrl_metricsServerConn,
-                    ctrl_experimentName,
-                    ctrl_systemName,
-                    model->name,
-                    model->device,
-                    ctrl_containerLib[containerName].taskName,
-                    ctrl_containerLib[containerName].modelName,
-                    pair.first,  // source
-                    pair.second, // target device type
-                    possibleNetworkEntryPairs[pair]);
-                model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = networkProfile;
-            }
+            // for (const auto &pair : possibleDevicePairList)
+            // {
+            //     NetworkProfile networkProfile = queryNetworkProfile(
+            //         *ctrl_metricsServerConn,
+            //         ctrl_experimentName,
+            //         ctrl_systemName,
+            //         model->name,
+            //         model->device,
+            //         ctrl_containerLib[containerName].taskName,
+            //         ctrl_containerLib[containerName].modelName,
+            //         pair.first,  // source
+            //         pair.second, // target device type
+            //         possibleNetworkEntryPairs[pair]);
+            //     // model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = networkProfile;
+            // }
 
             // M/D/1 queue model calculates queue lengths
             double serviceRate = 1.0 / profile.p95prepLat;                            // Service rate is the reciprocal of preprocessing delay
@@ -1227,12 +1256,12 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
     // {
     if (decisionPoint > ratio + tolerance)
     {
-         std::cout << "Move Container from server to edge based on model priority: " << std::endl;
+        std::cout << "Move Container from server to edge based on model priority: " << std::endl;
         for (const auto &taskPair : ctrl_unscheduledPipelines.list)
         {
             const auto &task = taskPair.second;
 
-            for (auto &model : task.tk_pipelineModels)
+            for (auto &model : task->tk_pipelineModels)
             {
                 if (model->isSplitPoint)
                 {
@@ -1255,7 +1284,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
         {
             const auto &task = taskPair.second;
 
-            for (auto &model : task.tk_pipelineModels)
+            for (auto &model : task->tk_pipelineModels)
             {
                 if (model->isSplitPoint)
                 {
@@ -1277,3 +1306,4 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
         }
     }
 }
+
