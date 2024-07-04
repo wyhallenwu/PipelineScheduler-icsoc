@@ -243,16 +243,20 @@ bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, 
         auto mergedProfileDevice = &mergedProfile[deviceName];
         auto toBeMergedProfileDevice = &toBeMergedProfile.at(deviceName);
 
+        BatchSizeType batchSize = 
+
         mergedProfileDevice->p95InputSize = std::max(mergedProfileDevice->p95InputSize, toBeMergedProfileDevice->p95InputSize);
         mergedProfileDevice->p95OutputSize = std::max(mergedProfileDevice->p95OutputSize, toBeMergedProfileDevice->p95OutputSize);
-        mergedProfileDevice->p95prepLat = std::max(mergedProfileDevice->p95prepLat, toBeMergedProfileDevice->p95prepLat);
-        mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat, toBeMergedProfileDevice->p95postLat);
+        // mergedProfileDevice->p95prepLat = std::max(mergedProfileDevice->p95prepLat, toBeMergedProfileDevice->p95prepLat);
+        // mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat, toBeMergedProfileDevice->p95postLat);
 
         auto mergedBatchInfer = &mergedProfileDevice->batchInfer;
         // auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
 
         for (const auto &[batchSize, p] : toBeMergedProfileDevice->batchInfer) {
             mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, p.p95inferLat);
+            mergedBatchInfer->at(batchSize).p95prepLat = std::max(mergedBatchInfer->at(batchSize).p95prepLat, p.p95prepLat);
+            mergedBatchInfer->at(batchSize).p95postLat = std::max(mergedBatchInfer->at(batchSize).p95postLat, p.p95postLat);
             mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, p.cpuUtil);
             mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, p.gpuUtil);
             mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, p.memUsage);
@@ -462,10 +466,10 @@ void Controller::estimateModelLatency(PipelineModel *currModel) { std::string de
         return;
     }
     ModelProfile profile = currModel->processProfiles[deviceName];
-    uint64_t preprocessLatency = profile.p95prepLat;
     BatchSizeType batchSize = currModel->batchSize;
+    uint64_t preprocessLatency = profile.batchInfer[batchSize].p95prepLat;
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
-    uint64_t postprocessLatency = profile.p95postLat;
+    uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
     float preprocessRate = 1000000.f / preprocessLatency;
 
     currModel->expectedQueueingLatency = calculateQueuingLatency(currModel->arrivalProfiles.arrivalRates,
@@ -529,8 +533,8 @@ uint8_t Controller::incNumReplicas(const PipelineModel *model) {
     std::string deviceTypeName = model->deviceTypeName;
     ModelProfile profile = model->processProfiles.at(deviceTypeName);
     uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + profile.p95prepLat
-                                 + profile.p95postLat);
+    float indiProcessRate = 1 / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
+                                 + profile.batchInfer.at(model->batchSize).p95postLat);
     float processRate = indiProcessRate * numReplicas;
     while (processRate < model->arrivalProfiles.arrivalRates) {
         numReplicas++;
@@ -550,7 +554,8 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model) {
     std::string deviceTypeName = model->deviceTypeName;
     ModelProfile profile = model->processProfiles.at(deviceTypeName);
     uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + profile.p95prepLat + profile.p95postLat);
+    float indiProcessRate = 1 / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
+                                 + profile.batchInfer.at(model->batchSize).p95postLat);
     float processRate = indiProcessRate * numReplicas;
     while (numReplicas > 1) {
         numReplicas--;

@@ -51,6 +51,8 @@ const uint8_t NUM_GPUS = 4;
 
 struct BatchInferProfile {
     uint64_t p95inferLat;
+    uint64_t p95prepLat;
+    uint64_t p95postLat;
     
     CpuUtilType cpuUtil;
     MemUsageType memUsage;
@@ -215,12 +217,8 @@ struct ModelArrivalProfile {
 typedef std::map<std::pair<std::string, std::string>, ModelArrivalProfile> ModelArrivalProfileList;
 
 struct ModelProfile {
-    // p95 latency of preprocessing per query
-    uint64_t p95prepLat;
     // p95 latency of batch inference per query
     BatchInferProfileListType batchInfer;
-    // p95 latency of postprocessing per query
-    uint64_t p95postLat;
     // Average size of incoming queries
     int p95InputSize = 1; // bytes
     // Average total size of outgoing queries
