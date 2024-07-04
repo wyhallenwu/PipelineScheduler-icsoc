@@ -571,25 +571,24 @@ public:
             if (!t.added) {
                 t.added = AddTask(t);
             }
-            remainTasks.push_back(t);
+            if (!t.added) {
+                remainTasks.push_back(t);
+            }
         }
     }
 
     void InitRemain() {
-        bool allAdded = true;
         for (auto &t: remainTasks) {
             if (!t.added) {
                 t.added = AddTask(t);
             }
-            if (!t.added) {
-                allAdded = false;
-                continue;
+            if (t.added) {
+                // Remove the task from the remain list
+                remainTasks.erase(std::remove_if(remainTasks.begin(), remainTasks.end(),
+                                                [&t](const TaskDescription::TaskStruct &task) {
+                                                    return task.name == t.name;
+                                                }), remainTasks.end());
             }
-            // Remove the task from the remain list
-            remainTasks.erase(std::remove_if(remainTasks.begin(), remainTasks.end(),
-                                             [&t](const TaskDescription::TaskStruct &task) {
-                                                 return task.name == t.name;
-                                             }), remainTasks.end());
         }
     }
 

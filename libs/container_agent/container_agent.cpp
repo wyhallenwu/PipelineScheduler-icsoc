@@ -132,7 +132,7 @@ json loadRunArgs(int argc, char **argv) {
          * 2. Setting the batch size to the smallest profile batch size
          * 
          */
-        if (profiling_mode == 1) {
+        if (profiling_mode == 1 && containerConfigs["cont_taskName"] != "dsrc" && containerConfigs["cont_taskName"] != "datasource") {
             addProfileConfigs(containerConfigs.at("cont_pipeline")[i], profilingConfigs);
             
         } else if (profiling_mode == 2) {

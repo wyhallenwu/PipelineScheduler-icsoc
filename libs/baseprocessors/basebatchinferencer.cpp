@@ -135,8 +135,12 @@ void BaseBatchInferencer::inference() {
             STOP_THREADS = true;
             msvc_OutQueue[0]->emplace(currReq);
             continue;
+        }  else if (strcmp(currReq.req_travelPath[0].c_str(), "WARMUP_COMPLETED") == 0) {
+            msvc_profWarmupCompleted = true;
+            spdlog::get("container_agent")->info("{0:s} received the signal that the warmup is completed.", msvc_name);
+            msvc_OutQueue[0]->emplace(currReq);
+            continue;
         }
-
         msvc_inReqCount++;
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
@@ -144,6 +148,9 @@ void BaseBatchInferencer::inference() {
         currReq_recvTime = std::chrono::high_resolution_clock::now();
         if (msvc_inReqCount > 1) {
             updateReqRate(currReq_genTime);
+        }
+        for (auto& req_genTime : currReq.req_origGenTime) {
+            req_genTime.emplace_back(currReq_recvTime); //FIFTH_TIMESTAMP
         }
 
         // Do batched inference with TRT
@@ -188,7 +195,7 @@ void BaseBatchInferencer::inference() {
          * 6. When each request was completed by the postprocessor
          */
         for (auto& req_genTime : currReq.req_origGenTime) {
-            req_genTime.emplace_back(timeNow); //FIFTH_TIMESTAMP
+            req_genTime.emplace_back(timeNow); //SIXTH_TIMESTAMP
         }
 
         outReqData.emplace_back(shapeGuide);
