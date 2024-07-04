@@ -31,6 +31,7 @@ private:
     cv::VideoCapture source;
     int wait_time_ms;
     int skip_count;
+    float skipRatio;
 };
 
 

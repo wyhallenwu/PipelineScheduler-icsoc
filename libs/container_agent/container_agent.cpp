@@ -551,7 +551,8 @@ ContainerAgent::ContainerAgent(const json &configs) {
         if (!tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, cont_processTableName)) {
             sql_statement = "CREATE TABLE IF NOT EXISTS " + cont_processTableName + " ("
                                                                                     "timestamps BIGINT NOT NULL, "
-                                                                                    "stream TEXT NOT NULL, ";
+                                                                                    "stream TEXT NOT NULL, "
+                                                                                    "infer_batch_size INT2 NOT NULL,";
             for (auto &period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) { 
                 sql_statement += "thrput_" + std::to_string(period/1000) + "s FLOAT, ";
             }
@@ -571,6 +572,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
             pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "CREATE INDEX ON " + cont_processTableName + " (stream);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "CREATE INDEX ON " + cont_processTableName + " (infer_batch_size);";
             pushSQL(*cont_metricsServerConn, sql_statement);
 
         
@@ -882,22 +886,24 @@ void ContainerAgent::collectRuntimeMetrics() {
             spdlog::get("container_agent")->trace("{0:s} pushed arrival metrics to the database.", cont_name);
 
             processRecords = cont_msvcsList[3]->getProcessRecords();
-            for (auto& [reqOriginStream, records] : processRecords) {
+            for (auto& [key, records] : processRecords) {
+                std::string reqOriginStream = key.first;
+                BatchSizeType inferBatchSize = key.second;
                 uint32_t numEntries = records.postEndTime.size();
                 // Check if there are any records
-                if (numEntries == 0) {
+                if (numEntries < 20) {
                     continue;
                 }
 
                 // Construct the SQL statement
-                sql = absl::StrFormat("INSERT INTO %s (timestamps, stream", cont_processTableName);
+                sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, infer_batch_size", cont_processTableName);
 
                 for (auto& period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) {
                     sql += ", thrput_" + std::to_string(period / 1000) + "s";
                 }
 
                 sql += ", p95_prep_duration_us, p95_batch_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b) VALUES (";
-                sql += timePointToEpochString(std::chrono::high_resolution_clock::now()) + ", '" + reqOriginStream + "'";
+                sql += timePointToEpochString(std::chrono::high_resolution_clock::now()) + ", '" + reqOriginStream + "'," + std::to_string(inferBatchSize);
 
                 // Calculate the throughput rates for the configured periods
                 std::vector<float> throughputRates = getRatesInPeriods(records.postEndTime, cont_metricsServerConfigs.queryArrivalPeriodMillisec);

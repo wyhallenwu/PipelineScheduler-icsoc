@@ -10,6 +10,61 @@ const int DATA_BASE_PORT = 55001;
 const int CONTROLLER_BASE_PORT = 60001;
 const int DEVICE_CONTROL_PORT = 60002;
 
+void Controller::readInitialObjectCount(const std::string &path) {
+    std::ifstream file(path);
+    json j = json::parse(file);
+    std::map<std::string, std::map<std::string, std::map<int, float>>> initialPerSecondRate;
+    for (auto &item: j.items()) {
+        std::string streamName = item.key();
+        initialPerSecondRate[streamName] = {};
+        for (auto &object: item.value().items()) {
+            std::string objectName = object.key();
+            initialPerSecondRate[streamName][objectName] = {};
+            std::vector<int> perFrameObjCount = object.value().get<std::vector<int>>();
+            int numFrames = perFrameObjCount.size();
+            int totalNumObjs = 0;
+            for (auto i = 0; i < numFrames; i++) {
+                totalNumObjs += perFrameObjCount[i];
+                if ((i + 1) % 30 != 0) {
+                    continue;
+                }
+                int seconds = (i + 1) / 30;
+                initialPerSecondRate[streamName][objectName][seconds] = totalNumObjs * 1.f / seconds;
+            }
+        }
+
+        std::map<std::string, float> *stream = &(ctrl_initialRequestRates[streamName]);
+        float maxPersonRate = 1.2 * std::max_element(
+                    initialPerSecondRate[streamName]["person"].begin(),
+                    initialPerSecondRate[streamName]["person"].end()
+            )->second;
+        float maxCarRate = 1.2 * std::max_element(
+                    initialPerSecondRate[streamName]["car"].begin(),
+                    initialPerSecondRate[streamName]["car"].end()
+            )->second;
+        if (streamName.find("traffic") != std::string::npos) {
+            stream->insert({"yolov5n", 30});
+
+            stream->insert({"retina1face", std::ceil(maxPersonRate)});
+            stream->insert({"arcface", std::ceil(maxPersonRate * 0.6)});
+            stream->insert({"carbrand", std::ceil(maxCarRate)});
+            stream->insert({"platedet", std::ceil(maxCarRate)});
+        } else if (streamName.find("people") != std::string::npos) {
+            stream->insert({"yolov5n", 30});
+            stream->insert({"retina1face", std::ceil(maxPersonRate)});
+            stream->insert({"age", std::ceil(maxPersonRate) * 0.6});
+            stream->insert({"gender", std::ceil(maxPersonRate) * 0.6});
+            stream->insert({"movenet", std::ceil(maxPersonRate)});
+        } else if (streamName.find("zoom") != std::string::npos) {
+            stream->insert({"retinaface", 30});
+            stream->insert({"arcface", std::ceil(maxPersonRate)});
+            stream->insert({"age", std::ceil(maxPersonRate)});
+            stream->insert({"gender", std::ceil(maxPersonRate)});
+            stream->insert({"emotionnet", std::ceil(maxPersonRate)});
+        }
+    }
+}
+
 void Controller::readConfigFile(const std::string &path) {
     std::ifstream file(path);
     json j = json::parse(file);
@@ -18,6 +73,7 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_systemName = j["systemName"];
     ctrl_runtime = j["runtime"];
     ctrl_port_offset = j["port_offset"];
+    ctrl_systemFPS = j["system_fps"];
     initialTasks = j["initial_pipelines"];
 }
 
@@ -33,6 +89,7 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
 Controller::Controller(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
     readConfigFile(absl::GetFlag(FLAGS_ctrl_configPath));
+    readInitialObjectCount("../jsons/object_count.json");
 
     ctrl_logPath = absl::GetFlag(FLAGS_ctrl_logPath);
     ctrl_logPath += "/" + ctrl_experimentName;
