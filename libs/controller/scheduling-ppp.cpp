@@ -33,7 +33,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
             continue;
         } else if (model->name.find("datasource") != std::string::npos) {
             model->arrivalProfiles.arrivalRates = 30;
-            this->client_profiles_jf.add(model, possibleNetworkEntryPairs);
+            this->client_profiles_jf.add(model);
             continue;
         }
         model->deviceTypeName = getDeviceTypeName(deviceList.at(model->device)->type);
@@ -81,6 +81,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
                 entry
             );
             model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
+            model->possibleNetworkEntryPairs[std::make_pair(pair.first, pair.second)] = entry;
         }
 
         for (const auto deviceName : model->possibleDevices) {
@@ -168,12 +169,6 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
         }
     }
     return container;
-}
-
-void Controller::Scheduling() {
-    while (running) {
-
-    }
 }
 
 /**
@@ -867,8 +862,7 @@ void ClientProfilesJF::sortBudgetDescending(std::vector<PipelineModel *> &client
               });
 }
 
-void ClientProfilesJF::add(PipelineModel *m, std::map<std::pair<std::string, std::string>, NetworkEntryType> network_pairs) {
-    m->possibleNetworkEntryPairs = network_pairs;
+void ClientProfilesJF::add(PipelineModel *m) {
     models.push_back(m);
 }
 

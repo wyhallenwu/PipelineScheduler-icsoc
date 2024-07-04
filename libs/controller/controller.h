@@ -621,7 +621,7 @@ public:
 
     static void sortBudgetDescending(std::vector<PipelineModel *> &clients);
 
-    void add(PipelineModel *m, std::map<std::pair<std::string, std::string>, NetworkEntryType> network_pairs);
+    void add(PipelineModel *m);
 
     void debugging();
 };
