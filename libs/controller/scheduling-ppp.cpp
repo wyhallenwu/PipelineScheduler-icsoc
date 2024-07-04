@@ -185,6 +185,47 @@ void Controller::Scheduling()
 {
     while (running)
     {
+        // use list of devices, tasks and containers to schedule depending on your algorithm
+        // put helper functions as a private member function of the controller and write them at the bottom of this file.
+        // std::vector<NodeHandle*> nodes;
+        NodeHandle *edgePointer = nullptr;
+        NodeHandle *serverPointer = nullptr;
+        unsigned long totalEdgeMemory = 0, totalServerMemory = 0;
+        // std::vector<std::unique_ptr<NodeHandle>> nodes;
+        // int cuda_device = 2; // need to be add
+        nodes.clear();
+        {
+            // std::unique_lock<std::mutex> lock(nodeHandleMutex);
+            std::unique_lock<std::mutex> lock(devices.devicesMutex);
+            // for (const auto &devicePair : devices.list)
+            // {
+            //     nodes.push_back(devicePair.second);
+            // }
+            auto pointers = devices.getList(); 
+
+            for (const auto &ptr : pointers) {
+                if (ptr != nullptr) {
+                    nodes.push_back(*ptr); 
+                }
+            }
+
+            // init Partitioner
+            Partitioner partitioner;
+            PipelineModel model;
+            float ratio = calculateRatio(nodes);
+
+            partitioner.BaseParPoint = ratio;
+
+            scheduleBaseParPointLoop(&model, &partitioner, nodes);
+            scheduleFineGrainedParPointLoop(&partitioner, nodes);
+            DecideAndMoveContainer(&model, nodes, &partitioner, 2);
+            deepCopyTasks(ctrl_unscheduledPipelines, ctrl_scheduledPipelines);
+            ApplyScheduling();
+            std::cout << "end_scheduleBaseParPoint " << partitioner.BaseParPoint << std::endl;
+            std::cout << "end_FineGrainedParPoint " << partitioner.FineGrainedOffset << std::endl;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(
+            5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
     }
 }
 
@@ -936,42 +977,31 @@ std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> Controller::categori
     return {edges, servers};
 }
 
-int Controller::calculateTotalprocessedRate(const PipelineModel *model, const std::vector<NodeHandle> &nodes, bool is_edge)
+double Controller::calculateTotalprocessedRate(const PipelineModel *model, const std::vector<NodeHandle> &nodes, bool is_edge)
 {
     auto [edges, servers] = categorizeNodes(nodes);
-    double totalRequestRate = 0;
+        double totalRequestRate = 0.0;
 
-    const std::string nodeType = is_edge ? "edge" : "server";
-    const int batchSize = is_edge ? 8 : 32;
+        const std::string nodeType = is_edge ? "edge" : "server";
+        const int batchSize = is_edge ? 8 : 32;
 
-    const auto &relevantNodes = is_edge ? edges : servers;
+        const auto &relevantNodes = is_edge ? edges : servers;
 
-    for (const NodeHandle &node : relevantNodes)
-    {
-        try
-        {
-            const auto &batchInfer = model->processProfiles.at(nodeType).batchInfer;
-            int timePerFrame = batchInfer.at(batchSize).p95inferLat;
+        for (const NodeHandle &node : relevantNodes) {
+            try {
+                const auto &batchInfer = model->processProfiles.at(nodeType).batchInfer;
+                int timePerFrame = batchInfer.at(batchSize).p95inferLat;
 
-            float requestRate;
-            if (timePerFrame == 0)
-            {
-                requestRate = 0.0;
+                double requestRate = (timePerFrame == 0) ? 0.0 : 1000000000.0 / timePerFrame;
+                totalRequestRate += requestRate;
+            } catch (const std::out_of_range &e) {
+                std::cerr << "Error: " << e.what() << ". Node type: " << nodeType
+                          << ", batch size: " << batchSize << std::endl;
             }
-            else
-            {
-                requestRate = 1000000000.0 / timePerFrame;
-            }
-            totalRequestRate += requestRate;
         }
-        catch (const std::out_of_range &e)
-        {
-            std::cerr << "Error: " << e.what() << ". Node type: " << nodeType << ", batch size: " << batchSize << std::endl;
-        }
+
+        return totalRequestRate;
     }
-
-    return totalRequestRate;
-}
 
 int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool is_edge)
 {
@@ -1306,4 +1336,3 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
         }
     }
 }
-
