@@ -618,7 +618,7 @@ void Controller::checkNetworkConditions() {
 
         // // If no network entries exist for a device, send a request to the device to perform network testing
         // for (auto &[deviceName, nodeHandle] : devices.list) {
-        //     if (nodeHandle.latestNetworkEntries.size() == 0) {
+        //     if (nodeHandle.latestNetworkEntries.empty()) {
         //         // TODO: Send a request to the device to perform network testing
 
         //     }

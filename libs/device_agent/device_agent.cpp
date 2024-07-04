@@ -186,7 +186,7 @@ void DeviceAgent::collectRuntimeMetrics() {
                     metrics.gpuMemUsage.emplace_back(stats.deviceMemoryUsage);
                 }
             }
-            if (metrics.gpuUsage.size() == 0) {
+            if (metrics.gpuUsage.empty()) {
                 Profiler::sysStats stats = dev_profiler->reportAnyMetrics();
                 metrics.timestamp = std::chrono::high_resolution_clock::now();
                 metrics.memUsage = stats.deviceMemoryUsage;
@@ -210,7 +210,7 @@ void DeviceAgent::collectRuntimeMetrics() {
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextMetricsReportTime)) {
 
-            if (dev_runtimeMetrics.size() == 0) {
+            if (dev_runtimeMetrics.empty()) {
                 spdlog::get("container_agent")->trace("{0:s} No runtime metrics to push to the database.", dev_name);
                 dev_metricsServerConfigs.nextMetricsReportTime = std::chrono::high_resolution_clock::now() +
                                                                  std::chrono::milliseconds(
