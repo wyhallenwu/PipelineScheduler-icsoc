@@ -502,22 +502,22 @@ public:
      */
     void addRecord(
         RequestTimeType timestamps,
-        uint32_t inferBatchSize,
+        BatchSizeType inferBatchSize,
         uint32_t inputSize,
         uint32_t outputSize,
         uint32_t reqNumber,
         std::string reqOrigin = "stream"
     ) {
         std::unique_lock<std::mutex> lock(mutex);
-        processRecords[reqOrigin].prepDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
-        processRecords[reqOrigin].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
-        processRecords[reqOrigin].inferQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
-        processRecords[reqOrigin].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[5] - timestamps[4]).count());
-        processRecords[reqOrigin].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[7] - timestamps[6]).count());
-        processRecords[reqOrigin].inferBatchSize.emplace_back(inferBatchSize);
-        processRecords[reqOrigin].postEndTime.emplace_back(timestamps[7]);
-        processRecords[reqOrigin].inputSize.emplace_back(inputSize);
-        processRecords[reqOrigin].outputSize.emplace_back(outputSize);
+        processRecords[{reqOrigin, inferBatchSize}].prepDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
+        processRecords[{reqOrigin, inferBatchSize}].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
+        processRecords[{reqOrigin, inferBatchSize}].inferQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
+        processRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[5] - timestamps[4]).count());
+        processRecords[{reqOrigin, inferBatchSize}].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[7] - timestamps[6]).count());
+        processRecords[{reqOrigin, inferBatchSize}].inferBatchSize.emplace_back(inferBatchSize);
+        processRecords[{reqOrigin, inferBatchSize}].postEndTime.emplace_back(timestamps[7]);
+        processRecords[{reqOrigin, inferBatchSize}].inputSize.emplace_back(inputSize);
+        processRecords[{reqOrigin, inferBatchSize}].outputSize.emplace_back(outputSize);
 
         batchInferRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[5] - timestamps[4]).count());
 
