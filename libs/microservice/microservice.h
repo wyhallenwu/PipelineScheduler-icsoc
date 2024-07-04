@@ -511,14 +511,15 @@ public:
         std::unique_lock<std::mutex> lock(mutex);
         processRecords[reqOrigin].prepDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
         processRecords[reqOrigin].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
-        processRecords[reqOrigin].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
-        processRecords[reqOrigin].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[6] - timestamps[5]).count());
+        processRecords[reqOrigin].inferQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
+        processRecords[reqOrigin].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[5] - timestamps[4]).count());
+        processRecords[reqOrigin].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[7] - timestamps[6]).count());
         processRecords[reqOrigin].inferBatchSize.emplace_back(inferBatchSize);
-        processRecords[reqOrigin].postEndTime.emplace_back(timestamps[6]);
+        processRecords[reqOrigin].postEndTime.emplace_back(timestamps[7]);
         processRecords[reqOrigin].inputSize.emplace_back(inputSize);
         processRecords[reqOrigin].outputSize.emplace_back(outputSize);
 
-        batchInferRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
+        batchInferRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[5] - timestamps[4]).count());
 
         currNumEntries++;
         totalNumEntries++;
@@ -623,6 +624,10 @@ public:
         return nullptr;
     };
 
+    RUNMODE getRUNMODE() {
+        return msvc_RUNMODE;
+    }
+
     virtual QueueLengthType GetOutQueueSize(int i) { return msvc_OutQueue[i]->size(); };
 
     int GetDroppedReqCount() const { return droppedReqCount; };
@@ -681,6 +686,14 @@ public:
                 checkCudaErrorCode(cudaSetDevice(deviceIndex), __func__);
             }
             cudaFree(0);
+        }
+    }
+
+    inline bool warmupCompleted() {
+        if (msvc_RUNMODE == RUNMODE::PROFILING) {
+            return msvc_profWarmupCompleted;
+        } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
+            return msvc_batchCount >= msvc_numWarmupBatches;
         }
     }
 
@@ -766,7 +779,10 @@ protected:
     BatchSizeType msvc_maxBatchSize;
 
     //
-    uint16_t msvc_numWarmupBatches = 15;
+    bool msvc_profWarmupCompleted = false;
+
+    //
+    uint16_t msvc_numWarmupBatches = 100;
 
     // Frame ID, only used during profiling
     int64_t msvc_currFrameID = -1;
@@ -802,18 +818,33 @@ protected:
      * (1) if in deployment mode, then we keep the batch size at the maximum
      * (2) if in profiling mode, then we stop the thread
      * 
-     * @return true if **batch size has been increase**
+     * @return true if **batch size has been increased**
      * @return false if **otherwise**
      */
     inline bool increaseBatchSize() {
         // If we already have the max batch size, then we can stop the thread
+        if (!msvc_profWarmupCompleted) {
+            msvc_profWarmupCompleted = true;
+            spdlog::get("container_agent")->info("{0:s} Warmup completed, starting profiling.", msvc_name);
+            msvc_OutQueue[0]->emplace(
+                Request<LocalGPUReqDataType>{
+                        {},
+                        {},
+                        {"WARMUP_COMPLETED"},
+                        0,
+                        {},
+                        {}
+                }
+            );
+            return true;
+        }
         if (++msvc_idealBatchSize > msvc_maxBatchSize) {
             if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
                 msvc_idealBatchSize = msvc_maxBatchSize;
             }
             return false;
         }
-        spdlog::info("Batch size increased to {}", msvc_idealBatchSize);
+        spdlog::get("container_agent")->info("Batch size increased to {}", msvc_idealBatchSize);
         return true;
     }
 
