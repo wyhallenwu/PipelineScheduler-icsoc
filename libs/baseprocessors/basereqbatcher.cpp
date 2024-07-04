@@ -358,8 +358,7 @@ void BaseReqBatcher::batchRequests() {
 
         // Keeping record of the arrival requests
         // TODO: Add rpc batch size instead of hardcoding
-        if (msvc_batchCount >= msvc_numWarmupBatches) {
-            // Only start recording after the warmup period
+        if (warmupCompleted()) {
             msvc_arrivalRecords.addRecord(
                     currReq.req_origGenTime[0],
                     10,
@@ -521,6 +520,9 @@ template<typename T>
 bool BaseReqBatcher::validateRequest(Request<T> &req) {
     // Meaning the the timeout in pop() has been reached and no request was actually popped
     if (strcmp(req.req_travelPath[0].c_str(), "empty") == 0) {
+        return false;
+    } else if (strcmp(req.req_travelPath[0].c_str(), "WARMUP_COMPLETED") == 0) {
+        spdlog::get("container_agent")->info("{0:s} received the signal that the warmup is completed.", msvc_name);
         return false;
     }
 
