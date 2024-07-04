@@ -73,6 +73,7 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_systemName = j["systemName"];
     ctrl_runtime = j["runtime"];
     ctrl_port_offset = j["port_offset"];
+    ctrl_systemFPS = j["system_fps"];
     initialTasks = j["initial_pipelines"];
 }
 

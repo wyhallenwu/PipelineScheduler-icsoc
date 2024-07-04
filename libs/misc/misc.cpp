@@ -97,7 +97,8 @@ float queryArrivalRate(
     const std::string &streamName,
     const std::string &taskName,
     const std::string &modelName,
-    const std::vector<uint8_t> &periods //seconds
+    const std::vector<uint8_t> &periods, //seconds
+    const uint16_t systemFPS
 ) {
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
@@ -128,7 +129,7 @@ float queryArrivalRate(
 
     if (res[0][0].is_null()) {
         // If there is no historical data, we look for the rate of the most recent profiled data
-        std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
+        std::string profileTableName = abbreviate("pr" + std::to_string(systemFPS) + "_" + taskName + "_arr");
         query = "WITH recent_data AS ("
                 "   SELECT * "
                 "   FROM %s "
@@ -159,7 +160,8 @@ NetworkProfile queryNetworkProfile(
     const std::string &senderDeviceType,
     const std::string &receiverHost,
     const std::string &receiverDeviceType,
-    const NetworkEntryType &networkEntries
+    const NetworkEntryType &networkEntries,
+    const uint16_t systemFPS
 ) {
     std::string senderHostAbbr = abbreviate(senderHost);
     std::string receiverHostAbbr = abbreviate(receiverHost);
@@ -204,7 +206,7 @@ NetworkProfile queryNetworkProfile(
     std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
 
     // If there is no historical data, we look for the rate of the most recent profiled data
-    std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
+    std::string profileTableName = abbreviate("pr" + std::to_string(systemFPS) + "_" + taskName + "_arr");
     query = "WITH recent_data AS ("
     "   SELECT p95_out_queueing_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
     "   FROM %s "
@@ -263,7 +265,8 @@ ModelArrivalProfile queryModelArrivalProfile(
     const std::string &modelName,
     const std::vector<std::pair<std::string, std::string>> &commPairs,
     const std::map<std::pair<std::string, std::string>, NetworkEntryType> &networkEntries,
-    const std::vector<uint8_t> &periods //seconds
+    const std::vector<uint8_t> &periods, //seconds
+    const uint16_t systemFPS
 ) {
     ModelArrivalProfile arrivalProfile;
 
@@ -297,7 +300,7 @@ ModelArrivalProfile queryModelArrivalProfile(
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
         // If there is no historical data, we look for the rate of the most recent profiled data
-        std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
+        std::string profileTableName = abbreviate("pr" + std::to_string(systemFPS) + "_" + taskName + "_arr");
         query = "WITH recent_data AS ("
                 "   SELECT * "
                 "   FROM %s "
@@ -352,7 +355,7 @@ ModelArrivalProfile queryModelArrivalProfile(
         }
 
         // If there is no historical data, we look for the rate of the most recent profiled data
-        std::string profileTableName = abbreviate("prof_" + taskName + "_arr");
+        std::string profileTableName = abbreviate("pr" + std::to_string(systemFPS) + "_" + taskName + "_arr");
         query = "WITH recent_data AS ("
         "   SELECT p95_out_queueing_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
         "   FROM %s "
@@ -399,7 +402,8 @@ void queryPrePostLatency(
     const std::string &deviceName,
     const std::string &deviceTypeName,
     const std::string &modelName,
-    ModelProfile &profile
+    ModelProfile &profile,
+    const uint16_t systemFPS
 ) {
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front()); 
@@ -486,7 +490,8 @@ void queryBatchInferLatency(
     const std::string &deviceName,
     const std::string &deviceTypeName,
     const std::string &modelName,
-    ModelProfile &profile
+    ModelProfile &profile,
+    const uint16_t systemFPS
 ) {
     BatchInferProfileListType batchInferProfile;
     std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
@@ -499,7 +504,7 @@ void queryBatchInferLatency(
 
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
-        std::string profileTableName = abbreviate("prof__" + modelNameAbbr + "__" + deviceTypeName) + "_batch";
+        std::string profileTableName = abbreviate("pr" + std::to_string(systemFPS) + "__" + modelNameAbbr + "__" + deviceTypeName) + "_batch";
         query = absl::StrFormat("SELECT infer_batch_size, percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_infer_duration_us) AS p95_infer_duration_us "
                                 "FROM %s "
                                 "GROUP BY infer_batch_size", profileTableName);
@@ -520,7 +525,8 @@ BatchInferProfileListType queryBatchInferLatency(
     const std::string &streamName,
     const std::string &deviceName,
     const std::string &deviceTypeName,
-    const std::string &modelName
+    const std::string &modelName,
+    const uint16_t systemFPS
 ) {
     ModelProfile modelProfile;
     queryBatchInferLatency(
@@ -551,10 +557,11 @@ void queryResourceRequirements(
     pqxx::connection &metricsConn,
     const std::string &deviceTypeName,
     const std::string &modelName,
-    ModelProfile &profile
+    ModelProfile &profile,
+    const uint16_t systemFPS
 ) {
     std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
-    std::string tableName = abbreviate("prof__" + modelNameAbbr + "__" + deviceTypeName + "_hw");
+    std::string tableName = abbreviate("pr" + std::to_string(systemFPS) + "__" + modelNameAbbr + "__" + deviceTypeName + "_hw");
     std::string query = absl::StrFormat("SELECT batch_size, MAX(cpu_usage), MAX(mem_usage), MAX(rss_mem_usage), MAX(gpu_usage), MAX(gpu_mem_usage) "
                             "FROM %s "
                             "GROUP BY batch_size;", tableName);

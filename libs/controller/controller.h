@@ -886,6 +886,8 @@ private:
     ClockType ctrl_nextSchedulingTime;
 
     std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
+
+    uint16_t ctrl_systemFPS;
 };
 
 
