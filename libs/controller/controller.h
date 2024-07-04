@@ -579,7 +579,7 @@ const std::map<std::string, float> ACC_LEVEL_MAP = {
         {"yolov5n416", 0.35},
         {"yolov5n512", 0.40},
         {"yolov5n608", 0.45},
-        {"Yolov5n640", 0.50},
+        {"yolov5n",    0.50},
         {"yolov5s640", 0.55},
         {"yolov5m640", 0.60},
 };

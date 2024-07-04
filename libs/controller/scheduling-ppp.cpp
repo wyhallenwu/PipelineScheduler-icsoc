@@ -101,14 +101,14 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 
             // MODIFICATION
             // collect the very first model of the pipeline, just use the yolo which is always the very first
-            if (containerName.find("yolo")) {
+            if (containerName.find("yolov") != std::string::npos) {
                 // add all available batch_size profiling into consideration
                 for (auto it = profile.batchInfer.begin(); it != profile.batchInfer.end(); ++it) {
                     BatchSizeType batch_size = it->first;
                     BatchInferProfile &batch_profile = it->second;
 
                     // note: the last three chars of the model name is the resolution it takes
-                    int width = std::stoi(model->name.substr(model->name.length() - 3));
+                    int width = model->name == "yolov5n" ? 640 : std::stoi(model->name.substr(model->name.length() - 3));
 
                     // check the accuracy indicator, use dummy value just to reflect the capacity of the model(evaluate their performance in general)
                     this->model_profiles_jf.add(model->name, ACC_LEVEL_MAP.at(model->name),
@@ -128,7 +128,16 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 }
 
 bool CheckMergable(const std::string &m) {
-    return m == "datasource" || m == "yolov5n" || m == "retina1face" || m == "yolov5ndsrc" || m == "retina1facedsrc";
+    if (m == "datasource") {
+        return true;
+    }
+    if (m.find("yolov5") != std::string::npos) {
+        return true;
+    }
+    if (m.find("retina1face") != std::string::npos) {
+        return true;
+    }
+    return false;
 }
 
 ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i) {

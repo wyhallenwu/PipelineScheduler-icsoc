@@ -88,8 +88,6 @@ Controller::Controller(int argc, char **argv) {
     server = builder.BuildAndStart();
 
     ctrl_nextSchedulingTime = std::chrono::system_clock::now();
-    //sleep for 3 sec
-    std::this_thread::sleep_for(TimePrecisionType(3000000));
 }
 
 Controller::~Controller() {
