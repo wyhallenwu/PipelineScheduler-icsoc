@@ -574,6 +574,9 @@ public:
             if (!t.added) {
                 remainTasks.push_back(t);
             }
+            if (!t.added) {
+                remainTasks.push_back(t);
+            }
         }
     }
 
@@ -625,7 +628,7 @@ private:
     void estimateModelNetworkLatency(PipelineModel *currModel);
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
-    void getInitialBatchSizes(TaskHandle &models, uint64_t slo);
+    void getInitialBatchSizes(TaskHandle *task, uint64_t slo);
     void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
 
     bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile);
@@ -633,6 +636,14 @@ private:
     bool mergeModels(PipelineModel *mergedModel, PipelineModel *tobeMergedModel);
     TaskHandle mergePipelines(const std::string& taskName);
     void mergePipelines();
+
+    bool containerTemporalScheduling(ContainerHandle *container);
+    bool modelTemporalScheduling(PipelineModel *pipelineModel);
+    void temporalScheduling();
+
+    bool containerTemporalScheduling(ContainerHandle *container);
+    bool modelTemporalScheduling(PipelineModel *pipelineModel);
+    void temporalScheduling();
 
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "");
 
@@ -882,8 +893,8 @@ private:
     std::map<std::string, NetworkEntryType> ctrl_inDeviceNetworkEntries;
 
     // TODO: Read from config file
-    std::uint64_t ctrl_schedulingIntervalSec = 600;
-    ClockType ctrl_nextSchedulingTime;
+    std::uint64_t ctrl_schedulingIntervalSec = 10;//600;
+    ClockType ctrl_nextSchedulingTime = std::chrono::system_clock::now();
 
     std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
 
