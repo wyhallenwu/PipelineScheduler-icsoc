@@ -456,7 +456,8 @@ void queryPrePostLatency(
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_post_duration_us) AS p95_post_duration_us_all, "
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_input_size_b) AS p95_input_size_b_all, "
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_output_size_b) AS p95_output_size_b_all "
-                            "FROM recent_data;", profileTableName);
+                            "FROM recent_data "
+                            "GROUP BY infer_batch_size;", profileTableName);
     res = pullSQL(metricsConn, query);
     for (const auto& row : res) {
         BatchSizeType batchSize = row["infer_batch_size"].as<BatchSizeType>();
