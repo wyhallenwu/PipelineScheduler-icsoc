@@ -24,20 +24,65 @@ if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
             FORCE)
 endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
+message ("Building controller for system: ${SYSTEM_NAME}")
+if(SYSTEM_NAME STREQUAL "PPP")
 # Only public header files go here.
-set(
-        HEADER_FILES
-        controller.h
-        scheduling-ppp.h
-        ../json/json.h
-)
+        set(
+                HEADER_FILES
+                controller.h
+                scheduling-ppp.h
+                ../json/json.h
+        )
 
-# All source files and private header files go here.
-set(
-        SOURCE_FILES
-        controller.cpp
-        scheduling-ppp.cpp
-)
+        # All source files and private header files go here.
+        set(
+                SOURCE_FILES
+                controller.cpp
+                scheduling-ppp.cpp
+        )
+elseif (SYSTEM_NAME STREQUAL "JLF")
+        set(
+                HEADER_FILES
+                controller.h
+                scheduling-jlf.h
+                ../json/json.h
+        )
+
+        # All source files and private header files go here.
+        set(
+                SOURCE_FILES
+                controller.cpp
+                scheduling-jlf.cpp
+        )
+elseif (SYSTEM_NAME STREQUAL "DIS")
+        set(
+                HEADER_FILES
+                controller.h
+                scheduling-dis.h
+                ../json/json.h
+        )
+
+        # All source files and private header files go here.
+        set(
+                SOURCE_FILES
+                controller.cpp
+                scheduling-dis.cpp
+        )
+elseif (SYSTEM_NAME STREQUAL "RIM")
+        set(
+                HEADER_FILES
+                controller.h
+                scheduling-rim.h
+                ../json/json.h
+        )
+
+        # All source files and private header files go here.
+        set(
+                SOURCE_FILES
+                controller.cpp
+                scheduling-rim.cpp
+        )
+endif()
 
 # Here we define the library.
 add_library(controller
