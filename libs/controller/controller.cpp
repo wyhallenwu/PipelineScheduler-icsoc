@@ -32,31 +32,33 @@ void Controller::readInitialObjectCount(const std::string &path) {
                 initialPerSecondRate[streamName][objectName][seconds] = totalNumObjs * 1.f / seconds;
             }
         }
-
+        float skipRate = ctrl_systemFPS / 30.f;
         std::map<std::string, float> *stream = &(ctrl_initialRequestRates[streamName]);
         float maxPersonRate = 1.2 * std::max_element(
                     initialPerSecondRate[streamName]["person"].begin(),
                     initialPerSecondRate[streamName]["person"].end()
-            )->second;
+            )->second * skipRate;
+        maxPersonRate = std::max(maxPersonRate, ctrl_systemFPS * 1.f);
         float maxCarRate = 1.2 * std::max_element(
                     initialPerSecondRate[streamName]["car"].begin(),
                     initialPerSecondRate[streamName]["car"].end()
-            )->second;
+            )->second * skipRate;
+        maxCarRate = std::max(maxCarRate, ctrl_systemFPS * 1.f);
         if (streamName.find("traffic") != std::string::npos) {
-            stream->insert({"yolov5n", 30});
+            stream->insert({"yolov5n", ctrl_systemFPS});
 
             stream->insert({"retina1face", std::ceil(maxPersonRate)});
             stream->insert({"arcface", std::ceil(maxPersonRate * 0.6)});
             stream->insert({"carbrand", std::ceil(maxCarRate)});
             stream->insert({"platedet", std::ceil(maxCarRate)});
         } else if (streamName.find("people") != std::string::npos) {
-            stream->insert({"yolov5n", 30});
+            stream->insert({"yolov5n", ctrl_systemFPS});
             stream->insert({"retina1face", std::ceil(maxPersonRate)});
             stream->insert({"age", std::ceil(maxPersonRate) * 0.6});
             stream->insert({"gender", std::ceil(maxPersonRate) * 0.6});
             stream->insert({"movenet", std::ceil(maxPersonRate)});
         } else if (streamName.find("zoom") != std::string::npos) {
-            stream->insert({"retinaface", 30});
+            stream->insert({"retinaface", ctrl_systemFPS});
             stream->insert({"arcface", std::ceil(maxPersonRate)});
             stream->insert({"age", std::ceil(maxPersonRate)});
             stream->insert({"gender", std::ceil(maxPersonRate)});

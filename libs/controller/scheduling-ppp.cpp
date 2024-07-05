@@ -53,7 +53,8 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
                 t.name,
                 t.source,
                 ctrl_containerLib[containerName].taskName,
-                ctrl_containerLib[containerName].modelName
+                ctrl_containerLib[containerName].modelName,
+                ctrl_systemFPS
             );
         }
 
@@ -76,7 +77,8 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
                 senderDeviceType,
                 pair.second,
                 receiverDeviceType,
-                entry
+                entry,
+                ctrl_systemFPS
             );
             model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
         }
@@ -92,7 +94,8 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
                 t.source,
                 deviceName,
                 deviceTypeName,
-                ctrl_containerLib[containerName].modelName
+                ctrl_containerLib[containerName].modelName,
+                ctrl_systemFPS
             );
             model->processProfiles[deviceTypeName] = profile;
         }
