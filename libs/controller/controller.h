@@ -476,6 +476,8 @@ struct TaskHandle {
     PipelineModelListType tk_pipelineModels;
     mutable std::mutex tk_mutex;
 
+    bool tk_newlyAdded = true;
+
     TaskHandle() = default;
 
     ~TaskHandle() {
@@ -516,6 +518,7 @@ struct TaskHandle {
         tk_lastLatency = other.tk_lastLatency;
         tk_subTasks = other.tk_subTasks;
         tk_pipelineModels = other.tk_pipelineModels;
+        tk_newlyAdded = other.tk_newlyAdded;
     }
 
     TaskHandle& operator=(const TaskHandle& other) {
@@ -533,6 +536,7 @@ struct TaskHandle {
             tk_lastLatency = other.tk_lastLatency;
             tk_subTasks = other.tk_subTasks;
             tk_pipelineModels = other.tk_pipelineModels;
+            tk_newlyAdded = other.tk_newlyAdded;
         }
         return *this;
     }
@@ -623,6 +627,8 @@ private:
 
     void calculateQueueSizes(ContainerHandle &model, const ModelType modelType);
     uint64_t calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate);
+
+    void queryingProfiles(TaskHandle *task);
 
     void estimateModelLatency(PipelineModel *currModel);
     void estimateModelNetworkLatency(PipelineModel *currModel);
