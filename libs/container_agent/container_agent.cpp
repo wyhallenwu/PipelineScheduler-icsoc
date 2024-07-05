@@ -891,7 +891,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 BatchSizeType inferBatchSize = key.second;
                 uint32_t numEntries = records.postEndTime.size();
                 // Check if there are any records
-                if (numEntries == 0) {
+                if (numEntries < 20) {
                     continue;
                 }
 

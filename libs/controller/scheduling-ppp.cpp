@@ -161,8 +161,56 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     return container;
 }
 
+// ==================================================================Scheduling==================================================================
+// ==============================================================================================================================================
+// ==============================================================================================================================================
+// ==============================================================================================================================================
+
 void Controller::Scheduling() {
     while (running) {
+        // Check if it is the next scheduling period
+        Stopwatch schedulingSW;
+        schedulingSW.start();
+        if (std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now() - ctrl_nextSchedulingTime).count() < 10) {
+            continue;
+        }
+        auto taskList = ctrl_unscheduledPipelines.getMap();
+        if (taskList.empty()) {
+            continue;
+        }
+        for (auto [taskName, taskHandle]: taskList) {
+            getInitialBatchSizes(taskHandle, taskHandle->tk_slo);
+            shiftModelToEdge(taskHandle->tk_pipelineModels, taskHandle->tk_pipelineModels.front(), taskHandle->tk_slo, "edge");
+        }
+        mergePipelines();
+        // temporalScheduling();
+        schedulingSW.stop();
+        ctrl_nextSchedulingTime = std::chrono::system_clock::now() + std::chrono::seconds(ctrl_schedulingIntervalSec);
+        std::this_thread::sleep_for(TimePrecisionType((ctrl_schedulingIntervalSec + 1) * 1000000 - schedulingSW.elapsed_microseconds()));
+    }
+
+}
+
+bool Controller::containerTemporalScheduling(ContainerHandle *container) {
+
+}
+
+bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel) {
+    if (pipelineModel->name == "datasource" || pipelineModel->name == "sink") {
+        return true;
+    }
+    for (auto container : pipelineModel->manifestations) {
+        containerTemporalScheduling(container);
+    }
+    for (auto downstream : pipelineModel->downstreams) {
+        modelTemporalScheduling(downstream.first);
+    }
+    return true;
+}
+
+void Controller::temporalScheduling() {
+    for (auto &[taskName, taskHandle]: ctrl_scheduledPipelines.list) {
         
     }
 }
@@ -243,16 +291,20 @@ bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, 
         auto mergedProfileDevice = &mergedProfile[deviceName];
         auto toBeMergedProfileDevice = &toBeMergedProfile.at(deviceName);
 
+        BatchSizeType batchSize = 
+
         mergedProfileDevice->p95InputSize = std::max(mergedProfileDevice->p95InputSize, toBeMergedProfileDevice->p95InputSize);
         mergedProfileDevice->p95OutputSize = std::max(mergedProfileDevice->p95OutputSize, toBeMergedProfileDevice->p95OutputSize);
-        mergedProfileDevice->p95prepLat = std::max(mergedProfileDevice->p95prepLat, toBeMergedProfileDevice->p95prepLat);
-        mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat, toBeMergedProfileDevice->p95postLat);
+        // mergedProfileDevice->p95prepLat = std::max(mergedProfileDevice->p95prepLat, toBeMergedProfileDevice->p95prepLat);
+        // mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat, toBeMergedProfileDevice->p95postLat);
 
         auto mergedBatchInfer = &mergedProfileDevice->batchInfer;
         // auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
 
         for (const auto &[batchSize, p] : toBeMergedProfileDevice->batchInfer) {
             mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, p.p95inferLat);
+            mergedBatchInfer->at(batchSize).p95prepLat = std::max(mergedBatchInfer->at(batchSize).p95prepLat, p.p95prepLat);
+            mergedBatchInfer->at(batchSize).p95postLat = std::max(mergedBatchInfer->at(batchSize).p95postLat, p.p95postLat);
             mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, p.cpuUtil);
             mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, p.gpuUtil);
             mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, p.memUsage);
@@ -291,9 +343,9 @@ TaskHandle Controller::mergePipelines(const std::string& taskName) {
     auto unscheduledTasks = ctrl_unscheduledPipelines.getMap();
 
     *mergedPipelineModels = getModelsByPipelineType(unscheduledTasks.at(taskName)->tk_type, "server");
-    auto numModels = mergedPipeline.tk_pipelineModels.size();
+    uint16_t numModels = mergedPipeline.tk_pipelineModels.size();
 
-    for (auto i = 0; i < numModels; i++) {
+    for (uint16_t i = 0; i < numModels; i++) {
         if (mergedPipelineModels->at(i)->name == "datasource") {
             continue;
         }
@@ -302,6 +354,14 @@ TaskHandle Controller::mergePipelines(const std::string& taskName) {
                 continue;
             }
             mergeModels(mergedPipelineModels->at(i), task.second->tk_pipelineModels.at(i));
+        }
+        auto numIncReps = incNumReplicas(mergedPipelineModels->at(i));
+        mergedPipelineModels->at(i)->numReplicas += numIncReps;
+        auto deviceList = devices.getMap();
+        for (auto j = 0; j < mergedPipelineModels->at(i)->numReplicas; j++) {
+            mergedPipelineModels->at(i)->manifestations.emplace_back(new ContainerHandle{});
+            mergedPipelineModels->at(i)->manifestations.back()->task = &mergedPipeline;
+            mergedPipelineModels->at(i)->manifestations.back()->device_agent = deviceList.at(mergedPipelineModels->at(i)->device);
         }
     }
 }
@@ -312,6 +372,8 @@ void Controller::mergePipelines() {
 
     for (const auto &taskName : toMerge) {
         mergedPipeline = mergePipelines(taskName);
+        std::lock_guard lock(ctrl_scheduledPipelines.tasksMutex);
+        ctrl_scheduledPipelines.list.insert({mergedPipeline.tk_name, &mergedPipeline});
     }
 }
 
@@ -382,11 +444,11 @@ void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel
  * @param nObjects 
  * @return std::map<ModelType, int> 
  */
-void Controller::getInitialBatchSizes(TaskHandle &task, uint64_t slo) {
+void Controller::getInitialBatchSizes(TaskHandle *task, uint64_t slo) {
 
-    PipelineModelListType &models = task.tk_pipelineModels;
+    PipelineModelListType *models = &(task->tk_pipelineModels);
 
-    for (auto &m: models) {
+    for (auto m: *models) {
         m->batchSize = 1;
         m->numReplicas = 1;
 
@@ -396,16 +458,16 @@ void Controller::getInitialBatchSizes(TaskHandle &task, uint64_t slo) {
 
     // DFS-style recursively estimate the latency of a pipeline from source to sink
     // The first model should be the datasource
-    estimatePipelineLatency(models.front(), 0);
+    estimatePipelineLatency(models->front(), 0);
 
-    uint64_t expectedE2ELatency = models.back()->expectedStart2HereLatency;
+    uint64_t expectedE2ELatency = models->back()->expectedStart2HereLatency;
 
     if (slo < expectedE2ELatency) {
         spdlog::info("SLO is too low for the pipeline to meet. Expected E2E latency: {0:d}, SLO: {1:d}", expectedE2ELatency, slo);
     }
 
     // Increase number of replicas to avoid bottlenecks
-    for (auto &m: models) {
+    for (auto m: *models) {
         auto numIncReplicas = incNumReplicas(m);
         m->numReplicas += numIncReplicas;
     }
@@ -414,16 +476,16 @@ void Controller::getInitialBatchSizes(TaskHandle &task, uint64_t slo) {
     auto foundBest = true;
     while (foundBest) {
         foundBest = false;
-        uint64_t bestCost = models.back()->estimatedStart2HereCost;
-        for (auto &m: models) {
+        uint64_t bestCost = models->back()->estimatedStart2HereCost;
+        for (auto m: *models) {
             BatchSizeType oldBatchsize = m->batchSize;
             m->batchSize *= 2;
             estimateModelLatency(m);
-            estimatePipelineLatency(models.front(), 0);
-            expectedE2ELatency = models.back()->expectedStart2HereLatency;
+            estimatePipelineLatency(models->front(), 0);
+            expectedE2ELatency = models->back()->expectedStart2HereLatency;
             if (expectedE2ELatency < slo) {
                 // If increasing the batch size of model `m` creates a pipeline that meets the SLO, we should keep it
-                uint64_t estimatedE2Ecost = models.back()->estimatedStart2HereCost;
+                uint64_t estimatedE2Ecost = models->back()->estimatedStart2HereCost;
                 // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
                 if (estimatedE2Ecost < bestCost) {
                     bestCost = estimatedE2Ecost;
@@ -459,13 +521,15 @@ void Controller::estimateModelLatency(PipelineModel *currModel) { std::string de
         currModel->expectedAvgPerQueryLatency = 0;
         currModel->expectedMaxProcessLatency = 0;
         currModel->estimatedPerQueryCost = 0;
+        currModel->expectedStart2HereLatency = 0;
+        currModel->estimatedStart2HereCost = 0;
         return;
     }
     ModelProfile profile = currModel->processProfiles[deviceName];
-    uint64_t preprocessLatency = profile.p95prepLat;
     BatchSizeType batchSize = currModel->batchSize;
+    uint64_t preprocessLatency = profile.batchInfer[batchSize].p95prepLat;
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
-    uint64_t postprocessLatency = profile.p95postLat;
+    uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
     float preprocessRate = 1000000.f / preprocessLatency;
 
     currModel->expectedQueueingLatency = calculateQueuingLatency(currModel->arrivalProfiles.arrivalRates,
@@ -475,6 +539,8 @@ void Controller::estimateModelLatency(PipelineModel *currModel) { std::string de
             preprocessLatency * batchSize + inferLatency * batchSize + postprocessLatency * batchSize;
     currModel->estimatedPerQueryCost = currModel->expectedAvgPerQueryLatency + currModel->expectedQueueingLatency +
                                        currModel->expectedTransferLatency;
+    currModel->expectedStart2HereLatency = 0;
+    currModel->estimatedStart2HereCost = 0;
 }
 
 void Controller::estimateModelNetworkLatency(PipelineModel *currModel) {
@@ -498,11 +564,15 @@ void Controller::estimatePipelineLatency(PipelineModel *currModel, const uint64_
     // Update the expected latency to reach the current model
     // In case a model has multiple upstreams, the expected latency to reach the model is the maximum of the expected latency 
     // to reach from each upstream.
-    currModel->expectedStart2HereLatency = std::max(
-            currModel->expectedStart2HereLatency,
-            start2HereLatency + currModel->expectedMaxProcessLatency + currModel->expectedTransferLatency +
-            currModel->expectedQueueingLatency
-    );
+    if (currModel->name == "datasource") {
+        currModel->expectedStart2HereLatency = start2HereLatency;
+    } else {
+        currModel->expectedStart2HereLatency = std::max(
+                currModel->expectedStart2HereLatency,
+                start2HereLatency + currModel->expectedMaxProcessLatency + currModel->expectedTransferLatency +
+                currModel->expectedQueueingLatency
+        );
+    }
 
     // Cost of the pipeline until the current model
     currModel->estimatedStart2HereCost += currModel->estimatedPerQueryCost;
@@ -529,8 +599,8 @@ uint8_t Controller::incNumReplicas(const PipelineModel *model) {
     std::string deviceTypeName = model->deviceTypeName;
     ModelProfile profile = model->processProfiles.at(deviceTypeName);
     uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + profile.p95prepLat
-                                 + profile.p95postLat);
+    float indiProcessRate = 1 / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
+                                 + profile.batchInfer.at(model->batchSize).p95postLat);
     float processRate = indiProcessRate * numReplicas;
     while (processRate < model->arrivalProfiles.arrivalRates) {
         numReplicas++;
@@ -550,7 +620,8 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model) {
     std::string deviceTypeName = model->deviceTypeName;
     ModelProfile profile = model->processProfiles.at(deviceTypeName);
     uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + profile.p95prepLat + profile.p95postLat);
+    float indiProcessRate = 1 / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
+                                 + profile.batchInfer.at(model->batchSize).p95postLat);
     float processRate = indiProcessRate * numReplicas;
     while (numReplicas > 1) {
         numReplicas--;
