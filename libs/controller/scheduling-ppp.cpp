@@ -111,18 +111,18 @@ void Controller::Scheduling() {
         if (taskList.empty()) {
             continue;
         }
-        for (auto [taskName, taskHandle]: taskList) {
-            queryingProfiles(taskHandle);
-            getInitialBatchSizes(taskHandle, taskHandle->tk_slo);
-            shiftModelToEdge(taskHandle->tk_pipelineModels, taskHandle->tk_pipelineModels.front(), taskHandle->tk_slo, "edge");
-            taskHandle->tk_newlyAdded = false;
-        }
+        // for (auto [taskName, taskHandle]: taskList) {
+        //     queryingProfiles(taskHandle);
+        //     getInitialBatchSizes(taskHandle, taskHandle->tk_slo);
+        //     shiftModelToEdge(taskHandle->tk_pipelineModels, taskHandle->tk_pipelineModels.front(), taskHandle->tk_slo, "edge");
+        //     taskHandle->tk_newlyAdded = false;
+        // }
 
-        mergePipelines();
-        // temporalScheduling();
-        schedulingSW.stop();
-        ctrl_nextSchedulingTime = std::chrono::system_clock::now() + std::chrono::seconds(ctrl_schedulingIntervalSec);
-        std::this_thread::sleep_for(TimePrecisionType((ctrl_schedulingIntervalSec + 1) * 1000000 - schedulingSW.elapsed_microseconds()));
+        // mergePipelines();
+        // // temporalScheduling();
+        // schedulingSW.stop();
+        // ctrl_nextSchedulingTime = std::chrono::system_clock::now() + std::chrono::seconds(ctrl_schedulingIntervalSec);
+        // std::this_thread::sleep_for(TimePrecisionType((ctrl_schedulingIntervalSec + 1) * 1000000 - schedulingSW.elapsed_microseconds()));
     }
 
 }

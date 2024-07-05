@@ -219,11 +219,10 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     task->tk_src_device = t.device;
 
     task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device, t.name);
-
-    std::lock_guard lock2(ctrl_unscheduledPipelines.tasksMutex);
+    std::unique_lock<std::mutex> lock2(ctrl_unscheduledPipelines.tasksMutex);
     ctrl_unscheduledPipelines.list.insert({task->tk_name, task});
 
-    std::cout << "Task added: " << t.name << std::endl;
+    lock2.unlock();
     return true;
 }
 
@@ -510,6 +509,11 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     }
 }
 
+/**
+ * @brief 
+ * 
+ * @param node 
+ */
 void Controller::queryInDeviceNetworkEntries(NodeHandle *node) {
     std::string deviceTypeName = SystemDeviceTypeList[node->type];
     std::string deviceTypeNameAbbr = abbreviate(deviceTypeName);
@@ -1184,4 +1188,13 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
         default:
             return {};
     }
+}
+
+PipelineModelListType deepCopyPipelineModelList(const PipelineModelListType& original) {
+    PipelineModelListType newList;
+    newList.reserve(original.size());
+    for (const auto* model : original) {
+        newList.push_back(new PipelineModel(*model));
+    }
+    return newList;
 }
