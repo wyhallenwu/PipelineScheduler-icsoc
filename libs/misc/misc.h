@@ -534,7 +534,7 @@ NetworkProfile queryNetworkProfile(
     const std::string &receiverHost,
     const std::string &receiverDeviceType,
     const NetworkEntryType &networkEntries,
-    const uint16_t systemFPS = 15
+    uint16_t systemFPS = 15
 );
 
 ModelArrivalProfile queryModelArrivalProfile(
@@ -606,7 +606,7 @@ ModelProfile queryModelProfile(
     const std::string &deviceName,
     const std::string &deviceTypeName,
     const std::string &modelName,
-    const uint16_t systemFPS = 15
+    uint16_t systemFPS = 15
 );
 
 // =======================================================================================================================================================

@@ -161,7 +161,7 @@ NetworkProfile queryNetworkProfile(
     const std::string &receiverHost,
     const std::string &receiverDeviceType,
     const NetworkEntryType &networkEntries,
-    const uint16_t systemFPS
+    uint16_t systemFPS
 ) {
     std::string senderHostAbbr = abbreviate(senderHost);
     std::string receiverHostAbbr = abbreviate(receiverHost);
@@ -596,7 +596,8 @@ ModelProfile queryModelProfile(
     const std::string &streamName,
     const std::string &deviceName,
     const std::string &deviceTypeName,
-    const std::string &modelName
+    const std::string &modelName,
+    uint16_t systemFPS
 ) {
     ModelProfile profile;
 
