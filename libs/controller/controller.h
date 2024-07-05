@@ -239,8 +239,8 @@ struct ContainerHandle {
       model_file(model_file),
       device_agent(device_agent),
       task(task),
-      upstreams(upstreams),
       downstreams(downstreams),
+      upstreams(upstreams),
       queueSizes(queueSizes) {}
     
     // Copy constructor
@@ -380,8 +380,7 @@ struct PipelineModel {
                   const std::string& deviceTypeName = "",
                   bool merged = false,
                   const std::vector<std::string>& possibleDevices = {})
-        : device(device),
-          name(name),
+        : name(name),
           task(task),
           isSplitPoint(isSplitPoint),
           arrivalProfiles(arrivalProfiles),
@@ -395,6 +394,7 @@ struct PipelineModel {
           expectedQueueingLatency(expectedQueueingLatency),
           expectedAvgPerQueryLatency(expectedAvgPerQueryLatency),
           expectedMaxProcessLatency(expectedMaxProcessLatency),
+          device(device),
           deviceTypeName(deviceTypeName),
           merged(merged),
           possibleDevices(possibleDevices) {}
@@ -574,6 +574,9 @@ public:
             if (!t.added) {
                 remainTasks.push_back(t);
             }
+            if (!t.added) {
+                remainTasks.push_back(t);
+            }
         }
     }
 
@@ -625,7 +628,7 @@ private:
     void estimateModelNetworkLatency(PipelineModel *currModel);
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
-    void getInitialBatchSizes(TaskHandle &models, uint64_t slo);
+    void getInitialBatchSizes(TaskHandle *task, uint64_t slo);
     void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
 
     bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile);
@@ -633,6 +636,10 @@ private:
     bool mergeModels(PipelineModel *mergedModel, PipelineModel *tobeMergedModel);
     TaskHandle mergePipelines(const std::string& taskName);
     void mergePipelines();
+
+    bool containerTemporalScheduling(ContainerHandle *container);
+    bool modelTemporalScheduling(PipelineModel *pipelineModel);
+    void temporalScheduling();
 
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "");
 
@@ -844,11 +851,11 @@ private:
 
         std::vector<ContainerHandle *> getList() {
             std::lock_guard<std::mutex> lock(containersMutex);
-            std::vector<ContainerHandle *> containers;
+            std::vector<ContainerHandle *> cnts;
             for (auto &c: list) {
-                containers.push_back(c.second);
+                cnts.push_back(c.second);
             }
-            return containers;
+            return cnts;
         }
 
         std::map<std::string, ContainerHandle *> getMap() {
@@ -882,10 +889,12 @@ private:
     std::map<std::string, NetworkEntryType> ctrl_inDeviceNetworkEntries;
 
     // TODO: Read from config file
-    std::uint64_t ctrl_schedulingIntervalSec = 600;
-    ClockType ctrl_nextSchedulingTime;
+    std::uint64_t ctrl_schedulingIntervalSec = 10;//600;
+    ClockType ctrl_nextSchedulingTime = std::chrono::system_clock::now();
 
     std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
+
+    uint16_t ctrl_systemFPS;
 };
 
 

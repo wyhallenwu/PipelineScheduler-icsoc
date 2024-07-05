@@ -316,7 +316,7 @@ private:
     std::string dev_hwMetricsTableName;
     std::string dev_networkTableName;
 
-    uint16_t dev_numCudaDevices;
+    uint16_t dev_numCudaDevices{};
 };
 
 #endif //DEVICE_AGENT_H
