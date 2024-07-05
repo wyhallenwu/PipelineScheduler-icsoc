@@ -10,6 +10,61 @@ const int DATA_BASE_PORT = 55001;
 const int CONTROLLER_BASE_PORT = 60001;
 const int DEVICE_CONTROL_PORT = 60002;
 
+void Controller::readInitialObjectCount(const std::string &path) {
+    std::ifstream file(path);
+    json j = json::parse(file);
+    std::map<std::string, std::map<std::string, std::map<int, float>>> initialPerSecondRate;
+    for (auto &item: j.items()) {
+        std::string streamName = item.key();
+        initialPerSecondRate[streamName] = {};
+        for (auto &object: item.value().items()) {
+            std::string objectName = object.key();
+            initialPerSecondRate[streamName][objectName] = {};
+            std::vector<int> perFrameObjCount = object.value().get<std::vector<int>>();
+            int numFrames = perFrameObjCount.size();
+            int totalNumObjs = 0;
+            for (auto i = 0; i < numFrames; i++) {
+                totalNumObjs += perFrameObjCount[i];
+                if ((i + 1) % 30 != 0) {
+                    continue;
+                }
+                int seconds = (i + 1) / 30;
+                initialPerSecondRate[streamName][objectName][seconds] = totalNumObjs * 1.f / seconds;
+            }
+        }
+
+        std::map<std::string, float> *stream = &(ctrl_initialRequestRates[streamName]);
+        float maxPersonRate = 1.2 * std::max_element(
+                    initialPerSecondRate[streamName]["person"].begin(),
+                    initialPerSecondRate[streamName]["person"].end()
+            )->second;
+        float maxCarRate = 1.2 * std::max_element(
+                    initialPerSecondRate[streamName]["car"].begin(),
+                    initialPerSecondRate[streamName]["car"].end()
+            )->second;
+        if (streamName.find("traffic") != std::string::npos) {
+            stream->insert({"yolov5n", 30});
+
+            stream->insert({"retina1face", std::ceil(maxPersonRate)});
+            stream->insert({"arcface", std::ceil(maxPersonRate * 0.6)});
+            stream->insert({"carbrand", std::ceil(maxCarRate)});
+            stream->insert({"platedet", std::ceil(maxCarRate)});
+        } else if (streamName.find("people") != std::string::npos) {
+            stream->insert({"yolov5n", 30});
+            stream->insert({"retina1face", std::ceil(maxPersonRate)});
+            stream->insert({"age", std::ceil(maxPersonRate) * 0.6});
+            stream->insert({"gender", std::ceil(maxPersonRate) * 0.6});
+            stream->insert({"movenet", std::ceil(maxPersonRate)});
+        } else if (streamName.find("zoom") != std::string::npos) {
+            stream->insert({"retinaface", 30});
+            stream->insert({"arcface", std::ceil(maxPersonRate)});
+            stream->insert({"age", std::ceil(maxPersonRate)});
+            stream->insert({"gender", std::ceil(maxPersonRate)});
+            stream->insert({"emotionnet", std::ceil(maxPersonRate)});
+        }
+    }
+}
+
 void Controller::readConfigFile(const std::string &path) {
     std::ifstream file(path);
     json j = json::parse(file);
@@ -18,21 +73,23 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_systemName = j["systemName"];
     ctrl_runtime = j["runtime"];
     ctrl_port_offset = j["port_offset"];
+    ctrl_systemFPS = j["system_fps"];
     initialTasks = j["initial_pipelines"];
 }
 
 void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskStruct &val) {
     j.at("pipeline_name").get_to(val.name);
-    val.fullName = val.name + "_" + val.device;
     j.at("pipeline_target_slo").get_to(val.slo);
     j.at("pipeline_type").get_to(val.type);
     j.at("video_source").get_to(val.source);
     j.at("pipeline_source_device").get_to(val.device);
+    val.fullName = val.name + "_" + val.device;
 }
 
 Controller::Controller(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
     readConfigFile(absl::GetFlag(FLAGS_ctrl_configPath));
+    readInitialObjectCount("../jsons/object_count.json");
 
     ctrl_logPath = absl::GetFlag(FLAGS_ctrl_logPath);
     ctrl_logPath += "/" + ctrl_experimentName;
@@ -86,6 +143,8 @@ Controller::Controller(int argc, char **argv) {
     builder.RegisterService(&service);
     cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
+
+    ctrl_nextSchedulingTime = std::chrono::system_clock::now();
 }
 
 Controller::~Controller() {
@@ -96,10 +155,10 @@ Controller::~Controller() {
 
     std::unique_lock<std::mutex> lock2(devices.devicesMutex);
     for (auto &device: devices.list) {
-        device.second.cq->Shutdown();
+        device.second->cq->Shutdown();
         void *got_tag;
         bool ok = false;
-        while (device.second.cq->Next(&got_tag, &ok));
+        while (device.second->cq->Next(&got_tag, &ok));
     }
     server->Shutdown();
     cq->Shutdown();
@@ -116,19 +175,6 @@ void Controller::HandleRecvRpcs() {
         }
         GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
-    }
-}
-
-void Controller::Scheduling() {
-    // TODO: please out your scheduling loop inside of here
-    while (running) {
-        for (auto& task_pair : tasks) {
-            performPlacement(task_pair.second);
-        }
-        // use list of devices, tasks and containers to schedule depending on your algorithm
-        // put helper functions as a private member function of the controller and write them at the bottom of this file.
-        std::this_thread::sleep_for(std::chrono::milliseconds(
-                5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
     }
 }
 
@@ -163,7 +209,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         new DeviseAdvertisementHandler(service, cq, controller);
         std::string target_str = absl::StrFormat("%s:%d", request.ip_address(), DEVICE_CONTROL_PORT + controller->ctrl_port_offset);
         std::string deviceName = request.device_name();
-        NodeHandle node{deviceName,
+        NodeHandle *node = new NodeHandle{deviceName,
                                      request.ip_address(),
                                      ControlCommunication::NewStub(
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
@@ -172,13 +218,18 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                      request.processors(), std::vector<double>(request.processors(), 0.0),
                                      std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
                                      std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset, {}};
-        controller->devices.list.insert({deviceName, node});
         reply.set_name(controller->ctrl_systemName);
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
+        controller->devices.addDevice(deviceName, node);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
-        controller->queryInDeviceNetworkEntries(&(controller->devices.list[deviceName]));
+        controller->queryInDeviceNetworkEntries(controller->devices.list.at(deviceName));
+
+        if (deviceName != "server") {
+            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.list[deviceName])), 1000, 1200000, 30);
+            networkCheck.detach();
+        }
     } else {
         GPR_ASSERT(status == FINISH);
         delete this;
@@ -264,49 +315,46 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     }
 }
 
-void Controller::MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device) {
-    NodeHandle *old_device = msvc->device_agent;
-    NodeHandle *device;
+void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
+    NodeHandle *old_device = container->device_agent;
     bool start_dsrc = false, merge_dsrc = false;
-    if (to_edge) {
-        device = msvc->upstreams[0]->device_agent;
-        if (msvc->mergable) {
+    if (device->name != "server") {
+        if (container->mergable) {
             merge_dsrc = true;
-            if (msvc->model == Yolov5n) {
-                msvc->model = Yolov5nDsrc;
-            } else if (msvc->model == Retinaface) {
-                msvc->model = RetinafaceDsrc;
+            if (container->model == Yolov5n) {
+                container->model = Yolov5nDsrc;
+            } else if (container->model == Retinaface) {
+                container->model = RetinafaceDsrc;
             }
         }
     } else {
-        device = &devices.list["server"];
-        if (msvc->mergable) {
+        if (container->mergable) {
             start_dsrc = true;
-            if (msvc->model == Yolov5nDsrc) {
-                msvc->model = Yolov5n;
-            } else if (msvc->model == RetinafaceDsrc) {
-                msvc->model = Retinaface;
+            if (container->model == Yolov5nDsrc) {
+                container->model = Yolov5n;
+            } else if (container->model == RetinafaceDsrc) {
+                container->model = Retinaface;
             }
         }
     }
-    msvc->device_agent = device;
-    msvc->recv_port = device->next_free_port++;
-    device->containers.insert({msvc->name, msvc});
-    msvc->cuda_device = cuda_device;
-    StartContainer(msvc, !(start_dsrc || merge_dsrc));
-    for (auto upstr: msvc->upstreams) {
+    container->device_agent = device;
+    container->recv_port = device->next_free_port++;
+    device->containers.insert({container->name, container});
+    container->cuda_device = container->cuda_device;
+    StartContainer(container, !(start_dsrc || merge_dsrc));
+    for (auto upstr: container->upstreams) {
         if (start_dsrc) {
             StartContainer(upstr, false);
-            SyncDatasource(msvc, upstr);
+            SyncDatasource(container, upstr);
         } else if (merge_dsrc) {
-            SyncDatasource(upstr, msvc);
+            SyncDatasource(upstr, container);
             StopContainer(upstr, old_device);
         } else {
-            AdjustUpstream(msvc->recv_port, upstr, device, msvc->name);
+            AdjustUpstream(container->recv_port, upstr, device, container->name);
         }
     }
-    StopContainer(msvc, old_device);
-    old_device->containers.erase(msvc->name);
+    StopContainer(container, old_device);
+    old_device->containers.erase(container->name);
 }
 
 void Controller::AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *new_device,
@@ -548,7 +596,7 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
  * @param numLoops 
  * @return NetworkEntryType 
  */
-NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize, uint32_t numLoops) {
+NetworkEntryType Controller::initNetworkCheck(NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize, uint32_t numLoops) {
     LoopRange request;
     EmptyMessage reply;
     ClientContext context;
@@ -565,7 +613,13 @@ NetworkEntryType Controller::initNetworkCheck(const NodeHandle &node, uint32_t m
     }
 
     NetworkEntryType entries = network_check_buffer[node.name];
+    entries = aggregateNetworkEntries(entries);
     network_check_buffer[node.name].clear();
+    spdlog::get("container_agent")->info("Finished network check for device {}.", node.name);
+    std::lock_guard lock(node.nodeHandleMutex);
+    node.initialNetworkCheck = true;
+    node.latestNetworkEntries["server"] = entries;
+    node.lastNetworkCheckTime = std::chrono::system_clock::now();
     return entries;
 };
 
@@ -581,47 +635,55 @@ void Controller::checkNetworkConditions() {
         stopwatch.start();
         std::map<std::string, NetworkEntryType> networkEntries = {};
 
-        for (auto &[deviceName, nodeHandle] : devices.list) {
-            if (deviceName == "server") {
+        
+        for (auto [deviceName, nodeHandle] : devices.getMap()) {
+            std::unique_lock<std::mutex> lock(nodeHandle->nodeHandleMutex);
+            bool initialNetworkCheck = nodeHandle->initialNetworkCheck;
+            uint64_t timeSinceLastCheck = std::chrono::duration_cast<TimePrecisionType>(
+                    std::chrono::system_clock::now() - nodeHandle->lastNetworkCheckTime).count() / 1000000;
+            lock.unlock();
+            if (deviceName == "server" || (initialNetworkCheck && timeSinceLastCheck < 60)) {
+                spdlog::get("container_agent")->info("Skipping network check for device {}.", deviceName);
                 continue;
             }
-            networkEntries[deviceName] = {};
+            initNetworkCheck(*nodeHandle, 1000, 1200000, 30);
         }
-        std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
-        std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
-                            "FROM %s ", tableName);
+        // std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
+        // std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
+        //                     "FROM %s ", tableName);
 
-        pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
-        //Getting the latest network entries into the networkEntries map
-        for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
-            std::string sender_host = row["sender_host"].as<std::string>();
-            if (sender_host == "server" || sender_host == "serv") {
-                continue;
-            }
-            std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
-            networkEntries[sender_host].emplace_back(entry);
-        }
+        // pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
+        // //Getting the latest network entries into the networkEntries map
+        // for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
+        //     std::string sender_host = row["sender_host"].as<std::string>();
+        //     if (sender_host == "server" || sender_host == "serv") {
+        //         continue;
+        //     }
+        //     std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
+        //     networkEntries[sender_host].emplace_back(entry);
+        // }
 
-        // Updating NodeHandle object with the latest network entries
-        for (auto &[deviceName, entries] : networkEntries) {
-            // If entry belongs to a device that is not in the list of devices, ignore it
-            if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
-                continue;
-            }
-            std::unique_lock<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
-            devices.list[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
-        }
+        // // Updating NodeHandle object with the latest network entries
+        // for (auto &[deviceName, entries] : networkEntries) {
+        //     // If entry belongs to a device that is not in the list of devices, ignore it
+        //     if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
+        //         continue;
+        //     }
+        //     std::lock_guard<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
+        //     devices.list[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
+        // }
 
-        // If no network entries exist for a device, send a request to the device to perform network testing
-        for (auto &[deviceName, nodeHandle] : devices.list) {
-            if (nodeHandle.latestNetworkEntries.size() == 0) {
-                // TODO: Send a request to the device to perform network testing
+        // // If no network entries exist for a device, send a request to the device to perform network testing
+        // for (auto &[deviceName, nodeHandle] : devices.list) {
+        //     if (nodeHandle.latestNetworkEntries.size() == 0) {
+        //         // TODO: Send a request to the device to perform network testing
 
-            }
-        }
+        //     }
+        // }
 
         stopwatch.stop();
-        std::this_thread::sleep_for(TimePrecisionType(60 * 1000000 - stopwatch.elapsed_microseconds()));
+        uint64_t sleepTimeUs = 60 * 1000000 - stopwatch.elapsed_microseconds();
+        std::this_thread::sleep_for(TimePrecisionType(sleepTimeUs));
     }
 }
 

@@ -41,79 +41,31 @@ ABSL_DECLARE_FLAG(uint16_t, ctrl_loggingMode);
 struct ContainerHandle;
 struct PipelineModel;
 
+struct GPUPortion;
+
+struct GPULane {
+    std::uint16_t gpuNum;
+    std::uint16_t laneNum;
+    std::uint64_t dutyCycle = 9999999999999999;
+};
+
+struct GPUPortion : GPULane {
+    std::uint64_t start = 0;
+    std::uint64_t end = 9999999999999999;
+    GPULane * lane = nullptr;
+    GPUPortion* next = nullptr;
+    GPUPortion* prev = nullptr;
+};
+
+struct GPUPortionList {
+    GPUPortion *head = nullptr;
+    std::vector<GPUPortion *> list;
+};
+
 // Structure that whole information about the pipeline used for scheduling
 typedef std::vector<PipelineModel *> PipelineModelListType;
 
-struct TaskHandle {
-    std::string tk_name;
-    std::string tk_fullName;
-    PipelineType tk_type;
-    std::string tk_source;
-    int tk_slo;
-    ClockType tk_startTime;
-    int tk_lastLatency;
-    std::map<std::string, std::vector<ContainerHandle*>> tk_subTasks;
-    PipelineModelListType tk_pipelineModels;
-    mutable std::mutex tk_mutex;
-
-    TaskHandle() = default;
-
-    ~TaskHandle() {
-        // Ensure no other threads are using this object
-        std::lock_guard<std::mutex> lock(tk_mutex);
-        for (auto& model : tk_pipelineModels) {
-            delete model;
-        }
-    }
-
-    TaskHandle(const std::string& tk_name,
-               const std::string& tk_fullName,
-               PipelineType tk_type,
-               const std::string& tk_source,
-               int tk_slo,
-               ClockType tk_startTime,
-               int tk_lastLatency)
-    : tk_name(tk_name),
-      tk_type(tk_type),
-      tk_source(tk_source),
-      tk_slo(tk_slo),
-      tk_startTime(tk_startTime),
-      tk_lastLatency(tk_lastLatency) {}
-
-    TaskHandle(const TaskHandle& other) {
-        std::lock(tk_mutex, other.tk_mutex);
-        std::lock_guard<std::mutex> lock(other.tk_mutex);
-        std::lock_guard<std::mutex> lock2(tk_mutex);
-        tk_name = other.tk_name;
-        tk_fullName = other.tk_fullName;
-        tk_type = other.tk_type;
-        tk_source = other.tk_source;
-        tk_slo = other.tk_slo;
-        tk_startTime = other.tk_startTime;
-        tk_lastLatency = other.tk_lastLatency;
-        tk_subTasks = other.tk_subTasks;
-        tk_pipelineModels = other.tk_pipelineModels;
-    }
-
-    TaskHandle& operator=(const TaskHandle& other) {
-        if (this != &other) {
-            std::lock(tk_mutex, other.tk_mutex);
-            std::lock_guard<std::mutex> lock1(tk_mutex);
-            std::lock_guard<std::mutex> lock2(other.tk_mutex);
-            tk_name = other.tk_name;
-            tk_fullName = other.tk_fullName;
-            tk_type = other.tk_type;
-            tk_source = other.tk_source;
-            tk_slo = other.tk_slo;
-            tk_startTime = other.tk_startTime;
-            tk_lastLatency = other.tk_lastLatency;
-            tk_subTasks = other.tk_subTasks;
-            tk_pipelineModels = other.tk_pipelineModels;
-        }
-        return *this;
-    }
-};
-
+struct TaskHandle;
 struct NodeHandle {
     std::string name;
     std::string ip;
@@ -128,6 +80,17 @@ struct NodeHandle {
     std::map<std::string, ContainerHandle *> containers;
     // The latest network entries to determine the network conditions and latencies of transferring data
     std::map<std::string, NetworkEntryType> latestNetworkEntries = {};
+    //
+    uint8_t numGPULanes;
+    //
+    std::vector<GPULane *> gpuLanes;
+    GPUPortionList freeGPUPortions;
+
+    bool initialNetworkCheck = false;
+    ClockType lastNetworkCheckTime;
+
+    
+
     mutable std::mutex nodeHandleMutex;
 
     NodeHandle() = default;
@@ -157,8 +120,8 @@ struct NodeHandle {
 
     NodeHandle(const NodeHandle &other) {
         std::lock(nodeHandleMutex, other.nodeHandleMutex);
-        std::lock_guard<std::mutex> lock(other.nodeHandleMutex);
-        std::lock_guard<std::mutex> lock2(nodeHandleMutex);
+        std::lock_guard<std::mutex> lock1(nodeHandleMutex, std::adopt_lock);
+        std::lock_guard<std::mutex> lock2(other.nodeHandleMutex, std::adopt_lock);
         name = other.name;
         ip = other.ip;
         stub = other.stub;
@@ -171,6 +134,27 @@ struct NodeHandle {
         next_free_port = other.next_free_port;
         containers = other.containers;
         latestNetworkEntries = other.latestNetworkEntries;
+    }
+
+    NodeHandle& operator=(const NodeHandle &other) {
+        if (this != &other) {
+            std::lock(nodeHandleMutex, other.nodeHandleMutex);
+            std::lock_guard<std::mutex> lock1(nodeHandleMutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(other.nodeHandleMutex, std::adopt_lock);
+            name = other.name;
+            ip = other.ip;
+            stub = other.stub;
+            cq = other.cq;
+            type = other.type;
+            num_processors = other.num_processors;
+            processors_utilization = other.processors_utilization;
+            mem_size = other.mem_size;
+            mem_utilization = other.mem_utilization;
+            next_free_port = other.next_free_port;
+            containers = other.containers;
+            latestNetworkEntries = other.latestNetworkEntries;
+        }
+        return *this;
     }
 };
 
@@ -191,8 +175,8 @@ struct ContainerHandle {
 
     NodeHandle *device_agent;
     TaskHandle *task;
-    std::vector<ContainerHandle *> upstreams;
     std::vector<ContainerHandle *> downstreams;
+    std::vector<ContainerHandle *> upstreams;
     // Queue sizes of the model
     std::vector<QueueLengthType> queueSizes;
 
@@ -215,6 +199,12 @@ struct ContainerHandle {
     uint64_t expectedPostprocessLatency = 0;
     // Expected throughput
     float expectedThroughput = 0;
+    //
+    uint64_t startTime;
+    //
+    uint64_t endTime;
+    //
+    GPUPortion *executionLane = nullptr;
     //
     mutable std::mutex containerHandleMutex;
 
@@ -253,13 +243,48 @@ struct ContainerHandle {
       upstreams(upstreams),
       downstreams(downstreams),
       queueSizes(queueSizes) {}
+    
+    // Copy constructor
+    ContainerHandle(const ContainerHandle& other) {
+        std::lock(containerHandleMutex, other.containerHandleMutex);
+        std::lock_guard<std::mutex> lock1(containerHandleMutex, std::adopt_lock);
+        std::lock_guard<std::mutex> lock2(other.containerHandleMutex, std::adopt_lock);
+
+        name = other.name;
+        class_of_interest = other.class_of_interest;
+        model = other.model;
+        mergable = other.mergable;
+        dimensions = other.dimensions;
+        inference_deadline = other.inference_deadline;
+        arrival_rate = other.arrival_rate;
+        batch_size = other.batch_size;
+        cuda_device = other.cuda_device;
+        recv_port = other.recv_port;
+        model_file = other.model_file;
+        device_agent = other.device_agent;
+        task = other.task;
+        upstreams = other.upstreams;
+        downstreams = other.downstreams;
+        queueSizes = other.queueSizes;
+        running = other.running;
+        numMicroservices = other.numMicroservices;
+        expectedTransferLatency = other.expectedTransferLatency;
+        expectedQueueingLatency = other.expectedQueueingLatency;
+        expectedPreprocessLatency = other.expectedPreprocessLatency;
+        expectedInferLatency = other.expectedInferLatency;
+        expectedPostprocessLatency = other.expectedPostprocessLatency;
+        expectedThroughput = other.expectedThroughput;
+        startTime = other.startTime;
+        endTime = other.endTime;
+        executionLane = other.executionLane;
+    }
 
     // Copy assignment operator
     ContainerHandle& operator=(const ContainerHandle& other) {
         if (this != &other) {
             std::lock(containerHandleMutex, other.containerHandleMutex);
-            std::lock_guard<std::mutex> lock(containerHandleMutex);
-            std::lock_guard<std::mutex> lock2(other.containerHandleMutex);
+            std::lock_guard<std::mutex> lock1(containerHandleMutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(other.containerHandleMutex, std::adopt_lock);
             name = other.name;
             class_of_interest = other.class_of_interest;
             model = other.model;
@@ -284,13 +309,15 @@ struct ContainerHandle {
             expectedInferLatency = other.expectedInferLatency;
             expectedPostprocessLatency = other.expectedPostprocessLatency;
             expectedThroughput = other.expectedThroughput;
+            startTime = other.startTime;
+            endTime = other.endTime;
+            executionLane = other.executionLane;
         }
         return *this;
     }
 };
 
 struct PipelineModel {
-    std::string device;
     std::string name;
     TaskHandle *task;
     // Whether the upstream is on another device
@@ -305,7 +332,7 @@ struct PipelineModel {
     // The batch size of the model
     BatchSizeType batchSize;
     // The number of replicas of the model
-    uint8_t numReplicas;
+    uint8_t numReplicas = -1;
     // The assigned cuda device for each replica
     std::vector<uint8_t> cudaDevices;
     // Average latency to query to reach from the upstream
@@ -323,7 +350,15 @@ struct PipelineModel {
     // The estimated latency of the model
     uint64_t estimatedStart2HereCost = 0;
 
+    std::string device;
     std::string deviceTypeName;
+    NodeHandle *deviceAgent;
+
+    bool merged = false;
+
+    std::vector<std::string> possibleDevices;
+    // The list of containers that will be created for this model
+    std::vector<ContainerHandle *> manifestations;
 
     mutable std::mutex pipelineModelMutex;
 
@@ -337,13 +372,15 @@ struct PipelineModel {
                   const std::vector<std::pair<PipelineModel*, int>>& downstreams = {},
                   const std::vector<std::pair<PipelineModel*, int>>& upstreams = {},
                   const BatchSizeType& batchSize = BatchSizeType(),
-                  uint8_t numReplicas = 1,
+                  uint8_t numReplicas = -1,
                   std::vector<uint8_t> cudaDevices = {},
                   uint64_t expectedTransferLatency = 0,
                   uint64_t expectedQueueingLatency = 0,
                   uint64_t expectedAvgPerQueryLatency = 0,
                   uint64_t expectedMaxProcessLatency = 0,
-                  const std::string& deviceTypeName = "")
+                  const std::string& deviceTypeName = "",
+                  bool merged = false,
+                  const std::vector<std::string>& possibleDevices = {})
         : device(device),
           name(name),
           task(task),
@@ -359,13 +396,46 @@ struct PipelineModel {
           expectedQueueingLatency(expectedQueueingLatency),
           expectedAvgPerQueryLatency(expectedAvgPerQueryLatency),
           expectedMaxProcessLatency(expectedMaxProcessLatency),
-          deviceTypeName(deviceTypeName) {}
+          deviceTypeName(deviceTypeName),
+          merged(merged),
+          possibleDevices(possibleDevices) {}
+
+    // Copy constructor
+    PipelineModel(const PipelineModel& other) {
+        std::lock(pipelineModelMutex, other.pipelineModelMutex);
+        std::lock_guard<std::mutex> lock1(other.pipelineModelMutex, std::adopt_lock);
+        std::lock_guard<std::mutex> lock2(pipelineModelMutex, std::adopt_lock);
+        device = other.device;
+        name = other.name;
+        task = other.task;
+        isSplitPoint = other.isSplitPoint;
+        arrivalProfiles = other.arrivalProfiles;
+        processProfiles = other.processProfiles;
+        downstreams = other.downstreams;
+        upstreams = other.upstreams;
+        batchSize = other.batchSize;
+        numReplicas = other.numReplicas;
+        cudaDevices = other.cudaDevices;
+        expectedTransferLatency = other.expectedTransferLatency;
+        expectedQueueingLatency = other.expectedQueueingLatency;
+        expectedAvgPerQueryLatency = other.expectedAvgPerQueryLatency;
+        expectedMaxProcessLatency = other.expectedMaxProcessLatency;
+        expectedStart2HereLatency = other.expectedStart2HereLatency;
+        estimatedPerQueryCost = other.estimatedPerQueryCost;
+        estimatedStart2HereCost = other.estimatedStart2HereCost;
+        deviceTypeName = other.deviceTypeName;
+        merged = other.merged;
+        possibleDevices = other.possibleDevices;
+        manifestations = other.manifestations;
+        deviceAgent = other.deviceAgent;
+    }
 
     // Assignment operator
     PipelineModel& operator=(const PipelineModel& other) {
         if (this != &other) {
-            std::lock_guard<std::mutex> lock(pipelineModelMutex);
-            std::lock_guard<std::mutex> lock2(other.pipelineModelMutex);
+            std::lock(pipelineModelMutex, other.pipelineModelMutex);
+            std::lock_guard<std::mutex> lock1(pipelineModelMutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(other.pipelineModelMutex, std::adopt_lock);
             device = other.device;
             name = other.name;
             task = other.task;
@@ -385,10 +455,91 @@ struct PipelineModel {
             estimatedPerQueryCost = other.estimatedPerQueryCost;
             estimatedStart2HereCost = other.estimatedStart2HereCost;
             deviceTypeName = other.deviceTypeName;
+            merged = other.merged;
+            possibleDevices = other.possibleDevices;
+            manifestations = other.manifestations;
+            deviceAgent = other.deviceAgent;
         }
         return *this;
     }
 };
+
+struct TaskHandle {
+    std::string tk_name;
+    std::string tk_fullName;
+    PipelineType tk_type;
+    std::string tk_source;
+    std::string tk_src_device;
+    int tk_slo;
+    ClockType tk_startTime;
+    int tk_lastLatency;
+    std::map<std::string, std::vector<ContainerHandle*>> tk_subTasks;
+    PipelineModelListType tk_pipelineModels;
+    mutable std::mutex tk_mutex;
+
+    TaskHandle() = default;
+
+    ~TaskHandle() {
+        // Ensure no other threads are using this object
+        std::lock_guard<std::mutex> lock(tk_mutex);
+        for (auto& model : tk_pipelineModels) {
+            delete model;
+        }
+    }
+
+    TaskHandle(const std::string& tk_name,
+               const std::string& tk_fullName,
+               PipelineType tk_type,
+               const std::string& tk_source,
+               const std::string& tk_src_device,
+               int tk_slo,
+               ClockType tk_startTime,
+               int tk_lastLatency)
+    : tk_name(tk_name),
+      tk_type(tk_type),
+      tk_source(tk_source),
+      tk_src_device(tk_src_device),
+      tk_slo(tk_slo),
+      tk_startTime(tk_startTime),
+      tk_lastLatency(tk_lastLatency) {}
+
+    TaskHandle(const TaskHandle& other) {
+        std::lock(tk_mutex, other.tk_mutex);
+        std::lock_guard<std::mutex> lock1(other.tk_mutex, std::adopt_lock);
+        std::lock_guard<std::mutex> lock2(tk_mutex, std::adopt_lock);
+        tk_name = other.tk_name;
+        tk_fullName = other.tk_fullName;
+        tk_type = other.tk_type;
+        tk_source = other.tk_source;
+        tk_src_device = other.tk_src_device;
+        tk_slo = other.tk_slo;
+        tk_startTime = other.tk_startTime;
+        tk_lastLatency = other.tk_lastLatency;
+        tk_subTasks = other.tk_subTasks;
+        tk_pipelineModels = other.tk_pipelineModels;
+    }
+
+    TaskHandle& operator=(const TaskHandle& other) {
+        if (this != &other) {
+            std::lock(tk_mutex, other.tk_mutex);
+            std::lock_guard<std::mutex> lock1(tk_mutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(other.tk_mutex, std::adopt_lock);
+            tk_name = other.tk_name;
+            tk_fullName = other.tk_fullName;
+            tk_type = other.tk_type;
+            tk_source = other.tk_source;
+            tk_src_device = other.tk_src_device;
+            tk_slo = other.tk_slo;
+            tk_startTime = other.tk_startTime;
+            tk_lastLatency = other.tk_lastLatency;
+            tk_subTasks = other.tk_subTasks;
+            tk_pipelineModels = other.tk_pipelineModels;
+        }
+        return *this;
+    }
+};
+
+
 
 namespace TaskDescription {
     struct TaskStruct {
@@ -416,34 +567,32 @@ public:
 
     void Scheduling();
 
-    void Init() { 
-        bool allAdded = true;
+    void Init() {
         for (auto &t: initialTasks) {
             if (!t.added) {
                 t.added = AddTask(t);
             }
             if (!t.added) {
-                allAdded = false;
+                remainTasks.push_back(t);
             }
-            remainTasks.push_back(t);
+            if (!t.added) {
+                remainTasks.push_back(t);
+            }
         }
     }
 
     void InitRemain() {
-        bool allAdded = true;
         for (auto &t: remainTasks) {
             if (!t.added) {
                 t.added = AddTask(t);
             }
-            if (!t.added) {
-                allAdded = false;
-                continue;
+            if (t.added) {
+                // Remove the task from the remain list
+                remainTasks.erase(std::remove_if(remainTasks.begin(), remainTasks.end(),
+                                                [&t](const TaskDescription::TaskStruct &task) {
+                                                    return task.name == t.name;
+                                                }), remainTasks.end());
             }
-            // Remove the task from the remain list
-            remainTasks.erase(std::remove_if(remainTasks.begin(), remainTasks.end(),
-                                             [&t](const TaskDescription::TaskStruct &task) {
-                                                 return task.name == t.name;
-                                             }), remainTasks.end());
         }
     }
 
@@ -461,22 +610,39 @@ public:
 
     void Stop() { running = false; };
 
+    void readInitialObjectCount(
+        const std::string& path 
+    );
+
 private:
 
-    NetworkEntryType initNetworkCheck(const NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
+    void initiateGPULanes(NodeHandle &node);
+
+    NetworkEntryType initNetworkCheck(NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
     uint8_t incNumReplicas(const PipelineModel *model);
     uint8_t decNumReplicas(const PipelineModel *model);
 
     void calculateQueueSizes(ContainerHandle &model, const ModelType modelType);
     uint64_t calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate);
 
-    void estimateModelLatency(PipelineModel *currModel, const std::string& deviceName);
+    void estimateModelLatency(PipelineModel *currModel);
+    void estimateModelNetworkLatency(PipelineModel *currModel);
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
-    void getInitialBatchSizes(TaskHandle &models, uint64_t slo, int nObjects);
-    void shiftModelToEdge(TaskHandle &models, const ModelType &currModel, uint64_t slo);
+    void getInitialBatchSizes(TaskHandle *task, uint64_t slo);
+    void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
 
-    PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice);
+    bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile);
+    bool mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, const PerDeviceModelProfileType &toBeMergedProfile);
+    bool mergeModels(PipelineModel *mergedModel, PipelineModel *tobeMergedModel);
+    TaskHandle mergePipelines(const std::string& taskName);
+    void mergePipelines();
+
+    bool containerTemporalScheduling(ContainerHandle *container);
+    bool modelTemporalScheduling(PipelineModel *pipelineModel);
+    void temporalScheduling();
+
+    PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "");
 
     void checkNetworkConditions();
 
@@ -543,7 +709,7 @@ private:
 
     void StartContainer(ContainerHandle *container, bool easy_allocation = true);
 
-    void MoveContainer(ContainerHandle *msvc, bool to_edge, int cuda_device = 0);
+    void MoveContainer(ContainerHandle *container, NodeHandle *new_device);
 
     static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
 
@@ -582,19 +748,128 @@ private:
     };
 
     struct Devices {
-        std::map<std::string, NodeHandle> list = {};
+    public:
+        void addDevice(const std::string &name, NodeHandle *node) {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            list[name] = node;
+        }
+
+        void removeDevice(const std::string &name) {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            list.erase(name);
+        }
+
+        NodeHandle *getDevice(const std::string &name) {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            return list[name];
+        }
+
+        std::vector<NodeHandle *> getList() {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            std::vector<NodeHandle *> devices;
+            for (auto &d: list) {
+                devices.push_back(d.second);
+            }
+            return devices;
+        }
+
+        std::map<std::string, NodeHandle*> getMap() {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            return list;
+        }
+
+        bool hasDevice(const std::string &name) {
+            std::lock_guard<std::mutex> lock(devicesMutex);
+            return list.find(name) != list.end();
+        }
+    // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
+    public:
+        std::map<std::string, NodeHandle*> list = {};
         std::mutex devicesMutex;
     };
     
     Devices devices;
 
     struct Tasks {
-        std::map<std::string, TaskHandle> list = {};
+    public:
+        void addTask(const std::string &name, TaskHandle *task) {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            list[name] = task;
+        }
+
+        void removeTask(const std::string &name) {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            list.erase(name);
+        }
+
+        TaskHandle *getTask(const std::string &name) {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            return list[name];
+        }
+
+        std::vector<TaskHandle *> getList() {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            std::vector<TaskHandle *> tasks;
+            for (auto &t: list) {
+                tasks.push_back(t.second);
+            }
+            return tasks;
+        }
+
+        std::map<std::string, TaskHandle*> getMap() {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            return list;
+        }
+
+        bool hasTask(const std::string &name) {
+            std::lock_guard<std::mutex> lock(tasksMutex);
+            return list.find(name) != list.end();
+        }
+
+    // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
+    public:
+        std::map<std::string, TaskHandle*> list = {};
         std::mutex tasksMutex;
     };
     Tasks ctrl_unscheduledPipelines, ctrl_scheduledPipelines;
 
     struct Containers {
+    public:
+        void addContainer(const std::string &name, ContainerHandle *container) {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            list[name] = container;
+        }
+
+        void removeContainer(const std::string &name) {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            list.erase(name);
+        }
+
+        ContainerHandle *getContainer(const std::string &name) {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            return list[name];
+        }
+
+        std::vector<ContainerHandle *> getList() {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            std::vector<ContainerHandle *> containers;
+            for (auto &c: list) {
+                containers.push_back(c.second);
+            }
+            return containers;
+        }
+
+        std::map<std::string, ContainerHandle *> getMap() {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            return list;
+        }
+
+        bool hasContainer(const std::string &name) {
+            std::lock_guard<std::mutex> lock(containersMutex);
+            return list.find(name) != list.end();
+        }
+    //TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
+    public:
         std::map<std::string, ContainerHandle*> list = {};
         std::mutex containersMutex;
     };
@@ -614,8 +889,13 @@ private:
 
     std::map<std::string, NetworkEntryType> ctrl_inDeviceNetworkEntries;
 
-    // RIM implementation
-    
+    // TODO: Read from config file
+    std::uint64_t ctrl_schedulingIntervalSec = 10;//600;
+    ClockType ctrl_nextSchedulingTime = std::chrono::system_clock::now();
+
+    std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
+
+    uint16_t ctrl_systemFPS;
 };
 
 // ========================================================== added ================================================================

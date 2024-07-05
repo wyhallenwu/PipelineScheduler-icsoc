@@ -275,7 +275,12 @@ void BaseBBoxCropper::cropping() {
             STOP_THREADS = true;
             msvc_OutQueue[0]->emplace(currReq);
             continue;
-        }
+        } else if (strcmp(currReq.req_travelPath[0].c_str(), "WARMUP_COMPLETED") == 0) {
+            msvc_profWarmupCompleted = true;
+            spdlog::get("container_agent")->info("{0:s} received the signal that the warmup is completed.", msvc_name);
+            msvc_OutQueue[0]->emplace(currReq);
+            continue;
+        } 
 
         msvc_inReqCount++;
 
@@ -466,22 +471,24 @@ void BaseBBoxCropper::cropping() {
             // Clearing out data of the vector
 
             /**
-             * @brief There are 7 important timestamps to be recorded:
+             * @brief There are 8 important timestamps to be recorded:
              * 1. When the request was generated
              * 2. When the request was received by the batcher
              * 3. When the request was done preprocessing by the batcher
              * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
-             * 5. When the batch inferencer was completed by the inferencer 
-             * 6. When the request was received by the postprocessor
-             * 7. When each request was completed by the postprocessor
+             * 5. When the batch inferencer popped the batch sent from batcher
+             * 6. When the batch inference was completed by the inferencer 
+             * 7. When the request was received by the postprocessor
+             * 8. When each request was completed by the postprocessor
              */
 
             // If the number of warmup batches has been passed, we start to record the latency
-            if (msvc_batchCount > msvc_numWarmupBatches) {
+            if (warmupCompleted()) {
                 currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
                 // TODO: Add the request number
                 msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0, getOriginStream(currReq.req_travelPath[i]));
             }
+
 
             singleImageBBoxList.clear();
         }
