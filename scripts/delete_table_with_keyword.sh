@@ -16,23 +16,25 @@ DB_NAME=${4:-$DEFAULT_DB_NAME}
 DB_USER=${5:-$DEFAULT_DB_USER}
 DB_PASSWORD=${6:-$DEFAULT_DB_PASSWORD}
 
-
 # Export the PGPASSWORD environment variable
 export PGPASSWORD=$DB_PASSWORD
 
-# Get the list of tables containing the phrase
+# Get the list of tables containing the phrase in all schemas
 tables=$(psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c "
-SELECT tablename 
+SELECT schemaname, tablename 
 FROM pg_tables 
 WHERE tablename LIKE '%$PHRASE%';")
 
 # Loop through the list of tables and drop each one
-for table in $tables; do
-    if [[ ! -z "$table" ]]; then
-        echo "Dropping table: $table"
-        psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "DROP TABLE IF EXISTS $table CASCADE;"
+while IFS="|" read -r schemaname tablename; do
+    # Trim whitespace
+    schemaname=$(echo $schemaname | xargs)
+    tablename=$(echo $tablename | xargs)
+    if [[ ! -z "$schemaname" && ! -z "$tablename" ]]; then
+        echo "Dropping table: $schemaname.$tablename"
+        psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "DROP TABLE IF EXISTS \"$schemaname\".\"$tablename\" CASCADE;"
     fi
-done
+done <<< "$tables"
 
 # Unset the PGPASSWORD environment variable
 unset PGPASSWORD
