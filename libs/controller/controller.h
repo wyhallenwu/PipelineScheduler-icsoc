@@ -239,8 +239,8 @@ struct ContainerHandle {
       model_file(model_file),
       device_agent(device_agent),
       task(task),
-      downstreams(downstreams),
       upstreams(upstreams),
+      downstreams(downstreams),
       queueSizes(queueSizes) {}
     
     // Copy constructor
@@ -380,7 +380,8 @@ struct PipelineModel {
                   const std::string& deviceTypeName = "",
                   bool merged = false,
                   const std::vector<std::string>& possibleDevices = {})
-        : name(name),
+        : device(device),
+          name(name),
           task(task),
           isSplitPoint(isSplitPoint),
           arrivalProfiles(arrivalProfiles),
@@ -394,7 +395,6 @@ struct PipelineModel {
           expectedQueueingLatency(expectedQueueingLatency),
           expectedAvgPerQueryLatency(expectedAvgPerQueryLatency),
           expectedMaxProcessLatency(expectedMaxProcessLatency),
-          device(device),
           deviceTypeName(deviceTypeName),
           merged(merged),
           possibleDevices(possibleDevices) {}
@@ -851,11 +851,11 @@ private:
 
         std::vector<ContainerHandle *> getList() {
             std::lock_guard<std::mutex> lock(containersMutex);
-            std::vector<ContainerHandle *> cnts;
+            std::vector<ContainerHandle *> containers;
             for (auto &c: list) {
-                cnts.push_back(c.second);
+                containers.push_back(c.second);
             }
-            return cnts;
+            return containers;
         }
 
         std::map<std::string, ContainerHandle *> getMap() {
