@@ -517,8 +517,8 @@ float queryArrivalRate(
     const std::string &streamName,
     const std::string &taskName,
     const std::string &modelName,
-    const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60}, //seconds
-    const uint16_t systemFPS = 15
+    const uint16_t systemFPS = 15,
+    const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
 );
 
 NetworkProfile queryNetworkProfile(
@@ -534,7 +534,7 @@ NetworkProfile queryNetworkProfile(
     const std::string &receiverHost,
     const std::string &receiverDeviceType,
     const NetworkEntryType &networkEntries,
-    const uint16_t systemFPS = 15
+    uint16_t systemFPS = 15
 );
 
 ModelArrivalProfile queryModelArrivalProfile(
@@ -547,8 +547,8 @@ ModelArrivalProfile queryModelArrivalProfile(
     const std::string &modelName,
     const std::vector<std::pair<std::string, std::string>> &commPair,
     const std::map<std::pair<std::string, std::string>, NetworkEntryType> &networkEntries,
-    const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60}, //seconds
-    const uint16_t systemFPS = 15
+    const uint16_t systemFPS = 15,
+    const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
 );
 
 void queryBatchInferLatency(
@@ -606,7 +606,7 @@ ModelProfile queryModelProfile(
     const std::string &deviceName,
     const std::string &deviceTypeName,
     const std::string &modelName,
-    const uint16_t systemFPS = 15
+    uint16_t systemFPS = 15
 );
 
 // =======================================================================================================================================================
