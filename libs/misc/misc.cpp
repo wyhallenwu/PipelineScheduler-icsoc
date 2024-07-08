@@ -494,7 +494,6 @@ void queryBatchInferLatency(
     ModelProfile &profile,
     const uint16_t systemFPS
 ) {
-    BatchInferProfileListType batchInferProfile;
     std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelNameAbbr + "__" + deviceName)  + "_batch";
@@ -513,9 +512,12 @@ void queryBatchInferLatency(
     }
     for (const auto& row : res) {
         BatchSizeType batchSize = row[0].as<BatchSizeType>();
-        batchInferProfile[batchSize].p95inferLat = row[1].as<uint64_t>() / batchSize;
+        // If the current value is 0, which means it has not been updated
+        if (profile.batchInfer[batchSize].p95inferLat != 0) {
+            continue;
+        }
+        profile.batchInfer[batchSize].p95inferLat = row[1].as<uint64_t>() / batchSize;
     }
-    profile.batchInfer = batchInferProfile;
 }
 
 BatchInferProfileListType queryBatchInferLatency(
