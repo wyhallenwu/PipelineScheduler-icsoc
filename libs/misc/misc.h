@@ -216,6 +216,10 @@ struct ModelArrivalProfile {
 // <<pipelineName, modelName>, ModelArrivalProfile>
 typedef std::map<std::pair<std::string, std::string>, ModelArrivalProfile> ModelArrivalProfileList;
 
+/**
+ * @brief Perforamnce profile of a model on a particular device
+ * 
+ */
 struct ModelProfile {
     // p95 latency of batch inference per query
     BatchInferProfileListType batchInfer;
@@ -223,6 +227,8 @@ struct ModelProfile {
     int p95InputSize = 1; // bytes
     // Average total size of outgoing queries
     int p95OutputSize = 1; // bytes
+    // Max possible batch size for the model on this device
+    BatchSizeType maxBatchSize = 1;
 };
 
 
