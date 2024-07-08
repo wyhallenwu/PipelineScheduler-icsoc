@@ -50,9 +50,9 @@ const uint8_t NUM_LANES_PER_GPU = 3;
 const uint8_t NUM_GPUS = 4;
 
 struct BatchInferProfile {
-    uint64_t p95inferLat;
-    uint64_t p95prepLat;
-    uint64_t p95postLat;
+    uint64_t p95inferLat = 0;
+    uint64_t p95prepLat = 0;
+    uint64_t p95postLat = 0;
     
     CpuUtilType cpuUtil;
     MemUsageType memUsage;
