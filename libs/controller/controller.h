@@ -629,32 +629,6 @@ public:
     );
 
 private:
-
-//////////////////////////////////////////////////distream_add//////////////////////////////////////////////////////
-    std::mutex nodeHandleMutex;
-    struct Partitioner
-    {
-        // NodeHandle& edge;
-        // NodeHandle& server;
-        // need server here
-        float BaseParPoint;
-        float FineGrainedOffset;
-    };
-
-    struct Partitioner;
-    std::vector<NodeHandle> nodes;
-    std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> categorizeNodes(const std::vector<NodeHandle> &nodes);
-    int calculateTotalprocessedRate(const PipelineModel *model, const std::vector<NodeHandle> &nodes, bool is_edge);
-    int calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool is_edge);
-    double getMaxTP(const PipelineModel *model, std::vector<NodeHandle> nodes, bool is_edge);
-    void scheduleBaseParPointLoop(const PipelineModel *model, Partitioner *partitioner, std::vector<NodeHandle> nodes);
-    float ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle> &nodes, bool is_edge);
-    void scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle> &nodes);
-    void DecideAndMoveContainer(const PipelineModel *model, std::vector<NodeHandle> &nodes, Partitioner *partitioner, int cuda_device);
-    float calculateRatio(const std::vector<NodeHandle> &nodes);
-
-
-
     void initiateGPULanes(NodeHandle &node);
 
     NetworkEntryType initNetworkCheck(NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
@@ -967,6 +941,29 @@ private:
     std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
 
     uint16_t ctrl_systemFPS;
+    
+//////////////////////////////////////////////////distream_add//////////////////////////////////////////////////////
+    std::mutex nodeHandleMutex;
+    struct Partitioner
+    {
+        // NodeHandle& edge;
+        // NodeHandle& server;
+        // need server here
+        float BaseParPoint;
+        float FineGrainedOffset;
+    };
+
+    struct Partitioner;
+    std::vector<NodeHandle> nodes;
+    std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> categorizeNodes(const std::vector<NodeHandle> &nodes);
+    double calculateTotalprocessedRate(const PipelineModel *model, const std::vector<NodeHandle> &nodes, bool is_edge);
+    int calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool is_edge);
+    double getMaxTP(const PipelineModel *model, std::vector<NodeHandle> nodes, bool is_edge);
+    void scheduleBaseParPointLoop(const PipelineModel *model, Partitioner *partitioner, std::vector<NodeHandle> nodes);
+    float ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle> &nodes, bool is_edge);
+    void scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle> &nodes);
+    void DecideAndMoveContainer(const PipelineModel *model, std::vector<NodeHandle> &nodes, Partitioner *partitioner, int cuda_device);
+    float calculateRatio(const std::vector<NodeHandle> &nodes);
 };
 
 
