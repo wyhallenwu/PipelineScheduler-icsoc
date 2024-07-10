@@ -14,6 +14,10 @@ include(GNUInstallDirs)
 # https://cmake.org/cmake/help/v3.11/module/CMakePackageConfigHelpers.html
 include(CMakePackageConfigHelpers)
 
+set(SYSTEM_NAME "PPP" CACHE STRING "System name: ")
+
+message("System name: ${SYSTEM_NAME}")
+
 # If no build type was specified, set it to Release.
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING

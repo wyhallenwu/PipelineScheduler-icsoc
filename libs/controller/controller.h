@@ -356,7 +356,7 @@ struct PipelineModel {
     bool merged = false;
 
     std::vector<std::string> possibleDevices;
-    // The list of containers that will be created for this model
+    // Manifestations are the list of containers that will be created for this model
     std::vector<ContainerHandle *> manifestations;
 
     mutable std::mutex pipelineModelMutex;
@@ -425,7 +425,10 @@ struct PipelineModel {
         deviceTypeName = other.deviceTypeName;
         merged = other.merged;
         possibleDevices = other.possibleDevices;
-        manifestations = other.manifestations;
+        manifestations = {};
+        for (auto& container : other.manifestations) {
+            manifestations.push_back(new ContainerHandle(*container));
+        }
         deviceAgent = other.deviceAgent;
     }
 
@@ -456,12 +459,17 @@ struct PipelineModel {
             deviceTypeName = other.deviceTypeName;
             merged = other.merged;
             possibleDevices = other.possibleDevices;
-            manifestations = other.manifestations;
+            manifestations = {};
+            for (auto& container : other.manifestations) {
+                manifestations.push_back(new ContainerHandle(*container));
+            }
             deviceAgent = other.deviceAgent;
         }
         return *this;
     }
 };
+
+PipelineModelListType deepCopyPipelineModelList(const PipelineModelListType& original);
 
 struct TaskHandle {
     std::string tk_name;
@@ -475,6 +483,8 @@ struct TaskHandle {
     std::map<std::string, std::vector<ContainerHandle*>> tk_subTasks;
     PipelineModelListType tk_pipelineModels;
     mutable std::mutex tk_mutex;
+
+    bool tk_newlyAdded = true;
 
     TaskHandle() = default;
 
@@ -515,7 +525,11 @@ struct TaskHandle {
         tk_startTime = other.tk_startTime;
         tk_lastLatency = other.tk_lastLatency;
         tk_subTasks = other.tk_subTasks;
-        tk_pipelineModels = other.tk_pipelineModels;
+        tk_pipelineModels = {};
+        for (auto& model : other.tk_pipelineModels) {
+            tk_pipelineModels.push_back(new PipelineModel(*model));
+        }
+        tk_newlyAdded = other.tk_newlyAdded;
     }
 
     TaskHandle& operator=(const TaskHandle& other) {
@@ -532,7 +546,11 @@ struct TaskHandle {
             tk_startTime = other.tk_startTime;
             tk_lastLatency = other.tk_lastLatency;
             tk_subTasks = other.tk_subTasks;
-            tk_pipelineModels = other.tk_pipelineModels;
+            tk_pipelineModels = {};
+            for (auto& model : other.tk_pipelineModels) {
+                tk_pipelineModels.push_back(new PipelineModel(*model));
+            }
+            tk_newlyAdded = other.tk_newlyAdded;
         }
         return *this;
     }
@@ -571,25 +589,24 @@ public:
             if (!t.added) {
                 t.added = AddTask(t);
             }
-            remainTasks.push_back(t);
+            if (!t.added) {
+                remainTasks.push_back(t);
+            }
         }
     }
 
     void InitRemain() {
-        bool allAdded = true;
         for (auto &t: remainTasks) {
             if (!t.added) {
                 t.added = AddTask(t);
             }
-            if (!t.added) {
-                allAdded = false;
-                continue;
+            if (t.added) {
+                // Remove the task from the remain list
+                remainTasks.erase(std::remove_if(remainTasks.begin(), remainTasks.end(),
+                                                [&t](const TaskDescription::TaskStruct &task) {
+                                                    return task.name == t.name;
+                                                }), remainTasks.end());
             }
-            // Remove the task from the remain list
-            remainTasks.erase(std::remove_if(remainTasks.begin(), remainTasks.end(),
-                                             [&t](const TaskDescription::TaskStruct &task) {
-                                                 return task.name == t.name;
-                                             }), remainTasks.end());
         }
     }
 
@@ -607,7 +624,9 @@ public:
 
     void Stop() { running = false; };
 
-    // void deepCopyTasks(Tasks source, Tasks destination); //add by distream
+    void readInitialObjectCount(
+        const std::string& path 
+    );
 
 private:
 
@@ -645,11 +664,13 @@ private:
     void calculateQueueSizes(ContainerHandle &model, const ModelType modelType);
     uint64_t calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate);
 
+    void queryingProfiles(TaskHandle *task);
+
     void estimateModelLatency(PipelineModel *currModel);
     void estimateModelNetworkLatency(PipelineModel *currModel);
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
-    void getInitialBatchSizes(TaskHandle &models, uint64_t slo);
+    void getInitialBatchSizes(TaskHandle *task, uint64_t slo);
     void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
 
     bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile);
@@ -658,7 +679,11 @@ private:
     TaskHandle mergePipelines(const std::string& taskName);
     void mergePipelines();
 
-    PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice);
+    bool containerTemporalScheduling(ContainerHandle *container);
+    bool modelTemporalScheduling(PipelineModel *pipelineModel);
+    void temporalScheduling();
+
+    PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "");
 
     void checkNetworkConditions();
 
@@ -842,10 +867,36 @@ private:
             return list.find(name) != list.end();
         }
 
+        Tasks() = default;
+
+        // Copy constructor
+        Tasks(const Tasks &other) {
+            std::lock(tasksMutex, other.tasksMutex);
+            std::lock_guard<std::mutex> lock1(tasksMutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(other.tasksMutex, std::adopt_lock);
+            list = {};
+            for (auto &t: other.list) {
+                list[t.first] = new TaskHandle(*t.second);
+            }
+        }
+
+        Tasks& operator=(const Tasks &other) {
+            if (this != &other) {
+                std::lock(tasksMutex, other.tasksMutex);
+                std::lock_guard<std::mutex> lock1(tasksMutex, std::adopt_lock);
+                std::lock_guard<std::mutex> lock2(other.tasksMutex, std::adopt_lock);
+                list = {};
+                for (auto &t: other.list) {
+                    list[t.first] = new TaskHandle(*t.second);
+                }
+            }
+            return *this;
+        }
+
     // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
     public:
         std::map<std::string, TaskHandle*> list = {};
-        std::mutex tasksMutex;
+        mutable std::mutex tasksMutex;
     };
     Tasks ctrl_unscheduledPipelines, ctrl_scheduledPipelines;
 
@@ -910,8 +961,12 @@ private:
     std::map<std::string, NetworkEntryType> ctrl_inDeviceNetworkEntries;
 
     // TODO: Read from config file
-    std::uint64_t ctrl_schedulingIntervalSec = 600;
-    ClockType ctrl_nextSchedulingTime;
+    std::uint64_t ctrl_schedulingIntervalSec = 10;//600;
+    ClockType ctrl_nextSchedulingTime = std::chrono::system_clock::now();
+
+    std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
+
+    uint16_t ctrl_systemFPS;
 };
 
 
