@@ -940,7 +940,7 @@ private:
 
     uint16_t ctrl_systemFPS;
 
-    void rim_action(TaskHandle *task, Devices& devices);
+    void schedule_rim();
 };
 
 // ========================================================== added ================================================================

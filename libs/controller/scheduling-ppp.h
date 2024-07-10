@@ -5,10 +5,11 @@
 // Helper functions
 uint64_t calc_model_fps(PipelineModel *currModel, NodeHandle *device)
 {
+    uint64_t batchSize = 16;
     ModelProfile profile = currModel->processProfiles[device->name];
-    uint64_t preprocessLatency = profile.batchInfer[16].p95prepLat;
-    uint64_t inferLatency = profile.batchInfer[16].p95inferLat;
-    uint64_t postprocessLatency = profile.batchInfer[16].p95postLat;
+    uint64_t preprocessLatency = profile.batchInfer[batchSize].p95prepLat;
+    uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
+    uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
 
     currModel->expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
     return 1 / (currModel->expectedAvgPerQueryLatency / 1000000);
@@ -156,8 +157,6 @@ bool place_on_edge(PipelineModel *root, std::vector<std::set<std::string>> &avai
                    std::vector<std::set<std::string>> selected_subgraphs,
                    std::map<std::string, NodeHandle *> devices, uint64_t desiredFps)
 {
-    // Generate initial subgraphs
-    std::vector<std::set<std::string>> selected_subgraphs;
 
     while (!available_subgraphs.empty())
     {
@@ -165,12 +164,12 @@ bool place_on_edge(PipelineModel *root, std::vector<std::set<std::string>> &avai
         auto chosen_subgraph = choosing_subgraph(available_subgraphs, root, devices, desiredFps);
 
         // If no subgraph could be chosen, return false
-        if (!chosen_subgraph_opt.has_value())
+        if (!chosen_subgraph.has_value())
         {
             return false;
         }
         // Update available and selected subgraphs
-        update_available_subgraphs(available_subgraphs, selected_subgraphs, chosen_subgraph);
+        update_available_subgraphs(available_subgraphs, selected_subgraphs, chosen_subgraph.value());
     }
 
     return true;
@@ -188,11 +187,11 @@ void place_on_server(PipelineModel *root, std::vector<std::set<std::string>> &av
         auto chosen_subgraph = choosing_subgraph(available_subgraphs, root, devices, desiredFps);
 
         // Update available and selected subgraphs
-        update_available_subgraphs(available_subgraphs, selected_subgraphs, chosen_subgraph);
+        update_available_subgraphs(available_subgraphs, selected_subgraphs, chosen_subgraph.value());
     }
 }
 
-void Controller::rim_action(TaskHandle *task, Devices &devices)
+void rim_action(TaskHandle *task, Devices &devices)
 {
     // The desired fps
     uint64_t desiredFps = 1 / (task->tk_slo / 1000000);
@@ -220,6 +219,10 @@ void Controller::rim_action(TaskHandle *task, Devices &devices)
     {
         place_on_server(root, remaining_subgraphs, selected_subgraphs, servers, desiredFps);
     }
+}
+
+void Controller::schedule_rim(){
+
 }
 
 // Task to do tomorrow
