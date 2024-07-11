@@ -262,7 +262,7 @@ NetworkProfile queryNetworkProfile(
     d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
 
     if ((senderHost != "server") && (senderHost == receiverHost) && (taskName.find("yolo") != std::string::npos)) {
-        d2dNetworkProfile.p95PackageSize = 0;
+        d2dNetworkProfile.p95TransferDuration = 0;
         return d2dNetworkProfile;
     }
 
