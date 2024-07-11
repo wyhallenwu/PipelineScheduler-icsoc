@@ -142,16 +142,22 @@ Controller::Controller(int argc, char **argv) {
     ctrl_metricsServerConfigs.password = "agent";
     ctrl_metricsServerConn = connectToMetricsServer(ctrl_metricsServerConfigs, "controller");
 
-    std::string sql = "CREATE SCHEMA IF NOT EXISTS " + ctrl_metricsServerConfigs.schema + ";";
-    pushSQL(*ctrl_metricsServerConn, sql);
-    sql = "GRANT USAGE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
-    pushSQL(*ctrl_metricsServerConn, sql);
-    sql = "GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
-    pushSQL(*ctrl_metricsServerConn, sql);
-    sql = "GRANT CREATE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
-    pushSQL(*ctrl_metricsServerConn, sql);
-    sql = "ALTER DEFAULT PRIVILEGES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " GRANT SELECT, INSERT ON TABLES TO device_agent, container_agent;";
-    pushSQL(*ctrl_metricsServerConn, sql);
+    // Check if schema exists
+    std::string sql = "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '" + ctrl_metricsServerConfigs.schema + "';";
+    pqxx::result res = pullSQL(*ctrl_metricsServerConn, sql);
+    if (res.empty()) {
+        std::string sql = "CREATE SCHEMA IF NOT EXISTS " + ctrl_metricsServerConfigs.schema + ";";
+        pushSQL(*ctrl_metricsServerConn, sql);
+        sql = "GRANT USAGE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
+        pushSQL(*ctrl_metricsServerConn, sql);
+        sql = "GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
+        pushSQL(*ctrl_metricsServerConn, sql);
+        sql = "GRANT CREATE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
+        pushSQL(*ctrl_metricsServerConn, sql);
+        sql = "ALTER DEFAULT PRIVILEGES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " GRANT SELECT, INSERT ON TABLES TO device_agent, container_agent;";
+        pushSQL(*ctrl_metricsServerConn, sql);
+    }
+
 
     std::thread networkCheckThread(&Controller::checkNetworkConditions, this);
     networkCheckThread.detach();
