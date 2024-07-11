@@ -177,7 +177,7 @@ void DeviceAgent::collectRuntimeMetrics() {
             metrics.cpuUsage = stats[0].cpuUsage;
             metrics.memUsage = stats[0].memoryUsage;
             metrics.rssMemUsage = stats[0].rssMemory;
-            for (int i = 0; i < stats.size(); i++) {
+            for (unsigned int i = 0; i < stats.size(); i++) {
                 metrics.gpuUsage.emplace_back(stats[i].gpuUtilization);
                 metrics.gpuMemUsage.emplace_back(stats[i].gpuMemoryUsage);
             }

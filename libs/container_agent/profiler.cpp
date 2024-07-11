@@ -77,7 +77,7 @@ Profiler::sysStats Profiler::reportAtRuntime(unsigned int cpu_pid, unsigned int 
 
 std::vector<Profiler::sysStats> Profiler::reportDeviceStats() {
     std::vector<Profiler::sysStats> deviceStats;
-    for (int i = 0; i < cuda_devices.size(); i++) {
+    for (unsigned int i = 0; i < cuda_devices.size(); i++) {
         sysStats value{};
         value.cpuUsage = getDeviceCPUInfo();
         value.memoryUsage = getDeviceMemoryInfo();
