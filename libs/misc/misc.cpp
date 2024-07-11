@@ -89,6 +89,22 @@ uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &tot
 // =======================================================================================================================================================
 // =======================================================================================================================================================
 
+/**
+ * @brief Query the arrival rate of queries coming to a particular model. The function first look the most recent data.
+ * But if such data doesn't exist, it looks for the most recent profiled data.
+ * 
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param systemFPS The current system-wide fps used for data sources
+ * @param periods 
+ * @return float 
+ */
 float queryArrivalRate(
     pqxx::connection &metricsConn,
     const std::string &experimentName,
@@ -148,6 +164,26 @@ float queryArrivalRate(
     return res[0]["max_arrival_rate"].as<float>();
 }
 
+/**
+ * @brief Query the network conditions between two devices. The function first look the most recent data.
+ * But if such data doesn't exist, it looks for the most recent profiled data.
+ * 
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param senderHost The name of the sending device of the pair (e.g., server, nxavier1, nxavier2...)
+ * @param senderDeviceType The type of the sending device (e.g., nxavier, server, orin...)
+ * @param receiverHost The name of the receiving device of the pair (e.g., server, nxavier1, nxavier2...)
+ * @param receiverDeviceType The type of the receiving device (e.g., nxavier, server, orin...)
+ * @param networkEntries The most current network entries between the sender host and the receiver host
+ * @param systemFPS 
+ * @return NetworkProfile 
+ */
 NetworkProfile queryNetworkProfile(
     pqxx::connection &metricsConn,
     const std::string &experimentName,
@@ -382,16 +418,20 @@ ModelArrivalProfile queryModelArrivalProfile(
 }
 
 /**
- * @brief Query pre, post processing latency as well as input and output sizes
+ * @brief Query process latencies (preprocessing, batch inference, postprocessing) and input/output sizes of a model
  * 
- * @param metricsConn 
- * @param experimentName 
- * @param systemName 
- * @param pipelineName 
- * @param streamName 
- * @param deviceName 
- * @param modelName 
- * @param profile this will be updated
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param deviceName The name of the device where the model is running (e.g., nxavier1, nxavier2, server...)
+ * @param deviceTypeName The type of the device (e.g., nxavier, server, orin...)
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param profile 
+ * @param systemFPS 
  */
 void queryPrePostLatency(
     pqxx::connection &metricsConn,
@@ -465,7 +505,7 @@ void queryPrePostLatency(
             continue;
         }
         profile.batchInfer[batchSize].p95prepLat = (uint64_t) row["p95_prep_duration_us_all"].as<double>();
-        profile.batchInfer[batchSize].p95inferLat = (uint64_t) row["p95_infer_duration_us_all"].as<double>();
+        profile.batchInfer[batchSize].p95inferLat = (uint64_t) row["p95_infer_duration_us_all"].as<double>() / batchSize;
         profile.batchInfer[batchSize].p95postLat = (uint64_t) row["p95_post_duration_us_all"].as<double>();
         profile.p95InputSize = (uint32_t) row["p95_input_size_b_all"].as<float>();
         profile.p95OutputSize = (uint32_t) row["p95_output_size_b_all"].as<float>();
@@ -473,14 +513,20 @@ void queryPrePostLatency(
 }
 
 /**
- * @brief Query batch inference latency
+ * @brief Batch inference latency is queried from the most recent profiled data, ONLY for batch sizes that are not available in the most recent data.
  * 
- * @param metricsConn 
- * @param tableName 
- * @param streamName 
- * @param deviceName 
- * @param modelName 
- * @param modelProfile 
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param deviceName The name of the device where the model is running (e.g., nxavier1, nxavier2, server...)
+ * @param deviceTypeName The type of the device (e.g., nxavier, server, orin...)
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param profile 
+ * @param systemFPS 
  */
 void queryBatchInferLatency(
     pqxx::connection &metricsConn,
@@ -520,6 +566,20 @@ void queryBatchInferLatency(
     }
 }
 
+/**
+ * @brief Wrapper for batch inference latency query
+ * 
+ * @param metricsConn 
+ * @param experimentName 
+ * @param systemName 
+ * @param pipelineName 
+ * @param streamName 
+ * @param deviceName 
+ * @param deviceTypeName 
+ * @param modelName 
+ * @param systemFPS 
+ * @return BatchInferProfileListType 
+ */
 BatchInferProfileListType queryBatchInferLatency(
     pqxx::connection &metricsConn,
     const std::string &experimentName,
@@ -547,14 +607,13 @@ BatchInferProfileListType queryBatchInferLatency(
 }
 
 /**
- * @brief 
+ * @brief Query the resource requirements of a model
  * 
  * @param metricsConn 
- * @param tableName 
- * @param streamName 
- * @param deviceName 
+ * @param deviceTypeName 
  * @param modelName 
  * @param profile 
+ * @param systemFPS 
  */
 void queryResourceRequirements(
     pqxx::connection &metricsConn,
@@ -582,13 +641,19 @@ void queryResourceRequirements(
 
 
 /**
- * @brief 
+ * @brief Wrapper for querying the model profile
  * 
- * @param experimentName 
- * @param pipelineName 
- * @param streamName 
- * @param deviceName 
- * @param modelName 
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param deviceName The name of the device where the model is running (e.g., nxavier1, nxavier2, server...)
+ * @param deviceTypeName The type of the device (e.g., nxavier, server, orin...)
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param systemFPS 
  * @return ModelProfile 
  */
 ModelProfile queryModelProfile(
@@ -943,6 +1008,7 @@ std::map<std::string, std::string> keywordAbbrs = {
     {"datasource", "dsrc"},
     {"traffic", "trfc"},
     {"building", "bldg"},
+    {"people", "ppl"},
     {"yolov5", "y5"},
     {"yolov5n", "y5n"},
     {"yolov5s", "y5s"},

@@ -86,6 +86,13 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_systemFPS
             );
             model->processProfiles[deviceTypeName] = profile;
+            model->processProfiles[deviceTypeName].maxBatchSize = std::max_element(
+                profile.batchInfer.begin(),
+                profile.batchInfer.end(),
+                [](const auto &p1, const auto &p2) {
+                    return p1.first < p2.first;
+                }
+            )->first;
         }
 
         // ModelArrivalProfile profile = queryModelArrivalProfile(
