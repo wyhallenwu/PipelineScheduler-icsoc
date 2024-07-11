@@ -487,7 +487,6 @@ void queryPrePostLatency(
     query = absl::StrFormat("WITH recent_data AS ("
                             "SELECT infer_batch_size, p95_prep_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
                             "FROM %s "
-                            "LIMIT 100 "
                             ") "
                             "SELECT "
                             "    infer_batch_size, "
