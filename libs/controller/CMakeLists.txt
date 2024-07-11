@@ -115,7 +115,7 @@ target_include_directories(controller
         # Used when installing the library:
         $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
         ${OpenCV_INCLUDE_DIRS}
-        ${LIGHTGBM_INCLUDE_DIR}
+        # ${LIGHTGBM_INCLUDE_DIR}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
         PRIVATE
         # Used only when building the library:
@@ -131,7 +131,7 @@ target_link_libraries(controller
         ${_PROTOBUF_LIBPROTOBUF}
         ${CMAKE_THREAD_LIBS_INIT}
         microservice
-        ${LIGHTGBM_LIBRARY}
+        # ${LIGHTGBM_LIBRARY}
 )
 
 # Here we configure variables specifying the target directories.
