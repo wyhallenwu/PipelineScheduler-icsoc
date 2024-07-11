@@ -201,7 +201,7 @@ void Controller::Scheduling()
                 }
 
                 lock_pipeline_model.unlock();
-                lock_task.unlock();
+                // lock_task.unlock();
             }
         }
 
