@@ -191,7 +191,7 @@ void place_on_server(PipelineModel *root, std::vector<std::set<std::string>> &av
     }
 }
 
-void rim_action(TaskHandle *task, Devices &devices)
+void Controller::rim_action(TaskHandle *task)
 {
     // The desired fps
     uint64_t desiredFps = 1 / (task->tk_slo / 1000000);
@@ -221,8 +221,10 @@ void rim_action(TaskHandle *task, Devices &devices)
     }
 }
 
-void Controller::schedule_rim(){
-
+void Controller::schedule_rim(std::map<std::string, TaskHandle*> &tasks){
+    for (auto [taskName, taskHandle]: tasks) {
+        rim_action(taskHandle);
+    } 
 }
 
 // Task to do tomorrow
