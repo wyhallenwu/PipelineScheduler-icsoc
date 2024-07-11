@@ -123,11 +123,18 @@ void Controller::Scheduling()
             continue;
         }
 
+        // for (auto &[task_name, task]: taskList) {
+        //     std::cout << "s task name: " << task << std::endl;
+        //     std::cout << task->tk_fullName << ", " << task->tk_lastLatency
+        // }
+
         // collect all information
         model_profiles_jf.infos.clear();
         client_profiles_jf.infos.clear();
         for (auto &[task_name, task] : taskList)
         {
+            std::cout << "task name: " << task_name << std::endl;
+            // std::unique_lock<std::mutex> lock_task(task->tk_mutex);
             for (auto model : task->tk_pipelineModels)
             {
 
@@ -194,6 +201,7 @@ void Controller::Scheduling()
                 }
 
                 lock_pipeline_model.unlock();
+                lock_task.unlock();
             }
         }
 
