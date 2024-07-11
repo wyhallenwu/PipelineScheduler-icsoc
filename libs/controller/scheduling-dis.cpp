@@ -150,9 +150,9 @@ void Controller::Scheduling()
 
         scheduleBaseParPointLoop(&model, &partitioner, nodes);
         scheduleFineGrainedParPointLoop(&partitioner, nodes);
-        DecideAndMoveContainer(&model, nodes, &partitioner, 2);
+        // DecideAndMoveContainer(&model, nodes, &partitioner, 2);
         // ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
-        ApplyScheduling();
+        // ApplyScheduling();
         std::cout << "end_scheduleBaseParPoint " << partitioner.BaseParPoint << std::endl;
         std::cout << "end_FineGrainedParPoint " << partitioner.FineGrainedOffset << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(
@@ -616,63 +616,42 @@ uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const fl
 
 ///////////////////////////////////////////////////////////////////////distream add//////////////////////////////////////////////////////////////////////////////////////
 
-std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> Controller::categorizeNodes(const std::vector<NodeHandle> &nodes)
-{
-    std::vector<NodeHandle> edges;
-    std::vector<NodeHandle> servers;
-
-    for (const auto &node : nodes)
-    {
-        if (node.type == NXXavier || node.type == AGXXavier || node.type == OrinNano)
-        {
-            edges.push_back(node);
-            //  std::cout << "edge_push " << node.ip << std::endl;
-        }
-        else if (node.type == Server)
-        {
-            servers.push_back(node);
-            // std::cout << "server_push " << node.ip << std::endl;
-        }
-    }
-
-    return {edges, servers};
-}
-
 double Controller::calculateTotalprocessedRate(const PipelineModel *model, const std::vector<NodeHandle> &nodes, bool is_edge)
 {
-    auto [edges, servers] = categorizeNodes(nodes);
     double totalRequestRate = 0.0;
     std::map<std::string, NodeHandle *> deviceList = devices.getMap();
 
     for (const auto &taskPair : ctrl_unscheduledPipelines.list)
     {
         const auto &task = taskPair.second;
-        // queryingProfiles(task); //wrong format
+        queryingProfiles(task);
 
         for (auto &model : task->tk_pipelineModels)
         {
+            if (deviceList.find(model->device) == deviceList.end()) {
+                continue;
+            }
+            
             std::string deviceType = getDeviceTypeName(deviceList.at(model->device)->type);
-            std::cout << "calculateTotalprocessedRate deviceType " << deviceType << std::endl;
-            int batchInfer;
-            if (is_edge && deviceType != "server")
+            // std::cout << "calculateTotalprocessedRate deviceType " << deviceType << std::endl;
+            if ((is_edge && deviceType != "server") || (!is_edge && deviceType == "server" && model->name != "sink" ))
             {
-                batchInfer = 3000; // model->processProfiles[deviceType].batchInfer[8].p95inferLat;
-                std::cout << "edge_batchInfer" << batchInfer << std::endl;
-            }
-            else
-            {
-                batchInfer = 6000; // model->processProfiles.at(deviceType).batchInfer.at(32).p95inferLat;
-                // std::cout << "server_batchInfer" << batchInfer<< std::endl;
-            }
-            // std::cout << "batchInfer" << model->processProfiles.at(nodeType).batchInfer<< std::endl;
-            // int timePerFrame = batchInfer.at(batchSize).p95inferLat;
-            // std::cout << "timePerFrame" << timePerFrame << std::endl;
-            // processProfiles["server"].batchInfer[8].p95inferLat
+                int batchInfer;
+                if (is_edge) 
+                {
+                    batchInfer = model->processProfiles[deviceType].batchInfer[8].p95inferLat;
+                    // std::cout << "edge_batchInfer" << batchInfer << std::endl;
+                }
+                else 
+                {
+                    batchInfer = model->processProfiles.at(deviceType).batchInfer[16].p95inferLat;
+                    // std::cout << "server_batchInfer" << batchInfer << std::endl;
+                }
 
-            double requestRate = (batchInfer == 0) ? 0.0 : 1000000000.0 / batchInfer;
-            // std::cout << "requestRate " << requestRate << std::endl;
-            totalRequestRate += requestRate;
-            std::cout << "totalRequestRate " << totalRequestRate << std::endl;
+                double requestRate = (batchInfer == 0) ? 0.0 : 1000000.0 / batchInfer;
+                totalRequestRate += requestRate;
+                std::cout << "totalRequestRate " << totalRequestRate << std::endl;
+            }
         }
     }
 
@@ -681,62 +660,46 @@ double Controller::calculateTotalprocessedRate(const PipelineModel *model, const
 
 int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool is_edge)
 {
-    auto [edges, servers] = categorizeNodes(nodes);
     double totalQueue = 0.0;
     std::map<std::string, NodeHandle *> deviceList = devices.getMap();
 
-    // const auto &relevantNodes = is_edge ? edges : servers;
-    // std::vector<std::pair<std::string, std::string>> possibleDevicePairList = {{"edge", "server"}};
-    // std::map<std::pair<std::string, std::string>, NetworkEntryType> possibleNetworkEntryPairs;
-
-    for (const auto &taskPair : ctrl_unscheduledPipelines.list)
+   for (const auto &taskPair : ctrl_unscheduledPipelines.list)
     {
-        const auto &task = taskPair.second; // everyTaskHandle
+        const auto &task = taskPair.second;
+        queryingProfiles(task);
 
-        for (const auto &model : task->tk_pipelineModels)
-        { // every model
-            std::string deviceType = getDeviceTypeName(deviceList.at(model->device)->type);
-            std::cout << "deviceType " << deviceType << std::endl;
-
-            std::string containerName = model->name + "-" + deviceType;
-            std::cout << "containerName " << containerName << std::endl;
-            if (containerName.find("datasource") != std::string::npos || containerName.find("sink") != std::string::npos)
-            {
+        for (auto &model : task->tk_pipelineModels)
+        {
+            if (deviceList.find(model->device) == deviceList.end()) {
                 continue;
             }
+            
+            std::string deviceType = getDeviceTypeName(deviceList.at(model->device)->type);
+            // std::cout << "calculateTotalprocessedRate deviceType " << deviceType << std::endl;
+            if ((is_edge && deviceType != "server" && model->name != "datasource") || (!is_edge && deviceType == "server" && model->name != "sink" ))
+            {
+                int queue;
+                if (is_edge) 
+                {
+                    queue = model->arrivalProfiles.arrivalRates;
+                    std::cout << "edge_queue" << queue << std::endl;
+                }
+                else 
+                {
+                    queue = model->arrivalProfiles.arrivalRates;
+                    std::cout << "server_queue" << queue << std::endl;
+                }
 
-            double queueLength;
-            if (is_edge == true && deviceType != "server")
-            {
-                double arrivalRate = 5000; // model->arrivalProfiles.arrivalRates;  is zero
-                std::cout << "edge arrivalRate " << arrivalRate << std::endl;
-                queueLength = 1.0 / arrivalRate; // profile.batchInfer.at(1).p95inferLat;
+                double totalqueue = (queue == 0) ? 0.0 : queue;
+                totalQueue += totalqueue;
+                std::cout << "totalRequestRate " << totalQueue << std::endl;
             }
-            else
-            {
-                double arrivalRate = 500000; // model->arrivalProfiles.arrivalRates;  is zero
-                std::cout << "server arrivalRate " << arrivalRate << std::endl;
-                queueLength = 1.0 / arrivalRate; // profile.batchInfer.at(1).p95inferLat;
-            }
-            totalQueue += queueLength;
         }
     }
 
     return totalQueue;
 }
 
-double Controller::getMaxTP(const PipelineModel *model, std::vector<NodeHandle> nodes, bool is_edge)
-{
-    int processedRate = calculateTotalprocessedRate(model, nodes, is_edge);
-    if (calculateTotalQueue(nodes, is_edge) == 0.0)
-    {
-        return 0;
-    }
-    else
-    {
-        return processedRate;
-    }
-}
 
 void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitioner *partitioner, std::vector<NodeHandle> nodes)
 {
@@ -746,13 +709,9 @@ void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitione
 
     while (true)
     {
-        // std::this_thread::sleep_for(std::chrono::milliseconds(250));
-        // float TPEdges = 0.0f;
-
-        // auto [edges, servers] = categorizeNodes(nodes);
-        float TPEdges = getMaxTP(model, nodes, true);
+        float TPEdges = calculateTotalprocessedRate(model, nodes, true);
         std::cout << "TPEdges: " << TPEdges << std::endl;
-        float TPServer = getMaxTP(model, nodes, false);
+        float TPServer = calculateTotalprocessedRate(model, nodes, false);
         std::cout << "TPServer: " << TPServer << std::endl;
 
         // init the TPedgesAvg and TPserverAvg based on the current runtime
@@ -804,40 +763,20 @@ void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitione
     }
 }
 
-// float Controller::ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle> &nodes, bool is_edge)
-// {
-//     float sum = 0.0;
-//     int N = nodes.size();
-//     // float edgeQueueCapacity = 10000000000.0; // need to know the  real Capacity
-
-//     if (N == 0)
-//         return 0; // incase N=0
-
-//     float tmp = calculateTotalQueue(nodes, is_edge);
-//     sum += tmp;
-//     float norm = sum / static_cast<float>(N);
-//     return norm;
-// }
 
 void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle> &nodes)
 {
     float w;
     int totalServerQueue;
-    float ServerCapacity = 1000000000000.0;
-    float edgeQueueCapacity = 100000000000000.0;
     float tmp;
     while (true)
     {
-        // std::this_thread::sleep_for(std::chrono::milliseconds(250));  // every 250 weakup
-        auto [edges, servers] = categorizeNodes(nodes);
 
-        float wbar = calculateTotalQueue(nodes, true) / edgeQueueCapacity;
+        float wbar = calculateTotalQueue(nodes, true);
         std::cout << "wbar " << wbar << std::endl;
-        float totalServerQueue = calculateTotalQueue(nodes, false);
-        std::cout << "totalServerQueue " << totalServerQueue << std::endl;
-        float w = totalServerQueue / ServerCapacity;
+        float w = calculateTotalQueue(nodes, false);
         std::cout << "w " << w << std::endl;
-        if (w == 0)
+        if (wbar == 0)
         {
             float tmp = 1.0f;
             partitioner->FineGrainedOffset = tmp * partitioner->BaseParPoint;
@@ -845,69 +784,18 @@ void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const
         else
         {
             float tmp = (wbar - w) / std::max(wbar, w);
-            // std::cout << "tmp " << tmp << std::endl;
-            // std::cout << "(wbar - w) " << (wbar - w) << std::endl;
-            // std::cout << "std::max(wbar, w) " << std::max(wbar, w) << std::endl;
             partitioner->FineGrainedOffset = tmp * partitioner->BaseParPoint;
         }
-        // std::cout << "tmp " << tmp << std::endl;
         break;
     }
 }
 
-// float Controller::calculateRatio(const std::vector<NodeHandle> &nodes)
-// {
-//     auto [edges, servers] = categorizeNodes(nodes);
-//     float edgeMem = 0.0f;
-//     float serverMem = 0.0f;
-//     float ratio = 0.0f;
-//     NodeHandle *edgePointer = nullptr;
-//     NodeHandle *serverPointer = nullptr;
-
-//     for (const NodeHandle &node : nodes)
-//     {
-//         if (!node.type == SystemDeviceType::Server)
-//         {
-//             edgePointer = const_cast<NodeHandle *>(&node);
-//             edgeMem += std::accumulate(node.mem_size.begin(), node.mem_size.end(), 0UL);
-//         }
-//         else
-//         {
-//             serverPointer = const_cast<NodeHandle *>(&node);
-//             serverMem += std::accumulate(node.mem_size.begin(), node.mem_size.end(), 0UL);
-//         }
-//     }
-
-//     if (edgePointer == nullptr)
-//     {
-//         std::cout << "No edge device found.\n";
-//     }
-
-//     std::cout << "Total serverMem: " << serverMem << std::endl;
-//     std::cout << "Total edgeMem: " << edgeMem << std::endl;
-
-//     if (serverMem != 0)
-//     {
-//         ratio = edgeMem / serverMem;
-//     }
-//     else
-//     {
-//         ratio = 0.0f;
-//     }
-
-//     std::cout << "Calculated Ratio: " << ratio << std::endl;
-//     return ratio;
-// }
 
 void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<NodeHandle> &nodes, Partitioner *partitioner, int cuda_device)
 {
     float decisionPoint = partitioner->BaseParPoint + partitioner->FineGrainedOffset;
-    // float ratio = 0.7;
     float tolerance = 0.1;
-    auto [edges, servers] = categorizeNodes(nodes);
-    float currEdgeWorkload = calculateTotalQueue(nodes, true);
-    float currServerWorkload = calculateTotalQueue(nodes, false);
-    float ratio = currEdgeWorkload / currServerWorkload;
+    float ratio = 0.3;
     // ContainerHandle *selectedContainer = nullptr;
 
     // while (decisionPoint < ratio - tolerance || decisionPoint > ratio + tolerance)
@@ -925,6 +813,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
                 if (model->isSplitPoint)
                 {
 
+                    std::cout << "model: " << model->name << std::endl;
                     std::lock_guard<std::mutex> lock(model->pipelineModelMutex);
 
                     if (model->device == "server")
