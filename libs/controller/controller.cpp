@@ -218,7 +218,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 
     task->tk_src_device = t.device;
 
-    task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device, t.name);
+    task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device, t.name, t.source);
     std::unique_lock<std::mutex> lock2(ctrl_unscheduledPipelines.tasksMutex);
     ctrl_unscheduledPipelines.list.insert({task->tk_name, task});
 
@@ -902,7 +902,16 @@ void Controller::checkNetworkConditions() {
 // ============================================================================================================================================ //
 // ============================================================================================================================================ //
 
-PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName) {
+PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName, const std::string &streamName) {
+    std::string sourceName = streamName;
+    if (ctrl_initialRequestRates.find(sourceName) == ctrl_initialRequestRates.end()) {
+        for (auto [key, rates]: ctrl_initialRequestRates) {
+            if (key.find(pipelineName) != std::string::npos) {
+                sourceName = key;
+                break;
+            }
+        }
+    }
     switch (type) {
         case PipelineType::Traffic: {
             auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
@@ -988,12 +997,12 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             carbrand->downstreams.push_back({sink, -1});
             platedet->downstreams.push_back({sink, -1});
 
-            if (!pipelineName.empty()) {
-                yolov5n->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][yolov5n->name];
-                retina1face->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][retina1face->name];
-                arcface->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][arcface->name];
-                carbrand->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][carbrand->name];
-                platedet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][platedet->name];
+            if (!sourceName.empty()) {
+                yolov5n->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5n->name];
+                retina1face->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][retina1face->name];
+                arcface->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][arcface->name];
+                carbrand->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][carbrand->name];
+                platedet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][platedet->name];
             }
 
             return {datasource, yolov5n, retina1face, arcface, carbrand, platedet, sink};
@@ -1081,12 +1090,12 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             age->downstreams.push_back({sink, -1});
             movenet->downstreams.push_back({sink, -1});
 
-            if (!pipelineName.empty()) {
-                yolov5n->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][yolov5n->name];
-                retina1face->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][retina1face->name];
-                movenet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][movenet->name];
-                gender->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][movenet->name];
-                age->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][age->name];
+            if (!sourceName.empty()) {
+                yolov5n->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5n->name];
+                retina1face->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][retina1face->name];
+                movenet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][movenet->name];
+                gender->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][movenet->name];
+                age->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][age->name];
             }
 
             return {datasource, yolov5n, retina1face, movenet, gender, age, sink};
@@ -1175,12 +1184,12 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             gender->downstreams.push_back({sink, -1});
             arcface->downstreams.push_back({sink, -1});
 
-            if (!pipelineName.empty()) {         
-                retina1face->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][retina1face->name];
-                emotionnet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][emotionnet->name];
-                age->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][age->name];
-                gender->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][gender->name];
-                arcface->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[pipelineName][arcface->name];
+            if (!sourceName.empty()) {         
+                retina1face->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][retina1face->name];
+                emotionnet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][emotionnet->name];
+                age->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][age->name];
+                gender->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][gender->name];
+                arcface->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][arcface->name];
             }
 
             return {datasource, retina1face, emotionnet, age, gender, arcface, sink};
