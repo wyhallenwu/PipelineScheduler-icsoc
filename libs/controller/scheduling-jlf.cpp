@@ -123,9 +123,20 @@ void Controller::Scheduling()
             continue;
         }
 
-        // for (auto &[task_name, task]: taskList) {
-        //     std::cout << "s task name: " << task << std::endl;
-        //     std::cout << task->tk_fullName << ", " << task->tk_lastLatency
+        // // FIXME: already empty here
+        // for (auto &[task_name, task] : ctrl_unscheduledPipelines.list)
+        // {
+        //     std::cout << "s task name: " << task_name << std::endl;
+        //     std::cout << "s full name" << task->tk_fullName << ", last_latency: " << task->tk_lastLatency << ", slo: " << task->tk_slo << std::endl;
+        //     for (auto &model : task->tk_pipelineModels)
+        //     {
+        //         std::unique_lock<std::mutex> model_lock(model->pipelineModelMutex);
+        //         std::cout << "s model device name: " << model->deviceTypeName
+        //                   << ", s model batch size: " << model->batchSize << std::endl;
+        //         auto downstream = model->downstreams.front().first;
+        //         std::unique_lock<std::mutex> d_lock(downstream->pipelineModelMutex);
+        //         std::cout << "s dstream name: " << downstream->deviceTypeName << std::endl;
+        //     }
         // }
 
         // collect all information
@@ -192,12 +203,13 @@ void Controller::Scheduling()
                     // FIXME: empty downstream here
 
                     std::cout << "before access" << std::endl;
-                    auto downstream_device = downstream.first->deviceTypeName;
-                    std::cout << "downstream device: " << downstream_device << std::endl;
-                    auto entry = model->deviceAgent->latestNetworkEntries.at(downstream_device);
-
+                    std::cout << "name of the upstream: " << model->upstreams.front().first->name << std::endl;
+                    // auto downstream_device = downstream.first->deviceTypeName;
+                    // std::cout << "downstream device: " << downstream_device << std::endl;
+                    // auto entry = model->deviceAgent->latestNetworkEntries.at(downstream_device);
+                    // std::cout << "empty here" << std::endl;
                     // CHECKME: req rate correctness
-                    client_profiles_jf.add(model->name, task->tk_slo, ctrl_systemFPS, model, task->tk_name, task->tk_source, entry);
+                    // client_profiles_jf.add(model->name, task->tk_slo, ctrl_systemFPS, model, task->tk_name, task->tk_source, entry);
                 }
 
                 lock_pipeline_model.unlock();
