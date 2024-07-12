@@ -169,8 +169,13 @@ void Controller::Scheduling()
                 if (model->name.find("yolo") != std::string::npos)
                 {
                     // collect model information
-                    std::string name = model->name;
+                    // std::string name = model->name;
+
                     // CHECKME: what is the system FPS
+                    std::string containerName = model->name + "-" + model->deviceTypeName;
+                    // std::cout << "model name: " << model->name << std::endl;
+                    // std::cout << "model device name: " << model->device << ", model device type name: " << model->deviceTypeName << std::endl;
+                    // std::cout << "taskName: " << ctrl_containerLib[containerName].taskName << ", " << ctrl_containerLib[containerName].modelName << std::endl;
                     BatchInferProfileListType batch_proilfes = queryBatchInferLatency(
                         *ctrl_metricsServerConn.get(),
                         ctrl_experimentName,
@@ -179,18 +184,20 @@ void Controller::Scheduling()
                         task->tk_source,
                         model->device,
                         model->deviceTypeName,
-                        name,
+                        ctrl_containerLib[containerName].modelName,
                         ctrl_systemFPS);
 
                     // CHECKME: get width, height
                     // parse the resolution of the model
-                    std::size_t pos = name.find("-");
-                    std::string yolo = name.substr(0, pos);
+                    std::cout << "yolo name: " << model->name << std::endl;
+                    std::size_t pos = model->name.find("-");
+                    std::string yolo = model->name.substr(0, pos);
+                    std::cout << "yolo: " << yolo << std::endl;
                     int rs;
                     try
                     {
                         size_t pos;
-                        rs = std::stoi(yolo.substr(name.length() - 3, 3), &pos);
+                        rs = std::stoi(yolo.substr(model->name.length() - 3, 3), &pos);
                         if (pos != 3)
                         {
                             throw std::invalid_argument("yolov5n, set the default resolution 640");
@@ -202,11 +209,10 @@ void Controller::Scheduling()
                     }
                     int width = rs;
                     int height = rs;
-
+                    std::cout << "resolution is: " << rs << std::endl;
                     for (auto &[batch_size, profile] : batch_proilfes)
                     {
-                        std::cout << "name is: " << name << std::endl;
-                        model_profiles_jf.add(name, ACC_LEVEL_MAP.at(name), batch_size, profile.p95inferLat, width, height, model);
+                        model_profiles_jf.add(model->name, ACC_LEVEL_MAP.at(yolo + std::to_string(rs)), batch_size, profile.p95inferLat, width, height, model);
                     }
                 }
                 else if (model->name.find("datasource") != std::string::npos)
@@ -215,17 +221,11 @@ void Controller::Scheduling()
 
                     // CHECKME: find the very first downstream device as the network entry pair
                     auto downstream = model->downstreams.front();
-                    std::cout << "name of model: " << model->name << std::endl;
-                    // FIXME: empty downstream here
+                    auto downstream_device = downstream.first->deviceTypeName;
+                    auto entry = model->deviceAgent->latestNetworkEntries.at(downstream_device);
 
-                    std::cout << "before access" << std::endl;
-                    std::cout << "name of the upstream: " << model->upstreams.front().first->name << std::endl;
-                    // auto downstream_device = downstream.first->deviceTypeName;
-                    // std::cout << "downstream device: " << downstream_device << std::endl;
-                    // auto entry = model->deviceAgent->latestNetworkEntries.at(downstream_device);
-                    // std::cout << "empty here" << std::endl;
                     // CHECKME: req rate correctness
-                    // client_profiles_jf.add(model->name, task->tk_slo, ctrl_systemFPS, model, task->tk_name, task->tk_source, entry);
+                    client_profiles_jf.add(model->name, task->tk_slo, ctrl_systemFPS, model, task->tk_name, task->tk_source, entry);
                 }
 
                 lock_pipeline_model.unlock();
@@ -233,12 +233,17 @@ void Controller::Scheduling()
             }
         }
 
-        // just extract the PipelineModel* from the first profile of each model
-        auto model = this->model_profiles_jf.infos.begin()->second[0].model;
-        std::unique_lock<std::mutex> model_lock(model->pipelineModelMutex);
-        auto server_device = model->device;
-        auto server_device_type = model->deviceTypeName;
-        model_lock.unlock();
+        // // just extract the PipelineModel* from the first profile of each model
+        // auto model = this->model_profiles_jf.infos.begin()->second[0].model;
+        // std::unique_lock<std::mutex> model_lock(model->pipelineModelMutex);
+        // auto server_device = model->device;
+        // auto server_device_type = model->deviceTypeName;
+        // model_lock.unlock();
+        // std::cout << "sever device name: " << model->device << ", model device type name: " << model->deviceTypeName << std::endl;
+
+        // check the correctness of the client infos and model infos
+        client_profiles_jf.debugging();
+        model_profiles_jf.debugging();
 
         for (auto &client_info : client_profiles_jf.infos)
         {
@@ -246,8 +251,18 @@ void Controller::Scheduling()
             std::unique_lock<std::mutex> client_lock(client_model->pipelineModelMutex);
             auto client_device = client_model->device;
             auto client_device_type = client_model->deviceTypeName;
+            // downstream yolo information
+            auto downstream = client_model->downstreams.front().first;
+            std::unique_lock<std::mutex> model_lock(downstream->pipelineModelMutex);
+            std::string model_name = downstream->name;
+            std::string model_device = downstream->device;
+            std::string model_device_typename = downstream->deviceTypeName;
+            std::string containerName = model_name + "-" + model_device_typename;
+            model_lock.unlock();
             client_lock.unlock();
 
+            std::cout << "before query Network" << std::endl;
+            std::cout << "name of the client model: " << containerName << std::endl;
             // CHECKME: NetworkEntry retrieval correctness
             NetworkProfile network_proflie = queryNetworkProfile(
                 *ctrl_metricsServerConn,
@@ -255,20 +270,25 @@ void Controller::Scheduling()
                 ctrl_systemName,
                 client_info.task_name,
                 client_info.task_source,
-                ctrl_containerLib[client_info.name].taskName,
-                ctrl_containerLib[client_info.name].modelName,
+                ctrl_containerLib[containerName].taskName,
+                ctrl_containerLib[containerName].modelName,
                 client_device,
                 client_device_type,
-                server_device,
-                server_device_type,
+                model_device,
+                model_device_typename,
                 client_info.network_entry);
             auto lat = network_proflie.p95TransferDuration;
+            std::cout << "queried latency is: " << lat << std::endl;
             client_info.set_transmission_latency(lat);
         }
 
         // start scheduling
 
+        std::cout << "START SCHEDULING" << std::endl;
+
         auto mappings = mapClient(this->client_profiles_jf, this->model_profiles_jf);
+
+        std::cout << "FINISH STRATEGY COMPUTING" << std::endl;
 
         for (auto &mapping : mappings)
         {
@@ -322,6 +342,21 @@ void Controller::Scheduling()
                 container_lock.unlock();
             }
             model_lock.unlock();
+        }
+        
+        std::cout << "SCHEDULING END" << std::endl;
+
+        // for debugging mappings
+        for (auto &mapping : mappings) {
+            std::cout << "***********************************************************" << std::endl;
+            auto model_info = std::get<0>(mapping);
+            std::cout << "Model name: " << std::get<0>(model_info) << ", acc: " << std::get<1>(model_info) << std::endl;
+            auto clients_info = std::get<1>(mapping);
+            for (auto& client: clients_info) {
+                std::cout << "Client name: " << client.name << ", budget: " << client.budget << ", lat: " << client.transmission_latency << std::endl;
+            }
+            std::cout << "Batch size: " << std::get<2>(mapping) << std::endl;
+            std::cout << "***********************************************************" << std::endl;
         }
 
         // TODO: apply the scheduling
@@ -885,15 +920,15 @@ void ModelProfilesJF::debugging()
     {
         auto key = it->first;
         auto profilings = it->second;
-        std::cout << "*********************************************" << std::endl;
         std::cout << "Model: " << std::get<0>(key) << ", Accuracy: " << std::get<1>(key) << std::endl;
         for (const auto &model_info : profilings)
         {
             std::cout << "batch size: " << model_info.batch_size << ", latency: " << model_info.inference_latency
-                      << ", width: " << model_info.width << ", height: " << model_info.height << std::endl;
+                      << ", width: " << model_info.width << ", height: " << model_info.height << 
+                        ", throughput: " << model_info.throughput << std::endl;
         }
-        std::cout << "*********************************************" << std::endl;
     }
+    std::cout << "======================ModelProfiles Debugging End=======================" << std::endl;
 }
 
 // -------------------------------------------------------------------------------------------
@@ -928,6 +963,7 @@ void ClientProfilesJF::debugging()
     {
         std::cout << "Unique id: " << client_info.name << ", buget: " << client_info.budget << ", req_rate: " << client_info.req_rate << std::endl;
     }
+    std::cout << "===================================ClientProfiles Debugging End==========================" << std::endl;
 }
 
 // -------------------------------------------------------------------------------------------
