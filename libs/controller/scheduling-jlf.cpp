@@ -296,6 +296,7 @@ void Controller::Scheduling()
             auto model_info = std::get<0>(mapping);
             auto selected_clients = std::get<1>(mapping);
             int batch_size = std::get<2>(mapping);
+            std::cout << "Selected Mapping batch size: " << batch_size << std::endl;
 
             // find the PipelineModel* of that model
             ModelInfoJF m = this->model_profiles_jf.infos[model_info][0];
@@ -350,7 +351,7 @@ void Controller::Scheduling()
         for (auto &mapping : mappings) {
             std::cout << "***********************************************************" << std::endl;
             auto model_info = std::get<0>(mapping);
-            std::cout << "Model name: " << std::get<0>(model_info) << ", acc: " << std::get<1>(model_info) << std::endl;
+            std::cout << "Model name: " << std::get<0>(model_info) << ", acc: " << std::get<1>(model_info) << ", batch_size: " << std::endl;
             auto clients_info = std::get<1>(mapping);
             for (auto& client: clients_info) {
                 std::cout << "Client name: " << client.name << ", budget: " << client.budget << ", lat: " << client.transmission_latency << std::endl;
@@ -1214,7 +1215,9 @@ int check_and_assign(std::vector<ModelInfoJF> &model,
         if (model_info.throughput > total_req_rate &&
             max_batch_size < model_info.batch_size)
         {
+            // choose the just enough batch size
             max_batch_size = model_info.batch_size;
+            break;
         }
     }
     return max_batch_size;
