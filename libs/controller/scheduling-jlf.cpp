@@ -118,6 +118,7 @@ void Controller::Scheduling()
             continue;
         }
         auto taskList = ctrl_unscheduledPipelines.getMap();
+        auto deviceList = devices.getMap();
         if (taskList.empty())
         {
             continue;
@@ -145,6 +146,21 @@ void Controller::Scheduling()
         for (auto &[task_name, task] : taskList)
         {
             std::cout << "task name: " << task_name << std::endl;
+            for (auto model : task->tk_pipelineModels) {
+                std::unique_lock<std::mutex> lock_pipeline_model(model->pipelineModelMutex);
+                if (model->name.find("datasource") == std::string::npos) {
+                    model->device = "server";
+                    model->deviceTypeName = "server";
+                    model->deviceAgent = deviceList["server"];
+                } else {
+                    model->deviceTypeName = deviceList[model->device]->type;
+                    model->deviceAgent = deviceList[model->device];
+                }
+                lock_pipeline_model.unlock();
+            }
+        }
+        for (auto &[task_name, task] : taskList)
+        {
             // std::unique_lock<std::mutex> lock_task(task->tk_mutex);
             for (auto model : task->tk_pipelineModels)
             {
