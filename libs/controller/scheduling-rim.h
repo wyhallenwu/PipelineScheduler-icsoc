@@ -12,11 +12,16 @@ uint64_t calc_model_fps(PipelineModel *currModel, NodeHandle *device)
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
     uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
 
+    std::cout << currModel->name << device->name << std::endl;
+    std::cout << "preprocessLatency: " << preprocessLatency << std::endl;
+    std::cout << "inferLatency: " << inferLatency << std::endl;
+    std::cout << "postprocessLatency: " << postprocessLatency << std::endl;
+
     currModel->expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
     return 1 / (currModel->expectedAvgPerQueryLatency / 1000000);
 }
 
-double calc_pipe_utilization(const std::set<std::string> &subgraph,
+double calc_pipe_utilization(const std::list<std::string> &subgraph,
                              const std::unordered_map<std::string, PipelineModel *> &model_map,
                              NodeHandle *device, uint64_t desiredFps)
 {
@@ -33,66 +38,81 @@ double calc_pipe_utilization(const std::set<std::string> &subgraph,
     return device_utilization;
 }
 
-void dfs(PipelineModel *node, std::set<std::string> &current_subgraph, std::set<std::set<std::string>> &subgraphs)
+void generate_subgraphs_helper(PipelineModel *node, std::vector<PipelineModel *> &current_path, std::vector<std::list<std::string>> &subgraphs)
 {
-    std::cout << "dfs" << std::endl;
-    if (!node)
-        return;
+    if (!node) return;
 
-    current_subgraph.insert(node->name);
-    subgraphs.insert(current_subgraph);
+    current_path.push_back(node);
 
-    for (const auto &child_pair : node->downstreams)
+    // Generate subgraphs for the current path
+    for (size_t i = 0; i < current_path.size(); ++i)
     {
-        PipelineModel *child = child_pair.first;
-        std::set<std::string> new_subgraph = current_subgraph;
-        dfs(child, new_subgraph, subgraphs);
+        std::list<std::string> subgraph;
+        for (size_t j = i; j < current_path.size(); ++j)
+        {
+            subgraph.push_back(current_path[j]->name);
+        }
+        subgraphs.push_back(subgraph);
     }
+
+    // Continue with downstream nodes
+    for (auto &downstream : node->downstreams)
+    {
+        generate_subgraphs_helper(downstream.first, current_path, subgraphs);
+    }
+
+    current_path.pop_back();
 }
 
-std::vector<std::set<std::string>> generate_subgraphs(PipelineModel *root)
+std::vector<std::list<std::string>> generate_subgraphs(PipelineModel *root)
 {
-    std::cout << "generate_subgraphs" << std::endl;
-    std::set<std::set<std::string>> subgraphs;
-    std::set<std::string> current_subgraph;
-    dfs(root, current_subgraph, subgraphs);
+    std::vector<std::list<std::string>> subgraphs;
+    std::vector<PipelineModel *> current_path;
+    generate_subgraphs_helper(root, current_path, subgraphs);
 
-    std::vector<std::set<std::string>> result(subgraphs.begin(), subgraphs.end());
-    std::sort(result.begin(), result.end(),
-              [](const std::set<std::string> &a, const std::set<std::string> &b)
-              {
-                  return a.size() > b.size();
-              });
+    // Sort the subgraphs by size in descending order
+    std::sort(subgraphs.begin(), subgraphs.end(), [](const std::list<std::string> &a, const std::list<std::string> &b) {
+        return a.size() > b.size();
+    });
 
-    return result;
+    return subgraphs;
 }
 
 std::unordered_map<std::string, PipelineModel *> build_model_map(PipelineModel *root)
 {
-    std::cout << "build_model_map" << std::endl;
     std::unordered_map<std::string, PipelineModel *> model_map;
-    std::function<void(PipelineModel *)> dfs = [&](PipelineModel *node)
+    if (!root) return model_map;
+
+    std::queue<PipelineModel *> q;
+    q.push(root);
+
+    while (!q.empty())
     {
-        if (!node || model_map.find(node->name) != model_map.end())
-            return;
-        model_map[node->name] = node;
-        for (const auto &child_pair : node->downstreams)
+        PipelineModel *current = q.front();
+        q.pop();
+
+        if (model_map.find(current->name) == model_map.end())
         {
-            dfs(child_pair.first);
+            model_map[current->name] = current;
+
+            for (const auto &downstream : current->downstreams)
+            {
+                q.push(downstream.first);
+            }
         }
-    };
-    dfs(root);
+    }
+
     return model_map;
 }
 
 // End of helper functions
 
-std::optional<std::set<std::string>> choosing_subgraph(const std::vector<std::set<std::string>> &available_subgraphs,
+std::optional<std::list<std::string>> choosing_subgraph(const std::vector<std::list<std::string>> &available_subgraphs,
                                                        PipelineModel *root, std::map<std::string, NodeHandle *> devices, uint64_t desiredFps)
 {
     std::cout << "choosing_subgraph" << std::endl;
     auto model_map = build_model_map(root);
-    std::set<std::string> best_subgraph;
+    std::list<std::string> best_subgraph;
     double best_score = 0.0;
     NodeHandle *best_device = nullptr;
 
@@ -129,38 +149,34 @@ std::optional<std::set<std::string>> choosing_subgraph(const std::vector<std::se
     return best_subgraph;
 }
 
-void update_available_subgraphs(std::vector<std::set<std::string>> &available_subgraphs,
-                                std::vector<std::set<std::string>> &selected_subgraphs,
-                                const std::set<std::string> &chosen_subgraph)
+void update_available_subgraphs(std::vector<std::list<std::string>> &available_subgraphs,
+                                std::vector<std::list<std::string>> &selected_subgraphs,
+                                const std::list<std::string> &chosen_subgraph)
 {
-    std::cout << "update_available_subgraphs" << std::endl;
+    // Add the chosen subgraph to selected subgraphs
     selected_subgraphs.push_back(chosen_subgraph);
 
-    auto it = available_subgraphs.begin();
-    while (it != available_subgraphs.end())
-    {
-        bool should_remove = false;
-        for (const auto &node : chosen_subgraph)
-        {
-            if (it->find(node) != it->end())
-            {
-                should_remove = true;
-                break;
-            }
-        }
-        if (should_remove)
-        {
-            it = available_subgraphs.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
-    }
+    // Create a set of nodes in the chosen subgraph for quick lookup
+    std::set<std::string> chosen_nodes(chosen_subgraph.begin(), chosen_subgraph.end());
+
+    // Remove subgraphs from available_subgraphs that have any node in chosen_nodes
+    available_subgraphs.erase(
+        std::remove_if(available_subgraphs.begin(), available_subgraphs.end(),
+                       [&chosen_nodes](const std::list<std::string> &subgraph) {
+                           for (const auto &node : subgraph)
+                           {
+                               if (chosen_nodes.find(node) != chosen_nodes.end())
+                               {
+                                   return true;
+                               }
+                           }
+                           return false;
+                       }),
+        available_subgraphs.end());
 }
 
-bool place_on_edge(PipelineModel *root, std::vector<std::set<std::string>> &available_subgraphs,
-                   std::vector<std::set<std::string>> selected_subgraphs,
+bool place_on_edge(PipelineModel *root, std::vector<std::list<std::string>> &available_subgraphs,
+                   std::vector<std::list<std::string>> selected_subgraphs,
                    std::map<std::string, NodeHandle *> devices, uint64_t desiredFps)
 {
     std::cout << "Scheduling using RIM2" << std::endl;
@@ -181,8 +197,8 @@ bool place_on_edge(PipelineModel *root, std::vector<std::set<std::string>> &avai
     return true;
 }
 
-void place_on_server(PipelineModel *root, std::vector<std::set<std::string>> &available_subgraphs,
-                     std::vector<std::set<std::string>> selected_subgraphs,
+void place_on_server(PipelineModel *root, std::vector<std::list<std::string>> &available_subgraphs,
+                     std::vector<std::list<std::string>> selected_subgraphs,
                      std::map<std::string, NodeHandle *> devices, uint64_t desiredFps)
 {
 
@@ -198,36 +214,56 @@ void place_on_server(PipelineModel *root, std::vector<std::set<std::string>> &av
     }
 }
 
-std::string subgraph_to_string(const std::set<std::string>& subgraph) {
-    std::ostringstream oss;
-    for (auto it = subgraph.begin(); it != subgraph.end(); ++it) {
-        if (it != subgraph.begin()) oss << "-";
-        oss << *it;
-    }
-    return oss.str();
-}
-
-void print_graph_dfs(PipelineModel* node, std::unordered_set<PipelineModel*>& visited, int depth = 0) {
-    if (!node || visited.find(node) != visited.end()) {
-        return;
-    }
-
-    visited.insert(node);
-
-    // Print the current node with proper indentation
-    std::cout << std::string(depth * 2, ' ') << node->name;
-    
-
-    // Recursively print downstream nodes
-    for (const auto& [downstream, _] : node->downstreams) {
-        print_graph_dfs(downstream, visited, depth + 1);
+void print_subgraphs(const std::vector<std::list<std::string>> &subgraphs)
+{
+    for (size_t i = 0; i < subgraphs.size(); ++i)
+    {
+        std::cout << i + 1 << ". ";
+        bool first = true;
+        for (const auto &node : subgraphs[i])
+        {
+            if (!first)
+                std::cout << "-";
+            std::cout << node;
+            first = false;
+        }
+        std::cout << std::endl;
     }
 }
 
-void print_pipeline_graph(PipelineModel* root) {
-    std::unordered_set<PipelineModel*> visited;
-    std::cout << "Pipeline Graph:" << std::endl;
-    print_graph_dfs(root, visited);
+void print_pipeline_levels(PipelineModel* root) {
+    std::cout << "Pipeline Graph Levels:" << std::endl;
+
+    std::queue<PipelineModel*> current_level;
+    current_level.push(root);
+
+    int level = 0;
+    while (!current_level.empty()) {
+        std::cout << "Level " << level << ": ";
+        
+        std::queue<PipelineModel*> next_level;
+        std::unordered_set<PipelineModel*> level_set;
+
+        while (!current_level.empty()) {
+            PipelineModel* node = current_level.front();
+            current_level.pop();
+
+            if (level_set.find(node) == level_set.end()) {
+                std::cout << node->name << " ";
+                level_set.insert(node);
+
+                for (const auto& [downstream, _] : node->downstreams) {
+                    if (level_set.find(downstream) == level_set.end()) {
+                        next_level.push(downstream);
+                    }
+                }
+            }
+        }
+
+        std::cout << std::endl;
+        current_level = next_level;
+        level++;
+    }
 }
 
 void Controller::rim_action(TaskHandle *task)
@@ -236,15 +272,13 @@ void Controller::rim_action(TaskHandle *task)
     std::cout << "Scheduling using RIM1" << std::endl;
     uint64_t desiredFps = 1 / (task->tk_slo / 1000000);
     // Should the root be the data source or the first model ??
-    PipelineModel *root = task->tk_pipelineModels[0];
-    std::vector<std::set<std::string>> remaining_subgraphs = generate_subgraphs(root);
-    std::vector<std::set<std::string>> selected_subgraphs;
+    PipelineModel *root = task->tk_pipelineModels[1];
+    std::vector<std::list<std::string>> remaining_subgraphs = generate_subgraphs(root);
+    std::vector<std::list<std::string>> selected_subgraphs;
 
-    print_pipeline_graph(root);
+    // print_pipeline_levels(root);
 
-    // for (size_t i = 0; i < remaining_subgraphs.size(); ++i) {
-    //     std::cout << i + 1 << ". " << subgraph_to_string(remaining_subgraphs[i]) << std::endl;
-    // }
+    print_subgraphs(remaining_subgraphs);
 
     std::map<std::string, NodeHandle *> edges;
     std::map<std::string, NodeHandle *> servers;
@@ -272,7 +306,9 @@ void Controller::schedule_rim(std::map<std::string, TaskHandle*> &tasks){
         rim_action(taskHandle);
     } 
 }
+// ====================================================== END OF IMPLEMENTATION OF RIM  ===========================================================
 
-// Task to do tomorrow
-// 1. Implement the place_on_server function, ask carefully the question of how to place the model on the server
-// 2. Make sure the devices in the place on edge function are the edge devices.
+// 1. Floating point error in calc_model_fps
+// 2. Not integrate lock mutex
+// 3. Comment out all the important functions
+// 4. Check to make sure pass by reference
