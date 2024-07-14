@@ -143,6 +143,7 @@ std::optional<std::list<std::string>> choosing_subgraph(const std::vector<std::l
         {
             PipelineModel *node = it->second;
             node->deviceAgent = best_device;
+            node->device = best_device->name;
         }
     }
 
@@ -272,7 +273,7 @@ void Controller::rim_action(TaskHandle *task)
     std::cout << "Scheduling using RIM1" << std::endl;
     uint64_t desiredFps = 1 / (task->tk_slo / 1000000);
     // Should the root be the data source or the first model ??
-    PipelineModel *root = task->tk_pipelineModels[1];
+    PipelineModel *root = task->tk_pipelineModels[0];
     std::vector<std::list<std::string>> remaining_subgraphs = generate_subgraphs(root);
     std::vector<std::list<std::string>> selected_subgraphs;
 

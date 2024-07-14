@@ -107,11 +107,77 @@ void Controller::queryingProfiles(TaskHandle *task) {
 
 void Controller::Scheduling() {
     while (running) {
+         // Check if it is the next scheduling period
+        Stopwatch schedulingSW;
+        schedulingSW.start();
+        if (std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now() - ctrl_nextSchedulingTime)
+                .count() < 10)
+        {
+            continue;
+        }
         auto taskList = ctrl_unscheduledPipelines.getMap();
+        auto deviceList = devices.getMap();
         if (taskList.empty()) {
             continue;
         }
+
+        for (auto &[task_name, task] : taskList)
+        {
+            std::cout << "task name: " << task_name << std::endl;
+            for (auto model : task->tk_pipelineModels) {
+                std::unique_lock<std::mutex> lock_pipeline_model(model->pipelineModelMutex);
+                if (model->name.find("datasource") == std::string::npos) {
+                    model->device = "server";
+                    model->deviceTypeName = "server";
+                    model->deviceAgent = deviceList["server"];
+                } else {
+                    model->deviceTypeName = ctrl_sysDeviceInfo[deviceList[model->device]->type];
+                    model->deviceAgent = deviceList[model->device];
+                }
+                lock_pipeline_model.unlock();
+            }
+        }
+        for (auto &[task_name, task] : taskList)
+        {
+            // std::unique_lock<std::mutex> lock_task(task->tk_mutex);
+            for (auto model : task->tk_pipelineModels)
+            {
+
+                std::unique_lock<std::mutex> lock_pipeline_model(model->pipelineModelMutex);
+                // collect model information
+                // std::string name = model->name;
+
+                // CHECKME: what is the system FPS
+                std::string containerName =  model->name;
+                if (model->name.find("yolo") != std::string::npos) {
+                    containerName = model->name + "-" + model->deviceTypeName;
+                }
+                std::cout << "model name: " << model->name << std::endl;
+                std::cout << "model device name: " << model->device << ", model device type name: " << model->deviceTypeName << std::endl;
+                std::cout << "container name: " << ctrl_containerLib[containerName].modelName << std::endl;
+                queryBatchInferLatency(
+                    *ctrl_metricsServerConn.get(),
+                    ctrl_experimentName,
+                    ctrl_systemName,
+                    task->tk_name,
+                    task->tk_source,
+                    model->device,
+                    model->deviceTypeName,
+                    ctrl_containerLib[containerName].modelName,
+                    ctrl_systemFPS);
+
+
+                lock_pipeline_model.unlock();
+            }
+        }
+
+        std::cout << "START SCHEDULING" << std::endl;
+
         schedule_rim(taskList);
+
+        std::cout << "SCHEDULING END" << std::endl;
+        
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
         ApplyScheduling();
         std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
