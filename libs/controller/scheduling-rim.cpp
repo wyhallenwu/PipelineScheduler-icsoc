@@ -149,10 +149,7 @@ void Controller::Scheduling() {
                 // std::string name = model->name;
 
                 // CHECKME: what is the system FPS
-                std::string containerName =  model->name;
-                if (model->name.find("yolo") != std::string::npos) {
-                    containerName = model->name + "-" + model->deviceTypeName;
-                }
+                std::string containerName =  model->name + "-" + model->deviceTypeName;
                 std::cout << "model name: " << model->name << std::endl;
                 std::cout << "model device name: " << model->device << ", model device type name: " << model->deviceTypeName << std::endl;
                 std::cout << "container name: " << ctrl_containerLib[containerName].modelName << std::endl;
