@@ -429,6 +429,10 @@ struct PipelineModel {
         for (auto& container : other.manifestations) {
             manifestations.push_back(new ContainerHandle(*container));
         }
+        manifestations = {};
+        for (auto& container : other.manifestations) {
+            manifestations.push_back(new ContainerHandle(*container));
+        }
         deviceAgent = other.deviceAgent;
     }
 
@@ -471,6 +475,8 @@ struct PipelineModel {
 
 PipelineModelListType deepCopyPipelineModelList(const PipelineModelListType& original);
 
+PipelineModelListType deepCopyPipelineModelList(const PipelineModelListType& original);
+
 struct TaskHandle {
     std::string tk_name;
     std::string tk_fullName;
@@ -485,6 +491,7 @@ struct TaskHandle {
     mutable std::mutex tk_mutex;
 
     bool tk_newlyAdded = true;
+
 
     TaskHandle() = default;
 
@@ -760,6 +767,7 @@ public:
     void readInitialObjectCount(
         const std::string& path 
     );
+
 
 private:
 
