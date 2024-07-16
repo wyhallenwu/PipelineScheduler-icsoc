@@ -224,7 +224,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 
     task->tk_src_device = t.device;
 
-    task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device, t.name, t.source);
+    task->tk_pipelineModels = getModelsByPipelineTypeTest(t.type, t.device, t.name, t.source);
     std::unique_lock<std::mutex> lock2(ctrl_unscheduledPipelines.tasksMutex);
     ctrl_unscheduledPipelines.list.insert({task->tk_name, task});
 

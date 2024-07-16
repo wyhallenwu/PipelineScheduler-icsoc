@@ -801,6 +801,9 @@ private:
 
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "", const std::string &streamName = "");
 
+    // added for testing jlf
+    PipelineModelListType getModelsByPipelineTypeTest(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "", const std::string &streamName = "");
+
     void checkNetworkConditions();
 
     void readConfigFile(const std::string &config_path);

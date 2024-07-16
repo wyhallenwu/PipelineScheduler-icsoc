@@ -149,6 +149,7 @@ void Controller::Scheduling()
             for (auto model : task->tk_pipelineModels)
             {
                 std::unique_lock<std::mutex> lock_pipeline_model(model->pipelineModelMutex);
+                std::cout << "model name: " << model->name << std::endl;
                 if (model->name.find("datasource") == std::string::npos)
                 {
                     model->device = "server";
@@ -196,7 +197,6 @@ void Controller::Scheduling()
                     std::cout << "yolo name: " << model->name << std::endl;
                     std::size_t pos = model->name.find("-");
                     std::string yolo = model->name.substr(0, pos);
-                    std::cout << "yolo: " << yolo << std::endl;
                     int rs;
                     try
                     {
@@ -206,11 +206,13 @@ void Controller::Scheduling()
                         {
                             throw std::invalid_argument("yolov5n, set the default resolution 640");
                         }
+                        yolo = yolo.substr(0, yolo.length() - 3);
                     }
                     catch (const std::invalid_argument &e)
                     {
                         rs = 640;
                     }
+                    std::cout << "yolo: " << yolo << std::endl;
                     int width = rs;
                     int height = rs;
                     std::cout << "resolution is: " << rs << std::endl;
@@ -895,7 +897,7 @@ bool ModelSetCompare::operator()(
     const std::tuple<std::string, float> &lhs,
     const std::tuple<std::string, float> &rhs) const
 {
-    return std::get<1>(lhs) < std::get<1>(rhs);
+    return std::get<1>(lhs) > std::get<1>(rhs);
 }
 
 // -------------------------------------------------------------------------------------------
@@ -1029,13 +1031,13 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
     }
     // init matrix
     int cols = max_throughput / h + 1;
-    std::cout << "max_throughput: " << max_throughput << std::endl;
-    std::cout << "row: " << rows << " cols: " << cols << std::endl;
+    // std::cout << "max_throughput: " << max_throughput << std::endl;
+    // std::cout << "row: " << rows << " cols: " << cols << std::endl;
     std::vector<std::vector<int>> dp_mat(rows, std::vector<int>(cols, 0));
     // iterating
-    for (int client_index = 1; client_index < clients.size(); client_index++)
+    for (int client_index = 1; client_index <= clients.size(); client_index++)
     {
-        auto &client = clients[client_index];
+        auto &client = clients[client_index - 1];
         auto result = findMaxBatchSize(models, client, max_batch_size);
         max_batch_size = std::get<0>(result);
         max_index = std::get<1>(result);
@@ -1058,9 +1060,13 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
             {
                 int k_prime = (w_k - lambda_i) / h;
                 int v = v_i + dp_mat[client_index - 1][k_prime];
+                assert(v >=0 && k_prime >=0);
                 if (v > dp_mat[client_index - 1][k])
                 {
                     dp_mat[client_index][k] = v;
+                }
+                else {
+                    dp_mat[client_index][k] = dp_mat[client_index - 1][k];
                 }
                 if (v > best_value)
                 {
@@ -1092,14 +1098,13 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
 
     auto [row, col] = best_cell;
 
-    std::cout << "best cell: " << row << " " << col << std::endl;
+    std::cout << "best cell: " << row << " " << col << ", best value: " << best_value << std::endl;
     int w = dp_mat[row][col];
     while (row > 0 && col > 0)
     {
-        std::cout << row << " " << col << std::endl;
         if (dp_mat[row][col] == dp_mat[row - 1][col])
         {
-            row--;
+            row = row - 1;
         }
         else
         {
@@ -1109,6 +1114,7 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
             col = int((w - w_i) / h);
             w = col * h;
             assert(w == dp_mat[row][col]);
+            std::cout << "In backtracing, w: " << w << ", dp: " << dp_mat[row][col] << std::endl;
             selected_clients.push_back(c);
         }
     }
@@ -1147,26 +1153,48 @@ mapClient(ClientProfilesJF client_profile, ModelProfilesJF model_profiles)
          ++it)
     {
         key_index++;
-        std::cout << "before filtering" << std::endl;
+        std::cout << "MapClient(): before filtering" << std::endl;
         for (auto &c : clients)
         {
             std::cout << c.name << " " << c.budget << " " << c.req_rate << std::endl;
         }
+        std::cout << "MapClient(): end before filtering" << std::endl;
 
         auto selected_clients = findOptimalClients(it->second, clients);
+
+        std::cout << "MapClient(): searched optimal" << std::endl;
+        for (auto &c : selected_clients)
+        {
+            std::cout << c.name << " " << c.budget << " " << c.req_rate << std::endl;
+        }
+        std::cout << "MapClient(): end searched optimal" << std::endl;
 
         // tradeoff:
         // assign all left clients to the last available model
         if (key_index == map_size)
         {
-            std::cout << "assign all rest clients" << std::endl;
+            // std::cout << "assign all rest clients" << std::endl;
+            std::cout << "MapClient(): assign all rest clients" << std::endl;
+            std::cout << "key idx: " << key_index << std::endl;
+            for (auto &c : clients)
+            {
+                std::cout << c.name << " " << c.budget << " " << c.req_rate << std::endl;
+            }
+            std::cout << "MapClient(): end assign all rest clients" << std::endl;
+
+            if (clients.size() == 0)
+            {
+                break;
+            }
+
             selected_clients = clients;
             clients.clear();
-            std::cout << "selected clients assgined" << std::endl;
+            std::cout << "MapClient(): selected clients assgined" << std::endl;
             for (auto &c : selected_clients)
             {
                 std::cout << c.name << " " << c.budget << " " << c.req_rate << std::endl;
             }
+            std::cout << "MapClient(): end selected clients assgined" << std::endl; 
             assert(clients.size() == 0);
         }
 
@@ -1177,20 +1205,20 @@ mapClient(ClientProfilesJF client_profile, ModelProfilesJF model_profiles)
 
         mappings.push_back(
             std::make_tuple(it->first, selected_clients, batch_size));
-        std::cout << "start removing collected clients" << std::endl;
         differenceClients(clients, selected_clients);
-        std::cout << "after filtering" << std::endl;
+        std::cout << "MapClient(): after difference" << std::endl;
         for (auto &c : clients)
         {
             std::cout << c.name << " " << c.budget << " " << c.req_rate << std::endl;
         }
+        std::cout << "MapClient(): end difference" << std::endl;
         if (clients.size() == 0)
         {
             break;
         }
     }
 
-    std::cout << "mapping relation" << std::endl;
+    std::cout << "MapClient(): mapping relation" << std::endl;
     for (auto &t : mappings)
     {
         std::cout << "======================" << std::endl;
@@ -1261,6 +1289,7 @@ std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models,
         if (model.inference_latency * 2.0 < client.budget - client.transmission_latency &&
             model.batch_size > max_batch_size && model.batch_size <= max_available_batch_size)
         {
+            // std::cout << "Latency budget: " << client.budget - client.transmission_latency << ", Model Inference Latency: " << model.inference_latency << std::endl;
             max_batch_size = model.batch_size;
             max_index = index;
         }
