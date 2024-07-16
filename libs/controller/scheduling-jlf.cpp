@@ -146,13 +146,17 @@ void Controller::Scheduling()
         for (auto &[task_name, task] : taskList)
         {
             std::cout << "task name: " << task_name << std::endl;
-            for (auto model : task->tk_pipelineModels) {
+            for (auto model : task->tk_pipelineModels)
+            {
                 std::unique_lock<std::mutex> lock_pipeline_model(model->pipelineModelMutex);
-                if (model->name.find("datasource") == std::string::npos) {
+                if (model->name.find("datasource") == std::string::npos)
+                {
                     model->device = "server";
                     model->deviceTypeName = "server";
                     model->deviceAgent = deviceList["server"];
-                } else {
+                }
+                else
+                {
                     model->deviceTypeName = deviceList[model->device]->type;
                     model->deviceAgent = deviceList[model->device];
                 }
@@ -344,16 +348,18 @@ void Controller::Scheduling()
             }
             model_lock.unlock();
         }
-        
+
         std::cout << "SCHEDULING END" << std::endl;
 
         // for debugging mappings
-        for (auto &mapping : mappings) {
+        for (auto &mapping : mappings)
+        {
             std::cout << "***********************************************************" << std::endl;
             auto model_info = std::get<0>(mapping);
             std::cout << "Model name: " << std::get<0>(model_info) << ", acc: " << std::get<1>(model_info) << ", batch_size: " << std::endl;
             auto clients_info = std::get<1>(mapping);
-            for (auto& client: clients_info) {
+            for (auto &client : clients_info)
+            {
                 std::cout << "Client name: " << client.name << ", budget: " << client.budget << ", lat: " << client.transmission_latency << std::endl;
             }
             std::cout << "Batch size: " << std::get<2>(mapping) << std::endl;
@@ -861,6 +867,11 @@ ModelInfoJF::ModelInfoJF(int bs, float il, int w, int h, std::string n, float ac
     model = m;
 }
 
+bool ModelInfoJF::operator==(const ModelInfoJF& other) const {
+        return batch_size == other.batch_size && inference_latency == other.inference_latency && throughput == other.throughput 
+        && width == other.width && height == other.height && name == other.name && accuracy == other.accuracy;
+    }
+
 ClientInfoJF::ClientInfoJF(std::string _name, float _budget, int _req_rate,
                            PipelineModel *_model, std::string _task_name, std::string _task_source,
                            NetworkEntryType _network_entry)
@@ -904,8 +915,14 @@ void ModelProfilesJF::add(std::string name, float accuracy, int batch_size, floa
 {
     auto key = std::tuple<std::string, float>{name, accuracy};
     ModelInfoJF value(batch_size, inference_latency, width, height, name, accuracy, m);
-    infos[key].push_back(value);
+    auto it = std::find(infos[key].begin(), infos[key].end(), value);
+    // record the model which is a new model
+    if (it == infos[key].end()){
+        infos[key].push_back(value);
+    }
 }
+    
+    
 
 void ModelProfilesJF::add(const ModelInfoJF &model_info)
 {
@@ -925,8 +942,7 @@ void ModelProfilesJF::debugging()
         for (const auto &model_info : profilings)
         {
             std::cout << "batch size: " << model_info.batch_size << ", latency: " << model_info.inference_latency
-                      << ", width: " << model_info.width << ", height: " << model_info.height << 
-                        ", throughput: " << model_info.throughput << std::endl;
+                      << ", width: " << model_info.width << ", height: " << model_info.height << ", throughput: " << model_info.throughput << std::endl;
         }
     }
     std::cout << "======================ModelProfiles Debugging End=======================" << std::endl;

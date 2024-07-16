@@ -612,6 +612,7 @@ struct ModelInfoJF
 
     ModelInfoJF();
     ModelInfoJF(int bs, float il, int w, int h, std::string n, float acc, PipelineModel *m);
+    bool operator==(const ModelInfoJF& other) const;
 };
 
 /**
