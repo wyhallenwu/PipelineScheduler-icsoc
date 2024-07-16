@@ -1259,9 +1259,13 @@ int check_and_assign(std::vector<ModelInfoJF> &model,
         if (model_info.throughput > total_req_rate &&
             max_batch_size < model_info.batch_size)
         {
-            // choose the just enough batch size
+            // NOTE: in our case, our model's throughput is too high, so
+            // in the experiment, it seems to always assign the small batch size.
+            // In Jellyfish, their model throughput is at most 80, and they just choose the batch size
+            // which could simply match the total request. The code here follows that.
             max_batch_size = model_info.batch_size;
             break;
+            
         }
     }
     return max_batch_size;
