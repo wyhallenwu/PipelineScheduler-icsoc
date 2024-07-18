@@ -558,6 +558,24 @@ struct TaskHandle {
         for (auto& model : other.tk_pipelineModels) {
             tk_pipelineModels.push_back(new PipelineModel(*model));
         }
+        for (auto& model : this->tk_pipelineModels) {
+            for (auto& downstream : model->downstreams) {
+                for (auto& model2 : tk_pipelineModels) {
+                    if (model2->name != downstream.first->name || model2->device != downstream.first->device) {
+                        continue;
+                    }
+                    downstream.first = model2;
+                }
+            }
+            for (auto& upstream : model->upstreams) {
+                for (auto& model2 : tk_pipelineModels) {
+                    if (model2->name != upstream.first->name || model2->device != upstream.first->device) {
+                        continue;
+                    }
+                    upstream.first = model2;
+                }
+            }
+        }
         tk_newlyAdded = other.tk_newlyAdded;
     }
 
@@ -578,6 +596,24 @@ struct TaskHandle {
             tk_pipelineModels = {};
             for (auto& model : other.tk_pipelineModels) {
                 tk_pipelineModels.push_back(new PipelineModel(*model));
+            }
+            for (auto& model : this->tk_pipelineModels) {
+                for (auto& downstream : model->downstreams) {
+                    for (auto& model2 : tk_pipelineModels) {
+                        if (model2->name != downstream.first->name || model2->device != downstream.first->device) {
+                            continue;
+                        }
+                        downstream.first = model2;
+                    }
+                }
+                for (auto& upstream : model->upstreams) {
+                    for (auto& model2 : tk_pipelineModels) {
+                        if (model2->name != upstream.first->name || model2->device != upstream.first->device) {
+                            continue;
+                        }
+                        upstream.first = model2;
+                    }
+                }
             }
             tk_newlyAdded = other.tk_newlyAdded;
         }
