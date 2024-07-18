@@ -172,17 +172,33 @@ void Controller::Scheduling() {
             //     lock_pipeline_model.unlock();
             // }
             queryingProfiles(task);
+
+            std::cout << "START SCHEDULING" << std::endl;
+
+            rim_action(task);
+
+            std::cout << "SCHEDULING END" << std::endl;
         }
-
-        std::cout << "START SCHEDULING" << std::endl;
-
-        schedule_rim(taskList);
-
-        std::cout << "SCHEDULING END" << std::endl;
         
+        // Update the scheduled pipelines
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
+
+        // Clear the unscheduled pipelines
+        std::vector<std::string> keysToRemove;
+    
+        // Get all the keys (task names) from the map
+        {
+            for (const auto& pair : taskList) {
+                keysToRemove.push_back(pair.first);
+            }
+        }
+        
+        // Remove each task
+        for (const auto& key : keysToRemove) {
+            ctrl_unscheduledPipelines.removeTask(key);
+        }
         // ApplyScheduling();
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
     }
 
 }

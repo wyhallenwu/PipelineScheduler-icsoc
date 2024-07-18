@@ -940,7 +940,7 @@ private:
 
     uint16_t ctrl_systemFPS;
 
-    void schedule_rim(std::map<std::string, TaskHandle*> &tasks);
+    // void schedule_rim(std::map<std::string, TaskHandle*> &tasks);
 
     void rim_action(TaskHandle *task);
 };

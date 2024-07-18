@@ -169,20 +169,23 @@ std::optional<std::list<std::string>> choosing_subgraph_for_edge(const std::vect
     // Update the device attribute for nodes in the best subgraph
     for (const auto &node_name : best_subgraph)
     {
-        if (node_name == "datasource" || node_name == "sink") {
-            NodeHandle *source_sink = devices.at(node_name);
-            node->deviceAgent = source_sink;
-            node->deviceTypeName = device_type_str(source_sink);
-            continue;
-        }
         auto it = model_map.find(node_name);
         if (it != model_map.end())
         {
-            
             PipelineModel *node = it->second;
-            node->deviceAgent = best_device;
-            node->device = best_device->name;
-            node->deviceTypeName = device_type_str(best_device);
+            if (node_name == "sink") {
+                continue;
+            }
+            else if (node_name == "datasource") {
+                NodeHandle *source_sink = devices.at(node->device);
+                node->deviceAgent = source_sink;
+                node->deviceTypeName = device_type_str(source_sink);
+            }
+            else {
+                node->deviceAgent = best_device;
+                node->device = best_device->name;
+                node->deviceTypeName = device_type_str(best_device);
+            }
         }
     }
 
@@ -353,16 +356,20 @@ void Controller::rim_action(TaskHandle *task)
     if (!remaining_subgraphs.empty()) {
         place_on_server(root, remaining_subgraphs, selected_subgraphs, servers, desiredFps);
     }
+
+    //update device for sink
+    PipelineModel *sink = task->tk_pipelineModels[task->tk_pipelineModels.size() - 1];
+    sink->deviceAgent = servers.at("server");
+    sink->deviceTypeName = device_type_str(servers.at("server"));
 }
 
-void Controller::schedule_rim(std::map<std::string, TaskHandle*> &tasks){
-    for (auto [taskName, taskHandle]: tasks) {
-        rim_action(taskHandle);
-    } 
-}
+// void Controller::schedule_rim(std::map<std::string, TaskHandle*> &tasks){
+//     for (auto [taskName, taskHandle]: tasks) {
+//         rim_action(taskHandle);
+//     } 
+// }
 // ====================================================== END OF IMPLEMENTATION OF RIM  ===========================================================
 
-// 1. Floating point error in calc_model_fps
-// 2. Not integrate lock mutex
-// 3. Comment out all the important functions
-// 4. Check to make sure pass by reference
+// 1. Not integrate lock mutex
+// 2. Comment out all the important functions
+// 3. The behaviour of unscheduled and scheduled pipeline is not correct
