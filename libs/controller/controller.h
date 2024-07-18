@@ -372,6 +372,7 @@ struct PipelineModel {
     NodeHandle *deviceAgent;
 
     bool merged = false;
+    bool toBeRun = true;
 
     std::vector<std::string> possibleDevices;
     // Manifestations are the list of containers that will be created for this model
@@ -397,6 +398,7 @@ struct PipelineModel {
                   uint64_t expectedMaxProcessLatency = 0,
                   const std::string& deviceTypeName = "",
                   bool merged = false,
+                  bool toBeRun = true,
                   const std::vector<std::string>& possibleDevices = {})
         : device(device),
           name(name),
@@ -415,6 +417,7 @@ struct PipelineModel {
           expectedMaxProcessLatency(expectedMaxProcessLatency),
           deviceTypeName(deviceTypeName),
           merged(merged),
+          toBeRun(toBeRun),
           possibleDevices(possibleDevices) {}
 
     // Copy constructor
@@ -445,6 +448,7 @@ struct PipelineModel {
         estimatedStart2HereCost = other.estimatedStart2HereCost;
         deviceTypeName = other.deviceTypeName;
         merged = other.merged;
+        toBeRun = other.toBeRun;
         possibleDevices = other.possibleDevices;
         manifestations = {};
         for (auto& container : other.manifestations) {
@@ -482,6 +486,7 @@ struct PipelineModel {
             estimatedStart2HereCost = other.estimatedStart2HereCost;
             deviceTypeName = other.deviceTypeName;
             merged = other.merged;
+            toBeRun = other.toBeRun;
             possibleDevices = other.possibleDevices;
             manifestations = {};
             for (auto& container : other.manifestations) {
