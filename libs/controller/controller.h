@@ -188,8 +188,14 @@ struct ContainerHandle {
     uint8_t numMicroservices = 5;
     // Average latency to query to reach from the upstream
     uint64_t expectedTransferLatency = 0;
-    // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
+    // Average in queueing latency, subjected to the arrival rate and processing rate of preprocessor
     uint64_t expectedQueueingLatency = 0;
+    // Average batching latency, subjected to the preprocessing rate, batch size and processing rate of inferencer
+    uint64_t expectedBatchingLatency = 0;
+    // Average post queueing latency, subjected to the processing rate of postprocessor
+    uint64_t expectedPostQueueingLatency = 0;
+    // Average out queueing latency, subjected to the processing rate of sender
+    uint64_t expectedOutQueueingLatency = 0;
     // Average latency to preprocess each query
     uint64_t expectedPreprocessLatency = 0;
     // Average latency to process each batch running at the specified batch size
@@ -269,6 +275,9 @@ struct ContainerHandle {
         numMicroservices = other.numMicroservices;
         expectedTransferLatency = other.expectedTransferLatency;
         expectedQueueingLatency = other.expectedQueueingLatency;
+        expectedBatchingLatency = other.expectedBatchingLatency;
+        expectedPostQueueingLatency = other.expectedPostQueueingLatency;
+        expectedOutQueueingLatency = other.expectedOutQueueingLatency;
         expectedPreprocessLatency = other.expectedPreprocessLatency;
         expectedInferLatency = other.expectedInferLatency;
         expectedPostprocessLatency = other.expectedPostprocessLatency;
@@ -304,6 +313,9 @@ struct ContainerHandle {
             numMicroservices = other.numMicroservices;
             expectedTransferLatency = other.expectedTransferLatency;
             expectedQueueingLatency = other.expectedQueueingLatency;
+            expectedBatchingLatency = other.expectedBatchingLatency;
+            expectedPostQueueingLatency = other.expectedPostQueueingLatency;
+            expectedOutQueueingLatency = other.expectedOutQueueingLatency;
             expectedPreprocessLatency = other.expectedPreprocessLatency;
             expectedInferLatency = other.expectedInferLatency;
             expectedPostprocessLatency = other.expectedPostprocessLatency;
@@ -338,6 +350,12 @@ struct PipelineModel {
     uint64_t expectedTransferLatency;
     // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
     uint64_t expectedQueueingLatency;
+    // Average batching latency, subjected to the preprocessing rate, batch size and processing rate of inferencer
+    uint64_t expectedBatchingLatency = 0;
+    // Average post queueing latency, subjected to the processing rate of postprocessor
+    uint64_t expectedPostQueueingLatency = 0;
+    // Average out queueing latency, subjected to the processing rate of sender
+    uint64_t expectedOutQueueingLatency = 0;
     // Average latency to process each query
     uint64_t expectedAvgPerQueryLatency;
     // Maximum latency to process each query as ones that come later have to wait to be processed in batch
@@ -417,6 +435,9 @@ struct PipelineModel {
         cudaDevices = other.cudaDevices;
         expectedTransferLatency = other.expectedTransferLatency;
         expectedQueueingLatency = other.expectedQueueingLatency;
+        expectedBatchingLatency = other.expectedBatchingLatency;
+        expectedPostQueueingLatency = other.expectedPostQueueingLatency;
+        expectedOutQueueingLatency = other.expectedOutQueueingLatency;
         expectedAvgPerQueryLatency = other.expectedAvgPerQueryLatency;
         expectedMaxProcessLatency = other.expectedMaxProcessLatency;
         expectedStart2HereLatency = other.expectedStart2HereLatency;
@@ -451,6 +472,9 @@ struct PipelineModel {
             cudaDevices = other.cudaDevices;
             expectedTransferLatency = other.expectedTransferLatency;
             expectedQueueingLatency = other.expectedQueueingLatency;
+            expectedBatchingLatency = other.expectedBatchingLatency;
+            expectedPostQueueingLatency = other.expectedPostQueueingLatency;
+            expectedOutQueueingLatency = other.expectedOutQueueingLatency;
             expectedAvgPerQueryLatency = other.expectedAvgPerQueryLatency;
             expectedMaxProcessLatency = other.expectedMaxProcessLatency;
             expectedStart2HereLatency = other.expectedStart2HereLatency;
