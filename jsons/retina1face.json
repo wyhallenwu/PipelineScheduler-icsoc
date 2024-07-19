@@ -1,5 +1,4 @@
 {
-    "pipeline_name": "traffic",
     "container" : {
         "cont_experimentName": "prof",
         "cont_systemName": "ppp",
@@ -259,7 +258,7 @@
                         "nb_classOfInterest": -1,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "143.248.57.150:55055"
+                            "0.0.0.0:55055"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "dummy_receiver_0",

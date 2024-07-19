@@ -14,6 +14,10 @@ include(GNUInstallDirs)
 # https://cmake.org/cmake/help/v3.11/module/CMakePackageConfigHelpers.html
 include(CMakePackageConfigHelpers)
 
+set(SYSTEM_NAME "PPP" CACHE STRING "System name: ")
+
+message("System name: ${SYSTEM_NAME}")
+
 # If no build type was specified, set it to Release.
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING
@@ -132,18 +136,18 @@ else()
 # set(CUDA_INCLUDE_DIRS "/usr/local/cuda/include")
 
     # Set LightGBM include directories
-    set(LIGHTGBM_INCLUDE_DIR "/usr/include/LightGBM")
-    include_directories(${LIGHTGBM_INCLUDE_DIR})
+    # set(LIGHTGBM_INCLUDE_DIR "/usr/include/LightGBM")
+    # include_directories(${LIGHTGBM_INCLUDE_DIR})
 
     # Find LightGBM library
-    find_library(LIGHTGBM_LIBRARY
-    NAMES lib_lightgbm.so
-    PATHS "/usr/lib"
-    NO_DEFAULT_PATH)
+    # find_library(LIGHTGBM_LIBRARY
+    # NAMES lib_lightgbm.so
+    # PATHS "/usr/lib"
+    # NO_DEFAULT_PATH)
 
-    if(NOT LIGHTGBM_LIBRARY)
-        message(FATAL_ERROR "LightGBM library not found.")
-    endif()
+    # if(NOT LIGHTGBM_LIBRARY)
+    #     message(FATAL_ERROR "LightGBM library not found.")
+    # endif()
 
     find_package(Threads REQUIRED)
 
