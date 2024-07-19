@@ -260,13 +260,18 @@ void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<float> dist = std::normal_distribution<float>((min_size + max_size) / 2, (max_size - min_size) / 6);
+    std::vector<char> data;
+    data.reserve(static_cast<size_t>(max_size));
+    for (int i = 0; i < max_size + 1; i++) {
+        data.push_back('x');
+    }
+
     for (int i = 0; i < num_loops; i++) {
         DummyMessage request;
         EmptyMessage reply;
         ClientContext context;
         Status status;
         int size = (int) dist(gen);
-        std::vector<char> data(size, 'a');
         timestamp = std::chrono::high_resolution_clock::now();
         request.set_origin_name(dev_name);
         request.set_gen_time(std::chrono::duration_cast<TimePrecisionType>(timestamp.time_since_epoch()).count());
