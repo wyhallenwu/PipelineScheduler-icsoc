@@ -294,12 +294,24 @@ bool CheckMergable(const std::string &m) {
 }
 
 ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i) {
-    auto *container = new ContainerHandle{abbreviate(model->task->tk_name + "_" + model->name),
-                                          model->upstreams[0].second,
+    if (model->name == "yolov5n" && model->device != "server") {
+        model->name = "yolov5ndsrc";
+    } else if (model->name == "retina1face" && model->device != "server") {
+        model->name = "retina1facedsrc";
+    }
+    int class_of_interest;
+    if (model->name == "datasource" || model->name.find("dsrc") != std::string::npos) {
+        class_of_interest = -1;
+    } else {
+        class_of_interest = model->upstreams[0].second;
+    }
+    
+    auto *container = new ContainerHandle{model->task->tk_name + "_" + model->name,
+                                          class_of_interest,
                                           ModelTypeReverseList[model->name],
                                           CheckMergable(model->name),
                                           {0},
-                                          model->estimatedStart2HereCost,
+                                          model->batchingDeadline,
                                           0.0,
                                           model->batchSize,
                                           model->cudaDevices[i],
@@ -307,27 +319,19 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
                                           ctrl_containerLib[model->name].modelPath,
                                           device,
                                           model->task};
+    
+    std::string containerName = model->name + "-" + getDeviceTypeName(device->type);
     if (model->name == "datasource" || model->name == "yolov5ndsrc" || model->name == "retina1facedsrc") {
-        container->dimensions = ctrl_containerLib[model->name].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0].get<std::vector<int>>();
+        container->dimensions = ctrl_containerLib[containerName].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0].get<std::vector<int>>();
     } else if (model->name != "sink") {
-        container->dimensions = ctrl_containerLib[model->name].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
+        container->dimensions = ctrl_containerLib[containerName].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
     }
     model->task->tk_subTasks[model->name].push_back(container);
 
-    for (auto &downstream: model->downstreams) {
-        for (auto &downstreamContainer: downstream.first->task->tk_subTasks[downstream.first->name]) {
-            if (downstreamContainer->device_agent == device) {
-                container->downstreams.push_back(downstreamContainer);
-                downstreamContainer->upstreams.push_back(container);
-            }
-        }
-    }
     for (auto &upstream: model->upstreams) {
         for (auto &upstreamContainer: upstream.first->task->tk_subTasks[upstream.first->name]) {
-            if (upstreamContainer->device_agent == device) {
-                container->upstreams.push_back(upstreamContainer);
-                upstreamContainer->downstreams.push_back(container);
-            }
+            container->upstreams.push_back(upstreamContainer);
+            upstreamContainer->downstreams.push_back(container);
         }
     }
     return container;

@@ -347,9 +347,9 @@ struct PipelineModel {
     // The assigned cuda device for each replica
     std::vector<uint8_t> cudaDevices;
     // Average latency to query to reach from the upstream
-    uint64_t expectedTransferLatency;
+    uint64_t expectedTransferLatency = 0;
     // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
-    uint64_t expectedQueueingLatency;
+    uint64_t expectedQueueingLatency = 0;
     // Average batching latency, subjected to the preprocessing rate, batch size and processing rate of inferencer
     uint64_t expectedBatchingLatency = 0;
     // Average post queueing latency, subjected to the processing rate of postprocessor
@@ -357,15 +357,17 @@ struct PipelineModel {
     // Average out queueing latency, subjected to the processing rate of sender
     uint64_t expectedOutQueueingLatency = 0;
     // Average latency to process each query
-    uint64_t expectedAvgPerQueryLatency;
+    uint64_t expectedAvgPerQueryLatency = 0;
     // Maximum latency to process each query as ones that come later have to wait to be processed in batch
-    uint64_t expectedMaxProcessLatency;
+    uint64_t expectedMaxProcessLatency = 0;
     // Latency from the start of the pipeline until the end of this model
     uint64_t expectedStart2HereLatency = -1;
     // The estimated cost per query processed by this model
     uint64_t estimatedPerQueryCost = 0;
     // The estimated latency of the model
     uint64_t estimatedStart2HereCost = 0;
+    // Batching deadline
+    uint64_t batchingDeadline = 9999999999;
 
     std::string device;
     std::string deviceTypeName;
@@ -446,6 +448,7 @@ struct PipelineModel {
         expectedStart2HereLatency = other.expectedStart2HereLatency;
         estimatedPerQueryCost = other.estimatedPerQueryCost;
         estimatedStart2HereCost = other.estimatedStart2HereCost;
+        batchingDeadline = other.batchingDeadline;
         deviceTypeName = other.deviceTypeName;
         merged = other.merged;
         toBeRun = other.toBeRun;
@@ -484,6 +487,7 @@ struct PipelineModel {
             expectedStart2HereLatency = other.expectedStart2HereLatency;
             estimatedPerQueryCost = other.estimatedPerQueryCost;
             estimatedStart2HereCost = other.estimatedStart2HereCost;
+            batchingDeadline = other.batchingDeadline;
             deviceTypeName = other.deviceTypeName;
             merged = other.merged;
             toBeRun = other.toBeRun;
