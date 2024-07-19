@@ -94,6 +94,7 @@ if (ON_HOST STREQUAL "ON")
 
     # Find gRPC installation
     # Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
+    set(gRPC_DIR /grpc/lib/cmake/grpc)
     find_package(gRPC CONFIG REQUIRED)
     message(STATUS "Using gRPC ${gRPC_VERSION}")
 
