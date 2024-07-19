@@ -88,9 +88,8 @@ struct NodeHandle {
     bool initialNetworkCheck = false;
     ClockType lastNetworkCheckTime;
 
-    
-
     mutable std::mutex nodeHandleMutex;
+    mutable std::mutex networkCheckMutex;
 
     NodeHandle() = default;
 

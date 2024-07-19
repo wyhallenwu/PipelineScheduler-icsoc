@@ -818,6 +818,9 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size) {
  * @return NetworkEntryType 
  */
 NetworkEntryType Controller::initNetworkCheck(NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize, uint32_t numLoops) {
+    if (!node.networkCheckMutex.try_lock()) {
+        return {};
+    }
     LoopRange request;
     EmptyMessage reply;
     ClientContext context;
@@ -841,6 +844,7 @@ NetworkEntryType Controller::initNetworkCheck(NodeHandle &node, uint32_t minPack
     node.initialNetworkCheck = true;
     node.latestNetworkEntries["server"] = entries;
     node.lastNetworkCheckTime = std::chrono::system_clock::now();
+    node.networkCheckMutex.unlock();
     return entries;
 };
 
