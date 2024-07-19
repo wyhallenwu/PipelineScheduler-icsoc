@@ -1,10 +1,10 @@
 {
     "container": {
-        "cont_experimentName": "prof",
+        "cont_experimentName": "pf15",
         "cont_systemName": "ppp",
         "cont_pipeName": "pedestrian",
         "cont_taskName": "movenet",
-        "cont_hostDevice": "agx1",
+        "cont_hostDevice": "agx",
         "cont_hostDeviceType": "agx",
         "cont_name": "movenet_0",
         "cont_pipeline": [

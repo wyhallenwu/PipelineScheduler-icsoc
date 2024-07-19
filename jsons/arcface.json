@@ -1,11 +1,10 @@
 {
-    "pipeline_name": "traffic",
     "container": {
-        "cont_experimentName": "prof",
+        "cont_experimentName": "pf15",
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "arcface",
-        "cont_hostDevice": "agx1",
+        "cont_hostDevice": "agx",
         "cont_hostDeviceType": "agx",
         "cont_name": "arcface_0",
         "cont_pipeline": [
