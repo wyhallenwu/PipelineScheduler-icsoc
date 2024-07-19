@@ -50,7 +50,7 @@ double calc_pipe_utilization(const std::list<std::string> &subgraph,
 {
     // std::lock_guard<std::mutex> device_lock(device->nodeHandleMutex);
 
-    double device_utilization = device->mem_utilization[0];
+    double device_utilization = 0.0;
     for (const auto &node_name : subgraph)
     {
         auto it = model_map.find(node_name);
@@ -69,45 +69,72 @@ double calc_pipe_utilization(const std::list<std::string> &subgraph,
 
 void generate_subgraphs_helper(PipelineModel *node, std::vector<PipelineModel *> &current_path, std::vector<std::list<std::string>> &subgraphs)
 {
-    if (!node) return;
-
     std::unique_lock<std::mutex> lock(node->pipelineModelMutex);
 
-    current_path.push_back(node);
+    if (!node || current_path.size() >= 3) return;
 
-    // Generate subgraphs for the current path
-    for (size_t i = 0; i < current_path.size(); ++i)
+    if (node->name.find("sink") == std::string::npos)
     {
-        std::list<std::string> subgraph;
-        for (size_t j = i; j < current_path.size(); ++j)
+        current_path.push_back(node);
+
+        if (current_path.size() <= 3)
         {
-            subgraph.push_back(current_path[j]->name);
+            std::list<std::string> subgraph;
+            for (auto *n : current_path)
+            {
+                subgraph.push_back(n->name);
+            }
+            subgraphs.push_back(subgraph);
         }
-        subgraphs.push_back(subgraph);
+
+        // Continue with downstream nodes
+        auto downstreams = node->downstreams;
+        lock.unlock();
+
+        for (const auto &downstream : downstreams)
+        {
+            generate_subgraphs_helper(downstream.first, current_path, subgraphs);
+        }
+
+        current_path.pop_back();
     }
+}
 
-    // Continue with downstream nodes
-    auto downstreams = node->downstreams;
-    lock.unlock();
+void generate_split_subgraphs(PipelineModel *node, std::vector<std::list<std::string>> &subgraphs)
+{
+    std::unique_lock<std::mutex> lock(node->pipelineModelMutex);
 
-    for (auto &downstream : downstreams)
+    if (!node || node->downstreams.size() < 2) return;
+
+    for (size_t i = 0; i < node->downstreams.size(); ++i)
     {
-        generate_subgraphs_helper(downstream.first, current_path, subgraphs);
+        for (size_t j = i + 1; j < node->downstreams.size(); ++j)
+        {
+            std::list<std::string> subgraph;
+            subgraph.push_back(node->name);
+            subgraph.push_back(node->downstreams[i].first->name);
+            subgraph.push_back(node->downstreams[j].first->name);
+            subgraphs.push_back(subgraph);
+        }
     }
 
-    current_path.pop_back();
+    lock.unlock();
 }
 
 std::vector<std::list<std::string>> generate_subgraphs(PipelineModel *root)
 {
+    std::unique_lock<std::mutex> lock(root->pipelineModelMutex);
     std::vector<std::list<std::string>> subgraphs;
     std::vector<PipelineModel *> current_path;
-    generate_subgraphs_helper(root, current_path, subgraphs);
 
-    // Sort the subgraphs by size in descending order
-    std::sort(subgraphs.begin(), subgraphs.end(), [](const std::list<std::string> &a, const std::list<std::string> &b) {
-        return a.size() > b.size();
-    });
+    auto downstreams = root->downstreams;
+    lock.unlock();
+
+    for (const auto &downstream : downstreams)
+    {
+        generate_subgraphs_helper(downstream.first, current_path, subgraphs);
+        generate_split_subgraphs(downstream.first, subgraphs);
+    }
 
     return subgraphs;
 }
@@ -146,7 +173,7 @@ std::unordered_map<std::string, PipelineModel *> build_model_map(PipelineModel *
 
 // End of helper functions
 
-std::optional<std::list<std::string>> choosing_subgraph_for_edge(const std::vector<std::list<std::string>> &available_subgraphs,
+std::list<std::string>* choosing_subgraph_for_edge(const std::vector<std::list<std::string>> &available_subgraphs,
                                                        PipelineModel *root, std::map<std::string, NodeHandle *> devices, uint64_t desiredFps)
 {
     double best_score = 0.0;
@@ -178,12 +205,10 @@ std::optional<std::list<std::string>> choosing_subgraph_for_edge(const std::vect
 
     if (best_score == 0.0)
     {
-        return std::nullopt;
+        return nullptr;
     }
 
     std::unique_lock<std::mutex> device_lock(best_device->nodeHandleMutex);
-
-    best_device->mem_utilization[0] = best_score;
 
     // Update the device attribute for nodes in the best subgraph
     for (const auto &node_name : best_subgraph)
@@ -193,100 +218,77 @@ std::optional<std::list<std::string>> choosing_subgraph_for_edge(const std::vect
         {
             PipelineModel *node = it->second;
             std::unique_lock<std::mutex> node_lock(node->pipelineModelMutex);
-            if (node_name == "sink" || node_name == "datasource") {
-                continue;
-            }
-            else {
-                node->deviceAgent = best_device;
-                node->device = best_device->name;
-                node->deviceTypeName = device_type_str(best_device);
-            }
+            node->deviceAgent = best_device;
+            node->device = best_device->name;
+            node->deviceTypeName = device_type_str(best_device);
             node_lock.unlock();
         }
     }
     device_lock.unlock();
 
-    return best_subgraph;
+    return new std::list<std::string>(best_subgraph);
 }
 
-void update_available_subgraphs(std::vector<std::list<std::string>> &available_subgraphs,
-                                std::vector<std::list<std::string>> &selected_subgraphs,
-                                const std::list<std::string> &chosen_subgraph)
+void collect_all_nodes(PipelineModel *node, std::set<std::string> &all_nodes)
 {
-    // Add the chosen subgraph to selected subgraphs
-    selected_subgraphs.push_back(chosen_subgraph);
+    if (!node || all_nodes.find(node->name) != all_nodes.end()) return;
+    
+    all_nodes.insert(node->name);
 
-    // Create a set of nodes in the chosen subgraph for quick lookup
-    std::set<std::string> chosen_nodes(chosen_subgraph.begin(), chosen_subgraph.end());
-
-    // Remove subgraphs from available_subgraphs that have any node in chosen_nodes
-    available_subgraphs.erase(
-        std::remove_if(available_subgraphs.begin(), available_subgraphs.end(),
-                       [&chosen_nodes](const std::list<std::string> &subgraph) {
-                           for (const auto &node : subgraph)
-                           {
-                               if (chosen_nodes.find(node) != chosen_nodes.end())
-                               {
-                                   return true;
-                               }
-                           }
-                           return false;
-                       }),
-        available_subgraphs.end());
-}
-
-void place_on_edge(PipelineModel *root, std::vector<std::list<std::string>> &available_subgraphs,
-                   std::vector<std::list<std::string>> &selected_subgraphs,
-                   std::map<std::string, NodeHandle *> &devices, uint64_t desiredFps)
-{
-
-    while (!available_subgraphs.empty())
+    for (const auto &downstream : node->downstreams)
     {
-        // Choose a subgraph
-        auto chosen_subgraph = choosing_subgraph_for_edge(available_subgraphs, root, devices, desiredFps);
-
-        // If no subgraph could be chosen, return false
-        if (!chosen_subgraph.has_value())
-        {
-            return;
-        }
-
-        // Update available and selected subgraphs
-        update_available_subgraphs(available_subgraphs, selected_subgraphs, chosen_subgraph.value());
+        collect_all_nodes(downstream.first, all_nodes);
     }
 }
 
+std::set<std::string> get_remaining_nodes(PipelineModel *root, const std::list<std::string> *chosen_subgraph)
+{
+    std::set<std::string> all_nodes;
+    collect_all_nodes(root, all_nodes);
 
+    if (chosen_subgraph)
+    {
+        // Remove nodes that are in the chosen subgraph
+        for (const auto &node : *chosen_subgraph)
+        {
+            all_nodes.erase(node);
+        }
+    }
 
-void place_on_server(PipelineModel *root, std::vector<std::list<std::string>> &available_subgraphs,
-                     std::vector<std::list<std::string>> &selected_subgraphs,
-                     std::map<std::string, NodeHandle *> &devices, uint64_t desiredFps)
+    // Remove "datasource" and any nodes containing "sink"
+    all_nodes.erase("datasource");
+    for (auto it = all_nodes.begin(); it != all_nodes.end(); )
+    {
+        if (it->find("sink") != std::string::npos)
+        {
+            it = all_nodes.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    return all_nodes;
+}
+
+void place_on_server(PipelineModel *root, std::set<std::string> &remaining_nodes,
+                     std::map<std::string, NodeHandle *> &devices)
 {
     auto model_map = build_model_map(root);
-    std::list<std::string> best_subgraph;
     NodeHandle *server_node = devices.at("server");
 
-
-    while (!available_subgraphs.empty())
+    for (const auto &node_name : remaining_nodes)
     {
-        // Update the device attribute for nodes in the best subgraph
-        best_subgraph = available_subgraphs.front();
-        for (const auto &node_name : best_subgraph)
+        auto it = model_map.find(node_name);
+        if (it != model_map.end())
         {
-            auto it = model_map.find(node_name);
-            if (it != model_map.end())
-            {
-                if (node_name == "sink" || node_name == "datasource") {
-                    continue;
-                }
-                PipelineModel *node = it->second;
-                node->deviceAgent = server_node;
-                node->device = server_node->name;
-            }
+            PipelineModel *node = it->second;
+            std::unique_lock<std::mutex> node_lock(node->pipelineModelMutex);
+            node->deviceAgent = server_node;
+            node->device = server_node->name;
+            node->deviceTypeName = device_type_str(server_node);
         }
-
-        // Update available and selected subgraphs
-        update_available_subgraphs(available_subgraphs, selected_subgraphs, best_subgraph);
     }
 }
 
@@ -305,6 +307,15 @@ void print_subgraphs(const std::vector<std::list<std::string>> &subgraphs)
         }
         std::cout << std::endl;
     }
+}
+
+void print_remaining_nodes(const std::set<std::string> &nodes)
+{
+    for (const auto &node : nodes)
+    {
+        std::cout << node << " ";
+    }
+    std::cout << std::endl;
 }
 
 void print_pipeline_levels(PipelineModel* root) {
@@ -349,12 +360,11 @@ void Controller::rim_action(TaskHandle *task)
 
     uint64_t desiredFps = static_cast<uint64_t>(std::round(1000000.0 / static_cast<double>(task->tk_slo)));
     PipelineModel *root = task->tk_pipelineModels[0];
-    std::vector<std::list<std::string>> remaining_subgraphs = generate_subgraphs(root);
-    std::vector<std::list<std::string>> selected_subgraphs;
+    std::vector<std::list<std::string>> suitable_subgraphs = generate_subgraphs(root);
 
     // print_pipeline_levels(root);
 
-    // print_subgraphs(remaining_subgraphs);
+    print_subgraphs(suitable_subgraphs);
 
     std::map<std::string, NodeHandle *> edges;
     std::map<std::string, NodeHandle *> servers;
@@ -382,11 +392,12 @@ void Controller::rim_action(TaskHandle *task)
         root->deviceTypeName = device_type_str(root->deviceAgent);
     }
 
+    std::list<std::string>* chosen_subgraph = choosing_subgraph_for_edge(suitable_subgraphs, root, edges, desiredFps);
+    std::set<std::string> remaining_nodes = get_remaining_nodes(root, chosen_subgraph);
 
-    place_on_edge(root, remaining_subgraphs, selected_subgraphs, edges, desiredFps);
-    if (!remaining_subgraphs.empty()) {
-        place_on_server(root, remaining_subgraphs, selected_subgraphs, servers, desiredFps);
-    }
+    print_remaining_nodes(remaining_nodes);
+
+    place_on_server(root, remaining_nodes, servers);
 
     //update device for sink
     PipelineModel *sink = task->tk_pipelineModels[task->tk_pipelineModels.size() - 1];
