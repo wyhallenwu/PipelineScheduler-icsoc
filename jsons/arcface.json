@@ -1,5 +1,4 @@
 {
-    "pipeline_name": "traffic",
     "container": {
         "cont_experimentName": "pf15",
         "cont_systemName": "ppp",

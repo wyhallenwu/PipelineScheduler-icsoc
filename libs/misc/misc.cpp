@@ -89,6 +89,22 @@ uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &tot
 // =======================================================================================================================================================
 // =======================================================================================================================================================
 
+/**
+ * @brief Query the arrival rate of queries coming to a particular model. The function first look the most recent data.
+ * But if such data doesn't exist, it looks for the most recent profiled data.
+ * 
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param systemFPS The current system-wide fps used for data sources
+ * @param periods 
+ * @return float 
+ */
 float queryArrivalRate(
     pqxx::connection &metricsConn,
     const std::string &experimentName,
@@ -97,8 +113,8 @@ float queryArrivalRate(
     const std::string &streamName,
     const std::string &taskName,
     const std::string &modelName,
-    const std::vector<uint8_t> &periods, //seconds
-    const uint16_t systemFPS
+    const uint16_t systemFPS,
+    const std::vector<uint8_t> &periods //seconds
 ) {
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
@@ -129,7 +145,7 @@ float queryArrivalRate(
 
     if (res[0][0].is_null()) {
         // If there is no historical data, we look for the rate of the most recent profiled data
-        std::string profileTableName = abbreviate("pr" + std::to_string(systemFPS) + "_" + taskName + "_arr");
+        std::string profileTableName = abbreviate("pf" + std::to_string(systemFPS) + "_" + taskName + "_arr");
         query = "WITH recent_data AS ("
                 "   SELECT * "
                 "   FROM %s "
@@ -148,6 +164,26 @@ float queryArrivalRate(
     return res[0]["max_arrival_rate"].as<float>();
 }
 
+/**
+ * @brief Query the network conditions between two devices. The function first look the most recent data.
+ * But if such data doesn't exist, it looks for the most recent profiled data.
+ * 
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param senderHost The name of the sending device of the pair (e.g., server, nxavier1, nxavier2...)
+ * @param senderDeviceType The type of the sending device (e.g., nxavier, server, orin...)
+ * @param receiverHost The name of the receiving device of the pair (e.g., server, nxavier1, nxavier2...)
+ * @param receiverDeviceType The type of the receiving device (e.g., nxavier, server, orin...)
+ * @param networkEntries The most current network entries between the sender host and the receiver host
+ * @param systemFPS 
+ * @return NetworkProfile 
+ */
 NetworkProfile queryNetworkProfile(
     pqxx::connection &metricsConn,
     const std::string &experimentName,
@@ -206,7 +242,7 @@ NetworkProfile queryNetworkProfile(
     std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
 
     // If there is no historical data, we look for the rate of the most recent profiled data
-    std::string profileTableName = abbreviate("pr" + std::to_string(systemFPS) + "_" + taskName + "_arr");
+    std::string profileTableName = abbreviate("pf" + std::to_string(systemFPS) + "_" + taskName + "_arr");
     query = "WITH recent_data AS ("
     "   SELECT p95_out_queueing_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
     "   FROM %s "
@@ -226,7 +262,7 @@ NetworkProfile queryNetworkProfile(
     d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
 
     if ((senderHost != "server") && (senderHost == receiverHost) && (taskName.find("yolo") != std::string::npos)) {
-        d2dNetworkProfile.p95PackageSize = 0;
+        d2dNetworkProfile.p95TransferDuration = 0;
         return d2dNetworkProfile;
     }
 
@@ -265,8 +301,8 @@ ModelArrivalProfile queryModelArrivalProfile(
     const std::string &modelName,
     const std::vector<std::pair<std::string, std::string>> &commPairs,
     const std::map<std::pair<std::string, std::string>, NetworkEntryType> &networkEntries,
-    const std::vector<uint8_t> &periods, //seconds
-    const uint16_t systemFPS
+    const uint16_t systemFPS,
+    const std::vector<uint8_t> &periods //seconds
 ) {
     ModelArrivalProfile arrivalProfile;
 
@@ -300,7 +336,7 @@ ModelArrivalProfile queryModelArrivalProfile(
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
         // If there is no historical data, we look for the rate of the most recent profiled data
-        std::string profileTableName = abbreviate("pr" + std::to_string(systemFPS) + "_" + taskName + "_arr");
+        std::string profileTableName = abbreviate("pf" + std::to_string(systemFPS) + "_" + taskName + "_arr");
         query = "WITH recent_data AS ("
                 "   SELECT * "
                 "   FROM %s "
@@ -355,7 +391,7 @@ ModelArrivalProfile queryModelArrivalProfile(
         }
 
         // If there is no historical data, we look for the rate of the most recent profiled data
-        std::string profileTableName = abbreviate("pr" + std::to_string(systemFPS) + "_" + taskName + "_arr");
+        std::string profileTableName = abbreviate("pf" + std::to_string(systemFPS) + "_" + taskName + "_arr");
         query = "WITH recent_data AS ("
         "   SELECT p95_out_queueing_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
         "   FROM %s "
@@ -382,16 +418,20 @@ ModelArrivalProfile queryModelArrivalProfile(
 }
 
 /**
- * @brief Query pre, post processing latency as well as input and output sizes
+ * @brief Query process latencies (preprocessing, batch inference, postprocessing) and input/output sizes of a model
  * 
- * @param metricsConn 
- * @param experimentName 
- * @param systemName 
- * @param pipelineName 
- * @param streamName 
- * @param deviceName 
- * @param modelName 
- * @param profile this will be updated
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param deviceName The name of the device where the model is running (e.g., nxavier1, nxavier2, server...)
+ * @param deviceTypeName The type of the device (e.g., nxavier, server, orin...)
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param profile 
+ * @param systemFPS 
  */
 void queryPrePostLatency(
     pqxx::connection &metricsConn,
@@ -443,11 +483,10 @@ void queryPrePostLatency(
     }
 
     // If most current historical data is not available for some batch sizes not specified in retrievedBatchSizes, we query profiled data
-    std::string profileTableName = abbreviate("prof__" + modelNameAbbr +  "__" + deviceTypeName + "_proc");
+    std::string profileTableName = abbreviate("pf" + std::to_string(systemFPS) + "__" + modelNameAbbr +  "__" + deviceTypeName + "_proc");
     query = absl::StrFormat("WITH recent_data AS ("
                             "SELECT infer_batch_size, p95_prep_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
                             "FROM %s "
-                            "LIMIT 100 "
                             ") "
                             "SELECT "
                             "    infer_batch_size, "
@@ -456,7 +495,8 @@ void queryPrePostLatency(
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_post_duration_us) AS p95_post_duration_us_all, "
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_input_size_b) AS p95_input_size_b_all, "
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_output_size_b) AS p95_output_size_b_all "
-                            "FROM recent_data;", profileTableName);
+                            "FROM recent_data "
+                            "GROUP BY infer_batch_size;", profileTableName);
     res = pullSQL(metricsConn, query);
     for (const auto& row : res) {
         BatchSizeType batchSize = row["infer_batch_size"].as<BatchSizeType>();
@@ -464,7 +504,7 @@ void queryPrePostLatency(
             continue;
         }
         profile.batchInfer[batchSize].p95prepLat = (uint64_t) row["p95_prep_duration_us_all"].as<double>();
-        profile.batchInfer[batchSize].p95inferLat = (uint64_t) row["p95_infer_duration_us_all"].as<double>();
+        profile.batchInfer[batchSize].p95inferLat = (uint64_t) row["p95_infer_duration_us_all"].as<double>() / batchSize;
         profile.batchInfer[batchSize].p95postLat = (uint64_t) row["p95_post_duration_us_all"].as<double>();
         profile.p95InputSize = (uint32_t) row["p95_input_size_b_all"].as<float>();
         profile.p95OutputSize = (uint32_t) row["p95_output_size_b_all"].as<float>();
@@ -472,14 +512,20 @@ void queryPrePostLatency(
 }
 
 /**
- * @brief Query batch inference latency
+ * @brief Batch inference latency is queried from the most recent profiled data, ONLY for batch sizes that are not available in the most recent data.
  * 
- * @param metricsConn 
- * @param tableName 
- * @param streamName 
- * @param deviceName 
- * @param modelName 
- * @param modelProfile 
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param deviceName The name of the device where the model is running (e.g., nxavier1, nxavier2, server...)
+ * @param deviceTypeName The type of the device (e.g., nxavier, server, orin...)
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param profile 
+ * @param systemFPS 
  */
 void queryBatchInferLatency(
     pqxx::connection &metricsConn,
@@ -493,7 +539,6 @@ void queryBatchInferLatency(
     ModelProfile &profile,
     const uint16_t systemFPS
 ) {
-    BatchInferProfileListType batchInferProfile;
     std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelNameAbbr + "__" + deviceName)  + "_batch";
@@ -504,7 +549,7 @@ void queryBatchInferLatency(
 
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
-        std::string profileTableName = abbreviate("pr" + std::to_string(systemFPS) + "__" + modelNameAbbr + "__" + deviceTypeName) + "_batch";
+        std::string profileTableName = abbreviate("pf" + std::to_string(systemFPS) + "__" + modelNameAbbr + "__" + deviceTypeName) + "_batch";
         query = absl::StrFormat("SELECT infer_batch_size, percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_infer_duration_us) AS p95_infer_duration_us "
                                 "FROM %s "
                                 "GROUP BY infer_batch_size", profileTableName);
@@ -512,11 +557,28 @@ void queryBatchInferLatency(
     }
     for (const auto& row : res) {
         BatchSizeType batchSize = row[0].as<BatchSizeType>();
-        batchInferProfile[batchSize].p95inferLat = row[1].as<uint64_t>() / batchSize;
+        // If the current value is 0, which means it has not been updated
+        if (profile.batchInfer[batchSize].p95inferLat != 0) {
+            continue;
+        }
+        profile.batchInfer[batchSize].p95inferLat = row[1].as<uint64_t>() / batchSize;
     }
-    profile.batchInfer = batchInferProfile;
 }
 
+/**
+ * @brief Wrapper for batch inference latency query
+ * 
+ * @param metricsConn 
+ * @param experimentName 
+ * @param systemName 
+ * @param pipelineName 
+ * @param streamName 
+ * @param deviceName 
+ * @param deviceTypeName 
+ * @param modelName 
+ * @param systemFPS 
+ * @return BatchInferProfileListType 
+ */
 BatchInferProfileListType queryBatchInferLatency(
     pqxx::connection &metricsConn,
     const std::string &experimentName,
@@ -544,14 +606,13 @@ BatchInferProfileListType queryBatchInferLatency(
 }
 
 /**
- * @brief 
+ * @brief Query the resource requirements of a model
  * 
  * @param metricsConn 
- * @param tableName 
- * @param streamName 
- * @param deviceName 
+ * @param deviceTypeName 
  * @param modelName 
  * @param profile 
+ * @param systemFPS 
  */
 void queryResourceRequirements(
     pqxx::connection &metricsConn,
@@ -561,7 +622,7 @@ void queryResourceRequirements(
     const uint16_t systemFPS
 ) {
     std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
-    std::string tableName = abbreviate("pr" + std::to_string(systemFPS) + "__" + modelNameAbbr + "__" + deviceTypeName + "_hw");
+    std::string tableName = abbreviate("pf" + std::to_string(systemFPS) + "__" + modelNameAbbr + "__" + deviceTypeName + "_hw");
     std::string query = absl::StrFormat("SELECT batch_size, MAX(cpu_usage), MAX(mem_usage), MAX(rss_mem_usage), MAX(gpu_usage), MAX(gpu_mem_usage) "
                             "FROM %s "
                             "GROUP BY batch_size;", tableName);
@@ -579,13 +640,19 @@ void queryResourceRequirements(
 
 
 /**
- * @brief 
+ * @brief Wrapper for querying the model profile
  * 
- * @param experimentName 
- * @param pipelineName 
- * @param streamName 
- * @param deviceName 
- * @param modelName 
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param deviceName The name of the device where the model is running (e.g., nxavier1, nxavier2, server...)
+ * @param deviceTypeName The type of the device (e.g., nxavier, server, orin...)
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param systemFPS 
  * @return ModelProfile 
  */
 ModelProfile queryModelProfile(
@@ -940,6 +1007,7 @@ std::map<std::string, std::string> keywordAbbrs = {
     {"datasource", "dsrc"},
     {"traffic", "trfc"},
     {"building", "bldg"},
+    {"people", "ppl"},
     {"yolov5", "y5"},
     {"yolov5n", "y5n"},
     {"yolov5s", "y5s"},
