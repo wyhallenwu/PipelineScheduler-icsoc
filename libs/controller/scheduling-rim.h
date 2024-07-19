@@ -6,6 +6,7 @@
 
 std::string device_type_str(NodeHandle *device)
 {
+    // std::lock_guard<std::mutex> lock(device->nodeHandleMutex);
     std::string device_type;
     switch (device->type)
     {
@@ -27,7 +28,9 @@ std::string device_type_str(NodeHandle *device)
 
 uint64_t calc_model_fps(PipelineModel *currModel, NodeHandle *device)
 {
-    std::cout << "calc_model_fps" << std::endl;
+    std::lock_guard<std::mutex> model_lock(currModel->pipelineModelMutex);
+    // std::lock_guard<std::mutex> device_lock(device->nodeHandleMutex);
+
     uint64_t batchSize = 8;
 
     std::string device_type = device_type_str(device);
@@ -37,11 +40,6 @@ uint64_t calc_model_fps(PipelineModel *currModel, NodeHandle *device)
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
     uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
 
-    // std::cout << currModel->name << "   " << device->name << std::endl;
-    std::cout << "preprocessLatency: " << preprocessLatency << std::endl;
-    std::cout << "inferLatency: " << inferLatency << std::endl;
-    std::cout << "postprocessLatency: " << postprocessLatency << std::endl;
-
     currModel->expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
     return static_cast<uint64_t>(std::round(1000000.0 / static_cast<double>(currModel->expectedAvgPerQueryLatency)));
 }
@@ -50,6 +48,8 @@ double calc_pipe_utilization(const std::list<std::string> &subgraph,
                              const std::unordered_map<std::string, PipelineModel *> &model_map,
                              NodeHandle *device, uint64_t desiredFps)
 {
+    // std::lock_guard<std::mutex> device_lock(device->nodeHandleMutex);
+
     double device_utilization = device->mem_utilization[0];
     for (const auto &node_name : subgraph)
     {
@@ -71,6 +71,8 @@ void generate_subgraphs_helper(PipelineModel *node, std::vector<PipelineModel *>
 {
     if (!node) return;
 
+    std::unique_lock<std::mutex> lock(node->pipelineModelMutex);
+
     current_path.push_back(node);
 
     // Generate subgraphs for the current path
@@ -85,7 +87,10 @@ void generate_subgraphs_helper(PipelineModel *node, std::vector<PipelineModel *>
     }
 
     // Continue with downstream nodes
-    for (auto &downstream : node->downstreams)
+    auto downstreams = node->downstreams;
+    lock.unlock();
+
+    for (auto &downstream : downstreams)
     {
         generate_subgraphs_helper(downstream.first, current_path, subgraphs);
     }
@@ -120,6 +125,8 @@ std::unordered_map<std::string, PipelineModel *> build_model_map(PipelineModel *
         PipelineModel *current = q.front();
         q.pop();
 
+        std::unique_lock<std::mutex> lock(current->pipelineModelMutex);
+
         if (model_map.find(current->name) == model_map.end())
         {
             model_map[current->name] = current;
@@ -129,6 +136,9 @@ std::unordered_map<std::string, PipelineModel *> build_model_map(PipelineModel *
                 q.push(downstream.first);
             }
         }
+
+        lock.unlock();
+
     }
 
     return model_map;
@@ -139,15 +149,18 @@ std::unordered_map<std::string, PipelineModel *> build_model_map(PipelineModel *
 std::optional<std::list<std::string>> choosing_subgraph_for_edge(const std::vector<std::list<std::string>> &available_subgraphs,
                                                        PipelineModel *root, std::map<std::string, NodeHandle *> devices, uint64_t desiredFps)
 {
-    std::cout << "choosing_subgraph_for_edge" << std::endl;
+    double best_score = 0.0;
     auto model_map = build_model_map(root);
     std::list<std::string> best_subgraph;
-    double best_score = 0.0;
     NodeHandle *best_device = nullptr;
+
+    std::unique_lock<std::mutex> root_lock(root->pipelineModelMutex);
+    auto possible_devices = root->possibleDevices;
+    root_lock.unlock();
 
     for (std::map<std::string, NodeHandle *>::iterator it = devices.begin(); it != devices.end(); ++it)
     {
-        if (std::find(root->possibleDevices.begin(), root->possibleDevices.end(), it->first) != root->possibleDevices.end()) {
+        if (std::find(possible_devices.begin(), possible_devices.end(), it->first) != possible_devices.end()) {
             for (const auto &subgraph : available_subgraphs)
             {
                 double score = calc_pipe_utilization(subgraph, model_map, it->second, desiredFps);
@@ -155,7 +168,9 @@ std::optional<std::list<std::string>> choosing_subgraph_for_edge(const std::vect
                 {
                     best_score = score;
                     best_subgraph = subgraph;
+                    std::unique_lock<std::mutex> device_lock(it->second->nodeHandleMutex);
                     best_device = it->second;
+                    device_lock.unlock();
                 }
             }
         }
@@ -166,6 +181,10 @@ std::optional<std::list<std::string>> choosing_subgraph_for_edge(const std::vect
         return std::nullopt;
     }
 
+    std::unique_lock<std::mutex> device_lock(best_device->nodeHandleMutex);
+
+    best_device->mem_utilization[0] = best_score;
+
     // Update the device attribute for nodes in the best subgraph
     for (const auto &node_name : best_subgraph)
     {
@@ -173,21 +192,19 @@ std::optional<std::list<std::string>> choosing_subgraph_for_edge(const std::vect
         if (it != model_map.end())
         {
             PipelineModel *node = it->second;
-            if (node_name == "sink") {
+            std::unique_lock<std::mutex> node_lock(node->pipelineModelMutex);
+            if (node_name == "sink" || node_name == "datasource") {
                 continue;
-            }
-            else if (node_name == "datasource") {
-                NodeHandle *source_sink = devices.at(node->device);
-                node->deviceAgent = source_sink;
-                node->deviceTypeName = device_type_str(source_sink);
             }
             else {
                 node->deviceAgent = best_device;
                 node->device = best_device->name;
                 node->deviceTypeName = device_type_str(best_device);
             }
+            node_lock.unlock();
         }
     }
+    device_lock.unlock();
 
     return best_subgraph;
 }
@@ -222,7 +239,7 @@ void place_on_edge(PipelineModel *root, std::vector<std::list<std::string>> &ava
                    std::vector<std::list<std::string>> &selected_subgraphs,
                    std::map<std::string, NodeHandle *> &devices, uint64_t desiredFps)
 {
-    std::cout << "Scheduling using RIM2" << std::endl;
+
     while (!available_subgraphs.empty())
     {
         // Choose a subgraph
@@ -233,20 +250,20 @@ void place_on_edge(PipelineModel *root, std::vector<std::list<std::string>> &ava
         {
             return;
         }
+
         // Update available and selected subgraphs
         update_available_subgraphs(available_subgraphs, selected_subgraphs, chosen_subgraph.value());
     }
 }
 
+
+
 void place_on_server(PipelineModel *root, std::vector<std::list<std::string>> &available_subgraphs,
                      std::vector<std::list<std::string>> &selected_subgraphs,
                      std::map<std::string, NodeHandle *> &devices, uint64_t desiredFps)
 {
-
-    std::cout << "Scheduling using RIM3" << std::endl;
     auto model_map = build_model_map(root);
     std::list<std::string> best_subgraph;
-    double best_score = 0.0;
     NodeHandle *server_node = devices.at("server");
 
 
@@ -259,6 +276,9 @@ void place_on_server(PipelineModel *root, std::vector<std::list<std::string>> &a
             auto it = model_map.find(node_name);
             if (it != model_map.end())
             {
+                if (node_name == "sink" || node_name == "datasource") {
+                    continue;
+                }
                 PipelineModel *node = it->second;
                 node->deviceAgent = server_node;
                 node->device = server_node->name;
@@ -325,7 +345,8 @@ void print_pipeline_levels(PipelineModel* root) {
 void Controller::rim_action(TaskHandle *task)
 {
     // The desired fps
-    std::cout << "Scheduling using RIM1" << std::endl;
+    std::lock_guard<std::mutex> task_lock(task->tk_mutex);
+
     uint64_t desiredFps = static_cast<uint64_t>(std::round(1000000.0 / static_cast<double>(task->tk_slo)));
     PipelineModel *root = task->tk_pipelineModels[0];
     std::vector<std::list<std::string>> remaining_subgraphs = generate_subgraphs(root);
@@ -333,24 +354,34 @@ void Controller::rim_action(TaskHandle *task)
 
     // print_pipeline_levels(root);
 
-    print_subgraphs(remaining_subgraphs);
+    // print_subgraphs(remaining_subgraphs);
 
     std::map<std::string, NodeHandle *> edges;
-    std::cout << "About to create servers map" << std::endl;
     std::map<std::string, NodeHandle *> servers;
-    std::cout << "Servers map created" << std::endl;
 
-    for (const auto &pair : devices.list)
     {
-        if (pair.second->name == "server")
+        std::lock_guard<std::mutex> devices_lock(devices.devicesMutex);
+        for (const auto &pair : devices.list)
         {
-            servers[pair.first] = pair.second;
-        }
-        else
-        {
-            edges[pair.first] = pair.second;
+            if (pair.second->name == "server")
+            {
+                servers[pair.first] = pair.second;
+            }
+            else
+            {
+                edges[pair.first] = pair.second;
+            }
         }
     }
+    
+
+    //update device for datasource
+    {
+        std::lock_guard<std::mutex> source_lock(root->pipelineModelMutex);
+        root->deviceAgent = edges.at(root->device);
+        root->deviceTypeName = device_type_str(root->deviceAgent);
+    }
+
 
     place_on_edge(root, remaining_subgraphs, selected_subgraphs, edges, desiredFps);
     if (!remaining_subgraphs.empty()) {
@@ -359,17 +390,14 @@ void Controller::rim_action(TaskHandle *task)
 
     //update device for sink
     PipelineModel *sink = task->tk_pipelineModels[task->tk_pipelineModels.size() - 1];
-    sink->deviceAgent = servers.at("server");
-    sink->deviceTypeName = device_type_str(servers.at("server"));
+    {
+        std::lock_guard<std::mutex> sink_lock(sink->pipelineModelMutex);
+        sink->deviceAgent = servers.at("server");
+        sink->deviceTypeName = device_type_str(sink->deviceAgent);
+    }
 }
 
-// void Controller::schedule_rim(std::map<std::string, TaskHandle*> &tasks){
-//     for (auto [taskName, taskHandle]: tasks) {
-//         rim_action(taskHandle);
-//     } 
-// }
 // ====================================================== END OF IMPLEMENTATION OF RIM  ===========================================================
 
-// 1. Not integrate lock mutex
 // 2. Comment out all the important functions
 // 3. The behaviour of unscheduled and scheduled pipeline is not correct

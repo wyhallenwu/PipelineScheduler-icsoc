@@ -14,10 +14,6 @@ void Controller::queryingProfiles(TaskHandle *task) {
         if (model->name.find("datasource") != std::string::npos || model->name.find("sink") != std::string::npos) {
             continue;
         }
-        // std::cout << model->device << std::endl;
-        // for (const auto& [key, value] : deviceList) {
-        //     std::cout << key << " " << value << std::endl;
-        // }
         model->deviceTypeName = getDeviceTypeName(deviceList.at(model->device)->type);
         std::vector<std::string> upstreamPossibleDeviceList = model->upstreams.front().first->possibleDevices;
         std::vector<std::string> thisPossibleDeviceList = model->possibleDevices;
@@ -43,30 +39,6 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_systemFPS
             );
         }
-        // for (const auto &pair : possibleDevicePairList) {
-        //     std::string senderDeviceType = getDeviceTypeName(deviceList.at(pair.first)->type);
-        //     std::string receiverDeviceType = getDeviceTypeName(deviceList.at(pair.second)->type);
-        //     containerName = model->name + "-" + receiverDeviceType;
-        //     std::unique_lock lock(devices.list[pair.first]->nodeHandleMutex);
-        //     NetworkEntryType entry = devices.list[pair.first]->latestNetworkEntries[receiverDeviceType];
-        //     lock.unlock();
-        //     NetworkProfile test = queryNetworkProfile(
-        //         *ctrl_metricsServerConn,
-        //         ctrl_experimentName,
-        //         ctrl_systemName,
-        //         task->tk_name,
-        //         task->tk_source,
-        //         ctrl_containerLib[containerName].taskName,
-        //         ctrl_containerLib[containerName].modelName,
-        //         pair.first,
-        //         senderDeviceType,
-        //         pair.second,
-        //         receiverDeviceType,
-        //         entry,
-        //         ctrl_systemFPS
-        //     );
-        //     model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
-        // }
         for (const auto deviceName : model->possibleDevices) {
             std::string deviceTypeName = getDeviceTypeName(deviceList.at(deviceName)->type);
             containerName = model->name + "-" + deviceTypeName;
@@ -81,6 +53,20 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_containerLib[containerName].modelName,
                 ctrl_systemFPS
             );
+
+
+            //----------------------------------------
+            // std::cout << ctrl_experimentName << std::endl;
+            // std::cout << ctrl_systemName << std::endl;
+            // std::cout << task->tk_name << std::endl;
+            // std::cout << task->tk_source << std::endl;
+            // std::cout << deviceName << std::endl;
+            // std::cout << deviceTypeName << std::endl;
+            // std::cout << ctrl_containerLib[containerName].modelName << std::endl;
+            // std::cout << ctrl_systemFPS << std::endl;
+
+            //----------------------------------------
+
             model->processProfiles[deviceTypeName] = profile;
             model->processProfiles[deviceTypeName].maxBatchSize = std::max_element(
                 profile.batchInfer.begin(),
@@ -90,117 +76,104 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 }
             )->first;
         }
+    }
+}
 
-        // ModelArrivalProfile profile = queryModelArrivalProfile(
-        //     *ctrl_metricsServerConn,
-        //     ctrl_experimentName,
-        //     ctrl_systemName,
-        //     t.name,
-        //     t.source,
-        //     ctrl_containerLib[containerName].taskName,
-        //     ctrl_containerLib[containerName].modelName,
-        //     possibleDeviceList,
-        //     possibleNetworkEntryPairs
-        // );
-        // std::cout << "sdfsdfasdf" << std::endl;
+void Controller::setRandomMemUtilization(Controller::Devices& devices) {
+    std::lock_guard<std::mutex> lock(devices.devicesMutex);
+    
+    // Seed the random number generator
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+    std::cout << "Memory Utilization after setting random values:" << std::endl;
+    std::cout << std::fixed << std::setprecision(4);  // Set output precision to 2 decimal places
+
+    for (auto& pair : devices.list) {
+        NodeHandle* node = pair.second;
+        
+        // Skip if the device is a server
+        if (node->name == "server") {
+            continue;
+        }
+
+        // Ensure mem_utilization has one element
+        if (node->mem_utilization.empty()) {
+            node->mem_utilization.resize(1, 0.0);
+        }
+
+        // Set random mem_utilization between 0.0 and 1.0
+        node->mem_utilization[0] = static_cast<double>(std::rand()) / RAND_MAX;
+
+        // Print the device name and its new utilization
+        std::cout << "Device: " << node->name << ", Utilization: " 
+                  << node->mem_utilization[0] * 100 << "%" << std::endl;
     }
 }
 
 void Controller::Scheduling() {
     while (running) {
-         // Check if it is the next scheduling period
+        // Check if it is the next scheduling period
         Stopwatch schedulingSW;
         schedulingSW.start();
         if (std::chrono::duration_cast<std::chrono::seconds>(
                 std::chrono::system_clock::now() - ctrl_nextSchedulingTime)
                 .count() < 10)
         {
-            continue;
-        }
-        auto taskList = ctrl_unscheduledPipelines.getMap();
-        // auto deviceList = devices.getMap();
-        if (taskList.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
         }
 
-        for (auto &[task_name, task] : taskList)
+        auto localTaskList = ctrl_unscheduledPipelines.getMap();
+        if (localTaskList.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+
+        std::vector<std::string> processedTasks;
+
+        for (auto &[task_name, task] : localTaskList)
         {
-            std::cout << "task name: " << task_name << std::endl;
-            // for (auto model : task->tk_pipelineModels)
-            // {
-
-            //     std::unique_lock<std::mutex> lock_pipeline_model(model->pipelineModelMutex);
-
-            //     model->deviceTypeName = ctrl_sysDeviceInfo[deviceList[model->device]->type];
-            //     model->deviceAgent = deviceList[model->device];
-
-            //     if (model->name == "datasource" || model->name == "sink") {
-            //         continue;
-            //     }
+            try {
+                std::cout << "Processing task: " << task_name << std::endl;
                 
-            //     for (const auto& [deviceEnum, deviceTypeName] : ctrl_sysDeviceInfo) {
-            //         if (deviceTypeName == "orinano") {
-            //             continue;
-            //         }
-            //         std::string containerName =  model->name + "-" + deviceTypeName;
-            //         std::cout << "model name: " << model->name << std::endl;
-            //         std::cout << "model device name: " << model->device << ", model device type name: " << model->deviceTypeName << std::endl;
-            //         std::cout << "container name: " << ctrl_containerLib[containerName].modelName << std::endl;
-            //         BatchInferProfileListType batch_profiles = queryBatchInferLatency(
-            //                 *ctrl_metricsServerConn.get(),
-            //                 ctrl_experimentName,
-            //                 ctrl_systemName,
-            //                 task->tk_name,
-            //                 task->tk_source,
-            //                 model->device,
-            //                 deviceTypeName,
-            //                 ctrl_containerLib[containerName].modelName,
-            //                 ctrl_systemFPS);
+                queryingProfiles(task);
 
-            //         std::cout << "device type name: " << deviceTypeName << std::endl;
-            //         for (const auto& [batchSize, profile] : batch_profiles) {
-            //             model->processProfiles[deviceTypeName].batchInfer[batchSize].p95prepLat = profile.p95prepLat;
-            //             model->processProfiles[deviceTypeName].batchInfer[batchSize].p95inferLat = profile.p95inferLat;
-            //             model->processProfiles[deviceTypeName].batchInfer[batchSize].p95postLat = profile.p95postLat;
-            //             std::cout << "batch size: " << batchSize << std::endl;
-            //             std::cout << "p95prepLat: " << model->processProfiles[deviceTypeName].batchInfer[batchSize].p95prepLat << std::endl;
-            //             std::cout << "p95inferLat: " << model->processProfiles[deviceTypeName].batchInfer[batchSize].p95inferLat << std::endl;
-            //             std::cout << "p95postLat: " << model->processProfiles[deviceTypeName].batchInfer[batchSize].p95postLat << std::endl;
-            //         }
-            //     }
+                try {
+                    std::cout << "START SCHEDULING" << std::endl;
+                    rim_action(task);
+                    std::cout << "SCHEDULING END" << std::endl;
+                } catch (const std::exception& e) {
+                    std::cerr << "Exception in rim_action: " << e.what() << std::endl;
+                } catch (...) {
+                    std::cerr << "Unknown exception in rim_action" << std::endl;
+                }
 
-            //     lock_pipeline_model.unlock();
-            // }
-            queryingProfiles(task);
+                setRandomMemUtilization(devices);
 
-            std::cout << "START SCHEDULING" << std::endl;
-
-            rim_action(task);
-
-            std::cout << "SCHEDULING END" << std::endl;
-        }
-        
-        // Update the scheduled pipelines
-        ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
-
-        // Clear the unscheduled pipelines
-        std::vector<std::string> keysToRemove;
-    
-        // Get all the keys (task names) from the map
-        {
-            for (const auto& pair : taskList) {
-                keysToRemove.push_back(pair.first);
+                processedTasks.push_back(task_name);
+            } catch (const std::exception& e) {
+                std::cerr << "Exception caught while processing task " << task_name << ": " << e.what() << std::endl;
+                // Log the error, but continue processing other tasks
             }
         }
         
-        // Remove each task
-        for (const auto& key : keysToRemove) {
-            ctrl_unscheduledPipelines.removeTask(key);
+        // Update the scheduled pipelines and remove processed tasks from unscheduled pipelines
+        {
+            std::lock_guard<std::mutex> lock(ctrl_unscheduledPipelines.tasksMutex);
+            std::lock_guard<std::mutex> lock2(ctrl_scheduledPipelines.tasksMutex);
+            
+            for (const auto& task_name : processedTasks) {
+                if (ctrl_unscheduledPipelines.hasTask(task_name)) {
+                    TaskHandle* task = ctrl_unscheduledPipelines.getTask(task_name);
+                    ctrl_scheduledPipelines.addTask(task_name, task);
+                    ctrl_unscheduledPipelines.removeTask(task_name);
+                }
+            }
         }
-        // ApplyScheduling();
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
-    }
 
+        // ApplyScheduling();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    }
 }
 
 bool Controller::containerTemporalScheduling(ContainerHandle *container) {

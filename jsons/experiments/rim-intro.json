@@ -6,17 +6,63 @@
     "port_offset": 3000,
     "initial_pipelines": [
         {
-            "pipeline_name": "traffic",
+            "pipeline_name": "traffic1",
             "pipeline_target_slo": 500000,
             "pipeline_type": 0,
             "video_source": "../data/preview/traffic_profiling.mp4",
             "pipeline_source_device": "agxavier1"
         }, {
-            "pipeline_name": "people",
+            "pipeline_name": "people1",
             "pipeline_target_slo": 450000,
             "pipeline_type": 2,
             "video_source": "../data/preview/people_profiling.mp4",
             "pipeline_source_device": "nxavier1"
+        },
+        {
+            "pipeline_name": "traffic2",
+            "pipeline_target_slo": 500000,
+            "pipeline_type": 0,
+            "video_source": "../data/preview/traffic_profiling.mp4",
+            "pipeline_source_device": "nxavier2"
+        }, {
+            "pipeline_name": "people2",
+            "pipeline_target_slo": 450000,
+            "pipeline_type": 2,
+            "video_source": "../data/preview/people_profiling.mp4",
+            "pipeline_source_device": "nxavier3"
+        },
+        {
+            "pipeline_name": "traffic3",
+            "pipeline_target_slo": 500000,
+            "pipeline_type": 0,
+            "video_source": "../data/preview/traffic_profiling.mp4",
+            "pipeline_source_device": "nxavier4"
+        }, {
+            "pipeline_name": "people3",
+            "pipeline_target_slo": 450000,
+            "pipeline_type": 2,
+            "video_source": "../data/preview/people_profiling.mp4",
+            "pipeline_source_device": "nxavier5"
+        },
+        {
+            "pipeline_name": "traffic4",
+            "pipeline_target_slo": 500000,
+            "pipeline_type": 0,
+            "video_source": "../data/preview/traffic_profiling.mp4",
+            "pipeline_source_device": "orinano1"
+        }, {
+            "pipeline_name": "people4",
+            "pipeline_target_slo": 450000,
+            "pipeline_type": 2,
+            "video_source": "../data/preview/people_profiling.mp4",
+            "pipeline_source_device": "orinano2"
+        },
+        {
+            "pipeline_name": "traffic5",
+            "pipeline_target_slo": 500000,
+            "pipeline_type": 0,
+            "video_source": "../data/preview/traffic_profiling.mp4",
+            "pipeline_source_device": "orinano3"
         }
     ]
 }
