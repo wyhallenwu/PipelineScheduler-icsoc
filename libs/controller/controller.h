@@ -88,9 +88,8 @@ struct NodeHandle {
     bool initialNetworkCheck = false;
     ClockType lastNetworkCheckTime;
 
-    
-
     mutable std::mutex nodeHandleMutex;
+    mutable std::mutex networkCheckMutex;
 
     NodeHandle() = default;
 
@@ -188,8 +187,14 @@ struct ContainerHandle {
     uint8_t numMicroservices = 5;
     // Average latency to query to reach from the upstream
     uint64_t expectedTransferLatency = 0;
-    // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
+    // Average in queueing latency, subjected to the arrival rate and processing rate of preprocessor
     uint64_t expectedQueueingLatency = 0;
+    // Average batching latency, subjected to the preprocessing rate, batch size and processing rate of inferencer
+    uint64_t expectedBatchingLatency = 0;
+    // Average post queueing latency, subjected to the processing rate of postprocessor
+    uint64_t expectedPostQueueingLatency = 0;
+    // Average out queueing latency, subjected to the processing rate of sender
+    uint64_t expectedOutQueueingLatency = 0;
     // Average latency to preprocess each query
     uint64_t expectedPreprocessLatency = 0;
     // Average latency to process each batch running at the specified batch size
@@ -269,6 +274,9 @@ struct ContainerHandle {
         numMicroservices = other.numMicroservices;
         expectedTransferLatency = other.expectedTransferLatency;
         expectedQueueingLatency = other.expectedQueueingLatency;
+        expectedBatchingLatency = other.expectedBatchingLatency;
+        expectedPostQueueingLatency = other.expectedPostQueueingLatency;
+        expectedOutQueueingLatency = other.expectedOutQueueingLatency;
         expectedPreprocessLatency = other.expectedPreprocessLatency;
         expectedInferLatency = other.expectedInferLatency;
         expectedPostprocessLatency = other.expectedPostprocessLatency;
@@ -304,6 +312,9 @@ struct ContainerHandle {
             numMicroservices = other.numMicroservices;
             expectedTransferLatency = other.expectedTransferLatency;
             expectedQueueingLatency = other.expectedQueueingLatency;
+            expectedBatchingLatency = other.expectedBatchingLatency;
+            expectedPostQueueingLatency = other.expectedPostQueueingLatency;
+            expectedOutQueueingLatency = other.expectedOutQueueingLatency;
             expectedPreprocessLatency = other.expectedPreprocessLatency;
             expectedInferLatency = other.expectedInferLatency;
             expectedPostprocessLatency = other.expectedPostprocessLatency;
@@ -335,25 +346,34 @@ struct PipelineModel {
     // The assigned cuda device for each replica
     std::vector<uint8_t> cudaDevices;
     // Average latency to query to reach from the upstream
-    uint64_t expectedTransferLatency;
+    uint64_t expectedTransferLatency = 0;
     // Average queueing latency, subjected to the arrival rate and processing rate of preprocessor
-    uint64_t expectedQueueingLatency;
+    uint64_t expectedQueueingLatency = 0;
+    // Average batching latency, subjected to the preprocessing rate, batch size and processing rate of inferencer
+    uint64_t expectedBatchingLatency = 0;
+    // Average post queueing latency, subjected to the processing rate of postprocessor
+    uint64_t expectedPostQueueingLatency = 0;
+    // Average out queueing latency, subjected to the processing rate of sender
+    uint64_t expectedOutQueueingLatency = 0;
     // Average latency to process each query
-    uint64_t expectedAvgPerQueryLatency;
+    uint64_t expectedAvgPerQueryLatency = 0;
     // Maximum latency to process each query as ones that come later have to wait to be processed in batch
-    uint64_t expectedMaxProcessLatency;
+    uint64_t expectedMaxProcessLatency = 0;
     // Latency from the start of the pipeline until the end of this model
     uint64_t expectedStart2HereLatency = -1;
     // The estimated cost per query processed by this model
     uint64_t estimatedPerQueryCost = 0;
     // The estimated latency of the model
     uint64_t estimatedStart2HereCost = 0;
+    // Batching deadline
+    uint64_t batchingDeadline = 9999999999;
 
     std::string device;
     std::string deviceTypeName;
     NodeHandle *deviceAgent;
 
     bool merged = false;
+    bool toBeRun = true;
 
     std::vector<std::string> possibleDevices;
     // Manifestations are the list of containers that will be created for this model
@@ -379,6 +399,7 @@ struct PipelineModel {
                   uint64_t expectedMaxProcessLatency = 0,
                   const std::string& deviceTypeName = "",
                   bool merged = false,
+                  bool toBeRun = true,
                   const std::vector<std::string>& possibleDevices = {})
         : device(device),
           name(name),
@@ -397,6 +418,7 @@ struct PipelineModel {
           expectedMaxProcessLatency(expectedMaxProcessLatency),
           deviceTypeName(deviceTypeName),
           merged(merged),
+          toBeRun(toBeRun),
           possibleDevices(possibleDevices) {}
 
     // Copy constructor
@@ -417,13 +439,18 @@ struct PipelineModel {
         cudaDevices = other.cudaDevices;
         expectedTransferLatency = other.expectedTransferLatency;
         expectedQueueingLatency = other.expectedQueueingLatency;
+        expectedBatchingLatency = other.expectedBatchingLatency;
+        expectedPostQueueingLatency = other.expectedPostQueueingLatency;
+        expectedOutQueueingLatency = other.expectedOutQueueingLatency;
         expectedAvgPerQueryLatency = other.expectedAvgPerQueryLatency;
         expectedMaxProcessLatency = other.expectedMaxProcessLatency;
         expectedStart2HereLatency = other.expectedStart2HereLatency;
         estimatedPerQueryCost = other.estimatedPerQueryCost;
         estimatedStart2HereCost = other.estimatedStart2HereCost;
+        batchingDeadline = other.batchingDeadline;
         deviceTypeName = other.deviceTypeName;
         merged = other.merged;
+        toBeRun = other.toBeRun;
         possibleDevices = other.possibleDevices;
         manifestations = {};
         for (auto& container : other.manifestations) {
@@ -451,13 +478,18 @@ struct PipelineModel {
             cudaDevices = other.cudaDevices;
             expectedTransferLatency = other.expectedTransferLatency;
             expectedQueueingLatency = other.expectedQueueingLatency;
+            expectedBatchingLatency = other.expectedBatchingLatency;
+            expectedPostQueueingLatency = other.expectedPostQueueingLatency;
+            expectedOutQueueingLatency = other.expectedOutQueueingLatency;
             expectedAvgPerQueryLatency = other.expectedAvgPerQueryLatency;
             expectedMaxProcessLatency = other.expectedMaxProcessLatency;
             expectedStart2HereLatency = other.expectedStart2HereLatency;
             estimatedPerQueryCost = other.estimatedPerQueryCost;
             estimatedStart2HereCost = other.estimatedStart2HereCost;
+            batchingDeadline = other.batchingDeadline;
             deviceTypeName = other.deviceTypeName;
             merged = other.merged;
+            toBeRun = other.toBeRun;
             possibleDevices = other.possibleDevices;
             manifestations = {};
             for (auto& container : other.manifestations) {
@@ -529,6 +561,24 @@ struct TaskHandle {
         for (auto& model : other.tk_pipelineModels) {
             tk_pipelineModels.push_back(new PipelineModel(*model));
         }
+        for (auto& model : this->tk_pipelineModels) {
+            for (auto& downstream : model->downstreams) {
+                for (auto& model2 : tk_pipelineModels) {
+                    if (model2->name != downstream.first->name || model2->device != downstream.first->device) {
+                        continue;
+                    }
+                    downstream.first = model2;
+                }
+            }
+            for (auto& upstream : model->upstreams) {
+                for (auto& model2 : tk_pipelineModels) {
+                    if (model2->name != upstream.first->name || model2->device != upstream.first->device) {
+                        continue;
+                    }
+                    upstream.first = model2;
+                }
+            }
+        }
         tk_newlyAdded = other.tk_newlyAdded;
     }
 
@@ -549,6 +599,24 @@ struct TaskHandle {
             tk_pipelineModels = {};
             for (auto& model : other.tk_pipelineModels) {
                 tk_pipelineModels.push_back(new PipelineModel(*model));
+            }
+            for (auto& model : this->tk_pipelineModels) {
+                for (auto& downstream : model->downstreams) {
+                    for (auto& model2 : tk_pipelineModels) {
+                        if (model2->name != downstream.first->name || model2->device != downstream.first->device) {
+                            continue;
+                        }
+                        downstream.first = model2;
+                    }
+                }
+                for (auto& upstream : model->upstreams) {
+                    for (auto& model2 : tk_pipelineModels) {
+                        if (model2->name != upstream.first->name || model2->device != upstream.first->device) {
+                            continue;
+                        }
+                        upstream.first = model2;
+                    }
+                }
             }
             tk_newlyAdded = other.tk_newlyAdded;
         }
