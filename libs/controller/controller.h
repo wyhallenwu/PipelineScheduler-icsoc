@@ -88,6 +88,8 @@ struct NodeHandle {
     bool initialNetworkCheck = false;
     ClockType lastNetworkCheckTime;
 
+    std::map<std::string, PipelineModel *> modelList;
+
     mutable std::mutex nodeHandleMutex;
     mutable std::mutex networkCheckMutex;
 
@@ -941,7 +943,7 @@ private:
         std::map<std::string, TaskHandle*> list = {};
         mutable std::mutex tasksMutex;
     };
-    Tasks ctrl_unscheduledPipelines, ctrl_scheduledPipelines;
+    Tasks ctrl_unscheduledPipelines, ctrl_scheduledPipelines, ctrl_pastScheduledPipelines;
 
     struct Containers {
     public:

@@ -241,11 +241,64 @@ void Controller::ApplyScheduling() {
     std::vector<ContainerHandle *> new_containers;
     std::unique_lock lock_devices(devices.devicesMutex);
     std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
+    std::unique_lock lock_pastPipelines(ctrl_pastScheduledPipelines.tasksMutex);
     std::unique_lock lock_containers(containers.containersMutex);
 
-    for (auto &pipe: ctrl_scheduledPipelines.list) {
-        for (auto &model: pipe.second->tk_pipelineModels) {
+    // designate all current models no longer valid to run
+    // after scheduling some of them will be designated as valid
+    // All the invalid will be stopped and removed.
+    for (auto &[deviceName, device]: devices.list) {
+        std::unique_lock lock_device(device->nodeHandleMutex);
+        for (auto &[modelName, model] : device->modelList) {
+            model->toBeRun = false;
+        }
+    }
+
+    /**
+     * @brief // Turn schedule tasks/pipelines into containers
+     * Containers that are already running may be kept running if they are still valid
+     */
+    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+        for (auto &model: pipe->tk_pipelineModels) {
+            auto device = devices.list[model->device];
             std::unique_lock lock_model(model->pipelineModelMutex);
+
+            // look for the model full name 
+            std::string modelFullName = pipe->tk_fullName + "-" + model->name;
+            bool pipelineExists = false, modelRunning = false;
+
+            // check if the pipeline already been scheduled once
+            if (ctrl_pastScheduledPipelines.list.find(pipeName) != ctrl_pastScheduledPipelines.list.end()) {
+                pipelineExists = true;
+            }
+
+            // If pipeline already exists, it means the model is currently running, either on the same device or a different device
+            // compared to the currently scheduled one.
+            PipelineModelListType::iterator it = ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.end();
+            PipelineModel* pastModel = nullptr;
+            if (pipelineExists) {
+                auto it = std::find_if(ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.begin(),
+                                              ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.end(),
+                                              [&modelFullName](PipelineModel *m) {
+                                                  return m->name == modelFullName;
+                                              });
+            }
+
+            if (it != ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.end()) {
+                modelRunning = true;
+                pastModel = *it;
+            }
+
+            // If the model is running, transfer all the containers that are running to the new model
+            if (modelRunning) {
+                std::vector<ContainerHandle*> pastModelContainers = pastModel->task->tk_subTasks[model->name];
+                for (auto container: pastModelContainers) {
+                    if (container->device_agent->name == model->device) {
+                        model->task->tk_subTasks[model->name].push_back(container);
+                    }
+                }
+            }
+
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
             // make sure enough containers are running with the right configurations
             if (candidates.size() < model->numReplicas) {
@@ -287,6 +340,13 @@ void Controller::ApplyScheduling() {
         StartContainer(container);
         containers.list.insert({container->name, container});
     }
+
+    lock_containers.unlock();
+    lock_devices.unlock();
+    lock_pipelines.unlock();
+    lock_pastPipelines.unlock();
+
+    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 }
 
 bool CheckMergable(const std::string &m) {
