@@ -237,9 +237,9 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
  *
  */
 void Controller::ApplyScheduling() {
-    // ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
+    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
     // collect all running containers by device and model name
-    // while (true) { // TODO: REMOVE. ONLY FOR TESTING
+    while (true) { // TODO: REMOVE. ONLY FOR TESTING
     std::vector<ContainerHandle *> new_containers;
     std::unique_lock lock_devices(devices.devicesMutex);
     std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
@@ -262,6 +262,9 @@ void Controller::ApplyScheduling() {
      */
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
+            if (ctrl_systemName != "ppp") {
+                model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
+            }
             auto device = devices.list[model->device];
             std::unique_lock lock_model(model->pipelineModelMutex);
 
@@ -365,7 +368,7 @@ void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-    // } // TODO: REMOVE. ONLY FOR TESTING
+    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
