@@ -119,9 +119,29 @@ void Controller::Scheduling()
         }
         auto taskList = ctrl_unscheduledPipelines.getMap();
         auto deviceList = devices.getMap();
-        if (taskList.empty())
+        if (taskList.size() < 4)
         {
             continue;
+        }
+
+        std::vector<std::string> taskTypes = {"traffic", "people"};
+        for (auto taskType : taskTypes)
+        {
+            if (taskList.find(taskType) == taskList.end())
+            {
+                continue;
+            }
+            for (auto &[taskName, taskHandle] : taskList)
+            {
+                if (taskName.find(taskType) == std::string::npos)
+                {
+                    continue;
+                }
+                taskList[taskType]->tk_pipelineModels.emplace_back(new PipelineModel(*taskHandle->tk_pipelineModels.front()));
+                taskList[taskType]->tk_pipelineModels.back()->downstreams = {};
+                auto yolo = taskList[taskType]->tk_pipelineModels.front()->downstreams.front().first;
+                taskList[taskType]->tk_pipelineModels.back()->downstreams.emplace_back(std::make_pair(yolo, -1));
+            }
         }
 
         // // FIXME: already empty here
