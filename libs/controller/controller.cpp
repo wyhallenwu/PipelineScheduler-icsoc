@@ -239,7 +239,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
     // collect all running containers by device and model name
-    while (true) { // TODO: REMOVE. ONLY FOR TESTING
+    // while (true) { // TODO: REMOVE. ONLY FOR TESTING
     if (ctrl_scheduledPipelines.list.empty()){
         std::cout << "empty pipeline in the beginning" << std::endl;
     }
@@ -407,7 +407,7 @@ void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-    } // TODO: REMOVE. ONLY FOR TESTING
+    // } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
