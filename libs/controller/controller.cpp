@@ -270,6 +270,7 @@ void Controller::ApplyScheduling() {
         for (auto &model: pipe->tk_pipelineModels) {
             if (ctrl_systemName != "ppp") {
                 model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
+                model->numReplicas = 1;
             }
             auto device = devices.list[model->device];
             std::unique_lock lock_model(model->pipelineModelMutex);
