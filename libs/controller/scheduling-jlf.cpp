@@ -124,22 +124,7 @@ void Controller::Scheduling()
             continue;
         }
 
-        // // FIXME: already empty here
-        // for (auto &[task_name, task] : ctrl_unscheduledPipelines.list)
-        // {
-        //     std::cout << "s task name: " << task_name << std::endl;
-        //     std::cout << "s full name" << task->tk_fullName << ", last_latency: " << task->tk_lastLatency << ", slo: " << task->tk_slo << std::endl;
-        //     for (auto &model : task->tk_pipelineModels)
-        //     {
-        //         std::unique_lock<std::mutex> model_lock(model->pipelineModelMutex);
-        //         std::cout << "s model device name: " << model->deviceTypeName
-        //                   << ", s model batch size: " << model->batchSize << std::endl;
-        //         auto downstream = model->downstreams.front().first;
-        //         std::unique_lock<std::mutex> d_lock(downstream->pipelineModelMutex);
-        //         std::cout << "s dstream name: " << downstream->deviceTypeName << std::endl;
-        //     }
-        // }
-
+        // divicde in the two groups: people, traffic
         // collect all information
         model_profiles_jf.infos.clear();
         client_profiles_jf.infos.clear();

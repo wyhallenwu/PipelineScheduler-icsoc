@@ -1156,6 +1156,8 @@ private:
     uint16_t ctrl_systemFPS;
 
     // ADD
+    std::map<std::string, ClientProfilesJF> clientProfilesCSJF;
+    std::map<std::string, ModelProfilesJF> modelProfilesCSJF;
     ClientProfilesJF client_profiles_jf;
     ModelProfilesJF model_profiles_jf;
 };
