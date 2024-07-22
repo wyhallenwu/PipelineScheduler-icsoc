@@ -240,6 +240,10 @@ void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
     // collect all running containers by device and model name
     while (true) { // TODO: REMOVE. ONLY FOR TESTING
+    if (ctrl_scheduledPipelines.list.empty()){
+        std::cout << "empty pipeline in the beginning" << std::endl;
+    }
+
     std::vector<ContainerHandle *> new_containers;
     std::unique_lock lock_devices(devices.devicesMutex);
     std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
@@ -255,6 +259,8 @@ void Controller::ApplyScheduling() {
             model->toBeRun = false;
         }
     }
+
+    std::cout << "b1" << std::endl;
 
     /**
      * @brief // Turn schedule tasks/pipelines into containers
@@ -311,6 +317,8 @@ void Controller::ApplyScheduling() {
             }
         }
     }
+
+    std::cout << "b2" << std::endl;
     // Rearranging the upstreams and downstreams for containers;
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
@@ -333,6 +341,33 @@ void Controller::ApplyScheduling() {
 
         }
     }
+    
+    std::cout << "b3" << std::endl;
+    // debugging:
+    // if (ctrl_scheduledPipelines.list.empty()){
+    //     std::cout << "empty in the debugging before" << std::endl;
+    // }
+    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+        // if (pipe->tk_pipelineModels.empty()) {
+        //     std::cout << "empty in the debugging" << std::endl;
+        // }
+        for (auto &model: pipe->tk_pipelineModels) {
+            // If its a datasource, we dont have to do it now
+            // datasource doesnt have upstreams
+            // and the downstreams will be set later
+            std::cout << "test in debugging" << std::endl;
+            if (model->name.find("datasource") != std::string::npos) {
+                std::cout << "===========Debugging: ==========" <<  std::endl;
+                auto yolo = model->downstreams.front();
+                std::cout << yolo.first->name << std::endl;
+                std::cout << "==============================" << std::endl;
+                continue;
+            }
+        }
+    }
+
+    std::cout << "b4" << std::endl;
+    
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
             int i = 0;
@@ -352,6 +387,8 @@ void Controller::ApplyScheduling() {
         }
     }
 
+    std::cout << "b5" << std::endl;
+
     for (auto container: new_containers) {
         StartContainer(container);
         containers.list.insert({container->name, container});
@@ -361,6 +398,8 @@ void Controller::ApplyScheduling() {
     lock_devices.unlock();
     lock_pipelines.unlock();
     lock_pastPipelines.unlock();
+
+    std::cout << "b6" << std::endl;
 
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
