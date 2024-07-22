@@ -562,6 +562,7 @@ struct TaskHandle {
         tk_pipelineModels = {};
         for (auto& model : other.tk_pipelineModels) {
             tk_pipelineModels.push_back(new PipelineModel(*model));
+            tk_pipelineModels.back()->task = this;
         }
         for (auto& model : this->tk_pipelineModels) {
             for (auto& downstream : model->downstreams) {
@@ -601,6 +602,7 @@ struct TaskHandle {
             tk_pipelineModels = {};
             for (auto& model : other.tk_pipelineModels) {
                 tk_pipelineModels.push_back(new PipelineModel(*model));
+                tk_pipelineModels.back()->task = this;
             }
             for (auto& model : this->tk_pipelineModels) {
                 for (auto& downstream : model->downstreams) {
