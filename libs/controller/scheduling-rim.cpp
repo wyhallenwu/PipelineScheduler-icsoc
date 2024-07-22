@@ -158,21 +158,23 @@ void Controller::Scheduling() {
         }
         
         // Update the scheduled pipelines and remove processed tasks from unscheduled pipelines
-        {
-            std::lock_guard<std::mutex> lock(ctrl_unscheduledPipelines.tasksMutex);
-            std::lock_guard<std::mutex> lock2(ctrl_scheduledPipelines.tasksMutex);
+        // {
+        //     std::lock_guard<std::mutex> lock(ctrl_unscheduledPipelines.tasksMutex);
+        //     std::lock_guard<std::mutex> lock2(ctrl_scheduledPipelines.tasksMutex);
             
-            for (const auto& task_name : processedTasks) {
-                if (ctrl_unscheduledPipelines.hasTask(task_name)) {
-                    TaskHandle* task = ctrl_unscheduledPipelines.getTask(task_name);
-                    ctrl_scheduledPipelines.addTask(task_name, task);
-                    ctrl_unscheduledPipelines.removeTask(task_name);
-                }
-            }
-        }
+        //     for (const auto& task_name : processedTasks) {
+        //         if (ctrl_unscheduledPipelines.hasTask(task_name)) {
+        //             TaskHandle* task = ctrl_unscheduledPipelines.getTask(task_name);
+        //             ctrl_scheduledPipelines.addTask(task_name, task);
+        //             ctrl_unscheduledPipelines.removeTask(task_name);
+        //         }
+        //     }
+        // }
 
-        // ApplyScheduling();
+        ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
+        ApplyScheduling();
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        // break;
     }
 }
 
