@@ -42,13 +42,13 @@
         "modelPath": "../models/yolov5n_608_dynamic_nms_3090_fp32_16_1.engine"
     },
     "yolov5s-server": {
-        "taskName": "yolov5s",
+        "taskName": "yolov5",
         "templateConfigPath": "../jsons/yolov5.json",
         "runCommand": "./Container_Yolov5",
         "modelPath": "../models/yolov5s_dynamic_nms_3090_fp32_16_1.engine"
     },
     "yolov5m-server": {
-        "taskName": "yolov5m",
+        "taskName": "yolov5",
         "templateConfigPath": "../jsons/yolov5.json",
         "runCommand": "./Container_Yolov5",
         "modelPath": "../models/yolov5m_dynamic_nms_3090_fp32_16_1.engine"
