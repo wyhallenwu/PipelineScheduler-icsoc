@@ -112,6 +112,13 @@ void Controller::Scheduling()
         // use list of devices, tasks and containers to schedule depending on your algorithm
         // put helper functions as a private member function of the controller and write them at the bottom of this file.
         // std::vector<NodeHandle*> nodes;
+
+        ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
+        auto taskList = ctrl_unscheduledPipelines.getMap();
+
+        if (taskList.size() < 2) {
+            continue;
+        }
     
         NodeHandle *edgePointer = nullptr;
         NodeHandle *serverPointer = nullptr;
