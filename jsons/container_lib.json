@@ -65,12 +65,6 @@
         "runCommand": "./Container_RetinaFace",
         "modelPath": "../models/retina1face_3090_fp32_64_1.engine"
     },
-    "retina1facedsrc-server": {
-        "taskName": "retina1face",
-        "templateConfigPath": "../jsons/retina1face.json",
-        "runCommand": "./Container_RetinaFace",
-        "modelPath": "../models/retina1face_3090_fp32_64_1.engine"
-    },
     "platedet-server": {
         "taskName": "platedet",
         "templateConfigPath": "../jsons/platedet.json",
@@ -113,7 +107,19 @@
         "runCommand": "./Container_CarBrand",
         "modelPath": "../models/carbrand_dynamic_3090_fp32_64_1.engine"
     },
+    "datasource-nxavier": {
+        "taskName": "datasource",
+        "templateConfigPath": "../jsons/datasource.json",
+        "runCommand": "./Container_DataSource",
+        "modelPath": ""
+    },
     "yolov5n-nxavier": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_dynamic_nms_nx_fp32_8_1.engine"
+    },
+    "yolov5ndsrc-nxavier": {
         "taskName": "yolov5",
         "templateConfigPath": "../jsons/yolov5.json",
         "runCommand": "./Container_Yolov5",
@@ -173,7 +179,19 @@
         "runCommand": "./Container_CarBrand",
         "modelPath": "../models/carbrand_dynamic_nx_fp32_8_1.engine"
     },
+    "datasource-agxavier": {
+        "taskName": "datasource",
+        "templateConfigPath": "../jsons/datasource.json",
+        "runCommand": "./Container_DataSource",
+        "modelPath": ""
+    },
     "yolov5n-agxavier": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_dynamic_nms_agx_fp32_16_1.engine"
+    },
+    "yolov5ndsrc-agxavier": {
         "taskName": "yolov5",
         "templateConfigPath": "../jsons/yolov5.json",
         "runCommand": "./Container_Yolov5",
@@ -233,7 +251,19 @@
         "runCommand": "./Container_CarBrand",
         "modelPath": "../models/carbrand_dynamic_agx_fp32_16_1.engine"
     },
+    "datasource-orinano": {
+        "taskName": "datasource",
+        "templateConfigPath": "../jsons/datasource.json",
+        "runCommand": "./Container_DataSource",
+        "modelPath": ""
+    },   
     "yolov5n-orinano": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_dynamic_nms_orn_fp32_8_1.engine"
+    },
+    "yolov5ndsrc-orinano": {
         "taskName": "yolov5",
         "templateConfigPath": "../jsons/yolov5.json",
         "runCommand": "./Container_Yolov5",
