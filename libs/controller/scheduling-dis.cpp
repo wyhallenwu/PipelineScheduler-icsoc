@@ -119,6 +119,15 @@ void Controller::Scheduling()
         if (taskList.size() < 2) {
             continue;
         }
+
+        // Adding taskname to model name for clarity
+        for (auto &[taskName, task] : taskList)
+        {
+            for (auto &model : task->tk_pipelineModels)
+            {
+                model->name = task->tk_name + "-" + model->name;
+            }
+        }
     
         NodeHandle *edgePointer = nullptr;
         NodeHandle *serverPointer = nullptr;
