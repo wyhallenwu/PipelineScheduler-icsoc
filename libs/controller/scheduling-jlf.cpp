@@ -154,6 +154,18 @@ void Controller::Scheduling()
                 taskList[taskType]->tk_pipelineModels.back()->downstreams = {};
                 auto yolo = taskList[taskType]->tk_pipelineModels.front()->downstreams.front().first;
                 taskList[taskType]->tk_pipelineModels.back()->downstreams.emplace_back(std::make_pair(yolo, -1));
+                taskList[taskType]->tk_pipelineModels.back()->name = taskName + "-" + taskType;
+            }
+        }
+        for (auto &taskType : taskTypes)
+        {
+            for (auto &model : taskList[taskType]->tk_pipelineModels)
+            {
+                if (model->name.find("datasource") != std::string::npos)
+                {
+                    continue;
+                }
+                model->name = taskType + "-" + model->name;
             }
         }
 
