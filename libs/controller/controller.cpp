@@ -237,15 +237,59 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
  *
  */
 void Controller::ApplyScheduling() {
+    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
     // collect all running containers by device and model name
+    while (true) { // TODO: REMOVE. ONLY FOR TESTING
     std::vector<ContainerHandle *> new_containers;
     std::unique_lock lock_devices(devices.devicesMutex);
     std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
+    std::unique_lock lock_pastPipelines(ctrl_pastScheduledPipelines.tasksMutex);
     std::unique_lock lock_containers(containers.containersMutex);
 
-    for (auto &pipe: ctrl_scheduledPipelines.list) {
-        for (auto &model: pipe.second->tk_pipelineModels) {
+    // designate all current models no longer valid to run
+    // after scheduling some of them will be designated as valid
+    // All the invalid will be stopped and removed.
+    for (auto &[deviceName, device]: devices.list) {
+        std::unique_lock lock_device(device->nodeHandleMutex);
+        for (auto &[modelName, model] : device->modelList) {
+            model->toBeRun = false;
+        }
+    }
+
+    /**
+     * @brief // Turn schedule tasks/pipelines into containers
+     * Containers that are already running may be kept running if they are still valid
+     */
+    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+        for (auto &model: pipe->tk_pipelineModels) {
+            auto device = devices.list[model->device];
             std::unique_lock lock_model(model->pipelineModelMutex);
+
+            // look for the model full name 
+            std::string modelFullName = model->name;
+            bool pipelineExists = false, modelRunning = false;
+
+            // check if the pipeline already been scheduled once before
+            PipelineModel* pastModel = nullptr;
+            if (ctrl_pastScheduledPipelines.list.find(pipeName) != ctrl_pastScheduledPipelines.list.end()) {
+
+                auto it = std::find_if(ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.begin(),
+                                              ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.end(),
+                                              [&modelFullName](PipelineModel *m) {
+                                                  return m->name == modelFullName;
+                                              });
+                // if the model is found in the past scheduled pipelines, its containers can be reused
+                if (it != ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.end()) {
+                    pastModel = *it;
+                    std::vector<ContainerHandle*> pastModelContainers = pastModel->task->tk_subTasks[model->name];
+                    for (auto container: pastModelContainers) {
+                        if (container->device_agent->name == model->device) {
+                            model->task->tk_subTasks[model->name].push_back(container);
+                        }
+                    }
+                    pastModel->toBeRun = true;
+                }
+            }
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
             // make sure enough containers are running with the right configurations
             if (candidates.size() < model->numReplicas) {
@@ -265,9 +309,34 @@ void Controller::ApplyScheduling() {
                     candidates.erase(candidates.begin() + i);
                 }
             }
+        }
+    }
+    // Rearranging the upstreams and downstreams for containers;
+    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+        for (auto &model: pipe->tk_pipelineModels) {
+            // If its a datasource, we dont have to do it now
+            // datasource doesnt have upstreams
+            // and the downstreams will be set later
+            if (model->name.find("datasource") != std::string::npos) {
+                continue;
+            }
 
-            // ensure right configurations of all containers
+            for (auto &container: model->task->tk_subTasks[model->name]) {
+                container->upstreams = {};
+                for (auto &[upstream, coi]: model->upstreams) {
+                    for (auto &upstreamContainer: upstream->task->tk_subTasks[upstream->name]) {
+                        container->upstreams.push_back(upstreamContainer);
+                        upstreamContainer->downstreams.push_back(container);
+                    }
+                }
+            }
+
+        }
+    }
+    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+        for (auto &model: pipe->tk_pipelineModels) {
             int i = 0;
+            std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
             for (auto *candidate: candidates) {
                 if (candidate->device_agent->name != model->device) {
                     candidate->batch_size = model->batchSize;
@@ -287,6 +356,16 @@ void Controller::ApplyScheduling() {
         StartContainer(container);
         containers.list.insert({container->name, container});
     }
+
+    lock_containers.unlock();
+    lock_devices.unlock();
+    lock_pipelines.unlock();
+    lock_pastPipelines.unlock();
+
+    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
+
+    spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
+    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
@@ -294,107 +373,125 @@ bool CheckMergable(const std::string &m) {
 }
 
 ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i) {
-    if (model->name == "yolov5n" && model->device != "server") {
-        model->name = "yolov5ndsrc";
-    } else if (model->name == "retina1face" && model->device != "server") {
-        model->name = "retina1facedsrc";
+    std::string modelName = splitString(model->name, "-").back();
+    if (model->name.find("yolov5n") != std::string::npos && model->device != "server") {
+        model->name = replaceSubstring(model->name, "yolov5n", "yolov5ndsrc");
+    } else if (model->name.find("retina1face") != std::string::npos && model->device != "server") {
+        model->name = replaceSubstring(model->name, "retina1face", "retina1facedsrc");
     }
     int class_of_interest;
-    if (model->name == "datasource" || model->name.find("dsrc") != std::string::npos) {
+    if (model->name.find("datasource") != std::string::npos || model->name.find("dsrc") != std::string::npos) {
         class_of_interest = -1;
     } else {
         class_of_interest = model->upstreams[0].second;
     }
+
+    std::string subTaskName = model->name;
+    std::string containerName = model->name + "-" + std::to_string(i);
+    // the name of the container type to look it up in the container library
+    std::string containerTypeName = modelName + "-" + getDeviceTypeName(device->type);
     
-    auto *container = new ContainerHandle{model->task->tk_name + "_" + model->name,
+    auto *container = new ContainerHandle{containerName,
                                           class_of_interest,
-                                          ModelTypeReverseList[model->name],
-                                          CheckMergable(model->name),
+                                          ModelTypeReverseList[modelName],
+                                          CheckMergable(modelName),
                                           {0},
                                           model->batchingDeadline,
                                           0.0,
                                           model->batchSize,
                                           model->cudaDevices[i],
                                           device->next_free_port++,
-                                          ctrl_containerLib[model->name].modelPath,
+                                          ctrl_containerLib[containerTypeName].modelPath,
                                           device,
                                           model->task};
     
-    std::string containerName = model->name + "-" + getDeviceTypeName(device->type);
-    if (model->name == "datasource" || model->name == "yolov5ndsrc" || model->name == "retina1facedsrc") {
-        container->dimensions = ctrl_containerLib[containerName].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0].get<std::vector<int>>();
-    } else if (model->name != "sink") {
-        container->dimensions = ctrl_containerLib[containerName].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
+    if (model->name.find("datasource") != std::string::npos ||
+        model->name.find("yolov5ndsrc") != std::string::npos || 
+        model->name.find("retina1facedsrc") != std::string::npos) {
+        container->dimensions = ctrl_containerLib[containerTypeName].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0].get<std::vector<int>>();
+    } else if (model->name.find("sink") == std::string::npos) {
+        container->dimensions = ctrl_containerLib[containerTypeName].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
     }
-    model->task->tk_subTasks[model->name].push_back(container);
 
-    for (auto &upstream: model->upstreams) {
-        for (auto &upstreamContainer: upstream.first->task->tk_subTasks[upstream.first->name]) {
-            container->upstreams.push_back(upstreamContainer);
-            upstreamContainer->downstreams.push_back(container);
-        }
-    }
+    model->task->tk_subTasks[subTaskName].push_back(container);
+
+    // for (auto &upstream: model->upstreams) {
+    //     std::string upstreamSubTaskName = upstream.first->name;
+    //     for (auto &upstreamContainer: upstream.first->task->tk_subTasks[upstreamSubTaskName]) {
+    //         container->upstreams.push_back(upstreamContainer);
+    //         upstreamContainer->downstreams.push_back(container);
+    //     }
+    // }
+
+    // for (auto &downstream: model->downstreams) {
+    //     std::string downstreamSubTaskName = downstream.first->name;
+    //     for (auto &downstreamContainer: downstream.first->task->tk_subTasks[downstreamSubTaskName]) {
+    //         container->downstreams.push_back(downstreamContainer);
+    //         downstreamContainer->upstreams.push_back(container);
+    //     }
+    // }
     return container;
 }
 
 void Controller::StartContainer(ContainerHandle *container, bool easy_allocation) {
-    std::cout << "Starting container: " << container->name << std::endl;
-    ContainerConfig request;
-    ClientContext context;
-    EmptyMessage reply;
-    Status status;
-    request.set_pipeline_name(container->task->tk_name);
-    request.set_model(container->model);
-    request.set_model_file(container->model_file);
-    request.set_batch_size(container->batch_size);
-    request.set_allocation_mode(easy_allocation);
-    request.set_device(container->cuda_device);
-    request.set_slo(container->inference_deadline);
-    for (auto dim: container->dimensions) {
-        request.add_input_dimensions(dim);
-    }
-    for (auto dwnstr: container->downstreams) {
-        Neighbor *dwn = request.add_downstream();
-        dwn->set_name(dwnstr->name);
-        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
-        dwn->set_class_of_interest(dwnstr->class_of_interest);
-        if (dwnstr->model == Sink) {
-            dwn->set_gpu_connection(false);
-        } else {
-            dwn->set_gpu_connection((container->device_agent == dwnstr->device_agent) &&
-                                    (container->cuda_device == dwnstr->cuda_device));
-        }
-    }
-    if (request.downstream_size() == 0) {
-        Neighbor *dwn = request.add_downstream();
-        dwn->set_name("video_sink");
-        dwn->set_ip("./out.log"); //output log file
-        dwn->set_class_of_interest(-1);
-        dwn->set_gpu_connection(false);
-    }
-    if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinafaceDsrc) {
-        Neighbor *up = request.add_upstream();
-        up->set_name("video_source");
-        up->set_ip(container->task->tk_source);
-        up->set_class_of_interest(-1);
-        up->set_gpu_connection(false);
-    } else {
-        for (auto upstr: container->upstreams) {
-            Neighbor *up = request.add_upstream();
-            up->set_name(upstr->name);
-            up->set_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
-            up->set_class_of_interest(-2);
-            up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
-                                   (container->cuda_device == upstr->cuda_device));
-        }
-    }
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            container->device_agent->stub->AsyncStartContainer(&context, request,
-                                                                      container->device_agent->cq));
-    finishGrpc(rpc, reply, status, container->device_agent->cq);
-    if (!status.ok()) {
-        std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
-    }
+    spdlog::get("container_agent")->info("Starting container: {0:s}", container->name);
+//     ContainerConfig request;
+//     ClientContext context;
+//     EmptyMessage reply;
+//     Status status;
+//     request.set_pipeline_name(container->task->tk_name);
+//     request.set_model(container->model);
+//     request.set_model_file(container->model_file);
+//     request.set_batch_size(container->batch_size);
+//     request.set_allocation_mode(easy_allocation);
+//     request.set_device(container->cuda_device);
+//     request.set_slo(container->inference_deadline);
+//     for (auto dim: container->dimensions) {
+//         request.add_input_dimensions(dim);
+//     }
+//     for (auto dwnstr: container->downstreams) {
+//         Neighbor *dwn = request.add_downstream();
+//         dwn->set_name(dwnstr->name);
+//         dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
+//         dwn->set_class_of_interest(dwnstr->class_of_interest);
+//         if (dwnstr->model == Sink) {
+//             dwn->set_gpu_connection(false);
+//         } else {
+//             dwn->set_gpu_connection((container->device_agent == dwnstr->device_agent) &&
+//                                     (container->cuda_device == dwnstr->cuda_device));
+//         }
+//     }
+//     if (request.downstream_size() == 0) {
+//         Neighbor *dwn = request.add_downstream();
+//         dwn->set_name("video_sink");
+//         dwn->set_ip("./out.log"); //output log file
+//         dwn->set_class_of_interest(-1);
+//         dwn->set_gpu_connection(false);
+//     }
+//     if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinafaceDsrc) {
+//         Neighbor *up = request.add_upstream();
+//         up->set_name("video_source");
+//         up->set_ip(container->task->tk_source);
+//         up->set_class_of_interest(-1);
+//         up->set_gpu_connection(false);
+//     } else {
+//         for (auto upstr: container->upstreams) {
+//             Neighbor *up = request.add_upstream();
+//             up->set_name(upstr->name);
+//             up->set_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
+//             up->set_class_of_interest(-2);
+//             up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
+//                                    (container->cuda_device == upstr->cuda_device));
+//         }
+//     }
+//     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+//             container->device_agent->stub->AsyncStartContainer(&context, request,
+//                                                                       container->device_agent->cq));
+//     finishGrpc(rpc, reply, status, container->device_agent->cq);
+//     if (!status.ok()) {
+//         std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
+//     }
+    spdlog::get("container_agent")->info("Container {0:s} started", container->name);
 }
 
 void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
@@ -423,35 +520,37 @@ void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
     container->recv_port = device->next_free_port++;
     device->containers.insert({container->name, container});
     container->cuda_device = container->cuda_device;
-    StartContainer(container, !(start_dsrc || merge_dsrc));
-    for (auto upstr: container->upstreams) {
-        if (start_dsrc) {
-            StartContainer(upstr, false);
-            SyncDatasource(container, upstr);
-        } else if (merge_dsrc) {
-            SyncDatasource(upstr, container);
-            StopContainer(upstr, old_device);
-        } else {
-            AdjustUpstream(container->recv_port, upstr, device, container->name);
-        }
-    }
-    StopContainer(container, old_device);
+    // StartContainer(container, !(start_dsrc || merge_dsrc));
+    // for (auto upstr: container->upstreams) {
+    //     if (start_dsrc) {
+    //         StartContainer(upstr, false);
+    //         SyncDatasource(container, upstr);
+    //     } else if (merge_dsrc) {
+    //         SyncDatasource(upstr, container);
+    //         StopContainer(upstr, old_device);
+    //     } else {
+    //         AdjustUpstream(container->recv_port, upstr, device, container->name);
+    //     }
+    // }
+    // StopContainer(container, old_device);
+    spdlog::get("container_agent")->info("Container {0:s} moved to device {1:s}", container->name, device->name);
     old_device->containers.erase(container->name);
 }
 
 void Controller::AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *new_device,
                                 const std::string &dwnstr) {
-    ContainerLink request;
-    ClientContext context;
-    EmptyMessage reply;
-    Status status;
-    request.set_name(upstr->name);
-    request.set_downstream_name(dwnstr);
-    request.set_ip(new_device->ip);
-    request.set_port(port);
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
-    finishGrpc(rpc, reply, status, upstr->device_agent->cq);
+    // ContainerLink request;
+    // ClientContext context;
+    // EmptyMessage reply;
+    // Status status;
+    // request.set_name(upstr->name);
+    // request.set_downstream_name(dwnstr);
+    // request.set_ip(new_device->ip);
+    // request.set_port(port);
+    // std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    //         upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
+    // finishGrpc(rpc, reply, status, upstr->device_agent->cq);
+    spdlog::get("container_agent")->info("Upstream of {0:s} adjusted to container {1:s}", dwnstr, upstr->name);
 }
 
 void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
@@ -468,15 +567,16 @@ void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
 
 void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs) {
     msvc->batch_size = new_bs;
-    ContainerInts request;
-    ClientContext context;
-    EmptyMessage reply;
-    Status status;
-    request.set_name(msvc->name);
-    request.add_value(new_bs);
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
-    finishGrpc(rpc, reply, status, msvc->device_agent->cq);
+    // ContainerInts request;
+    // ClientContext context;
+    // EmptyMessage reply;
+    // Status status;
+    // request.set_name(msvc->name);
+    // request.add_value(new_bs);
+    // std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    //         msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
+    // finishGrpc(rpc, reply, status, msvc->device_agent->cq);
+    spdlog::get("container_agent")->info("Batch size of {0:s} adjusted to {1:d}", msvc->name, new_bs);
 }
 
 void Controller::AdjustCudaDevice(ContainerHandle *msvc, unsigned int new_device) {
@@ -500,15 +600,16 @@ void Controller::AdjustResolution(ContainerHandle *msvc, std::vector<int> new_re
 }
 
 void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, bool forced) {
-    ContainerSignal request;
-    ClientContext context;
-    EmptyMessage reply;
-    Status status;
-    request.set_name(container->name);
-    request.set_forced(forced);
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
-    finishGrpc(rpc, reply, status, device->cq);
+    spdlog::get("container_agent")->info("Stopping container: {0:s}", container->name);
+    // ContainerSignal request;
+    // ClientContext context;
+    // EmptyMessage reply;
+    // Status status;
+    // request.set_name(container->name);
+    // request.set_forced(forced);
+    // std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+    //         device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
+    // finishGrpc(rpc, reply, status, device->cq);
     containers.list.erase(container->name);
     container->device_agent->containers.erase(container->name);
     for (auto upstr: container->upstreams) {
@@ -517,6 +618,7 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     for (auto dwnstr: container->downstreams) {
         dwnstr->upstreams.erase(std::remove(dwnstr->upstreams.begin(), dwnstr->upstreams.end(), container), dwnstr->upstreams.end());
     }
+    spdlog::get("container_agent")->info("Container {0:s} stopped", container->name);
 }
 
 /**
