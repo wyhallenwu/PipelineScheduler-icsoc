@@ -112,6 +112,9 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             };
             carbrand->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({carbrand, 2});
+            yolov5n320->downstreams.push_back({carbrand, 2});
+            yolov5n608->downstreams.push_back({carbrand, 2});
+            yolov5n512->downstreams.push_back({carbrand, 2});
 
             auto *platedet = new PipelineModel{
                     "server",
@@ -125,6 +128,9 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             };
             platedet->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({platedet, 2});
+            yolov5n320->downstreams.push_back({platedet, 2});
+            yolov5n608->downstreams.push_back({platedet, 2});
+            yolov5n512->downstreams.push_back({platedet, 2});
 
             auto *sink = new PipelineModel{
                     "server",
@@ -173,6 +179,46 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             yolov5n->possibleDevices = {startDevice, "server"};
             datasource->downstreams.push_back({yolov5n, -1});
 
+            // jlf added
+            auto *yolov5n320 = new PipelineModel{
+                    "server",
+                    "yolov5n320",
+                    {},
+                    true,
+                    {},
+                    {},
+                    {},
+                    {{datasource, -1}}
+            };
+            yolov5n320->possibleDevices = {startDevice, "server"};
+            // datasource->downstreams.push_back({yolov5n320, -1});
+           
+
+            auto *yolov5n608= new PipelineModel{
+                    "server",
+                    "yolov5n608",
+                    {},
+                    true,
+                    {},
+                    {},
+                    {},
+                    {{datasource, -1}}
+            };
+            yolov5n608->possibleDevices = {startDevice, "server"};
+            // datasource->downstreams.push_back({yolov5m, -1});
+
+            auto *yolov5n512 = new PipelineModel{
+                    "server",
+                    "yolov5n512",
+                    {},
+                    true,
+                    {},
+                    {},
+                    {},
+                    {{datasource, -1}}
+            };
+            yolov5n512->possibleDevices = {startDevice, "server"};
+
             auto *retina1face = new PipelineModel{
                     "server",
                     "retina1face",
@@ -185,6 +231,9 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             };
             retina1face->possibleDevices = {startDevice, "server"};
             yolov5n->downstreams.push_back({retina1face, 0});
+            yolov5n320->downstreams.push_back({retina1face, 0});
+            yolov5n608->downstreams.push_back({retina1face, 0});
+            yolov5n512->downstreams.push_back({retina1face, 0});
 
             auto *movenet = new PipelineModel{
                     "server",
@@ -198,6 +247,9 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             };
             movenet->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({movenet, 0});
+            yolov5n320->downstreams.push_back({movenet, 0});
+            yolov5n608->downstreams.push_back({movenet, 0});
+            yolov5n512->downstreams.push_back({movenet, 0});
 
             auto *gender = new PipelineModel{
                     "server",
@@ -248,7 +300,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                 age->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][age->name];
             }
 
-            return {datasource, yolov5n, retina1face, movenet, gender, age, sink};
+            return {datasource, yolov5n, yolov5n320, yolov5n608, yolov5n512, retina1face, movenet, gender, age, sink};
         }
         case PipelineType::Video_Call: {
             auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
