@@ -44,7 +44,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "localhost:55012"
+                            "0.0.0.0:55012"
                         ],
                         "nb_maxQueueSize": 10,
                         "nb_name": "retinaface",
