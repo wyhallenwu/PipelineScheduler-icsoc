@@ -226,9 +226,12 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 
     task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device, t.name, t.source);
     std::unique_lock<std::mutex> lock2(ctrl_unscheduledPipelines.tasksMutex);
+    std::unique_lock<std::mutex> lock3(ctrl_savedUnscheduledPipelines.tasksMutex);
     ctrl_unscheduledPipelines.list.insert({task->tk_name, task});
+    ctrl_savedUnscheduledPipelines.list.insert({task->tk_name, task});
 
     lock2.unlock();
+    lock3.unlock();
     return true;
 }
 
@@ -262,6 +265,10 @@ void Controller::ApplyScheduling() {
      */
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
+            if (ctrl_systemName != "ppp") {
+                model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
+                model->numReplicas = 1;
+            }
             auto device = devices.list[model->device];
             std::unique_lock lock_model(model->pipelineModelMutex);
 
@@ -1109,7 +1116,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {{retina1face, -1}, {carbrand, -1}, {platedet, -1}}
             };
             sink->possibleDevices = {"server"};
-            retina1face->downstreams.push_back({sink, -1});
+            arcface->downstreams.push_back({sink, -1});
             carbrand->downstreams.push_back({sink, -1});
             platedet->downstreams.push_back({sink, -1});
 
