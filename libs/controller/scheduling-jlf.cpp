@@ -133,7 +133,7 @@ void Controller::Scheduling()
             }
             for (auto &[taskName, taskHandle] : taskList)
             {
-                if (taskName.find(taskType) == std::string::npos)
+                if (taskName.find(taskType) == std::string::npos || taskName == taskType)
                 {
                     continue;
                 }
