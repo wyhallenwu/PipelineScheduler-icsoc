@@ -119,15 +119,65 @@ void Controller::Scheduling()
         }
         auto taskList = ctrl_unscheduledPipelines.getMap();
         auto deviceList = devices.getMap();
-        if (taskList.empty())
+        if (taskList.size() < 4)
         {
             continue;
         }
 
-        // divicde in the two groups: people, traffic
+        std::cout << "===================== before ==========================" << std::endl;
+        for (auto& [task_name, task] : taskList) {
+            auto pipes = task->tk_pipelineModels;
+            for (auto& pipe: pipes) {
+                std::unique_lock<std::mutex> pipe_lock(pipe->pipelineModelMutex);
+                std::cout << pipe->name << ", ";
+                pipe_lock.unlock();
+            }
+            std::cout << "end" << std::endl;
+        }
+        std::cout << "======================================================" << std::endl;
+
+        std::vector<std::string> taskTypes = {"traffic", "people"};
+        for (auto taskType : taskTypes)
+        {
+            if (taskList.find(taskType) == taskList.end())
+            {
+                continue;
+            }
+            for (auto &[taskName, taskHandle] : taskList)
+            {
+                if (taskName.find(taskType) == std::string::npos)
+                {
+                    continue;
+                }
+                taskList[taskType]->tk_pipelineModels.emplace_back(new PipelineModel(*taskHandle->tk_pipelineModels.front()));
+                taskList[taskType]->tk_pipelineModels.back()->downstreams = {};
+                auto yolo = taskList[taskType]->tk_pipelineModels.front()->downstreams.front().first;
+                taskList[taskType]->tk_pipelineModels.back()->downstreams.emplace_back(std::make_pair(yolo, -1));
+            }
+        }
+
+        std::cout << "===================== after ==========================" << std::endl;
+        for (auto& [task_name, task] : taskList) {
+            auto pipes = task->tk_pipelineModels;
+            for (auto& pipe: pipes) {
+                std::unique_lock<std::mutex> pipe_lock(pipe->pipelineModelMutex);
+                std::cout << pipe->name << ", ";
+                pipe_lock.unlock();
+            }
+            std::cout << "end" << std::endl;
+        }
+        std::cout << "======================================================" << std::endl;
+
+
+        // clear all the information
+        for (auto &pair: clientProfilesCSJF) {
+            pair.second.infos.clear();
+        }
+        for (auto &pair: modelProfilesCSJF) {
+            pair.second.infos.clear();
+        }
+
         // collect all information
-        model_profiles_jf.infos.clear();
-        client_profiles_jf.infos.clear();
         for (auto &[task_name, task] : taskList)
         {
             std::cout << "task name: " << task_name << std::endl;
@@ -203,7 +253,7 @@ void Controller::Scheduling()
                     // std::cout << "resolution is: " << rs << std::endl;
                     for (auto &[batch_size, profile] : batch_proilfes)
                     {
-                        model_profiles_jf.add(model->name, ACC_LEVEL_MAP.at(yolo + std::to_string(rs)), batch_size, profile.p95inferLat, width, height, model);
+                        modelProfilesCSJF[task->tk_name].add(model->name, ACC_LEVEL_MAP.at(yolo + std::to_string(rs)), batch_size, profile.p95inferLat, width, height, model);
                     }
                 }
                 else if (model->name.find("datasource") != std::string::npos)
@@ -216,7 +266,7 @@ void Controller::Scheduling()
                     auto entry = model->deviceAgent->latestNetworkEntries.at(downstream_device);
 
                     // CHECKME: req rate correctness
-                    client_profiles_jf.add(model->name, task->tk_slo, ctrl_systemFPS, model, task->tk_name, task->tk_source, entry);
+                    clientProfilesCSJF[task->tk_name].add(model->name, task->tk_slo, ctrl_systemFPS, model, task->tk_name, task->tk_source, entry);
                 }
 
                 lock_pipeline_model.unlock();
@@ -224,153 +274,166 @@ void Controller::Scheduling()
             }
         }
 
-        // // just extract the PipelineModel* from the first profile of each model
-        // auto model = this->model_profiles_jf.infos.begin()->second[0].model;
-        // std::unique_lock<std::mutex> model_lock(model->pipelineModelMutex);
-        // auto server_device = model->device;
-        // auto server_device_type = model->deviceTypeName;
-        // model_lock.unlock();
-        // std::cout << "sever device name: " << model->device << ", model device type name: " << model->deviceTypeName << std::endl;
-
-        // // check the correctness of the client infos and model infos
-        // client_profiles_jf.debugging();
-        // model_profiles_jf.debugging();
-
-        for (auto &client_info : client_profiles_jf.infos)
-        {
-            auto client_model = client_info.model;
-            std::unique_lock<std::mutex> client_lock(client_model->pipelineModelMutex);
-            auto client_device = client_model->device;
-            auto client_device_type = client_model->deviceTypeName;
-            // downstream yolo information
-            auto downstream = client_model->downstreams.front().first;
-            std::unique_lock<std::mutex> model_lock(downstream->pipelineModelMutex);
-            std::string model_name = downstream->name;
-            std::string model_device = downstream->device;
-            std::string model_device_typename = downstream->deviceTypeName;
-            std::string containerName = model_name + "-" + model_device_typename;
-            model_lock.unlock();
-            client_lock.unlock();
-
-            // std::cout << "before query Network" << std::endl;
-            // std::cout << "name of the client model: " << containerName << std::endl;
-            // CHECKME: NetworkEntry retrieval correctness
-            NetworkProfile network_proflie = queryNetworkProfile(
-                *ctrl_metricsServerConn,
-                ctrl_experimentName,
-                ctrl_systemName,
-                client_info.task_name,
-                client_info.task_source,
-                ctrl_containerLib[containerName].taskName,
-                ctrl_containerLib[containerName].modelName,
-                client_device,
-                client_device_type,
-                model_device,
-                model_device_typename,
-                client_info.network_entry);
-            auto lat = network_proflie.p95TransferDuration;
-            // std::cout << "queried latency is: " << lat << std::endl;
-            client_info.set_transmission_latency(lat);
-        }
-
-        // start scheduling
-
-        // std::cout << "START SCHEDULING" << std::endl;
-
-        auto mappings = mapClient(this->client_profiles_jf, this->model_profiles_jf);
-
-        // std::cout << "FINISH STRATEGY COMPUTING" << std::endl;
-
-        for (auto &mapping : mappings)
-        {
-            // retrieve the mapping for one model and its paired clients
-            auto model_info = std::get<0>(mapping);
-            auto selected_clients = std::get<1>(mapping);
-            int batch_size = std::get<2>(mapping);
-            // std::cout << "Selected Mapping batch size: " << batch_size << std::endl;
-
-            // find the PipelineModel* of that model
-            ModelInfoJF m = this->model_profiles_jf.infos[model_info][0];
-            for (auto &model : this->model_profiles_jf.infos[model_info])
-            {
-                if (model.batch_size == batch_size)
-                {
-                    // note: if occurs core dump, it's possible that there is no matchable pointer
-                    // and the p is null
-                    m = model;
-                    break;
-                }
+        
+        // debugging
+        std::cout << "============== debug ====================" << std::endl;
+        for (auto &task_name : taskTypes) {
+            auto client_profiles = clientProfilesCSJF[task_name];
+            auto model_profiles = modelProfilesCSJF[task_name];
+            std::cout << task_name << ", n client: " << client_profiles.infos.size() << std::endl;
+            std::cout << task_name << ", n model: " << model_profiles.infos.size() << std::endl;
+            for (auto &client_info : client_profiles.infos) {
+                std::cout << "client name: " << client_info.name << ", " << client_info.task_name << std::endl;
             }
-            // clear the upstream of that model
-            // CHECKME: lock correctness here
-            std::unique_lock<std::mutex> model_lock(m.model->pipelineModelMutex);
-            m.model->upstreams.clear();
+            for (auto &model_info : model_profiles.infos) {
+                std::cout << model_info.second.front().name << std::endl;
+            }
+                
+        }
+        std::cout << "=========================================" << std::endl;
 
-            // adjust downstream, upstream and resolution
-            // CHECKME: vaildate the class of interest here, default to 1 for simplicity
-            for (auto &client : selected_clients)
+        for (auto &task_name : taskTypes) {
+            auto client_profiles_jf = clientProfilesCSJF[task_name];
+            auto model_profiles_jf = modelProfilesCSJF[task_name];
+
+            for (auto &client_info : client_profiles_jf.infos)
             {
-                m.model->upstreams.push_back(std::make_pair(client.model, 1));
-                std::unique_lock<std::mutex> client_lock(client.model->pipelineModelMutex);
-                client.model->downstreams.clear();
-                client.model->downstreams.push_back(std::make_pair(m.model, 1));
-
-                // retrieve new resolution
-                int width = m.width;
-                int height = m.height;
-
+                auto client_model = client_info.model;
+                std::unique_lock<std::mutex> client_lock(client_model->pipelineModelMutex);
+                auto client_device = client_model->device;
+                auto client_device_type = client_model->deviceTypeName;
+                // downstream yolo information
+                auto downstream = client_model->downstreams.front().first;
+                std::unique_lock<std::mutex> model_lock(downstream->pipelineModelMutex);
+                std::string model_name = downstream->name;
+                std::string model_device = downstream->device;
+                std::string model_device_typename = downstream->deviceTypeName;
+                std::string containerName = model_name + "-" + model_device_typename;
+                model_lock.unlock();
                 client_lock.unlock();
 
-                std::unique_lock<std::mutex> container_lock(this->containers.containersMutex);
-                for (auto it = this->containers.list.begin(); it != this->containers.list.end(); ++it)
+                // std::cout << "before query Network" << std::endl;
+                // std::cout << "name of the client model: " << containerName << std::endl;
+                // CHECKME: NetworkEntry retrieval correctness
+                NetworkProfile network_proflie = queryNetworkProfile(
+                    *ctrl_metricsServerConn,
+                    ctrl_experimentName,
+                    ctrl_systemName,
+                    client_info.task_name,
+                    client_info.task_source,
+                    ctrl_containerLib[containerName].taskName,
+                    ctrl_containerLib[containerName].modelName,
+                    client_device,
+                    client_device_type,
+                    model_device,
+                    model_device_typename,
+                    client_info.network_entry);
+                auto lat = network_proflie.p95TransferDuration;
+                // std::cout << "queried latency is: " << lat << std::endl;
+                client_info.set_transmission_latency(lat);
+            }
+
+            // start scheduling
+
+            // std::cout << "START SCHEDULING" << std::endl;
+
+            auto mappings = mapClient(client_profiles_jf, model_profiles_jf);
+
+            // std::cout << "FINISH STRATEGY COMPUTING" << std::endl;
+
+            for (auto &mapping : mappings)
+            {
+                // retrieve the mapping for one model and its paired clients
+                auto model_info = std::get<0>(mapping);
+                auto selected_clients = std::get<1>(mapping);
+                int batch_size = std::get<2>(mapping);
+                // std::cout << "Selected Mapping batch size: " << batch_size << std::endl;
+
+                // find the PipelineModel* of that model
+                ModelInfoJF m = model_profiles_jf.infos[model_info][0];
+                for (auto &model : model_profiles_jf.infos[model_info])
                 {
-                    if (it->first == client.name)
+                    if (model.batch_size == batch_size)
                     {
-                        // CHECKME: excute resolution adjustment
-                        std::vector<int> rs = {width, height, 3};
-                        AdjustResolution(it->second, rs);
+                        // note: if occurs core dump, it's possible that there is no matchable pointer
+                        // and the p is null
+                        m = model;
+                        break;
                     }
                 }
-                container_lock.unlock();
+                // clear the upstream of that model
+                // CHECKME: lock correctness here
+                std::unique_lock<std::mutex> model_lock(m.model->pipelineModelMutex);
+                m.model->upstreams.clear();
+
+                // adjust downstream, upstream and resolution
+                // CHECKME: vaildate the class of interest here, default to 1 for simplicity
+                for (auto &client : selected_clients)
+                {
+                    m.model->upstreams.push_back(std::make_pair(client.model, 1));
+                    std::unique_lock<std::mutex> client_lock(client.model->pipelineModelMutex);
+                    client.model->downstreams.clear();
+                    client.model->downstreams.push_back(std::make_pair(m.model, 1));
+
+                    // retrieve new resolution
+                    int width = m.width;
+                    int height = m.height;
+
+                    client_lock.unlock();
+
+                    std::unique_lock<std::mutex> container_lock(this->containers.containersMutex);
+                    for (auto it = this->containers.list.begin(); it != this->containers.list.end(); ++it)
+                    {
+                        if (it->first == client.name)
+                        {
+                            // CHECKME: excute resolution adjustment
+                            std::vector<int> rs = {width, height, 3};
+                            AdjustResolution(it->second, rs);
+                        }
+                    }
+                    container_lock.unlock();
+                }
+                model_lock.unlock();
             }
-            model_lock.unlock();
-        }
 
-        std::cout << "SCHEDULING END" << std::endl;
+            std::cout << "SCHEDULING END" << std::endl;
 
-        // for debugging mappings
-        for (auto &mapping : mappings)
-        {
-            std::cout << "***********************************************************" << std::endl;
-            auto model_info = std::get<0>(mapping);
-            std::cout << "Model name: " << std::get<0>(model_info) << ", acc: " << std::get<1>(model_info) << ", batch_size: " << std::endl;
-            auto clients_info = std::get<1>(mapping);
-            for (auto &client : clients_info)
+            // for debugging mappings
+            for (auto &mapping : mappings)
             {
-                std::cout << "Client name: " << client.name << ", budget: " << client.budget << ", lat: " << client.transmission_latency << std::endl;
+                std::cout << "***********************************************************" << std::endl;
+                auto model_info = std::get<0>(mapping);
+                std::cout << "Model name: " << std::get<0>(model_info) << ", acc: " << std::get<1>(model_info) << ", batch_size: " << std::endl;
+                auto clients_info = std::get<1>(mapping);
+                for (auto &client : clients_info)
+                {
+                    std::cout << "Client name: " << client.name << ", budget: " << client.budget << ", lat: " << client.transmission_latency << std::endl;
+                }
+                std::cout << "Batch size: " << std::get<2>(mapping) << std::endl;
+                std::cout << "***********************************************************" << std::endl;
             }
-            std::cout << "Batch size: " << std::get<2>(mapping) << std::endl;
-            std::cout << "***********************************************************" << std::endl;
+
+            // for debugging
+            std::cout << "============================== check all clients downstream ==================================" << task_name << std::endl;
+            for (auto& client: client_profiles_jf.infos) {
+                auto p = client.model;
+                std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
+                for (auto& ds: p->downstreams) {
+                    std::cout << ds.first->name << std::endl;
+                }
+                lock.unlock();
+            }
+
+            std::cout << "================================= check all models upstream ==================================" << task_name << std::endl;
+            for (auto& model: model_profiles_jf.infos) {
+                auto p = model.second.front().model;
+                std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
+                std::cout << p->upstreams.front().first->name << std::endl;
+                lock.unlock();
+            }
         }
 
-        // for debugging
-        std::cout << "============================== check all clients downstream ==================================" << std::endl;
-        for (auto& client: client_profiles_jf.infos) {
-            auto p = client.model;
-            std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
-            for (auto& ds: p->downstreams) {
-                std::cout << ds.first->name << std::endl;
-            }
-            lock.unlock();
-        }
-
-        std::cout << "================================= check all models upstream ==================================" << std::endl;
-        for (auto& model: model_profiles_jf.infos) {
-            auto p = model.second.front().model;
-            std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
-            std::cout << p->upstreams.front().first->name << std::endl;
-            lock.unlock();
-        }
+        
 
         // TODO: test
         
@@ -432,7 +495,7 @@ void Controller::Scheduling()
         // ctrl_lock1.unlock();
 
         // std::cout << "after copy" << std::endl;
-        ApplyScheduling();
+        // ApplyScheduling();
 
         // for (auto [taskName, taskHandle]: taskList) {
         //     queryingProfiles(taskHandle);

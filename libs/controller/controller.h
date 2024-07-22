@@ -1158,8 +1158,8 @@ private:
     // ADD
     std::map<std::string, ClientProfilesJF> clientProfilesCSJF;
     std::map<std::string, ModelProfilesJF> modelProfilesCSJF;
-    ClientProfilesJF client_profiles_jf;
-    ModelProfilesJF model_profiles_jf;
+    // ClientProfilesJF client_profiles_jf;
+    // ModelProfilesJF model_profiles_jf;
 };
 
 

@@ -175,8 +175,8 @@ Controller::Controller(int argc, char **argv) {
 
 
     // added for jellyfish
-    clientProfilesCSJF = {{"people": ClientProfilesJF()}, {"traffic": ClientProfilesJF()}};
-    modelProfilesCSJF = {{"people": ModelProfilesJF()}, {"traffic": ModelProfilesJF()}};
+    clientProfilesCSJF = {{"people", ClientProfilesJF()}, {"traffic", ClientProfilesJF()}};
+    modelProfilesCSJF = {{"people", ModelProfilesJF()}, {"traffic", ModelProfilesJF()}};
 }
 
 Controller::~Controller() {
