@@ -351,22 +351,41 @@ void Controller::Scheduling()
             model_lock.unlock();
         }
 
-        // std::cout << "SCHEDULING END" << std::endl;
+        std::cout << "SCHEDULING END" << std::endl;
 
-        // // for debugging mappings
-        // for (auto &mapping : mappings)
-        // {
-        //     std::cout << "***********************************************************" << std::endl;
-        //     auto model_info = std::get<0>(mapping);
-        //     std::cout << "Model name: " << std::get<0>(model_info) << ", acc: " << std::get<1>(model_info) << ", batch_size: " << std::endl;
-        //     auto clients_info = std::get<1>(mapping);
-        //     for (auto &client : clients_info)
-        //     {
-        //         std::cout << "Client name: " << client.name << ", budget: " << client.budget << ", lat: " << client.transmission_latency << std::endl;
-        //     }
-        //     std::cout << "Batch size: " << std::get<2>(mapping) << std::endl;
-        //     std::cout << "***********************************************************" << std::endl;
-        // }
+        // for debugging mappings
+        for (auto &mapping : mappings)
+        {
+            std::cout << "***********************************************************" << std::endl;
+            auto model_info = std::get<0>(mapping);
+            std::cout << "Model name: " << std::get<0>(model_info) << ", acc: " << std::get<1>(model_info) << ", batch_size: " << std::endl;
+            auto clients_info = std::get<1>(mapping);
+            for (auto &client : clients_info)
+            {
+                std::cout << "Client name: " << client.name << ", budget: " << client.budget << ", lat: " << client.transmission_latency << std::endl;
+            }
+            std::cout << "Batch size: " << std::get<2>(mapping) << std::endl;
+            std::cout << "***********************************************************" << std::endl;
+        }
+
+        // for debugging
+        std::cout << "============================== check all clients downstream ==================================" << std::endl;
+        for (auto& client: client_profiles_jf.infos) {
+            auto p = client.model;
+            std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
+            for (auto& ds: p->downstreams) {
+                std::cout << ds.first->name << std::endl;
+            }
+            lock.unlock();
+        }
+
+        std::cout << "================================= check all models upstream ==================================" << std::endl;
+        for (auto& model: model_profiles_jf.infos) {
+            auto p = model.second.front().model;
+            std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
+            std::cout << p->upstreams.front().first->name << std::endl;
+            lock.unlock();
+        }
 
         // TODO: test
         

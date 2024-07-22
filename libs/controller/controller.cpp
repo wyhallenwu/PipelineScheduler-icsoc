@@ -239,7 +239,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
     // collect all running containers by device and model name
-    // while (true) { // TODO: REMOVE. ONLY FOR TESTING
+    while (true) { // TODO: REMOVE. ONLY FOR TESTING
     if (ctrl_scheduledPipelines.list.empty()){
         std::cout << "empty pipeline in the beginning" << std::endl;
     }
@@ -359,7 +359,7 @@ void Controller::ApplyScheduling() {
             // If its a datasource, we dont have to do it now
             // datasource doesnt have upstreams
             // and the downstreams will be set later
-            std::cout << "test in debugging" << std::endl;
+            // std::cout << "test in debugging" << std::endl;
             if (model->name.find("datasource") != std::string::npos) {
                 std::cout << "===========Debugging: ==========" <<  std::endl;
                 auto yolo = model->downstreams.front();
@@ -408,7 +408,7 @@ void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-    // } // TODO: REMOVE. ONLY FOR TESTING
+    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
