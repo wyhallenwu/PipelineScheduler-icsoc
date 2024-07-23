@@ -370,6 +370,8 @@ struct PipelineModel {
     // Batching deadline
     uint64_t batchingDeadline = 9999999999;
 
+    std::vector<int> dimensions = {-1, -1};
+
     std::string device;
     std::string deviceTypeName;
     NodeHandle *deviceAgent;
@@ -454,6 +456,7 @@ struct PipelineModel {
         merged = other.merged;
         toBeRun = other.toBeRun;
         possibleDevices = other.possibleDevices;
+        dimensions = other.dimensions;
         manifestations = {};
         for (auto& container : other.manifestations) {
             manifestations.push_back(new ContainerHandle(*container));
@@ -497,6 +500,7 @@ struct PipelineModel {
             merged = other.merged;
             toBeRun = other.toBeRun;
             possibleDevices = other.possibleDevices;
+            dimensions = other.dimensions;
             manifestations = {};
             for (auto& container : other.manifestations) {
                 manifestations.push_back(new ContainerHandle(*container));
