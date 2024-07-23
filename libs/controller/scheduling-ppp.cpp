@@ -247,14 +247,14 @@ void Controller::Scheduling() {
                 std::chrono::system_clock::now() - ctrl_nextSchedulingTime).count() < 10) {
             continue;
         }
-        auto taskList = ctrl_savedUnscheduledPipelines.getMap();
+        ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
+        auto taskList = ctrl_unscheduledPipelines.getMap();
         if (taskList.size() < 5) { // TODO: Remove this
             continue;
         }
         if (taskList.empty()) {
             continue;
         }
-        ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
 
         for (auto &[taskName, taskHandle]: taskList) {
             queryingProfiles(taskHandle);
