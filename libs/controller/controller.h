@@ -944,7 +944,7 @@ private:
         std::map<std::string, TaskHandle*> list = {};
         mutable std::mutex tasksMutex;
     };
-    Tasks ctrl_unscheduledPipelines, ctrl_scheduledPipelines, ctrl_pastScheduledPipelines;
+    Tasks ctrl_unscheduledPipelines, ctrl_savedUnscheduledPipelines, ctrl_scheduledPipelines, ctrl_pastScheduledPipelines;
 
     void deepCopyTasks(Tasks& source, Tasks& destination); //add by distream
 
