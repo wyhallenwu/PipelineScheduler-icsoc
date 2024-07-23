@@ -413,19 +413,21 @@ void Controller::Scheduling()
                     int width = m.width;
                     int height = m.height;
 
+                    std::vector<int> rs = {width, height};
+                    client.model->dimensions = rs;
                     client_lock.unlock();
 
-                    std::unique_lock<std::mutex> container_lock(this->containers.containersMutex);
-                    for (auto it = this->containers.list.begin(); it != this->containers.list.end(); ++it)
-                    {
-                        if (it->first == client.name)
-                        {
-                            // CHECKME: excute resolution adjustment
-                            std::vector<int> rs = {width, height, 3};
-                            AdjustResolution(it->second, rs);
-                        }
-                    }
-                    container_lock.unlock();
+                    // std::unique_lock<std::mutex> container_lock(this->containers.containersMutex);
+                    // for (auto it = this->containers.list.begin(); it != this->containers.list.end(); ++it)
+                    // {
+                    //     if (it->first == client.name)
+                    //     {
+                    //         // CHECKME: excute resolution adjustment
+                    //         std::vector<int> rs = {width, height, 3};
+                    //         AdjustResolution(it->second, rs);
+                    //     }
+                    // }
+                    // container_lock.unlock();
                 }
                 model_lock.unlock();
             }

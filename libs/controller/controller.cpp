@@ -376,7 +376,7 @@ void Controller::ApplyScheduling() {
             // and the downstreams will be set later
             // std::cout << "test in debugging" << std::endl;
             std::cout << "===========Debugging: ==========" <<  std::endl;
-            std::cout << "upstream of model: " << model->name << std::endl;
+            std::cout << "upstream of model: " << model->name << ", resolution: " << model->dimensions[0] << " " << model->dimensions[1] << std::endl;
             for (auto us: model->upstreams) {
                 std::cout << us.first->name << ", ";
             }
