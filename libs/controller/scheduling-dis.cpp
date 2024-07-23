@@ -112,6 +112,7 @@ void Controller::Scheduling()
         // use list of devices, tasks and containers to schedule depending on your algorithm
         // put helper functions as a private member function of the controller and write them at the bottom of this file.
         // std::vector<NodeHandle*> nodes;
+    
         NodeHandle *edgePointer = nullptr;
         NodeHandle *serverPointer = nullptr;
         unsigned long totalEdgeMemory = 0, totalServerMemory = 0;
@@ -150,9 +151,11 @@ void Controller::Scheduling()
 
         scheduleBaseParPointLoop(&model, &partitioner, nodes);
         scheduleFineGrainedParPointLoop(&partitioner, nodes);
-        // DecideAndMoveContainer(&model, nodes, &partitioner, 2);
-        // ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
-        // ApplyScheduling();
+        DecideAndMoveContainer(&model, nodes, &partitioner, 2);
+        std::cout << "b2" << std::endl;
+        ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
+        std::cout << "b3" << std::endl;
+        ApplyScheduling();
         std::cout << "end_scheduleBaseParPoint " << partitioner.BaseParPoint << std::endl;
         std::cout << "end_FineGrainedParPoint " << partitioner.FineGrainedOffset << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(
@@ -818,7 +821,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
     //tolerance threshold for decision making
     float tolerance = 0.1;
     // ratio for current worload
-    float ratio = calculateTotalQueue(nodes, true) / calculateTotalQueue(nodes, false);
+    float ratio = 0.3; //calculateTotalQueue(nodes, true) / calculateTotalQueue(nodes, false);
     // ContainerHandle *selectedContainer = nullptr;
 
     //the decisionpoint is much larger than the current workload that means we need give the edge more work
@@ -839,11 +842,16 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
                     std::cout << "model: " << model->name << std::endl;
                     std::lock_guard<std::mutex> lock(model->pipelineModelMutex);
 
+                    std::cout << "b1" << std::endl;
+                    std::cout << "model device" <<model->device<< std::endl;
                     //change the device from server to the source of edge device
                     if (model->device == "server")
                     {
-                        model->device = model->task->tk_src_device;
+                        std::cout << "model device2" <<model->device<< std::endl;
+                        model->device = task->tk_src_device;
+                        std::cout << "model device" <<model->device<< std::endl;
                     }
+                    std::cout << "model device" <<model->device<< std::endl;
                 }
             }
         }
