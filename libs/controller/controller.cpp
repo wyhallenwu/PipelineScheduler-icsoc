@@ -1084,7 +1084,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 0}}
             };
-            retina1face->possibleDevices = {startDevice, "server"};
+            retina1face->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({retina1face, 0});
 
             auto *arcface = new PipelineModel{
@@ -1177,7 +1177,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 0}}
             };
-            retina1face->possibleDevices = {startDevice, "server"};
+            retina1face->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({retina1face, 0});
 
             auto *movenet = new PipelineModel{
@@ -1257,7 +1257,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{datasource, -1}}
             };
-            retina1face->possibleDevices = {startDevice, "server"};
+            retina1face->possibleDevices = {"server"};
             datasource->downstreams.push_back({retina1face, -1});
 
             auto *emotionnet = new PipelineModel{
@@ -1283,7 +1283,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            age->possibleDevices = {startDevice, "server"};
+            age->possibleDevices = {"server"};
             retina1face->downstreams.push_back({age, -1});
 
             auto *gender = new PipelineModel{

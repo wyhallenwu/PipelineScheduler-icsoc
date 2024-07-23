@@ -48,7 +48,7 @@ struct GPULane {
     std::uint64_t dutyCycle = 9999999999999999;
 };
 
-struct GPUPortion : GPULane {
+struct GPUPortion {
     std::uint64_t start = 0;
     std::uint64_t end = 9999999999999999;
     GPULane * lane = nullptr;
@@ -721,13 +721,21 @@ private:
     void estimateModelNetworkLatency(PipelineModel *currModel);
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
+    void estimateBatchingDeadline(PipelineModel *model);
+
     void getInitialBatchSizes(TaskHandle *task, uint64_t slo);
     void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
 
-    bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile);
-    bool mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, const PerDeviceModelProfileType &toBeMergedProfile);
-    bool mergeModels(PipelineModel *mergedModel, PipelineModel *tobeMergedModel);
-    TaskHandle mergePipelines(const std::string& taskName);
+    bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile, const std::string &device, const std::string &upstreamDevice);
+    bool mergeProcessProfiles(
+        PerDeviceModelProfileType &mergedProfile,
+        float arrivalRate1,
+        const PerDeviceModelProfileType &toBeMergedProfile,
+        float arrivalRate2,
+        const std::string &device
+    );
+    bool mergeModels(PipelineModel *mergedModel, PipelineModel *tobeMergedModel, const std::string &device);
+    TaskHandle* mergePipelines(const std::string& taskName);
     void mergePipelines();
 
     bool containerTemporalScheduling(ContainerHandle *container);
@@ -1014,6 +1022,14 @@ private:
     std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
 
     uint16_t ctrl_systemFPS;
+
+    uint16_t ctrl_numGPULanes = NUM_LANES_PER_GPU * NUM_GPUS, ctrl_numGPUPortions;
+
+    void insertFreeGPUPortion(GPUPortion*& head, GPUPortion *freePortion);
+    std::pair<GPUPortion *, GPUPortion *> insertUsedGPUPortion(GPUPortion *head, GPUPortion *scheduledPortion, GPUPortion *toBeDividedFreePortion);
+    GPUPortion* findFreePortionForInsertion(GPUPortion *head, GPUPortion *scheduledPortion);
+
+    Tasks ctrl_mergedPipelines;
 };
 
 

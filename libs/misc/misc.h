@@ -48,6 +48,7 @@ typedef unsigned int GpuMemUsageType;
 
 const uint8_t NUM_LANES_PER_GPU = 3;
 const uint8_t NUM_GPUS = 4;
+const uint64_t MINIMUM_PORTION_SIZE = 1000; // microseconds = 1 millisecond
 
 struct BatchInferProfile {
     uint64_t p95inferLat = 0;
