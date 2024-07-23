@@ -113,22 +113,22 @@ void Controller::Scheduling()
         // put helper functions as a private member function of the controller and write them at the bottom of this file.
         // std::vector<NodeHandle*> nodes;
 
-        ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
-        auto taskList = ctrl_unscheduledPipelines.getMap();
+        // ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
+        // auto taskList = ctrl_unscheduledPipelines.getMap();
 
-        if (taskList.size() < 2) {
-            continue;
-        }
+        // if (taskList.size() < 2) {
+        //     continue;
+        // }
 
-        // Adding taskname to model name for clarity
-        for (auto &[taskName, task] : taskList)
-        {
-            for (auto &model : task->tk_pipelineModels)
-            {
-                model->name = task->tk_name + "-" + model->name;
-            }
-        }
-    
+        // // Adding taskname to model name for clarity
+        // for (auto &[taskName, task] : taskList)
+        // {
+        //     for (auto &model : task->tk_pipelineModels)
+        //     {
+        //         model->name = task->tk_name + "-" + model->name;
+        //     }
+        // }
+
         NodeHandle *edgePointer = nullptr;
         NodeHandle *serverPointer = nullptr;
         unsigned long totalEdgeMemory = 0, totalServerMemory = 0;
@@ -649,31 +649,32 @@ double Controller::calculateTotalprocessedRate(const PipelineModel *model, const
         // Iterate over all models in the task's pipeline
         for (auto &model : task->tk_pipelineModels)
         {
-            if (deviceList.find(model->device) == deviceList.end()) {
+            if (deviceList.find(model->device) == deviceList.end())
+            {
                 continue;
             }
-            
-            //get devicename for the information for get the batchinfer for next step
+
+            // get devicename for the information for get the batchinfer for next step
             std::string deviceType = getDeviceTypeName(deviceList.at(model->device)->type);
             // std::cout << "calculateTotalprocessedRate deviceType " << deviceType << std::endl;
-            //make sure the calculation is only for edge / server, because we need to is_edge to make sure which side information we need.
-            if ((is_edge && deviceType != "server") || (!is_edge && deviceType == "server" && model->name != "sink" ))
+            // make sure the calculation is only for edge / server, because we need to is_edge to make sure which side information we need.
+            if ((is_edge && deviceType != "server") || (!is_edge && deviceType == "server" && model->name != "sink"))
             {
                 int batchInfer;
-                if (is_edge) 
+                if (is_edge)
                 {
-                    //calculate the info only on edge side
+                    // calculate the info only on edge side
                     batchInfer = model->processProfiles[deviceType].batchInfer[8].p95inferLat;
                     // std::cout << "edge_batchInfer" << batchInfer << std::endl;
                 }
-                else 
+                else
                 {
-                    //calculate info only the server side
-                    batchInfer = model->processProfiles.at(deviceType).batchInfer[16].p95inferLat;
+                    // calculate info only the server side
+                    batchInfer = model->processProfiles[deviceType].batchInfer[16].p95inferLat;
                     // std::cout << "server_batchInfer" << batchInfer << std::endl;
                 }
 
-                //calculate the tp because is ms so we need devided by 1000000
+                // calculate the tp because is ms so we need devided by 1000000
                 double requestRate = (batchInfer == 0) ? 0.0 : 1000000.0 / batchInfer;
                 totalRequestRate += requestRate;
                 std::cout << "totalRequestRate " << totalRequestRate << std::endl;
@@ -684,45 +685,46 @@ double Controller::calculateTotalprocessedRate(const PipelineModel *model, const
     return totalRequestRate;
 }
 
-//calculate the queue based on arrival rate
+// calculate the queue based on arrival rate
 int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool is_edge)
 {
-    //init the info
+    // init the info
     double totalQueue = 0.0;
     std::map<std::string, NodeHandle *> deviceList = devices.getMap();
 
-   //for loop every model in the system
-   for (const auto &taskPair : ctrl_unscheduledPipelines.list)
+    // for loop every model in the system
+    for (const auto &taskPair : ctrl_unscheduledPipelines.list)
     {
         const auto &task = taskPair.second;
         queryingProfiles(task);
 
         for (auto &model : task->tk_pipelineModels)
         {
-            if (deviceList.find(model->device) == deviceList.end()) {
+            if (deviceList.find(model->device) == deviceList.end())
+            {
                 continue;
             }
-            
+
             std::string deviceType = getDeviceTypeName(deviceList.at(model->device)->type);
             // std::cout << "calculateTotalprocessedRate deviceType " << deviceType << std::endl;
-            //make sure the calculation is only for edge / server, because we need to is_edge to make sure which side information we need.
-            if ((is_edge && deviceType != "server" && model->name != "datasource") || (!is_edge && deviceType == "server" && model->name != "sink" ))
+            // make sure the calculation is only for edge / server, because we need to is_edge to make sure which side information we need.
+            if ((is_edge && deviceType != "server" && model->name != "datasource") || (!is_edge && deviceType == "server" && model->name != "sink"))
             {
                 int queue;
-                if (is_edge) 
+                if (is_edge)
                 {
-                    //calculate the queue only on edge
+                    // calculate the queue only on edge
                     queue = model->arrivalProfiles.arrivalRates;
                     std::cout << "edge_queue" << queue << std::endl;
                 }
-                else 
+                else
                 {
-                    //calculate the queue only on server
+                    // calculate the queue only on server
                     queue = model->arrivalProfiles.arrivalRates;
                     std::cout << "server_queue" << queue << std::endl;
                 }
 
-                //add all the nodes queue
+                // add all the nodes queue
                 double totalqueue = (queue == 0) ? 0.0 : queue;
                 totalQueue += totalqueue;
                 std::cout << "totalRequestRate " << totalQueue << std::endl;
@@ -733,17 +735,17 @@ int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool i
     return totalQueue;
 }
 
-//calculate the BaseParPoint based on the TP
+// calculate the BaseParPoint based on the TP
 void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitioner *partitioner, std::vector<NodeHandle> nodes)
 {
-    //init the data
+    // init the data
     float TPedgesAvg = 0.0f;
     float TPserverAvg = 0.0f;
     const float smooth = 0.4f;
 
     while (true)
     {
-        //get the TP on edge and server sides.
+        // get the TP on edge and server sides.
         float TPEdges = calculateTotalprocessedRate(model, nodes, true);
         std::cout << "TPEdges: " << TPEdges << std::endl;
         float TPServer = calculateTotalprocessedRate(model, nodes, false);
@@ -754,7 +756,7 @@ void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitione
         TPserverAvg = smooth * TPserverAvg + (1 - smooth) * TPServer; // this is server throughput
         std::cout << " TPserverAvg:" << TPserverAvg << std::endl;
 
-        // partition the parpoint, calculate based on the TP 
+        // partition the parpoint, calculate based on the TP
         if (TPedgesAvg > TPserverAvg + 10 * 4)
         {
             if (TPedgesAvg > 1.5 * TPserverAvg)
@@ -798,7 +800,7 @@ void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitione
     }
 }
 
-//fine grained the parpoint based on the queue
+// fine grained the parpoint based on the queue
 void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle> &nodes)
 {
     float w;
@@ -807,13 +809,13 @@ void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const
     while (true)
     {
 
-        //get edge and server sides queue data
+        // get edge and server sides queue data
         float wbar = calculateTotalQueue(nodes, true);
         std::cout << "wbar " << wbar << std::endl;
         float w = calculateTotalQueue(nodes, false);
         std::cout << "w " << w << std::endl;
-        //based on the queue sides to claculate the fine grained point
-        // If there's no queue on the edge, set a default adjustment factor
+        // based on the queue sides to claculate the fine grained point
+        //  If there's no queue on the edge, set a default adjustment factor
         if (wbar == 0)
         {
             float tmp = 1.0f;
@@ -829,18 +831,27 @@ void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const
     }
 }
 
-
 void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<NodeHandle> &nodes, Partitioner *partitioner, int cuda_device)
 {
     // Calculate the decision point by adding the base and fine grained partition
-    float decisionPoint = partitioner->BaseParPoint + partitioner->FineGrainedOffset;
-    //tolerance threshold for decision making
+    float decisionPoint = partitioner->BaseParPoint + partitioner->FineGrainedOffset*0.2;
+    // tolerance threshold for decision making
     float tolerance = 0.1;
-    // ratio for current worload
-    float ratio = 0.3; //calculateTotalQueue(nodes, true) / calculateTotalQueue(nodes, false);
+    // ratio for current worload 
+    float ratio = 0.0f;//calculateTotalQueue(nodes, true) /calculateTotalQueue(nodes, false);
     // ContainerHandle *selectedContainer = nullptr;
 
-    //the decisionpoint is much larger than the current workload that means we need give the edge more work
+    if (calculateTotalQueue(nodes, false) != 0)
+    {                                                  
+        ratio = calculateTotalQueue(nodes, true) /calculateTotalQueue(nodes, false);
+        ratio = std::max(0.0f, std::min(1.0f, ratio)); 
+    }
+    else
+    {
+        ratio = 0.0f; 
+    }
+
+    // the decisionpoint is much larger than the current workload that means we need give the edge more work
     if (decisionPoint > ratio + tolerance)
     {
         std::cout << "Move Container from server to edge based on model priority: " << std::endl;
@@ -851,7 +862,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
 
             for (auto &model : task->tk_pipelineModels)
             {
-                //we don't move the datasource and sink because it has to be on edge or server 
+                // we don't move the datasource and sink because it has to be on edge or server
                 if (model->isSplitPoint && model->name != "datasource" && model->name != "sink")
                 {
 
@@ -859,15 +870,15 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
                     std::lock_guard<std::mutex> lock(model->pipelineModelMutex);
 
                     std::cout << "b1" << std::endl;
-                    std::cout << "model device" <<model->device<< std::endl;
-                    //change the device from server to the source of edge device
+                    std::cout << "model device" << model->device << std::endl;
+                    // change the device from server to the source of edge device
                     if (model->device == "server")
                     {
-                        std::cout << "model device2" <<model->device<< std::endl;
+                        std::cout << "model device2" << model->device << std::endl;
                         model->device = task->tk_src_device;
-                        std::cout << "model device" <<model->device<< std::endl;
+                        std::cout << "model device" << model->device << std::endl;
                     }
-                    std::cout << "model device" <<model->device<< std::endl;
+                    std::cout << "model device" << model->device << std::endl;
                 }
             }
         }
@@ -892,7 +903,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
                         // lock for change information
                         std::lock_guard<std::mutex> lock(upstreamModel->pipelineModelMutex);
 
-                        //move the container from edge to server
+                        // move the container from edge to server
                         if (upstreamModel->device != "server")
                         {
                             upstreamModel->device = "server";
