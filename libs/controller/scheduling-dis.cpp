@@ -161,16 +161,13 @@ void Controller::Scheduling()
         Partitioner partitioner;
         PipelineModel model;
         float ratio = 0.3;
-        std::cout << "ratio" << std::endl;
 
         partitioner.BaseParPoint = ratio;
 
         scheduleBaseParPointLoop(&model, &partitioner, nodes);
         scheduleFineGrainedParPointLoop(&partitioner, nodes);
         DecideAndMoveContainer(&model, nodes, &partitioner, 2);
-        std::cout << "b2" << std::endl;
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
-        std::cout << "b3" << std::endl;
         ApplyScheduling();
         std::cout << "end_scheduleBaseParPoint " << partitioner.BaseParPoint << std::endl;
         std::cout << "end_FineGrainedParPoint " << partitioner.FineGrainedOffset << std::endl;
@@ -677,7 +674,7 @@ double Controller::calculateTotalprocessedRate(const PipelineModel *model, const
                 // calculate the tp because is ms so we need devided by 1000000
                 double requestRate = (batchInfer == 0) ? 0.0 : 1000000.0 / batchInfer;
                 totalRequestRate += requestRate;
-                std::cout << "totalRequestRate " << totalRequestRate << std::endl;
+                // std::cout << "totalRequestRate " << totalRequestRate << std::endl;
             }
         }
     }
@@ -715,19 +712,19 @@ int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool i
                 {
                     // calculate the queue only on edge
                     queue = model->arrivalProfiles.arrivalRates;
-                    std::cout << "edge_queue" << queue << std::endl;
+                    // std::cout << "edge_queue" << queue << std::endl;
                 }
                 else
                 {
                     // calculate the queue only on server
                     queue = model->arrivalProfiles.arrivalRates;
-                    std::cout << "server_queue" << queue << std::endl;
+                    // std::cout << "server_queue" << queue << std::endl;
                 }
 
                 // add all the nodes queue
                 double totalqueue = (queue == 0) ? 0.0 : queue;
                 totalQueue += totalqueue;
-                std::cout << "totalRequestRate " << totalQueue << std::endl;
+                // std::cout << "totalRequestRate " << totalQueue << std::endl;
             }
         }
     }
@@ -865,20 +862,13 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
                 // we don't move the datasource and sink because it has to be on edge or server
                 if (model->isSplitPoint && model->name != "datasource" && model->name != "sink")
                 {
-
-                    std::cout << "model: " << model->name << std::endl;
                     std::lock_guard<std::mutex> lock(model->pipelineModelMutex);
 
-                    std::cout << "b1" << std::endl;
-                    std::cout << "model device" << model->device << std::endl;
                     // change the device from server to the source of edge device
                     if (model->device == "server")
                     {
-                        std::cout << "model device2" << model->device << std::endl;
                         model->device = task->tk_src_device;
-                        std::cout << "model device" << model->device << std::endl;
                     }
-                    std::cout << "model device" << model->device << std::endl;
                 }
             }
         }
