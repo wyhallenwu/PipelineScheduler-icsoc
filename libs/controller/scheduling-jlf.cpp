@@ -144,6 +144,8 @@ void Controller::Scheduling()
             {
                 continue;
             }
+
+            std::vector<std::string> taskNameToRemove;
             for (auto &[taskName, taskHandle] : taskList)
             {
                 if (taskName.find(taskType) == std::string::npos || taskName == taskType)
@@ -155,7 +157,14 @@ void Controller::Scheduling()
                 auto yolo = taskList[taskType]->tk_pipelineModels.front()->downstreams.front().first;
                 taskList[taskType]->tk_pipelineModels.back()->downstreams.emplace_back(std::make_pair(yolo, -1));
                 taskList[taskType]->tk_pipelineModels.back()->name = taskName + "-" + taskType + "-datasource";
+                taskNameToRemove.push_back(taskName);
             }
+            // Delete all unnecessary tasks
+            for (auto taskName : taskNameToRemove)
+            {
+                taskList.erase(taskName);
+            }
+
         }
         for (auto &taskType : taskTypes)
         {
