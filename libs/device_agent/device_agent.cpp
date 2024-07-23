@@ -332,9 +332,11 @@ bool DeviceAgent::CreateContainer(
         }
         if (model == ModelType::DataSource) {
             base_config[0]["msvc_dataShape"] = {input_dims};
+            base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
         } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
             base_config[0]["msvc_dataShape"] = {input_dims};
             base_config[0]["msvc_type"] = 500;
+            base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
         } else {
             base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
             base_config[2]["path"] = model_file;
@@ -377,6 +379,7 @@ bool DeviceAgent::CreateContainer(
 
         // start container
         start_config["container"]["cont_pipeline"] = base_config;
+        std::cout << start_config.dump(4) << std::endl;
         unsigned int control_port = CONTAINER_BASE_PORT + dev_port_offset + containers.size();
         runDocker(executable, cont_name, to_string(start_config), device, control_port);
         std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
