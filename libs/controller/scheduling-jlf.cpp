@@ -154,7 +154,7 @@ void Controller::Scheduling()
                 taskList[taskType]->tk_pipelineModels.back()->downstreams = {};
                 auto yolo = taskList[taskType]->tk_pipelineModels.front()->downstreams.front().first;
                 taskList[taskType]->tk_pipelineModels.back()->downstreams.emplace_back(std::make_pair(yolo, -1));
-                taskList[taskType]->tk_pipelineModels.back()->name = taskName + "-" + taskType;
+                taskList[taskType]->tk_pipelineModels.back()->name = taskName + "-" + taskType + "-datasource";
             }
         }
         for (auto &taskType : taskTypes)
@@ -212,8 +212,13 @@ void Controller::Scheduling()
                 lock_pipeline_model.unlock();
             }
         }
+
+        int count = 0;
         for (auto &[task_name, task] : taskList)
         {
+            if (count == 2) {
+                break;
+            }
             // std::unique_lock<std::mutex> lock_task(task->tk_mutex);
             for (auto model : task->tk_pipelineModels)
             {
@@ -222,11 +227,14 @@ void Controller::Scheduling()
                 if (model->name.find("yolo") != std::string::npos)
                 {
                     // collect model information
-                    // std::string name = model->name;
+                    
+                    // parse name
+                    std::size_t pos1 = model->name.find("-");
+                    std::string model_name = model->name.substr(pos1 + 1);
 
                     // CHECKME: what is the system FPS
-                    std::string containerName = model->name + "-" + model->deviceTypeName;
-                    // std::cout << "model name: " << model->name << std::endl;
+                    std::string containerName = model_name + "-" + model->deviceTypeName;
+                    std::cout << "model name in finding: " << model_name << std::endl;
                     // std::cout << "model device name: " << model->device << ", model device type name: " << model->deviceTypeName << std::endl;
                     // std::cout << "taskName: " << ctrl_containerLib[containerName].taskName << ", " << ctrl_containerLib[containerName].modelName << std::endl;
                     BatchInferProfileListType batch_proilfes = queryBatchInferLatency(
@@ -243,13 +251,13 @@ void Controller::Scheduling()
                     // CHECKME: get width, height
                     // parse the resolution of the model
                     // std::cout << "yolo name: " << model->name << std::endl;
-                    std::size_t pos = model->name.find("-");
-                    std::string yolo = model->name.substr(0, pos);
+                    std::size_t pos = model_name.find("-");
+                    std::string yolo = model_name.substr(0, pos);
                     int rs;
                     try
                     {
                         size_t pos;
-                        rs = std::stoi(yolo.substr(model->name.length() - 3, 3), &pos);
+                        rs = std::stoi(yolo.substr(model_name.length() - 3, 3), &pos);
                         if (pos != 3)
                         {
                             throw std::invalid_argument("yolov5n, set the default resolution 640");
@@ -266,7 +274,7 @@ void Controller::Scheduling()
                     // std::cout << "resolution is: " << rs << std::endl;
                     for (auto &[batch_size, profile] : batch_proilfes)
                     {
-                        modelProfilesCSJF[task->tk_name].add(model->name, ACC_LEVEL_MAP.at(yolo + std::to_string(rs)), batch_size, profile.p95inferLat, width, height, model);
+                        modelProfilesCSJF[task->tk_name].add(model_name, ACC_LEVEL_MAP.at(yolo + std::to_string(rs)), batch_size, profile.p95inferLat, width, height, model);
                     }
                 }
                 else if (model->name.find("datasource") != std::string::npos)
@@ -285,6 +293,7 @@ void Controller::Scheduling()
                 lock_pipeline_model.unlock();
                 // lock_task.unlock();
             }
+            count++;
         }
 
         
@@ -319,15 +328,18 @@ void Controller::Scheduling()
                 auto downstream = client_model->downstreams.front().first;
                 std::unique_lock<std::mutex> model_lock(downstream->pipelineModelMutex);
                 std::string model_name = downstream->name;
+                size_t pos = model_name.find("-");
+                model_name = model_name.substr(pos + 1);
                 std::string model_device = downstream->device;
                 std::string model_device_typename = downstream->deviceTypeName;
                 std::string containerName = model_name + "-" + model_device_typename;
                 model_lock.unlock();
                 client_lock.unlock();
 
-                // std::cout << "before query Network" << std::endl;
-                // std::cout << "name of the client model: " << containerName << std::endl;
-                // CHECKME: NetworkEntry retrieval correctness
+                std::cout << "before query Network" << std::endl;
+                std::cout << "name of the client model: " << containerName << std::endl;
+                std::cout << "downstream name: " << downstream->name << std::endl;
+
                 NetworkProfile network_proflie = queryNetworkProfile(
                     *ctrl_metricsServerConn,
                     ctrl_experimentName,
@@ -441,7 +453,10 @@ void Controller::Scheduling()
             for (auto& model: model_profiles_jf.infos) {
                 auto p = model.second.front().model;
                 std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
-                std::cout << p->upstreams.front().first->name << std::endl;
+                for (auto us: p->upstreams) {
+                    std::cout << us.first->name << ", ";
+                }
+                std::cout << std::endl;
                 lock.unlock();
             }
         }
