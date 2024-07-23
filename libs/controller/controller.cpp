@@ -303,6 +303,9 @@ void Controller::ApplyScheduling() {
                 // start additional containers
                 for (unsigned int i = candidates.size(); i < model->numReplicas; i++) {
                     ContainerHandle *container = TranslateToContainer(model, devices.list[model->device], i);
+                    if (container == nullptr) {
+                        continue;
+                    }
                     new_containers.push_back(container);
                 }
             } else if (candidates.size() > model->numReplicas) {
@@ -380,11 +383,29 @@ bool CheckMergable(const std::string &m) {
 }
 
 ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i) {
+    if (model->name.find("datasource") != std::string::npos) {
+        for (auto &[downstream, coi] : model->downstreams) {
+            if ((downstream->name.find("yolov5n") != std::string::npos ||
+                 downstream->name.find("retina1face") != std::string::npos) &&
+                downstream->device != "server") {
+                return nullptr;
+            }
+        }
+    }
     std::string modelName = splitString(model->name, "-").back();
-    if (model->name.find("yolov5n") != std::string::npos && model->device != "server") {
-        model->name = replaceSubstring(model->name, "yolov5n", "yolov5ndsrc");
-    } else if (model->name.find("retina1face") != std::string::npos && model->device != "server") {
-        model->name = replaceSubstring(model->name, "retina1face", "retina1facedsrc");
+    bool upstreamIsDatasource = (std::find_if(model->upstreams.begin(), model->upstreams.end(),
+                                              [](const std::pair<PipelineModel *, int> &upstream) {
+                                                  return upstream.first->name.find("datasource") != std::string::npos;
+                                              }) != model->upstreams.end());
+    if (model->name.find("yolov5n") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
+        if (model->name.find("yolov5ndsrc") == std::string::npos) {
+            model->name = replaceSubstring(model->name, "yolov5n", "yolov5ndsrc");
+        }
+        
+    } else if (model->name.find("retina1face") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
+        if (model->name.find("retina1facedsrc") == std::string::npos) {
+            model->name = replaceSubstring(model->name, "retina1face", "retina1facedsrc");
+        }
     }
     int class_of_interest;
     if (model->name.find("datasource") != std::string::npos || model->name.find("dsrc") != std::string::npos) {
