@@ -272,16 +272,17 @@ void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
         EmptyMessage reply;
         ClientContext context;
         Status status;
-        int size = (int) dist(gen);
+        int size = std::abs((int) dist(gen));
         timestamp = std::chrono::high_resolution_clock::now();
         request.set_origin_name(dev_name);
         request.set_gen_time(std::chrono::duration_cast<TimePrecisionType>(timestamp.time_since_epoch()).count());
+        spdlog::get("container_agent")->debug("Sending data of size: {}", size);
         request.set_data(data.data(), size);
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 controller_stub->AsyncSendDummyData(&context, request, controller_sending_cq));
         finishGrpc(rpc, reply, status, controller_sending_cq);
     }
-    spdlog::get("container_agent")->trace("Network test completed");
+    spdlog::get("container_agent")->info("Network test completed");
 }
 
 bool DeviceAgent::CreateContainer(
