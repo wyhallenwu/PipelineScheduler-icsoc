@@ -692,31 +692,45 @@ void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::strin
     std::string interface = config["interface"];
     auto bandwidth_limits = config["bandwidth_limits"];
 
+    if (bandwidth_limits.empty()) {
+        std::cerr << "No bandwidth limits found in the JSON file." << std::endl;
+        return;
+    }
+
     auto start = std::chrono::system_clock::now();
 
-    for (const auto& limit : bandwidth_limits) {
-        if (!isRunning()) break;
-        int time_spot = limit["time"];
-        int mbps = limit["mbps"];
+    int bwThresholdIndex = 0;
 
-        // Wait until the specified time spot or until the agent is stopped
-        auto now = std::chrono::system_clock::now();
-        auto duration = std::chrono::seconds(time_spot) - std::chrono::duration_cast<std::chrono::seconds>(now - start);
-        if (duration.count() > 0) {
-            std::cout << "Waiting for " << duration.count() << " seconds to apply bandwidth limit of " << mbps << " Mbps..." << std::endl;
-            for (int i = 0; i < duration.count(); ++i) {
-                if (!isRunning()) break;
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-            }
+    ClockType nextThresholdSetTime = start + std::chrono::seconds(bandwidth_limits[bwThresholdIndex]["time"]); 
+    while (isRunning()) {
+        if (bwThresholdIndex >= bandwidth_limits.size()) {
+            break;
         }
+        if (std::chrono::system_clock::now() >= nextThresholdSetTime) {
+            Stopwatch stopwatch;
 
-        if (!isRunning()) break;
+            auto limit = bandwidth_limits[bwThresholdIndex];
+            int time_spot = limit["time"];
+            int mbps = limit["mbps"];
 
-        // Build and execute the command
-        std::string command = "sudo bash " + scriptPath + " " + interface + " " + std::to_string(mbps);
-        std::cout << "Executing command: " << command << std::endl;
-        int result = system(command.c_str());
-        std::cout << "Command executed with result: " << result << std::endl;
+            // Build and execute the command
+            std::string command = "sudo bash " + scriptPath + " " + interface + " " + std::to_string(mbps);
+            spdlog::get("container_agent")->info("{0:s} Setting BW limit to {1:d}", dev_name, mbps);
+            int result = system(command.c_str());
+            spdlog::get("container_agent")->info("Command executed with result: {0:d}", result);
+
+            if (bwThresholdIndex == bandwidth_limits.size() - 1) {
+                break;
+            }
+            auto distanceToNext = bandwidth_limits[++bwThresholdIndex]["time"].get<int>() - bandwidth_limits[bwThresholdIndex - 1]["time"].get<int>();
+            nextThresholdSetTime += std::chrono::seconds(distanceToNext);
+
+            auto sleepTime = nextThresholdSetTime - std::chrono::system_clock::now();
+            std::this_thread::sleep_for(sleepTime + std::chrono::nanoseconds(10000000));
+
+        }
     }
+
+    // QUANG: Remove the bandwidth limit
     std::cout << "Finished bandwidth limiting." << std::endl;
 }
