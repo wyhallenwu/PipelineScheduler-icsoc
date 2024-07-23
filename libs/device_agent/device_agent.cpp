@@ -672,3 +672,47 @@ void DeviceAgent::UpdateResolutionRequestHandler::Proceed() {
         delete this;
     }
 }
+
+// Function to run the bash script with parameters from a JSON file
+void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::string& jsonFilePath) {
+    // Read JSON file
+    std::ifstream json_file(jsonFilePath);
+    if (!json_file.is_open()) {
+        std::cerr << "Failed to open " << jsonFilePath << std::endl;
+        return;
+    }
+
+    json config;
+    json_file >> config;
+
+    std::string interface = config["interface"];
+    auto bandwidth_limits = config["bandwidth_limits"];
+
+    auto start = std::chrono::system_clock::now();
+
+    for (const auto& limit : bandwidth_limits) {
+        if (!isRunning()) break;
+        int time_spot = limit["time"];
+        int mbps = limit["mbps"];
+
+        // Wait until the specified time spot or until the agent is stopped
+        auto now = std::chrono::system_clock::now();
+        auto duration = std::chrono::seconds(time_spot) - std::chrono::duration_cast<std::chrono::seconds>(now - start);
+        if (duration.count() > 0) {
+            std::cout << "Waiting for " << duration.count() << " seconds to apply bandwidth limit of " << mbps << " Mbps..." << std::endl;
+            for (int i = 0; i < duration.count(); ++i) {
+                if (!isRunning()) break;
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+        }
+
+        if (!isRunning()) break;
+
+        // Build and execute the command
+        std::string command = "sudo bash " + scriptPath + " " + interface + " " + std::to_string(mbps);
+        std::cout << "Executing command: " << command << std::endl;
+        int result = system(command.c_str());
+        std::cout << "Command executed with result: " << result << std::endl;
+    }
+    std::cout << "Finished bandwidth limiting." << std::endl;
+}
