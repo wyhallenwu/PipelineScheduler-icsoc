@@ -307,6 +307,7 @@ void Controller::ApplyScheduling() {
                         continue;
                     }
                     new_containers.push_back(container);
+                    new_containers.back()->pipelineModel = model;
                 }
             } else if (candidates.size() > model->numReplicas) {
                 // remove the extra containers
@@ -431,7 +432,8 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
                                           device->next_free_port++,
                                           ctrl_containerLib[containerTypeName].modelPath,
                                           device,
-                                          model->task};
+                                          model->task,
+                                          model};
     
     if (model->name.find("datasource") != std::string::npos ||
         model->name.find("yolov5ndsrc") != std::string::npos || 
