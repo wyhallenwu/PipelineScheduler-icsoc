@@ -362,23 +362,33 @@ void Controller::ApplyScheduling() {
     // if (ctrl_scheduledPipelines.list.empty()){
     //     std::cout << "empty in the debugging before" << std::endl;
     // }
+    int count = 0;
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         // if (pipe->tk_pipelineModels.empty()) {
         //     std::cout << "empty in the debugging" << std::endl;
         // }
+        if (count == 2) {
+            break;
+        }
         for (auto &model: pipe->tk_pipelineModels) {
             // If its a datasource, we dont have to do it now
             // datasource doesnt have upstreams
             // and the downstreams will be set later
             // std::cout << "test in debugging" << std::endl;
-            if (model->name.find("datasource") != std::string::npos) {
-                std::cout << "===========Debugging: ==========" <<  std::endl;
-                auto yolo = model->downstreams.front();
-                std::cout << yolo.first->name << std::endl;
-                std::cout << "==============================" << std::endl;
-                continue;
+            std::cout << "===========Debugging: ==========" <<  std::endl;
+            std::cout << "upstream of model: " << model->name << std::endl;
+            for (auto us: model->upstreams) {
+                std::cout << us.first->name << ", ";
             }
+            std::cout << std::endl;
+            std::cout << "dstream of model: " << model->name << std::endl;
+            for (auto ds: model->downstreams) {
+                std::cout << ds.first->name << ", ";
+            }
+            std::cout << std::endl;
+            std::cout << "==============================" << std::endl;
         }
+        count++;
     }
 
     std::cout << "b4" << std::endl;

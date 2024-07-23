@@ -523,7 +523,7 @@ void Controller::Scheduling()
         // ctrl_lock1.unlock();
 
         // std::cout << "after copy" << std::endl;
-        // ApplyScheduling();
+        ApplyScheduling();
 
         // for (auto [taskName, taskHandle]: taskList) {
         //     queryingProfiles(taskHandle);
