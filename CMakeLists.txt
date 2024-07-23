@@ -37,7 +37,10 @@ endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     set(CMAKE_CXX_STANDARD 17)
     # Set C++ version and optimization level
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fPIC -Wall -DNDEBUG -Wno-deprecated-declarations -O0") #-Ofast
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fPIC -Wall -Wno-deprecated-declarations -O0") #-Ofast
+
+    # set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -fPIC -Wall")
+    # set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -fPIC -Wall -Wno-deprecated-declarations")
 
     # Let's ensure -std=c++xx instead of -std=g++xx
     set(CMAKE_CXX_EXTENSIONS OFF)
