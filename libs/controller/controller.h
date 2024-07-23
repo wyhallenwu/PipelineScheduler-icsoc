@@ -88,6 +88,8 @@ struct NodeHandle {
     bool initialNetworkCheck = false;
     ClockType lastNetworkCheckTime;
 
+    std::map<std::string, PipelineModel *> modelList;
+
     mutable std::mutex nodeHandleMutex;
     mutable std::mutex networkCheckMutex;
 
@@ -209,7 +211,8 @@ struct ContainerHandle {
     uint64_t endTime;
     //
     GPUPortion *executionLane = nullptr;
-    //
+    // points to the pipeline model that this container is part of
+    PipelineModel *pipelineModel = nullptr;
     mutable std::mutex containerHandleMutex;
 
     ContainerHandle() = default;
@@ -228,6 +231,7 @@ struct ContainerHandle {
                 const std::string model_file = "",
                 NodeHandle* device_agent = nullptr,
                 TaskHandle* task = nullptr,
+                PipelineModel* pipelineModel = nullptr,
                 const std::vector<ContainerHandle*>& upstreams = {},
                 const std::vector<ContainerHandle*>& downstreams = {},
                 const std::vector<QueueLengthType>& queueSizes = {})
@@ -244,6 +248,7 @@ struct ContainerHandle {
       model_file(model_file),
       device_agent(device_agent),
       task(task),
+      pipelineModel(pipelineModel),
       upstreams(upstreams),
       downstreams(downstreams),
       queueSizes(queueSizes) {}
@@ -284,6 +289,7 @@ struct ContainerHandle {
         startTime = other.startTime;
         endTime = other.endTime;
         executionLane = other.executionLane;
+        pipelineModel = other.pipelineModel;
     }
 
     // Copy assignment operator
@@ -322,6 +328,7 @@ struct ContainerHandle {
             startTime = other.startTime;
             endTime = other.endTime;
             executionLane = other.executionLane;
+            pipelineModel = other.pipelineModel;
         }
         return *this;
     }
@@ -367,6 +374,8 @@ struct PipelineModel {
     uint64_t estimatedStart2HereCost = 0;
     // Batching deadline
     uint64_t batchingDeadline = 9999999999;
+
+    std::vector<int> dimensions = {-1, -1};
 
     std::string device;
     std::string deviceTypeName;
@@ -452,6 +461,7 @@ struct PipelineModel {
         merged = other.merged;
         toBeRun = other.toBeRun;
         possibleDevices = other.possibleDevices;
+        dimensions = other.dimensions;
         manifestations = {};
         for (auto& container : other.manifestations) {
             manifestations.push_back(new ContainerHandle(*container));
@@ -491,6 +501,7 @@ struct PipelineModel {
             merged = other.merged;
             toBeRun = other.toBeRun;
             possibleDevices = other.possibleDevices;
+            dimensions = other.dimensions;
             manifestations = {};
             for (auto& container : other.manifestations) {
                 manifestations.push_back(new ContainerHandle(*container));
@@ -560,6 +571,7 @@ struct TaskHandle {
         tk_pipelineModels = {};
         for (auto& model : other.tk_pipelineModels) {
             tk_pipelineModels.push_back(new PipelineModel(*model));
+            tk_pipelineModels.back()->task = this;
         }
         for (auto& model : this->tk_pipelineModels) {
             for (auto& downstream : model->downstreams) {
@@ -599,6 +611,7 @@ struct TaskHandle {
             tk_pipelineModels = {};
             for (auto& model : other.tk_pipelineModels) {
                 tk_pipelineModels.push_back(new PipelineModel(*model));
+                tk_pipelineModels.back()->task = this;
             }
             for (auto& model : this->tk_pipelineModels) {
                 for (auto& downstream : model->downstreams) {
@@ -941,7 +954,7 @@ private:
         std::map<std::string, TaskHandle*> list = {};
         mutable std::mutex tasksMutex;
     };
-    Tasks ctrl_unscheduledPipelines, ctrl_scheduledPipelines;
+    Tasks ctrl_unscheduledPipelines, ctrl_savedUnscheduledPipelines, ctrl_scheduledPipelines, ctrl_pastScheduledPipelines;
 
     struct Containers {
     public:
