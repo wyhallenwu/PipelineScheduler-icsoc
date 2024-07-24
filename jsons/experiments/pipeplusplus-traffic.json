@@ -9,31 +9,31 @@
             "pipeline_name": "traffic1",
             "pipeline_target_slo": 50000,
             "pipeline_type": 0,
-            "video_source": "traffic1.mp4",
+            "video_source": "/app/data/traffic/traffic1.mp4",
             "pipeline_source_device": "nxavier1"
         }, {
             "pipeline_name": "traffic3",
             "pipeline_target_slo": 50000,
             "pipeline_type": 0,
-            "video_source": "traffic3.mp4",
+            "video_source": "/app/data/traffic/traffic3.mp4",
             "pipeline_source_device": "nxavier2"
         }, {
             "pipeline_name": "traffic6",
             "pipeline_target_slo": 50000,
             "pipeline_type": 0,
-            "video_source": "traffic6.mp4",
+            "video_source": "/app/data/traffic/traffic6.mp4",
             "pipeline_source_device": "nxavier3"
         }, {
             "pipeline_name": "traffic4",
             "pipeline_target_slo": 50000,
             "pipeline_type": 0,
-            "video_source": "traffic4.mp4",
+            "video_source": "/app/data/traffic/traffic4.mp4",
             "pipeline_source_device": "orinano2"
         }, {
             "pipeline_name": "traffic2",
             "pipeline_target_slo": 50000,
             "pipeline_type": 0,
-            "video_source": "traffic2.mp4",
+            "video_source": "/app/data/traffic/traffic2.mp4",
             "pipeline_source_device": "orinano3"
         } 
     ]

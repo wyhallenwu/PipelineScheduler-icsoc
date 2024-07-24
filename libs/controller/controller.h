@@ -388,6 +388,9 @@ struct PipelineModel {
     // Manifestations are the list of containers that will be created for this model
     std::vector<ContainerHandle *> manifestations;
 
+    // Source
+    std::string datasourceName;
+
     mutable std::mutex pipelineModelMutex;
 
         // Constructor with default parameters
@@ -467,6 +470,7 @@ struct PipelineModel {
             manifestations.push_back(new ContainerHandle(*container));
         }
         deviceAgent = other.deviceAgent;
+        datasourceName = other.datasourceName;
     }
 
     // Assignment operator
@@ -507,6 +511,7 @@ struct PipelineModel {
                 manifestations.push_back(new ContainerHandle(*container));
             }
             deviceAgent = other.deviceAgent;
+            datasourceName = other.datasourceName;
         }
         return *this;
     }
