@@ -225,6 +225,9 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     task->tk_src_device = t.device;
 
     task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device, t.name, t.source);
+    for (auto &model: task->tk_pipelineModels) {
+        model->datasourceName = t.source;
+    }
     std::unique_lock<std::mutex> lock2(ctrl_unscheduledPipelines.tasksMutex);
     std::unique_lock<std::mutex> lock3(ctrl_savedUnscheduledPipelines.tasksMutex);
     ctrl_unscheduledPipelines.list.insert({task->tk_name, task});
@@ -416,7 +419,7 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     }
 
     std::string subTaskName = model->name;
-    std::string containerName = model->name + "-" + std::to_string(i);
+    std::string containerName = ctrl_systemName + "-" + model->name + "-" + std::to_string(i);
     // the name of the container type to look it up in the container library
     std::string containerTypeName = modelName + "-" + getDeviceTypeName(device->type);
     
