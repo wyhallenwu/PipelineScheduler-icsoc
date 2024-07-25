@@ -65,6 +65,8 @@ public:
 
     void collectRuntimeMetrics();
 
+    void limitBandwidth(const std::string& scriptPath, const std::string& jsonFilePath);
+
 private:
     void testNetwork(float min_size, float max_size, int num_loops);
 
