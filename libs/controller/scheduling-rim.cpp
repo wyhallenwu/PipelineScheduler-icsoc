@@ -123,6 +123,7 @@ void Controller::Scheduling() {
             continue;
         }
 
+        ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto localTaskList = ctrl_unscheduledPipelines.getMap();
         if (localTaskList.empty()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
