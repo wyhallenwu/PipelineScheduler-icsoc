@@ -469,62 +469,67 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
 
 void Controller::StartContainer(ContainerHandle *container, bool easy_allocation) {
     spdlog::get("container_agent")->info("Starting container: {0:s}", container->name);
-//     ContainerConfig request;
-//     ClientContext context;
-//     EmptyMessage reply;
-//     Status status;
-//     request.set_pipeline_name(container->task->tk_name);
-//     request.set_model(container->model);
-//     request.set_model_file(container->model_file);
-//     request.set_batch_size(container->batch_size);
-//     request.set_allocation_mode(easy_allocation);
-//     request.set_device(container->cuda_device);
-//     request.set_slo(container->inference_deadline);
-//     for (auto dim: container->dimensions) {
-//         request.add_input_dimensions(dim);
-//     }
-//     for (auto dwnstr: container->downstreams) {
-//         Neighbor *dwn = request.add_downstream();
-//         dwn->set_name(dwnstr->name);
-//         dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
-//         dwn->set_class_of_interest(dwnstr->class_of_interest);
-//         if (dwnstr->model == Sink) {
-//             dwn->set_gpu_connection(false);
-//         } else {
-//             dwn->set_gpu_connection((container->device_agent == dwnstr->device_agent) &&
-//                                     (container->cuda_device == dwnstr->cuda_device));
-//         }
-//     }
-//     if (request.downstream_size() == 0) {
-//         Neighbor *dwn = request.add_downstream();
-//         dwn->set_name("video_sink");
-//         dwn->set_ip("./out.log"); //output log file
-//         dwn->set_class_of_interest(-1);
-//         dwn->set_gpu_connection(false);
-//     }
-//     if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinafaceDsrc) {
-//         Neighbor *up = request.add_upstream();
-//         up->set_name("video_source");
-//         up->set_ip(container->task->tk_source);
-//         up->set_class_of_interest(-1);
-//         up->set_gpu_connection(false);
-//     } else {
-//         for (auto upstr: container->upstreams) {
-//             Neighbor *up = request.add_upstream();
-//             up->set_name(upstr->name);
-//             up->set_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
-//             up->set_class_of_interest(-2);
-//             up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
-//                                    (container->cuda_device == upstr->cuda_device));
-//         }
-//     }
-//     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-//             container->device_agent->stub->AsyncStartContainer(&context, request,
-//                                                                       container->device_agent->cq));
-//     finishGrpc(rpc, reply, status, container->device_agent->cq);
-//     if (!status.ok()) {
-//         std::cout << status.error_code() << ": An error occured while sending the request" << std::endl;
-//     }
+    ContainerConfig request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    std::string pipelineName = splitString(container->name, "-").front();
+    request.set_pipeline_name(pipelineName);
+    request.set_model(container->model);
+    request.set_model_file(container->model_file);
+    request.set_batch_size(container->batch_size);
+    request.set_allocation_mode(easy_allocation);
+    if (container->model == DataSource || container->model == Sink) {
+        container->cuda_device = -1;
+    }
+    request.set_device(container->cuda_device);
+    request.set_slo(container->inference_deadline);
+    for (auto dim: container->dimensions) {
+        request.add_input_dimensions(dim);
+    }
+    for (auto dwnstr: container->downstreams) {
+        Neighbor *dwn = request.add_downstream();
+        dwn->set_name(dwnstr->name);
+        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
+        dwn->set_class_of_interest(dwnstr->class_of_interest);
+        if (dwnstr->model == Sink) {
+            dwn->set_gpu_connection(false);
+        } else {
+            dwn->set_gpu_connection((container->device_agent == dwnstr->device_agent) &&
+                                    (container->cuda_device == dwnstr->cuda_device));
+        }
+    }
+    if (request.downstream_size() == 0) {
+        Neighbor *dwn = request.add_downstream();
+        dwn->set_name("video_sink");
+        dwn->set_ip("./out.log"); //output log file
+        dwn->set_class_of_interest(-1);
+        dwn->set_gpu_connection(false);
+    }
+    if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinafaceDsrc) {
+        Neighbor *up = request.add_upstream();
+        up->set_name("video_source");
+        up->set_ip(container->pipelineModel->datasourceName);
+        up->set_class_of_interest(-1);
+        up->set_gpu_connection(false);
+    } else {
+        for (auto upstr: container->upstreams) {
+            Neighbor *up = request.add_upstream();
+            up->set_name(upstr->name);
+            up->set_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
+            up->set_class_of_interest(-2);
+            up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
+                                   (container->cuda_device == upstr->cuda_device));
+        }
+    }
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            container->device_agent->stub->AsyncStartContainer(&context, request,
+                                                                      container->device_agent->cq));
+    finishGrpc(rpc, reply, status, container->device_agent->cq);
+    if (!status.ok()) {
+        spdlog::get("container_agent")->error("Failed to start container: {0:s}", container->name);
+        return;
+    }
     spdlog::get("container_agent")->info("Container {0:s} started", container->name);
 }
 
