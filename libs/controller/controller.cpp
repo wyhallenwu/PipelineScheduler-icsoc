@@ -497,6 +497,8 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         } else {
             dwn->set_gpu_connection((container->device_agent == dwnstr->device_agent) &&
                                     (container->cuda_device == dwnstr->cuda_device));
+            dwn->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
+            //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
         }
     }
     if (request.downstream_size() == 0) {
