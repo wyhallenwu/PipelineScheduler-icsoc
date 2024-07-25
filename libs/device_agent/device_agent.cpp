@@ -47,6 +47,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
     dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
     dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
+    dev_type = type;
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
@@ -271,16 +272,17 @@ void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
         EmptyMessage reply;
         ClientContext context;
         Status status;
-        int size = (int) dist(gen);
+        int size = std::abs((int) dist(gen));
         timestamp = std::chrono::high_resolution_clock::now();
         request.set_origin_name(dev_name);
         request.set_gen_time(std::chrono::duration_cast<TimePrecisionType>(timestamp.time_since_epoch()).count());
+        spdlog::get("container_agent")->debug("Sending data of size: {}", size);
         request.set_data(data.data(), size);
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 controller_stub->AsyncSendDummyData(&context, request, controller_sending_cq));
         finishGrpc(rpc, reply, status, controller_sending_cq);
     }
-    spdlog::get("container_agent")->trace("Network test completed");
+    spdlog::get("container_agent")->info("Network test completed");
 }
 
 bool DeviceAgent::CreateContainer(
@@ -330,9 +332,11 @@ bool DeviceAgent::CreateContainer(
         }
         if (model == ModelType::DataSource) {
             base_config[0]["msvc_dataShape"] = {input_dims};
+            base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
         } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
             base_config[0]["msvc_dataShape"] = {input_dims};
             base_config[0]["msvc_type"] = 500;
+            base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
         } else {
             base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
             base_config[2]["path"] = model_file;
@@ -375,6 +379,7 @@ bool DeviceAgent::CreateContainer(
 
         // start container
         start_config["container"]["cont_pipeline"] = base_config;
+        std::cout << start_config.dump(4) << std::endl;
         unsigned int control_port = CONTAINER_BASE_PORT + dev_port_offset + containers.size();
         runDocker(executable, cont_name, to_string(start_config), device, control_port);
         std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
