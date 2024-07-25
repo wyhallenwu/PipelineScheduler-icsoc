@@ -118,15 +118,15 @@ void Controller::Scheduling()
             continue;
         }
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
-        auto taskList = ctrl_unscheduledPipelines.getMap();
+        auto untrimmedTaskList = ctrl_unscheduledPipelines.getMap();
         auto deviceList = devices.getMap();
-        if (taskList.size() < 4)
+        if (untrimmedTaskList.size() < 1)
         {
             continue;
         }
 
         std::cout << "===================== before ==========================" << std::endl;
-        for (auto& [task_name, task] : taskList) {
+        for (auto& [task_name, task] : untrimmedTaskList) {
             auto pipes = task->tk_pipelineModels;
             for (auto& pipe: pipes) {
                 std::unique_lock<std::mutex> pipe_lock(pipe->pipelineModelMutex);
@@ -136,35 +136,33 @@ void Controller::Scheduling()
             std::cout << "end" << std::endl;
         }
         std::cout << "======================================================" << std::endl;
+        std::map<std::string, TaskHandle *> taskList = {};
 
-        std::vector<std::string> taskTypes = {"traffic", "people"};
+        std::vector<std::string> taskTypes = {"traffic"};
         for (auto taskType : taskTypes)
         {
-            if (taskList.find(taskType) == taskList.end())
-            {
-                continue;
-            }
-
             std::vector<std::string> taskNameToRemove;
-            for (auto &[taskName, taskHandle] : taskList)
+            for (auto &[taskName, taskHandle] : untrimmedTaskList)
             {
                 if (taskName.find(taskType) == std::string::npos || taskName == taskType)
                 {
                     continue;
                 }
-                taskList[taskType]->tk_pipelineModels.emplace_back(new PipelineModel(*taskHandle->tk_pipelineModels.front()));
-                taskList[taskType]->tk_pipelineModels.back()->downstreams = {};
-                auto yolo = taskList[taskType]->tk_pipelineModels.front()->downstreams.front().first;
-                taskList[taskType]->tk_pipelineModels.back()->downstreams.emplace_back(std::make_pair(yolo, -1));
-                taskList[taskType]->tk_pipelineModels.back()->name = taskName + "-" + taskType + "-datasource";
-                taskNameToRemove.push_back(taskName);
+                if (taskList.find(taskType) == taskList.end())
+                {
+                    taskList[taskType] = new TaskHandle(*taskHandle);
+                    taskList[taskType]->tk_pipelineModels.front()->name = taskName + "-datasource";
+                    taskList[taskType]->tk_name = taskType;
+                }
+                else
+                {
+                    taskList[taskType]->tk_pipelineModels.emplace_back(new PipelineModel(*taskHandle->tk_pipelineModels.front()));
+                    taskList[taskType]->tk_pipelineModels.back()->downstreams = {};
+                    auto yolo = taskList[taskType]->tk_pipelineModels.front()->downstreams.front().first;
+                    taskList[taskType]->tk_pipelineModels.back()->downstreams.emplace_back(std::make_pair(yolo, -1));
+                    taskList[taskType]->tk_pipelineModels.back()->name = taskName + "-datasource";
+                }
             }
-            // Delete all unnecessary tasks
-            for (auto taskName : taskNameToRemove)
-            {
-                taskList.erase(taskName);
-            }
-
         }
         for (auto &taskType : taskTypes)
         {
@@ -189,6 +187,9 @@ void Controller::Scheduling()
             std::cout << "end" << std::endl;
         }
         std::cout << "======================================================" << std::endl;
+        std::unique_lock<std::mutex> lock(ctrl_unscheduledPipelines.tasksMutex);
+        ctrl_unscheduledPipelines.list = taskList;
+        lock.unlock();
 
 
         // clear all the information
