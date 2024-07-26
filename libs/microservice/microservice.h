@@ -160,9 +160,10 @@ public:
      */
     void emplace(Request<LocalCPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
-        //if (q_cpuQueue.size() == q_MaxSize) {
-        //    q_cpuQueue.pop();
-        //}
+        if (q_cpuQueue.size() == q_MaxSize) {
+            spdlog::get("container_agent")->warn("Queue {0:s} is full, dropping request", q_name);
+            q_cpuQueue.pop();
+        }
         q_cpuQueue.emplace(request);
         q_condition.notify_one();
     }
@@ -174,9 +175,10 @@ public:
      */
     void emplace(Request<LocalGPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
-        //if (q_gpuQueue.size() == q_MaxSize) {
-        //    q_gpuQueue.pop();
-        //}
+        if (q_gpuQueue.size() == q_MaxSize) {
+            spdlog::get("container_agent")->warn("Queue {0:s} is full, dropping request", q_name);
+            q_gpuQueue.pop();
+        }
         q_gpuQueue.emplace(request);
         q_condition.notify_one();
     }

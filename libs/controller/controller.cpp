@@ -405,11 +405,13 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     if (model->name.find("yolov5n") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
         if (model->name.find("yolov5ndsrc") == std::string::npos) {
             model->name = replaceSubstring(model->name, "yolov5n", "yolov5ndsrc");
+            modelName = "yolov5ndsrc";
         }
         
     } else if (model->name.find("retina1face") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
         if (model->name.find("retina1facedsrc") == std::string::npos) {
             model->name = replaceSubstring(model->name, "retina1face", "retina1facedsrc");
+            modelName = "retina1facedsrc";
         }
     }
     int class_of_interest;
@@ -522,6 +524,8 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             up->set_class_of_interest(-2);
             up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
                                    (container->cuda_device == upstr->cuda_device));
+            up->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
+            //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
