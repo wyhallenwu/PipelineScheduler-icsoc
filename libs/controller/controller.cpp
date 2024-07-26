@@ -645,15 +645,15 @@ void Controller::AdjustResolution(ContainerHandle *msvc, std::vector<int> new_re
 
 void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, bool forced) {
     spdlog::get("container_agent")->info("Stopping container: {0:s}", container->name);
-    // ContainerSignal request;
-    // ClientContext context;
-    // EmptyMessage reply;
-    // Status status;
-    // request.set_name(container->name);
-    // request.set_forced(forced);
-    // std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-    //         device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
-    // finishGrpc(rpc, reply, status, device->cq);
+    ContainerSignal request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(container->name);
+    request.set_forced(forced);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
+    finishGrpc(rpc, reply, status, device->cq);
     containers.list.erase(container->name);
     container->device_agent->containers.erase(container->name);
     for (auto upstr: container->upstreams) {
