@@ -113,22 +113,6 @@ void Controller::Scheduling()
         // put helper functions as a private member function of the controller and write them at the bottom of this file.
         // std::vector<NodeHandle*> nodes;
 
-        // ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
-        // auto taskList = ctrl_unscheduledPipelines.getMap();
-
-        // if (taskList.size() < 2) {
-        //     continue;
-        // }
-
-        // // Adding taskname to model name for clarity
-        // for (auto &[taskName, task] : taskList)
-        // {
-        //     for (auto &model : task->tk_pipelineModels)
-        //     {
-        //         model->name = task->tk_name + "-" + model->name;
-        //     }
-        // }
-
         NodeHandle *edgePointer = nullptr;
         NodeHandle *serverPointer = nullptr;
         unsigned long totalEdgeMemory = 0, totalServerMemory = 0;
@@ -156,6 +140,26 @@ void Controller::Scheduling()
 
             nodes.swap(localNodes);
         }
+
+        ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
+        auto taskList = ctrl_unscheduledPipelines.getMap();
+
+        if (taskList.size() < 1) {
+            continue;
+        }
+
+        for (auto &taskPair : taskList)
+        {
+            auto task = taskPair.second;
+            queryingProfiles(task);
+            // Adding taskname to model name for clarity
+            for (auto &model : task->tk_pipelineModels)
+            {
+                model->name = task->tk_name + "-" + model->name;
+            }
+        }
+
+
 
         // init Partitioner
         Partitioner partitioner;
@@ -641,8 +645,6 @@ double Controller::calculateTotalprocessedRate(const PipelineModel *model, const
     for (const auto &taskPair : ctrl_unscheduledPipelines.list)
     {
         const auto &task = taskPair.second;
-        queryingProfiles(task);
-
         // Iterate over all models in the task's pipeline
         for (auto &model : task->tk_pipelineModels)
         {
@@ -655,7 +657,7 @@ double Controller::calculateTotalprocessedRate(const PipelineModel *model, const
             std::string deviceType = getDeviceTypeName(deviceList.at(model->device)->type);
             // std::cout << "calculateTotalprocessedRate deviceType " << deviceType << std::endl;
             // make sure the calculation is only for edge / server, because we need to is_edge to make sure which side information we need.
-            if ((is_edge && deviceType != "server") || (!is_edge && deviceType == "server" && model->name != "sink"))
+            if ((is_edge && deviceType != "server") || (!is_edge && deviceType == "server" && model->name.find("sink") == std::string::npos))
             {
                 int batchInfer;
                 if (is_edge)
@@ -693,8 +695,6 @@ int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool i
     for (const auto &taskPair : ctrl_unscheduledPipelines.list)
     {
         const auto &task = taskPair.second;
-        queryingProfiles(task);
-
         for (auto &model : task->tk_pipelineModels)
         {
             if (deviceList.find(model->device) == deviceList.end())
@@ -705,7 +705,8 @@ int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool i
             std::string deviceType = getDeviceTypeName(deviceList.at(model->device)->type);
             // std::cout << "calculateTotalprocessedRate deviceType " << deviceType << std::endl;
             // make sure the calculation is only for edge / server, because we need to is_edge to make sure which side information we need.
-            if ((is_edge && deviceType != "server" && model->name != "datasource") || (!is_edge && deviceType == "server" && model->name != "sink"))
+            if ((is_edge && deviceType != "server" && model->name.find("datasource") == std::string::npos) || 
+                (!is_edge && deviceType == "server" && model->name.find("sink") == std::string::npos))
             {
                 int queue;
                 if (is_edge)
@@ -860,7 +861,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
             for (auto &model : task->tk_pipelineModels)
             {
                 // we don't move the datasource and sink because it has to be on edge or server
-                if (model->isSplitPoint && model->name != "datasource" && model->name != "sink")
+                if (model->isSplitPoint && model->name.find("datasource") == std::string::npos && model->name.find("sink") == std::string::npos)
                 {
                     std::lock_guard<std::mutex> lock(model->pipelineModelMutex);
 
@@ -883,7 +884,17 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
 
             for (auto &model : task->tk_pipelineModels)
             {
-                if (model->isSplitPoint && model->name != "datasource" && model->name != "sink")
+                if (model->isSplitPoint && 
+                    model->name.find("datasource") == std::string::npos && 
+                    model->name.find("sink") == std::string::npos)
+                {
+                    std::lock_guard<std::mutex> lock(model->pipelineModelMutex);
+
+                    if (model->device != "server")
+                    {
+                        model->device = "server";
+                    }
+                }
                 {
                     // because we need tp move container from edge to server so we have to move the upstream.
                     for (auto &upstreamPair : model->upstreams)
