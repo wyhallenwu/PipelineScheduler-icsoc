@@ -126,9 +126,11 @@ void Controller::Scheduling()
         }
 
         std::cout << "===================== before ==========================" << std::endl;
-        for (auto& [task_name, task] : untrimmedTaskList) {
+        for (auto &[task_name, task] : untrimmedTaskList)
+        {
             auto pipes = task->tk_pipelineModels;
-            for (auto& pipe: pipes) {
+            for (auto &pipe : pipes)
+            {
                 std::unique_lock<std::mutex> pipe_lock(pipe->pipelineModelMutex);
                 std::cout << pipe->name << ", ";
                 pipe_lock.unlock();
@@ -177,9 +179,11 @@ void Controller::Scheduling()
         }
 
         std::cout << "===================== after ==========================" << std::endl;
-        for (auto& [task_name, task] : taskList) {
+        for (auto &[task_name, task] : taskList)
+        {
             auto pipes = task->tk_pipelineModels;
-            for (auto& pipe: pipes) {
+            for (auto &pipe : pipes)
+            {
                 std::unique_lock<std::mutex> pipe_lock(pipe->pipelineModelMutex);
                 std::cout << pipe->name << ", ";
                 pipe_lock.unlock();
@@ -191,12 +195,13 @@ void Controller::Scheduling()
         ctrl_unscheduledPipelines.list = taskList;
         lock.unlock();
 
-
         // clear all the information
-        for (auto &pair: clientProfilesCSJF) {
+        for (auto &pair : clientProfilesCSJF)
+        {
             pair.second.infos.clear();
         }
-        for (auto &pair: modelProfilesCSJF) {
+        for (auto &pair : modelProfilesCSJF)
+        {
             pair.second.infos.clear();
         }
 
@@ -226,7 +231,8 @@ void Controller::Scheduling()
         int count = 0;
         for (auto &[task_name, task] : taskList)
         {
-            if (count == 2) {
+            if (count == 2)
+            {
                 break;
             }
             // std::unique_lock<std::mutex> lock_task(task->tk_mutex);
@@ -237,7 +243,7 @@ void Controller::Scheduling()
                 if (model->name.find("yolo") != std::string::npos)
                 {
                     // collect model information
-                    
+
                     // parse name
                     std::size_t pos1 = model->name.find("-");
                     std::string model_name = model->name.substr(pos1 + 1);
@@ -306,25 +312,27 @@ void Controller::Scheduling()
             count++;
         }
 
-        
         // debugging
         std::cout << "============== debug ====================" << std::endl;
-        for (auto &task_name : taskTypes) {
+        for (auto &task_name : taskTypes)
+        {
             auto client_profiles = clientProfilesCSJF[task_name];
             auto model_profiles = modelProfilesCSJF[task_name];
             std::cout << task_name << ", n client: " << client_profiles.infos.size() << std::endl;
             std::cout << task_name << ", n model: " << model_profiles.infos.size() << std::endl;
-            for (auto &client_info : client_profiles.infos) {
+            for (auto &client_info : client_profiles.infos)
+            {
                 std::cout << "client name: " << client_info.name << ", " << client_info.task_name << ", client address: " << client_info.model << std::endl;
             }
-            for (auto &model_info : model_profiles.infos) {
+            for (auto &model_info : model_profiles.infos)
+            {
                 std::cout << model_info.second.front().name << std::endl;
             }
-                
         }
         std::cout << "=========================================" << std::endl;
 
-        for (auto &task_name : taskTypes) {
+        for (auto &task_name : taskTypes)
+        {
             auto client_profiles_jf = clientProfilesCSJF[task_name];
             auto model_profiles_jf = modelProfilesCSJF[task_name];
 
@@ -379,19 +387,23 @@ void Controller::Scheduling()
             // clean the upstream of not selected yolo
             std::vector<PipelineModel *> not_selected_yolos;
             std::vector<PipelineModel *> selected_yolos;
-            for (auto& mapping: mappings) {
+            for (auto &mapping : mappings)
+            {
                 auto model_info = std::get<0>(mapping);
                 auto yolo_pipeliemodel = model_profiles_jf.infos[model_info][0].model;
                 selected_yolos.push_back(yolo_pipeliemodel);
             }
-            for (auto& yolo: model_profiles_jf.infos) {
+            for (auto &yolo : model_profiles_jf.infos)
+            {
                 auto yolo_pipeliemodel = yolo.second.front().model;
-                if (std::find(selected_yolos.begin(), selected_yolos.end(), yolo_pipeliemodel) == selected_yolos.end()) {
+                if (std::find(selected_yolos.begin(), selected_yolos.end(), yolo_pipeliemodel) == selected_yolos.end())
+                {
                     not_selected_yolos.push_back(yolo_pipeliemodel);
                 }
             }
 
-            for(auto & not_select_yolo: not_selected_yolos) {
+            for (auto &not_select_yolo : not_selected_yolos)
+            {
                 not_select_yolo->upstreams.clear();
             }
 
@@ -419,6 +431,7 @@ void Controller::Scheduling()
                 // CHECKME: lock correctness here
                 std::unique_lock<std::mutex> model_lock(m.model->pipelineModelMutex);
                 m.model->upstreams.clear();
+                m.model->batchSize = m.batch_size;
 
                 // adjust downstream, upstream and resolution
                 // CHECKME: vaildate the class of interest here, default to 1 for simplicity
@@ -471,20 +484,24 @@ void Controller::Scheduling()
 
             // for debugging
             std::cout << "============================== check all clients downstream ==================================" << task_name << std::endl;
-            for (auto& client: client_profiles_jf.infos) {
+            for (auto &client : client_profiles_jf.infos)
+            {
                 auto p = client.model;
                 std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
-                for (auto& ds: p->downstreams) {
+                for (auto &ds : p->downstreams)
+                {
                     std::cout << ds.first->name << std::endl;
                 }
                 lock.unlock();
             }
 
             std::cout << "================================= check all models upstream ==================================" << task_name << std::endl;
-            for (auto& model: model_profiles_jf.infos) {
+            for (auto &model : model_profiles_jf.infos)
+            {
                 auto p = model.second.front().model;
                 std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
-                for (auto us: p->upstreams) {
+                for (auto us : p->upstreams)
+                {
                     std::cout << us.first->name << ", address of client: " << us.first << "; ";
                 }
                 std::cout << std::endl;
@@ -492,10 +509,8 @@ void Controller::Scheduling()
             }
         }
 
-        
-
         // TODO: test
-        
+
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
 
         // std::cout << "test unscheduled in scheduling" << std::endl;
@@ -513,7 +528,7 @@ void Controller::Scheduling()
         //             if (model->name.find("datasource") != std::string::npos) {
         //                 std::cout << "datasource downstream: " << downstream->name << ", " << downstream->device << std::endl;
         //             }
-                    
+
         //             if (model->name.find("yolo") != std::string::npos) {
         //                 std::cout << "yolo upstream: " <<  model->upstreams.front().first->name << std::endl;
         //             }
@@ -541,7 +556,7 @@ void Controller::Scheduling()
         //             if (model->name.find("datasource") != std::string::npos) {
         //                 std::cout << "datasource downstream: " << downstream->name << ", " << downstream->device << std::endl;
         //             }
-                    
+
         //             if (model->name.find("yolo") != std::string::npos) {
         //                 std::cout << "yolo upstream: " <<  model->upstreams.front().first->name << std::endl;
         //             }
@@ -554,7 +569,7 @@ void Controller::Scheduling()
         // ctrl_lock1.unlock();
 
         // std::cout << "after copy" << std::endl;
-        ApplyScheduling();
+        // ApplyScheduling();
 
         // for (auto [taskName, taskHandle]: taskList) {
         //     queryingProfiles(taskHandle);
