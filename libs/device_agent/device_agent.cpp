@@ -308,7 +308,8 @@ bool DeviceAgent::CreateContainer(
             start_config["experimentName"] = dev_experiment_name;
             start_config["systemName"] = dev_system_name;
             start_config["pipelineName"] = pipe_name;
-            runDocker(executable, cont_name, to_string(start_config), device, 0);
+            uint16_t port = std::stoi(upstreams.at(0).ip().substr(upstreams.at(0).ip().find(':') + 1));
+            runDocker(executable, cont_name, to_string(start_config), device, port);
             return true;
         }
 
@@ -346,6 +347,10 @@ bool DeviceAgent::CreateContainer(
         // adjust receiver upstreams
         base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = upstreams.at(0).name();
         base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {upstreams.at(0).ip()};
+        if (model == ModelType::DataSource || model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
+            std::string dataDir = "../data/";
+            base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {dataDir + upstreams.at(0).ip()};
+        }
         if (upstreams.at(0).gpu_connection()) {
             base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
         } else {
@@ -354,12 +359,13 @@ bool DeviceAgent::CreateContainer(
 
         // adjust sender downstreams
         json sender = base_config.back();
-        json *postprocessor = &base_config[base_config.size() - 2];
+        uint16_t postprocessorIndex = base_config.size() - 2;
         json post_down = base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"][0];
         base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"] = json::array();
         base_config.erase(base_config.size() - 1);
         int i = 1;
         for (auto &d: downstreams) {
+            json *postprocessor = &base_config[postprocessorIndex];
             sender["msvc_name"] = sender["msvc_name"].get<std::string>() + std::to_string(i);
             sender["msvc_dnstreamMicroservices"][0]["nb_name"] = d.name();
             sender["msvc_dnstreamMicroservices"][0]["nb_link"] = {d.ip()};
