@@ -211,7 +211,8 @@ struct ContainerHandle {
     uint64_t endTime;
     //
     GPUPortion *executionLane = nullptr;
-    //
+    // points to the pipeline model that this container is part of
+    PipelineModel *pipelineModel = nullptr;
     mutable std::mutex containerHandleMutex;
 
     ContainerHandle() = default;
@@ -230,6 +231,7 @@ struct ContainerHandle {
                 const std::string model_file = "",
                 NodeHandle* device_agent = nullptr,
                 TaskHandle* task = nullptr,
+                PipelineModel* pipelineModel = nullptr,
                 const std::vector<ContainerHandle*>& upstreams = {},
                 const std::vector<ContainerHandle*>& downstreams = {},
                 const std::vector<QueueLengthType>& queueSizes = {})
@@ -246,6 +248,7 @@ struct ContainerHandle {
       model_file(model_file),
       device_agent(device_agent),
       task(task),
+      pipelineModel(pipelineModel),
       upstreams(upstreams),
       downstreams(downstreams),
       queueSizes(queueSizes) {}
@@ -286,6 +289,7 @@ struct ContainerHandle {
         startTime = other.startTime;
         endTime = other.endTime;
         executionLane = other.executionLane;
+        pipelineModel = other.pipelineModel;
     }
 
     // Copy assignment operator
@@ -324,6 +328,7 @@ struct ContainerHandle {
             startTime = other.startTime;
             endTime = other.endTime;
             executionLane = other.executionLane;
+            pipelineModel = other.pipelineModel;
         }
         return *this;
     }
@@ -370,6 +375,8 @@ struct PipelineModel {
     // Batching deadline
     uint64_t batchingDeadline = 9999999999;
 
+    std::vector<int> dimensions = {-1, -1};
+
     std::string device;
     std::string deviceTypeName;
     NodeHandle *deviceAgent;
@@ -380,6 +387,9 @@ struct PipelineModel {
     std::vector<std::string> possibleDevices;
     // Manifestations are the list of containers that will be created for this model
     std::vector<ContainerHandle *> manifestations;
+
+    // Source
+    std::string datasourceName;
 
     mutable std::mutex pipelineModelMutex;
 
@@ -454,11 +464,13 @@ struct PipelineModel {
         merged = other.merged;
         toBeRun = other.toBeRun;
         possibleDevices = other.possibleDevices;
+        dimensions = other.dimensions;
         manifestations = {};
         for (auto& container : other.manifestations) {
             manifestations.push_back(new ContainerHandle(*container));
         }
         deviceAgent = other.deviceAgent;
+        datasourceName = other.datasourceName;
     }
 
     // Assignment operator
@@ -493,11 +505,13 @@ struct PipelineModel {
             merged = other.merged;
             toBeRun = other.toBeRun;
             possibleDevices = other.possibleDevices;
+            dimensions = other.dimensions;
             manifestations = {};
             for (auto& container : other.manifestations) {
                 manifestations.push_back(new ContainerHandle(*container));
             }
             deviceAgent = other.deviceAgent;
+            datasourceName = other.datasourceName;
         }
         return *this;
     }

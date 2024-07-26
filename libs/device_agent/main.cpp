@@ -22,9 +22,16 @@ int main(int argc, char **argv) {
     }
 
     auto *agent = new DeviceAgent(controller_url, name, deviceType);
+
+    // Start the runBashScript function in a separate thread
+    std::thread scriptThread(&DeviceAgent::limitBandwidth, agent, "../scripts/set_bandwidth.sh", "../jsons/bandwidth.json");
+    scriptThread.detach();
+
+
     while (agent->isRunning()) {
         agent->collectRuntimeMetrics();
     }
+    scriptThread.join();
     delete agent;
     return 0;
 }
