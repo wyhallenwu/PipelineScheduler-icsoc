@@ -68,7 +68,7 @@
     "platedet-server": {
         "taskName": "platedet",
         "templateConfigPath": "../jsons/platedet.json",
-        "runCommand": "./Container_Yolov5-plate",
+        "runCommand": "./Container_PlateDet",
         "modelPath": "../models/platedet_dyn_nms_3090_fp32_64_1.engine"
     },
     "movenet-server": {
