@@ -244,9 +244,9 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
  *
  */
 void Controller::ApplyScheduling() {
-    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
+//    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
     // collect all running containers by device and model name
-    while (true) { // TODO: REMOVE. ONLY FOR TESTING
+//    while (true) { // TODO: REMOVE. ONLY FOR TESTING
     std::vector<ContainerHandle *> new_containers;
     std::unique_lock lock_devices(devices.devicesMutex);
     std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
@@ -273,12 +273,10 @@ void Controller::ApplyScheduling() {
                 model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
                 model->numReplicas = 1;
             }
-            auto device = devices.list[model->device];
             std::unique_lock lock_model(model->pipelineModelMutex);
 
             // look for the model full name 
             std::string modelFullName = model->name;
-            bool pipelineExists = false, modelRunning = false;
 
             // check if the pipeline already been scheduled once before
             PipelineModel* pastModel = nullptr;
@@ -302,10 +300,11 @@ void Controller::ApplyScheduling() {
                 }
             }
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
+            int candidate_size = candidates.size();
             // make sure enough containers are running with the right configurations
-            if (candidates.size() < model->numReplicas) {
+            if (candidate_size < model->numReplicas) {
                 // start additional containers
-                for (unsigned int i = candidates.size(); i < model->numReplicas; i++) {
+                for (unsigned int i = candidate_size; i < model->numReplicas; i++) {
                     ContainerHandle *container = TranslateToContainer(model, devices.list[model->device], i);
                     if (container == nullptr) {
                         continue;
@@ -313,9 +312,9 @@ void Controller::ApplyScheduling() {
                     new_containers.push_back(container);
                     new_containers.back()->pipelineModel = model;
                 }
-            } else if (candidates.size() > model->numReplicas) {
+            } else if (candidate_size > model->numReplicas) {
                 // remove the extra containers
-                for (unsigned int i = model->numReplicas; i < candidates.size(); i++) {
+                for (unsigned int i = model->numReplicas; i < candidate_size; i++) {
                     StopContainer(candidates[i], candidates[i]->device_agent);
                     model->task->tk_subTasks[model->name].erase(
                             std::remove(model->task->tk_subTasks[model->name].begin(),
@@ -380,7 +379,7 @@ void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-    } // TODO: REMOVE. ONLY FOR TESTING
+//    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
