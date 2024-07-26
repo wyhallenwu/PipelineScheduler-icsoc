@@ -777,7 +777,7 @@ public:
 //                                      jellyfish scheduling functions
 // --------------------------------------------------------------------------------------------------------
 
-std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfoJF>, int>> mapClient(ClientProfilesJF client_profile, ModelProfilesJF model_profiles);
+std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfoJF>, int>> mapClient(ClientProfilesJF &client_profile, ModelProfilesJF &model_profiles);
 std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &models, std::vector<ClientInfoJF> &clients);
 int check_and_assign(std::vector<ModelInfoJF> &model, std::vector<ClientInfoJF> &selected_clients);
 

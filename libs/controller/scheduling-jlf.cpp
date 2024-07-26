@@ -314,7 +314,7 @@ void Controller::Scheduling()
             std::cout << task_name << ", n client: " << client_profiles.infos.size() << std::endl;
             std::cout << task_name << ", n model: " << model_profiles.infos.size() << std::endl;
             for (auto &client_info : client_profiles.infos) {
-                std::cout << "client name: " << client_info.name << ", " << client_info.task_name << std::endl;
+                std::cout << "client name: " << client_info.name << ", " << client_info.task_name << ", client address: " << client_info.model << std::endl;
             }
             for (auto &model_info : model_profiles.infos) {
                 std::cout << model_info.second.front().name << std::endl;
@@ -374,6 +374,25 @@ void Controller::Scheduling()
             auto mappings = mapClient(client_profiles_jf, model_profiles_jf);
 
             // std::cout << "FINISH STRATEGY COMPUTING" << std::endl;
+
+            // clean the upstream of not selected yolo
+            std::vector<PipelineModel *> not_selected_yolos;
+            std::vector<PipelineModel *> selected_yolos;
+            for (auto& mapping: mappings) {
+                auto model_info = std::get<0>(mapping);
+                auto yolo_pipeliemodel = model_profiles_jf.infos[model_info][0].model;
+                selected_yolos.push_back(yolo_pipeliemodel);
+            }
+            for (auto& yolo: model_profiles_jf.infos) {
+                auto yolo_pipeliemodel = yolo.second.front().model;
+                if (std::find(selected_yolos.begin(), selected_yolos.end(), yolo_pipeliemodel) == selected_yolos.end()) {
+                    not_selected_yolos.push_back(yolo_pipeliemodel);
+                }
+            }
+
+            for(auto & not_select_yolo: not_selected_yolos) {
+                not_select_yolo->upstreams.clear();
+            }
 
             for (auto &mapping : mappings)
             {
@@ -465,7 +484,7 @@ void Controller::Scheduling()
                 auto p = model.second.front().model;
                 std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
                 for (auto us: p->upstreams) {
-                    std::cout << us.first->name << ", ";
+                    std::cout << us.first->name << ", address of client: " << us.first << "; ";
                 }
                 std::cout << std::endl;
                 lock.unlock();
@@ -1302,7 +1321,7 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
  */
 std::vector<
     std::tuple<std::tuple<std::string, float>, std::vector<ClientInfoJF>, int>>
-mapClient(ClientProfilesJF client_profile, ModelProfilesJF model_profiles)
+mapClient(ClientProfilesJF &client_profile, ModelProfilesJF &model_profiles)
 {
     // std::cout << " ======================= mapClient ==========================" << std::endl;
 
