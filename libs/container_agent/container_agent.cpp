@@ -755,11 +755,19 @@ void ContainerAgent::collectRuntimeMetrics() {
                 cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
     }
 
-    while (run) {
-        if (cont_taskName == "dsrc" || cont_taskName == "datasource") {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-            continue;
+    if (cont_taskName.find("dsrc") != std::string::npos || cont_taskName.find("datasource") != std::string::npos) {
+        while (run) {
+            if (cont_msvcsList[0]->STOP_THREADS) {
+                for (auto msvc: cont_msvcsList) {
+                    msvc->STOP_THREADS = true;
+                }
+                run = false;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+    }
+
+    while (run) {
         bool hwMetricsScraped = false;
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();

@@ -245,9 +245,9 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
  *
  */
 void Controller::ApplyScheduling() {
-    // ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
+//    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
     // collect all running containers by device and model name
-    // while (true) { // TODO: REMOVE. ONLY FOR TESTING
+//    // while (true) { // TODO: REMOVE. ONLY FOR TESTING
     std::cout << "apply scheduling" << std::endl;
     std::vector<ContainerHandle *> new_containers;
     std::unique_lock lock_devices(devices.devicesMutex);
@@ -275,12 +275,10 @@ void Controller::ApplyScheduling() {
                 model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
                 model->numReplicas = 1;
             }
-            auto device = devices.list[model->device];
             std::unique_lock lock_model(model->pipelineModelMutex);
 
             // look for the model full name 
             std::string modelFullName = model->name;
-            bool pipelineExists = false, modelRunning = false;
 
             // check if the pipeline already been scheduled once before
             PipelineModel* pastModel = nullptr;
@@ -304,10 +302,11 @@ void Controller::ApplyScheduling() {
                 }
             }
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
+            int candidate_size = candidates.size();
             // make sure enough containers are running with the right configurations
-            if (candidates.size() < model->numReplicas) {
+            if (candidate_size < model->numReplicas) {
                 // start additional containers
-                for (unsigned int i = candidates.size(); i < model->numReplicas; i++) {
+                for (unsigned int i = candidate_size; i < model->numReplicas; i++) {
                     ContainerHandle *container = TranslateToContainer(model, devices.list[model->device], i);
                     if (container == nullptr) {
                         continue;
@@ -315,9 +314,9 @@ void Controller::ApplyScheduling() {
                     new_containers.push_back(container);
                     new_containers.back()->pipelineModel = model;
                 }
-            } else if (candidates.size() > model->numReplicas) {
+            } else if (candidate_size > model->numReplicas) {
                 // remove the extra containers
-                for (unsigned int i = model->numReplicas; i < candidates.size(); i++) {
+                for (unsigned int i = model->numReplicas; i < candidate_size; i++) {
                     StopContainer(candidates[i], candidates[i]->device_agent);
                     model->task->tk_subTasks[model->name].erase(
                             std::remove(model->task->tk_subTasks[model->name].begin(),
@@ -382,7 +381,7 @@ void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-    // } // TODO: REMOVE. ONLY FOR TESTING
+//    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
@@ -407,11 +406,13 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     if (model->name.find("yolov5n") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
         if (model->name.find("yolov5ndsrc") == std::string::npos) {
             model->name = replaceSubstring(model->name, "yolov5n", "yolov5ndsrc");
+            modelName = "yolov5ndsrc";
         }
         
     } else if (model->name.find("retina1face") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
         if (model->name.find("retina1facedsrc") == std::string::npos) {
             model->name = replaceSubstring(model->name, "retina1face", "retina1facedsrc");
+            modelName = "retina1facedsrc";
         }
     }
     int class_of_interest;
@@ -524,6 +525,8 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             up->set_class_of_interest(-2);
             up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
                                    (container->cuda_device == upstr->cuda_device));
+            up->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
+            //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
@@ -659,15 +662,15 @@ void Controller::AdjustResolution(ContainerHandle *msvc, std::vector<int> new_re
 
 void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, bool forced) {
     spdlog::get("container_agent")->info("Stopping container: {0:s}", container->name);
-    // ContainerSignal request;
-    // ClientContext context;
-    // EmptyMessage reply;
-    // Status status;
-    // request.set_name(container->name);
-    // request.set_forced(forced);
-    // std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-    //         device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
-    // finishGrpc(rpc, reply, status, device->cq);
+    ContainerSignal request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(container->name);
+    request.set_forced(forced);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
+    finishGrpc(rpc, reply, status, device->cq);
     containers.list.erase(container->name);
     container->device_agent->containers.erase(container->name);
     for (auto upstr : container->upstreams)
