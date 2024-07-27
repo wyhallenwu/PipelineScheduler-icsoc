@@ -98,8 +98,56 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
 // ============================================================================================================================================ //
 // ============================================================================================================================================ //
 
+bool GPUHandle::addContainer(ContainerHandle *container) {
+    if (container->name.find("datasource") != std::string::npos || 
+        container->name.find("sink") != std::string::npos) {
+        containers.insert({container->name, container});
+        container->gpuHandle = this;
+        spdlog::get("container_agent")->info("Container {} successfully added to GPU {} of {}", container->name, number, hostName);
+        return true;
+    }
+    MemUsageType potentialMemUsage;
+    BatchSizeType batchSize = container->pipelineModel->batchSize;
+    if (container->device_agent->type == SystemDeviceType::Server) {
+        potentialMemUsage = currentMemUsage +
+            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage;
+    } else {
+        potentialMemUsage = currentMemUsage +
+            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage +
+            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].rssMemUsage;
+    }
+    
+    if (currentMemUsage > memLimit) {
+        spdlog::get("container_agent")->error("Container {} cannot be assigned to GPU {} of {}"
+                                            "due to memory limit", container->name, number, hostName);
+        return false;
+    }
+    containers.insert({container->name, container});
+    container->gpuHandle = this;
+    currentMemUsage = potentialMemUsage;
+    spdlog::get("container_agent")->info("Container {} successfully added to GPU {} of {}", container->name, number, hostName);
+    return true;
+}
 
+bool GPUHandle::removeContainer(ContainerHandle *container) {
+    if (containers.find(container->name) == containers.end()) {
+        spdlog::get("container_agent")->error("Container {} not found in GPU {} of {}", container->name, number, hostName);
+        return false;
+    }
+    containers.erase(container->name);
+    container->gpuHandle = nullptr;
+    BatchSizeType batchSize = container->pipelineModel->batchSize;
+    if (container->device_agent->type == SystemDeviceType::Server) {
+        currentMemUsage -= container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage;
+    } else {
+        currentMemUsage -= container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage +
+            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].rssMemUsage;
+    }
 
+    spdlog::get("container_agent")->info("Container {} successfully removed from GPU {} of {}", container->name, number, hostName);
+    return true;
+
+}
 
 
 // ============================================================= Con/Desstructors ============================================================= //
@@ -238,6 +286,20 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     lock2.unlock();
     lock3.unlock();
     return true;
+}
+
+void Controller::initialiseGPU(NodeHandle *node) {
+    if (node->name == "server") {
+        for (uint8_t gpuIndex = 0; gpuIndex < NUM_GPUS; gpuIndex++) {
+            std::string gpuName = "gpu" + std::to_string(gpuIndex);
+            GPUHandle *gpuNode = new GPUHandle{"3090", "server", gpuIndex, 22000, NUM_LANES_PER_GPU};
+            node->gpuHandles.emplace_back(gpuNode);
+        }
+    } else {
+        MemUsageType memSize = node->type == SystemDeviceType::AGXXavier ? 30000 : 5000;
+        GPUHandle *gpuNode = new GPUHandle{node->name, node->name, 0, memSize, 1};
+        node->gpuHandles.emplace_back(gpuNode);
+    }
 }
 
 /**
@@ -802,6 +864,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
+        controller->initialiseGPU(node);
         controller->devices.addDevice(deviceName, node);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
         controller->queryInDeviceNetworkEntries(controller->devices.list.at(deviceName));
