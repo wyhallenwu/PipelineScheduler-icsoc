@@ -846,23 +846,31 @@ void setupLogger(
 ) {
     std::string path = logPath + "/" + loggerName + ".log";
 
-
-
+    // Console sink setup
     if (loggingMode == 0 || loggingMode == 2) {
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         loggerSinks.emplace_back(console_sink);
     }
-    bool auto_flush = true;
+
+    // File sink setup with auto-flush enabled
     if (loggingMode == 1 || loggingMode == 2) {
+        bool auto_flush = true;
         auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path, auto_flush);
         loggerSinks.emplace_back(file_sink);
     }
 
-    logger = std::make_shared<spdlog::logger>("container_agent", loggerSinks.begin(), loggerSinks.end());
+    // Create and configure logger
+    logger = std::make_shared<spdlog::logger>("container_agent", begin(loggerSinks), end(loggerSinks));
     spdlog::register_logger(logger);
 
-    spdlog::get("container_agent")->set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
-    spdlog::get("container_agent")->set_level(spdlog::level::level_enum(verboseLevel));
+    // Set log pattern
+    logger->set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
+
+    // Set log level
+    logger->set_level(static_cast<spdlog::level::level_enum>(verboseLevel));
+
+    // Ensure logger flushes on every log (optional, for immediate write to file)
+    logger->flush_on(spdlog::level::trace);
 }
 
 

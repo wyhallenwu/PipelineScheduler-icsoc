@@ -275,8 +275,22 @@ void Controller::ApplyScheduling() {
                 model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
                 model->numReplicas = 1;
             }
-            std::unique_lock lock_model(model->pipelineModelMutex);
+            bool upstreamIsDatasource = (std::find_if(model->upstreams.begin(), model->upstreams.end(),
+                                                      [](const std::pair<PipelineModel *, int> &upstream) {
+                                                          return upstream.first->name.find("datasource") != std::string::npos;
+                                                      }) != model->upstreams.end());
+            if (model->name.find("yolov5n") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
+                if (model->name.find("yolov5ndsrc") == std::string::npos) {
+                    model->name = replaceSubstring(model->name, "yolov5n", "yolov5ndsrc");
+                }
 
+            } else if (model->name.find("retina1face") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
+                if (model->name.find("retina1facedsrc") == std::string::npos) {
+                    model->name = replaceSubstring(model->name, "retina1face", "retina1facedsrc");
+                }
+            }
+
+            std::unique_lock lock_model(model->pipelineModelMutex);
             // look for the model full name 
             std::string modelFullName = model->name;
 
@@ -398,23 +412,8 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
             }
         }
     }
-    std::string modelName = splitString(model->name, "-").back();
-    bool upstreamIsDatasource = (std::find_if(model->upstreams.begin(), model->upstreams.end(),
-                                              [](const std::pair<PipelineModel *, int> &upstream) {
-                                                  return upstream.first->name.find("datasource") != std::string::npos;
-                                              }) != model->upstreams.end());
-    if (model->name.find("yolov5n") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
-        if (model->name.find("yolov5ndsrc") == std::string::npos) {
-            model->name = replaceSubstring(model->name, "yolov5n", "yolov5ndsrc");
-            modelName = "yolov5ndsrc";
-        }
-        
-    } else if (model->name.find("retina1face") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
-        if (model->name.find("retina1facedsrc") == std::string::npos) {
-            model->name = replaceSubstring(model->name, "retina1face", "retina1facedsrc");
-            modelName = "retina1facedsrc";
-        }
-    }
+    std::string modelName = splitString(model->name, "_").back();
+
     int class_of_interest;
     if (model->name.find("datasource") != std::string::npos || model->name.find("dsrc") != std::string::npos) {
         class_of_interest = -1;
@@ -423,7 +422,7 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     }
 
     std::string subTaskName = model->name;
-    std::string containerName = ctrl_systemName + "-" + model->name + "-" + std::to_string(i);
+    std::string containerName = ctrl_systemName + "_" + model->name + "_" + std::to_string(i);
     // the name of the container type to look it up in the container library
     std::string containerTypeName = modelName + "-" + getDeviceTypeName(device->type);
     
@@ -476,7 +475,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     ClientContext context;
     EmptyMessage reply;
     Status status;
-    std::string pipelineName = splitString(container->name, "-").front();
+    std::string pipelineName = splitString(container->name, "_").front();
     request.set_pipeline_name(pipelineName);
     request.set_model(container->model);
     request.set_model_file(container->model_file);
@@ -673,10 +672,11 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
     finishGrpc(rpc, reply, status, device->cq);
-    containers.list.erase(container->name);
-    container->device_agent->containers.erase(container->name);
-    for (auto upstr : container->upstreams)
-    {
+    if (!forced) { //not forced means the container is stopped during scheduling and should be removed
+        containers.list.erase(container->name);
+        container->device_agent->containers.erase(container->name);
+    }
+    for (auto upstr: container->upstreams) {
         upstr->downstreams.erase(std::remove(upstr->downstreams.begin(), upstr->downstreams.end(), container), upstr->downstreams.end());
     }
     for (auto dwnstr : container->downstreams)
