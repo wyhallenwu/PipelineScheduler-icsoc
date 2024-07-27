@@ -75,6 +75,7 @@ private:
             std::string model_file,
             std::string pipe_name,
             BatchSizeType batch_size,
+            BatchSizeType fps,
             std::vector<int> input_dims,
             int replica_id,
             int allocation_mode,
