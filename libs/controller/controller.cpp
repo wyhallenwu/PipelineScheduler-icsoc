@@ -482,6 +482,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     request.set_model_file(container->model_file);
     request.set_batch_size(container->batch_size);
     request.set_allocation_mode(easy_allocation);
+    request.set_fps(ctrl_systemFPS);
     if (container->model == DataSource || container->model == Sink) {
         container->cuda_device = -1;
     }
@@ -517,6 +518,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         up->set_ip(container->pipelineModel->datasourceName);
         up->set_class_of_interest(-1);
         up->set_gpu_connection(false);
+        request.set_fps(ctrl_systemFPS);
     } else {
         for (auto upstr: container->upstreams) {
             Neighbor *up = request.add_upstream();
