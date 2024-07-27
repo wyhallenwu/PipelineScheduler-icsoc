@@ -171,7 +171,33 @@ void Controller::Scheduling()
         scheduleBaseParPointLoop(&model, &partitioner, nodes);
         scheduleFineGrainedParPointLoop(&partitioner, nodes);
         DecideAndMoveContainer(&model, nodes, &partitioner, 2);
+
+        for (auto &taskPair : taskList)
+        {
+            for (auto &model : taskPair.second->tk_pipelineModels)
+            {
+                if (model->name.find("datasource") != std::string::npos || model->name.find("sink") != std::string::npos)
+                {
+                    continue;
+                }
+                if (model->device == "server" && model->name.find("yolov5") != std::string::npos)
+                {
+                    model->batchSize = 16;
+                }
+                else if (model->device != "server")
+                {
+                    edgePointer = devices.list[model->device];
+                    model->batchSize = 8;
+                }
+                else
+                {
+                    model->batchSize = 32;
+                }
+            }
+        }
+
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
+
         ApplyScheduling();
         std::cout << "end_scheduleBaseParPoint " << partitioner.BaseParPoint << std::endl;
         std::cout << "end_FineGrainedParPoint " << partitioner.FineGrainedOffset << std::endl;
