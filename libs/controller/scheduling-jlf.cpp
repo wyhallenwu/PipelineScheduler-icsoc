@@ -301,8 +301,8 @@ void Controller::Scheduling()
                 {
                     continue;
                 }
-                model->timeBudgetLeft = taskList[taskType]->tk_pipelineModels.back()->expectedStart2HereLatency - model->expectedStart2HereLatency +
-                                        model->expectedMaxProcessLatency + model->expectedQueueingLatency;
+                // model->timeBudgetLeft = taskList[taskType]->tk_pipelineModels.back()->expectedStart2HereLatency - model->expectedStart2HereLatency +
+                                        // model->expectedMaxProcessLatency + model->expectedQueueingLatency;
             }
         }
 
@@ -662,8 +662,8 @@ void Controller::Scheduling()
                 if (model->name.find("yolo") == std::string::npos || model->batchSize == 0)
                 {
                     estimateModelLatency(model);
-                    model->timeBudgetLeft = task.second->tk_pipelineModels.back()->expectedStart2HereLatency - model->expectedStart2HereLatency +
-                                            model->expectedMaxProcessLatency + model->expectedQueueingLatency;
+                    // model->timeBudgetLeft = task.second->tk_pipelineModels.back()->expectedStart2HereLatency - model->expectedStart2HereLatency +
+                                            // model->expectedMaxProcessLatency + model->expectedQueueingLatency;
                 }
             }
         }
