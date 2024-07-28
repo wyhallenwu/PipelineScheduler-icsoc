@@ -301,6 +301,10 @@ void Controller::initialiseGPU(NodeHandle *node) {
     }
 }
 
+void Controller::basicGPUScheduling() {
+
+}
+
 /**
  * @brief call this method after the pipeline models have been added to scheduled
  *
