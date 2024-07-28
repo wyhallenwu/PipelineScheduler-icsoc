@@ -49,7 +49,8 @@ message ContainerConfig {
   int32 slo = 8;
   repeated uint32 input_dimensions = 9;
   repeated Neighbor upstream = 10;
-  repeated Neighbor downstream = 11;
+  repeated Neighbor downstream = 11; 
+  int32 fps = 12;
 }
 
 message ContainerLink {

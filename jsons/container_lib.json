@@ -140,7 +140,7 @@
     "platedet-nxavier": {
         "taskName": "platedet",
         "templateConfigPath": "../jsons/platedet.json",
-        "runCommand": "./Container_Yolov5-plate",
+        "runCommand": "./Container_PlateDet",
         "modelPath": "../models/platedet_dyn_nms_nx_fp32_8_1.engine"
     },
     "movenet-nxavier": {
@@ -212,7 +212,7 @@
     "platedet-agxavier": {
         "taskName": "platedet",
         "templateConfigPath": "../jsons/platedet.json",
-        "runCommand": "./Container_Yolov5-plate",
+        "runCommand": "./Container_PlateDet",
         "modelPath": "../models/platedet_dyn_nms_agx_fp32_16_1.engine"
     },
     "movenet-agxavier": {
