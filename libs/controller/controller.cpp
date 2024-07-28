@@ -395,7 +395,9 @@ void Controller::ApplyScheduling() {
             if (candidate_size < model->numReplicas) {
                 // start additional containers
                 for (unsigned int i = candidate_size; i < model->numReplicas; i++) {
+                    std::cout << "test translate" << std::endl;
                     ContainerHandle *container = TranslateToContainer(model, devices.list[model->device], i);
+                    std::cout << "end test translate" << std::endl;
                     if (container == nullptr) {
                         continue;
                     }
