@@ -300,7 +300,8 @@ bool DeviceAgent::CreateContainer(
 ) {
     std::string modelName = getContainerName(dev_type, model);
     try {
-        std::string cont_name = abbreviate(pipe_name + "_" + ModelTypeList[model] + "_" + std::to_string(replica_id));
+        std::string cont_name = dev_experiment_name + "_" + dev_system_name + "_" + pipe_name + "_" +
+                                ModelTypeList[model] + "_" + std::to_string(replica_id);
         std::cout << "Creating container: " << cont_name << std::endl;
         std::string executable = dev_containerLib[modelName].runCommand;
         json start_config;
