@@ -211,7 +211,6 @@ void Controller::Scheduling()
         {
             continue;
         }
-        // TODO: assure the correct number of people and traffic pipelines before starting the scheduling
 
         std::cout << "===================== before ==========================" << std::endl;
         for (auto &[task_name, task] : untrimmedTaskList)
@@ -228,7 +227,7 @@ void Controller::Scheduling()
         std::cout << "======================================================" << std::endl;
         std::map<std::string, TaskHandle *> taskList = {};
 
-        std::vector<std::string> taskTypes = {"traffic"};
+        std::vector<std::string> taskTypes = {"traffic", "people"};
         for (auto taskType : taskTypes)
         {
             std::vector<std::string> taskNameToRemove;
@@ -254,6 +253,17 @@ void Controller::Scheduling()
                 }
             }
         }
+
+
+        // TODO: assure the correct number of people and traffic pipelines in better way
+        if (taskList["traffic"] == nullptr || taskList["people"] == nullptr)
+        {
+            continue;
+        } else if (taskList["traffic"]->tk_pipelineModels.size() != 2 || taskList["people"]->tk_pipelineModels.size() != 2)
+        {
+            continue;
+        }
+
         for (auto &taskType : taskTypes)
         {
             queryingProfiles(taskList[taskType]);
