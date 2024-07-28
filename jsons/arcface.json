@@ -178,7 +178,18 @@
                 "normalize": true,
                 "obs": 1,
                 "path": "../models/arcface_dynamic_3090_fp32_64_1.engine",
-                "prec": 4
+                "prec": 4,
+                "msvc_imgNormScale": "0.0078125/1",
+                "msvc_subVals": [
+                    127.5,
+                    127.5,
+                    127.5
+                ],
+                "msvc_divVals": [
+                    1,
+                    1,
+                    1
+                ]
             },
             {
                 "msvc_name": "postprocessor",
