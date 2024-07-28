@@ -62,7 +62,8 @@ void DataReader::Process() {
         if (!source.read(frame)) {
             if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
                 spdlog::get("container_agent")->info("No more frames to read, exiting Video Processing.");
-                return;
+                stopThread();
+                continue;
             }
             spdlog::get("container_agent")->info("Resetting Video Processing.");
             source.set(cv::CAP_PROP_POS_FRAMES, 0);

@@ -755,11 +755,16 @@ void ContainerAgent::collectRuntimeMetrics() {
                 cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
     }
 
-    while (run) {
-        if (cont_taskName == "dsrc" || cont_taskName == "datasource") {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-            continue;
+    if (cont_msvcsList[0]->msvc_type == MicroserviceType::DataReader) {
+        while (run) {
+            if (cont_msvcsList[0]->STOP_THREADS) {
+                run = false;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+    }
+
+    while (run) {
         bool hwMetricsScraped = false;
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
@@ -809,12 +814,8 @@ void ContainerAgent::collectRuntimeMetrics() {
                     spdlog::get("container_agent")->trace("{0:s} pushed hardware metrics to the database.", cont_name);
                 }
                 if (cont_msvcsList[0]->STOP_THREADS) {
-                    // Summarizing the profiling results into a single table
-                    // updateProfileTable();
-                    for (auto msvc: cont_msvcsList) {
-                        msvc->STOP_THREADS = true;
-                    }
                     run = false;
+                    continue;
                 }
             }
 
@@ -979,7 +980,9 @@ void ContainerAgent::collectRuntimeMetrics() {
         spdlog::get("container_agent")->trace("{0:s} Container Agent's Metric Reporter sleeps for {1:d} milliseconds.", cont_name, sleepPeriod.count());
         std::this_thread::sleep_for(sleepPeriod);
     }
-
+    for (auto msvc: cont_msvcsList) {
+        msvc->stopThread();
+    }
 }
 
 void ContainerAgent::updateProfileTable() {

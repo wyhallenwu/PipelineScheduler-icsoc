@@ -92,7 +92,7 @@ private:
                 "-v /run/jtop.sock:/run/jtop.sock  -v /usr/bin/tegrastats:/usr/bin/tegrastats "
                 "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
-                        R"(%s pipeline-scheduler-agx %s --name %s --json='%s' --device %i --port %i --port_offset %i)",
+                        R"(%s pipeline-scheduler-nx %s --name %s --json='%s' --device %i --port %i --port_offset %i)",
                         dev_system_name + "_" + cont_name, executable, cont_name, start_string, device, port, dev_port_offset) +
                 " --log_dir= '../logs' --logging_mode 1";
         std::cout << command << std::endl;
