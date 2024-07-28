@@ -178,7 +178,18 @@
                 "normalize": true,
                 "obs": 1,
                 "path": "../models/gender_dynamic_nx_fp32_8_1.engine",
-                "prec": 4
+                "prec": 4,
+                "msvc_imgNormScale": "1/255",
+                "msvc_subVals": [
+                    0,
+                    0,
+                    0
+                ],
+                "msvc_divVals": [
+                    1,
+                    1,
+                    1
+                ]
             },
             {
                 "msvc_name": "postprocessor",

@@ -427,9 +427,9 @@ void BaseReqBatcher::batchRequests() {
             }
         }
 
-        data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
+        // data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
 
-        data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
+        // data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
         data.shape = RequestDataShapeType({(msvc_outReqShape.at(0))[0][1], (msvc_outReqShape.at(0))[0][1],
                                            (msvc_outReqShape.at(0))[0][2]});

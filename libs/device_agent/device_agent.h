@@ -92,8 +92,8 @@ private:
                 "-v /run/jtop.sock:/run/jtop.sock  -v /usr/bin/tegrastats:/usr/bin/tegrastats "
                 "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
-                        R"(%s pipeline-scheduler-nx %s --name %s --json='%s' --device %i --port %i --port_offset %i)",
-                        cont_name, executable, cont_name, start_string, device, port, dev_port_offset) +
+                        R"(%s pipeline-scheduler-nx %s --json='%s' --device %i --port %i --port_offset %i)",
+                        cont_name, executable, start_string, device, port, dev_port_offset) +
                 " --log_dir= '../logs' --logging_mode 1";
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
