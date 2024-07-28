@@ -175,10 +175,10 @@ struct ContainerHandle {
 
     NodeHandle *device_agent;
     TaskHandle *task;
-    std::vector<ContainerHandle *> downstreams;
-    std::vector<ContainerHandle *> upstreams;
+    std::vector<ContainerHandle *> downstreams = {};
+    std::vector<ContainerHandle *> upstreams = {};
     // Queue sizes of the model
-    std::vector<QueueLengthType> queueSizes;
+    std::vector<QueueLengthType> queueSizes = {};
 
     // Flag to indicate whether the container is running
     // At the end of scheduling, all containerhandle marked with `running = false` object will be deleted
@@ -213,6 +213,8 @@ struct ContainerHandle {
     GPUPortion *executionLane = nullptr;
     // points to the pipeline model that this container is part of
     PipelineModel *pipelineModel = nullptr;
+    //
+    uint64_t timeBudgetLeft = 9999999999;
     mutable std::mutex containerHandleMutex;
 
     ContainerHandle() = default;
@@ -232,9 +234,7 @@ struct ContainerHandle {
                 NodeHandle* device_agent = nullptr,
                 TaskHandle* task = nullptr,
                 PipelineModel* pipelineModel = nullptr,
-                const std::vector<ContainerHandle*>& upstreams = {},
-                const std::vector<ContainerHandle*>& downstreams = {},
-                const std::vector<QueueLengthType>& queueSizes = {})
+                uint64_t timeBudgetLeft = 9999999999)
     : name(name),
       class_of_interest(class_of_interest),
       model(model),
@@ -251,7 +251,8 @@ struct ContainerHandle {
       pipelineModel(pipelineModel),
       upstreams(upstreams),
       downstreams(downstreams),
-      queueSizes(queueSizes) {}
+      queueSizes(queueSizes),
+      timeBudgetLeft(timeBudgetLeft) {}
     
     // Copy constructor
     ContainerHandle(const ContainerHandle& other) {
@@ -290,6 +291,7 @@ struct ContainerHandle {
         endTime = other.endTime;
         executionLane = other.executionLane;
         pipelineModel = other.pipelineModel;
+        timeBudgetLeft = other.timeBudgetLeft;
     }
 
     // Copy assignment operator
@@ -329,6 +331,7 @@ struct ContainerHandle {
             endTime = other.endTime;
             executionLane = other.executionLane;
             pipelineModel = other.pipelineModel;
+            timeBudgetLeft = other.timeBudgetLeft;
         }
         return *this;
     }
@@ -391,6 +394,8 @@ struct PipelineModel {
     // Source
     std::string datasourceName;
 
+    uint64_t timeBudgetLeft = 9999999999;
+
     mutable std::mutex pipelineModelMutex;
 
         // Constructor with default parameters
@@ -412,6 +417,7 @@ struct PipelineModel {
                   const std::string& deviceTypeName = "",
                   bool merged = false,
                   bool toBeRun = true,
+                  uint64_t timeBudgetLeft = 9999999999,
                   const std::vector<std::string>& possibleDevices = {})
         : device(device),
           name(name),
@@ -431,6 +437,7 @@ struct PipelineModel {
           deviceTypeName(deviceTypeName),
           merged(merged),
           toBeRun(toBeRun),
+          timeBudgetLeft(timeBudgetLeft),
           possibleDevices(possibleDevices) {}
 
     // Copy constructor
@@ -463,6 +470,7 @@ struct PipelineModel {
         deviceTypeName = other.deviceTypeName;
         merged = other.merged;
         toBeRun = other.toBeRun;
+        timeBudgetLeft = other.timeBudgetLeft;
         possibleDevices = other.possibleDevices;
         dimensions = other.dimensions;
         manifestations = {};
@@ -504,6 +512,7 @@ struct PipelineModel {
             deviceTypeName = other.deviceTypeName;
             merged = other.merged;
             toBeRun = other.toBeRun;
+            timeBudgetLeft = other.timeBudgetLeft;
             possibleDevices = other.possibleDevices;
             dimensions = other.dimensions;
             manifestations = {};

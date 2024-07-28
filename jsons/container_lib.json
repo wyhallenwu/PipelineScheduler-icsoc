@@ -68,7 +68,7 @@
     "platedet-server": {
         "taskName": "platedet",
         "templateConfigPath": "../jsons/platedet.json",
-        "runCommand": "./Container_Yolov5-plate",
+        "runCommand": "./Container_PlateDet",
         "modelPath": "../models/platedet_dyn_nms_3090_fp32_64_1.engine"
     },
     "movenet-server": {
@@ -322,5 +322,59 @@
         "templateConfigPath": "../jsons/carbrand.json",
         "runCommand": "./Container_CarBrand",
         "modelPath": "../models/carbrand_dynamic_orn_fp32_8_1.engine"
+    },
+    "yolov5n320-nxavier": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_320_dynamic_nms_3090_fp32_16_1.engine"
+    },
+    "yolov5n320-agxavier": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_320_dynamic_nms_3090_fp32_16_1.engine"
+    },
+    "yolov5n320-orinano": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_320_dynamic_nms_3090_fp32_16_1.engine"
+    },
+    "yolov5n512-nxavier": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_512_dynamic_nms_3090_fp32_16_1.engine"
+    },
+    "yolov5n512-agxavier": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_512_dynamic_nms_3090_fp32_16_1.engine"
+    },
+    "yolov5n512-orinano": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_512_dynamic_nms_3090_fp32_16_1.engine"
+    },
+    "yolov5n608-nxavier": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_608_dynamic_nms_3090_fp32_16_1.engine"
+    },
+    "yolov5n608-agxavier": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_608_dynamic_nms_3090_fp32_16_1.engine"
+    },
+    "yolov5n608-orinano": {
+        "taskName": "yolov5",
+        "templateConfigPath": "../jsons/yolov5.json",
+        "runCommand": "./Container_Yolov5",
+        "modelPath": "../models/yolov5n_608_dynamic_nms_3090_fp32_16_1.engine"
     }
 }

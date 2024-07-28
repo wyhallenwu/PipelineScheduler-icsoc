@@ -284,6 +284,7 @@ void Controller::ApplyScheduling() {
                 model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
                 model->numReplicas = 1;
             }
+            std::cout << "bb0" << std::endl;
             auto device = devices.list[model->device];
             std::unique_lock lock_model(model->pipelineModelMutex);
 
@@ -291,6 +292,7 @@ void Controller::ApplyScheduling() {
             std::string modelFullName = model->name;
             bool pipelineExists = false, modelRunning = false;
 
+            std::cout << "bb1" << std::endl;
             // check if the pipeline already been scheduled once before
             PipelineModel* pastModel = nullptr;
             if (ctrl_pastScheduledPipelines.list.find(pipeName) != ctrl_pastScheduledPipelines.list.end()) {
@@ -312,20 +314,26 @@ void Controller::ApplyScheduling() {
                     pastModel->toBeRun = true;
                 }
             }
+            std::cout << "bb2" << std::endl;
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
+            std::cout << "bb3" << std::endl;
             // make sure enough containers are running with the right configurations
             if (candidates.size() < model->numReplicas) {
                 // start additional containers
+                std::cout << "bb4" << std::endl;
                 for (unsigned int i = candidates.size(); i < model->numReplicas; i++) {
                     ContainerHandle *container = TranslateToContainer(model, devices.list[model->device], i);
+                    std::cout << "bb4-0" << std::endl;
                     if (container == nullptr) {
                         continue;
                     }
                     new_containers.push_back(container);
                     new_containers.back()->pipelineModel = model;
                 }
+                std::cout << "bb4-1" << std::endl;
             } else if (candidates.size() > model->numReplicas) {
                 // remove the extra containers
+                std::cout << "bb5" << std::endl;
                 for (unsigned int i = model->numReplicas; i < candidates.size(); i++) {
                     StopContainer(candidates[i], candidates[i]->device_agent);
                     model->task->tk_subTasks[model->name].erase(
@@ -334,6 +342,7 @@ void Controller::ApplyScheduling() {
                             model->task->tk_subTasks[model->name].end());
                     candidates.erase(candidates.begin() + i);
                 }
+                std::cout << "bb5-1" << std::endl;
             }
         }
     }
@@ -459,11 +468,13 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     if (model->name.find("yolov5n") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
         if (model->name.find("yolov5ndsrc") == std::string::npos) {
             model->name = replaceSubstring(model->name, "yolov5n", "yolov5ndsrc");
+            modelName = "yolov5ndsrc";
         }
         
     } else if (model->name.find("retina1face") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
         if (model->name.find("retina1facedsrc") == std::string::npos) {
             model->name = replaceSubstring(model->name, "retina1face", "retina1facedsrc");
+            modelName = "retina1facedsrc";
         }
     }
     int class_of_interest;
@@ -576,6 +587,8 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             up->set_class_of_interest(-2);
             up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
                                    (container->cuda_device == upstr->cuda_device));
+            up->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
+            //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(

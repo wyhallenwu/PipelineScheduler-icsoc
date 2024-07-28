@@ -26,7 +26,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{datasource, -1}}
             };
-            yolov5n->possibleDevices = {startDevice, "server"};
+            yolov5n->possibleDevices = {"server"};
             datasource->downstreams.push_back({yolov5n, -1});
 
             // jlf added
@@ -40,7 +40,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{datasource, -1}}
             };
-            yolov5n320->possibleDevices = {startDevice, "server"};
+            yolov5n320->possibleDevices = {"server"};
             // datasource->downstreams.push_back({yolov5n320, -1});
            
 
@@ -54,7 +54,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{datasource, -1}}
             };
-            yolov5n608->possibleDevices = {startDevice, "server"};
+            yolov5n608->possibleDevices = {"server"};
             // datasource->downstreams.push_back({yolov5m, -1});
 
             auto *yolov5n512 = new PipelineModel{
@@ -67,7 +67,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{datasource, -1}}
             };
-            yolov5n512->possibleDevices = {startDevice, "server"};
+            yolov5n512->possibleDevices = {"server"};
             // datasource->downstreams.push_back({yolov5s, -1});
 
             auto *retina1face = new PipelineModel{
@@ -80,7 +80,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{yolov5n, 0}}
             };
-            retina1face->possibleDevices = {startDevice, "server"};
+            retina1face->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({retina1face, 0});
             yolov5n320->downstreams.push_back({retina1face, 0});
             yolov5n608->downstreams.push_back({retina1face, 0});
@@ -143,7 +143,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {{retina1face, -1}, {carbrand, -1}, {platedet, -1}}
             };
             sink->possibleDevices = {"server"};
-            retina1face->downstreams.push_back({sink, -1});
+            arcface->downstreams.push_back({sink, -1});
             carbrand->downstreams.push_back({sink, -1});
             platedet->downstreams.push_back({sink, -1});
 
@@ -176,7 +176,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{datasource, -1}}
             };
-            yolov5n->possibleDevices = {startDevice, "server"};
+            yolov5n->possibleDevices = {"server"};
             datasource->downstreams.push_back({yolov5n, -1});
 
             // jlf added
@@ -190,7 +190,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{datasource, -1}}
             };
-            yolov5n320->possibleDevices = {startDevice, "server"};
+            yolov5n320->possibleDevices = {"server"};
             // datasource->downstreams.push_back({yolov5n320, -1});
            
 
@@ -204,7 +204,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{datasource, -1}}
             };
-            yolov5n608->possibleDevices = {startDevice, "server"};
+            yolov5n608->possibleDevices = {"server"};
             // datasource->downstreams.push_back({yolov5m, -1});
 
             auto *yolov5n512 = new PipelineModel{
@@ -217,7 +217,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{datasource, -1}}
             };
-            yolov5n512->possibleDevices = {startDevice, "server"};
+            yolov5n512->possibleDevices = {"server"};
 
             auto *retina1face = new PipelineModel{
                     "server",
@@ -229,7 +229,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{yolov5n, 0}}
             };
-            retina1face->possibleDevices = {startDevice, "server"};
+            retina1face->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({retina1face, 0});
             yolov5n320->downstreams.push_back({retina1face, 0});
             yolov5n608->downstreams.push_back({retina1face, 0});
@@ -315,7 +315,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{datasource, -1}}
             };
-            retina1face->possibleDevices = {startDevice, "server"};
+            retina1face->possibleDevices = {"server"};
             datasource->downstreams.push_back({retina1face, -1});
 
             auto *emotionnet = new PipelineModel{
@@ -341,7 +341,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{retina1face, -1}}
             };
-            age->possibleDevices = {startDevice, "server"};
+            age->possibleDevices = {"server"};
             retina1face->downstreams.push_back({age, -1});
 
             auto *gender = new PipelineModel{
@@ -354,7 +354,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{retina1face, -1}}
             };
-            gender->possibleDevices = {startDevice, "server"};
+            gender->possibleDevices = {"server"};
             retina1face->downstreams.push_back({gender, -1});
 
             auto *arcface = new PipelineModel{

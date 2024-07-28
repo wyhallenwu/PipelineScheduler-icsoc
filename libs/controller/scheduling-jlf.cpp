@@ -104,6 +104,93 @@ void Controller::queryingProfiles(TaskHandle *task)
     }
 }
 
+void Controller::estimateModelLatency(PipelineModel *currModel)
+{
+    std::string deviceName = currModel->device;
+    // We assume datasource and sink models have no latency
+    if (currModel->name.find("datasource") != std::string::npos || currModel->name.find("sink") != std::string::npos)
+    {
+        currModel->expectedQueueingLatency = 0;
+        currModel->expectedAvgPerQueryLatency = 0;
+        currModel->expectedMaxProcessLatency = 0;
+        currModel->estimatedPerQueryCost = 0;
+        currModel->expectedStart2HereLatency = 0;
+        currModel->estimatedStart2HereCost = 0;
+        return;
+    }
+    ModelProfile profile = currModel->processProfiles[deviceName];
+    if (currModel->name.find("yolo") == std::string::npos)
+    {
+        currModel->batchSize = 12;
+    }
+    BatchSizeType batchSize = currModel->batchSize;
+    uint64_t preprocessLatency = profile.batchInfer[batchSize].p95prepLat;
+    uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
+    uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
+    float preprocessRate = 1000000.f / preprocessLatency;
+
+    currModel->expectedQueueingLatency = calculateQueuingLatency(currModel->arrivalProfiles.arrivalRates,
+                                                                 preprocessRate);
+    currModel->expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
+    currModel->expectedMaxProcessLatency =
+        preprocessLatency * batchSize + inferLatency * batchSize + postprocessLatency * batchSize;
+    currModel->estimatedPerQueryCost = currModel->expectedAvgPerQueryLatency + currModel->expectedQueueingLatency +
+                                       currModel->expectedTransferLatency;
+    currModel->expectedStart2HereLatency = 0;
+    currModel->estimatedStart2HereCost = 0;
+}
+
+void Controller::estimateModelNetworkLatency(PipelineModel *currModel)
+{
+    if (currModel->name.find("datasource") != std::string::npos || currModel->name.find("sink") != std::string::npos)
+    {
+        currModel->expectedTransferLatency = 0;
+        return;
+    }
+
+    currModel->expectedTransferLatency = currModel->arrivalProfiles.d2dNetworkProfile[std::make_pair(currModel->device, currModel->upstreams[0].first->device)].p95TransferDuration;
+}
+
+/**
+ * @brief DFS-style recursively estimate the latency of a pipeline from source to sink
+ *
+ * @param pipeline provides all information about the pipeline needed for scheduling
+ * @param currModel
+ */
+void Controller::estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency)
+{
+    // estimateModelLatency(currModel, currModel->device);
+
+    // Update the expected latency to reach the current model
+    // In case a model has multiple upstreams, the expected latency to reach the model is the maximum of the expected latency
+    // to reach from each upstream.
+    if (currModel->name.find("datasource") != std::string::npos)
+    {
+        currModel->expectedStart2HereLatency = start2HereLatency;
+    }
+    else
+    {
+        currModel->expectedStart2HereLatency = std::max(
+            currModel->expectedStart2HereLatency,
+            start2HereLatency + currModel->expectedMaxProcessLatency + currModel->expectedTransferLatency +
+                currModel->expectedQueueingLatency);
+    }
+
+    // Cost of the pipeline until the current model
+    currModel->estimatedStart2HereCost += currModel->estimatedPerQueryCost;
+
+    std::vector<std::pair<PipelineModel *, int>> downstreams = currModel->downstreams;
+    for (const auto &d : downstreams)
+    {
+        estimatePipelineLatency(d.first, currModel->expectedStart2HereLatency);
+    }
+
+    if (currModel->downstreams.size() == 0)
+    {
+        return;
+    }
+}
+
 void Controller::Scheduling()
 {
     while (running)
@@ -168,6 +255,19 @@ void Controller::Scheduling()
         }
         for (auto &taskType : taskTypes)
         {
+            queryingProfiles(taskList[taskType]);
+            std::cout << "debugging query profile" << std::endl;
+            for (auto &model : taskList[taskType]->tk_pipelineModels)
+            {
+                std::unique_lock<std::mutex> lock(model->pipelineModelMutex);
+                std::cout << "model name: " << model->name << ", " << model->device << std::endl;
+                for (auto &downstream : model->downstreams)
+                {
+                    std::cout << "downstream: " << downstream.first->name << ", " << downstream.second << std::endl;
+                }
+                lock.unlock();
+            }
+            std::cout << "debugging query profile end" << std::endl;
             for (auto &model : taskList[taskType]->tk_pipelineModels)
             {
                 if (model->name.find("datasource") != std::string::npos)
@@ -175,6 +275,34 @@ void Controller::Scheduling()
                     continue;
                 }
                 model->name = taskType + "-" + model->name;
+                if (model->name.find("yolo") != std::string::npos)
+                {
+                    continue;
+                }
+                estimateModelLatency(model);
+                estimateModelNetworkLatency(model);
+            }
+            for (auto &model : taskList[taskType]->tk_pipelineModels)
+            {
+                if (model->name.find("yolo") != std::string::npos)
+                {
+                    for (auto &downstream : model->downstreams)
+                    {
+                        estimatePipelineLatency(downstream.first, 0);
+                    }
+                    break;
+                }
+            }
+            taskList[taskType]->tk_slo -= taskList[taskType]->tk_pipelineModels.back()->expectedStart2HereLatency;
+
+            for (auto &model : taskList[taskType]->tk_pipelineModels)
+            {
+                if (model->name.find("datasource") != std::string::npos || model->name.find("sink") != std::string::npos)
+                {
+                    continue;
+                }
+                model->timeBudgetLeft = taskList[taskType]->tk_pipelineModels.back()->expectedStart2HereLatency - model->expectedStart2HereLatency +
+                                        model->expectedMaxProcessLatency + model->expectedQueueingLatency;
             }
         }
 
@@ -445,6 +573,7 @@ void Controller::Scheduling()
                     // retrieve new resolution
                     int width = m.width;
                     int height = m.height;
+                    m.model->batchSize = batch_size;
 
                     std::vector<int> rs = {width, height};
                     client.model->dimensions = rs;
@@ -510,6 +639,34 @@ void Controller::Scheduling()
         }
 
         // TODO: test
+
+        for (auto &task : taskList)
+        {
+            for (auto &model : task.second->tk_pipelineModels)
+            {
+                if (model->name.find("datasource") != std::string::npos || model->upstreams.size() == 0)
+                {
+                    continue;
+                }
+                if (model->name.find("datasource") != std::string::npos ||
+                    model->name.find("sink") != std::string::npos ||
+                    model->name.find("yolo") != std::string::npos)
+                {
+                    continue;
+                }
+                model->batchSize = 12;
+            }
+
+            for (auto &model : task.second->tk_pipelineModels)
+            {
+                if (model->name.find("yolo") == std::string::npos || model->batchSize == 0)
+                {
+                    estimateModelLatency(model);
+                    model->timeBudgetLeft = task.second->tk_pipelineModels.back()->expectedStart2HereLatency - model->expectedStart2HereLatency +
+                                            model->expectedMaxProcessLatency + model->expectedQueueingLatency;
+                }
+            }
+        }
 
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
 
@@ -880,96 +1037,6 @@ void Controller::getInitialBatchSizes(TaskHandle *task, uint64_t slo)
                 estimateModelLatency(m);
             }
         }
-    }
-}
-
-/**
- * @brief estimate the different types of latency, in microseconds
- * Due to batch inference's nature, the queries that come later has to wait for more time both in preprocessor and postprocessor.
- *
- * @param model infomation about the model
- * @param modelType
- */
-void Controller::estimateModelLatency(PipelineModel *currModel)
-{
-    std::string deviceName = currModel->device;
-    // We assume datasource and sink models have no latency
-    if (currModel->name == "datasource" || currModel->name == "sink")
-    {
-        currModel->expectedQueueingLatency = 0;
-        currModel->expectedAvgPerQueryLatency = 0;
-        currModel->expectedMaxProcessLatency = 0;
-        currModel->estimatedPerQueryCost = 0;
-        currModel->expectedStart2HereLatency = 0;
-        currModel->estimatedStart2HereCost = 0;
-        return;
-    }
-    ModelProfile profile = currModel->processProfiles[deviceName];
-    BatchSizeType batchSize = currModel->batchSize;
-    uint64_t preprocessLatency = profile.batchInfer[batchSize].p95prepLat;
-    uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
-    uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
-    float preprocessRate = 1000000.f / preprocessLatency;
-
-    currModel->expectedQueueingLatency = calculateQueuingLatency(currModel->arrivalProfiles.arrivalRates,
-                                                                 preprocessRate);
-    currModel->expectedAvgPerQueryLatency = preprocessLatency + inferLatency * batchSize + postprocessLatency;
-    currModel->expectedMaxProcessLatency =
-        preprocessLatency * batchSize + inferLatency * batchSize + postprocessLatency * batchSize;
-    currModel->estimatedPerQueryCost = currModel->expectedAvgPerQueryLatency + currModel->expectedQueueingLatency +
-                                       currModel->expectedTransferLatency;
-    currModel->expectedStart2HereLatency = 0;
-    currModel->estimatedStart2HereCost = 0;
-}
-
-void Controller::estimateModelNetworkLatency(PipelineModel *currModel)
-{
-    if (currModel->name == "datasource" || currModel->name == "sink")
-    {
-        currModel->expectedTransferLatency = 0;
-        return;
-    }
-
-    currModel->expectedTransferLatency = currModel->arrivalProfiles.d2dNetworkProfile[std::make_pair(currModel->device, currModel->upstreams[0].first->device)].p95TransferDuration;
-}
-
-/**
- * @brief DFS-style recursively estimate the latency of a pipeline from source to sink
- *
- * @param pipeline provides all information about the pipeline needed for scheduling
- * @param currModel
- */
-void Controller::estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency)
-{
-    // estimateModelLatency(currModel, currModel->device);
-
-    // Update the expected latency to reach the current model
-    // In case a model has multiple upstreams, the expected latency to reach the model is the maximum of the expected latency
-    // to reach from each upstream.
-    if (currModel->name == "datasource")
-    {
-        currModel->expectedStart2HereLatency = start2HereLatency;
-    }
-    else
-    {
-        currModel->expectedStart2HereLatency = std::max(
-            currModel->expectedStart2HereLatency,
-            start2HereLatency + currModel->expectedMaxProcessLatency + currModel->expectedTransferLatency +
-                currModel->expectedQueueingLatency);
-    }
-
-    // Cost of the pipeline until the current model
-    currModel->estimatedStart2HereCost += currModel->estimatedPerQueryCost;
-
-    std::vector<std::pair<PipelineModel *, int>> downstreams = currModel->downstreams;
-    for (const auto &d : downstreams)
-    {
-        estimatePipelineLatency(d.first, currModel->expectedStart2HereLatency);
-    }
-
-    if (currModel->downstreams.size() == 0)
-    {
-        return;
     }
 }
 
