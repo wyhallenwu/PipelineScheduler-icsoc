@@ -96,7 +96,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             dev_logger
     );
 
-    dev_containerLib = getContainerLib(abbreviate(SystemDeviceTypeList[type]));
+    dev_containerLib = getContainerLib(SystemDeviceTypeList[type]);
     dev_metricsServerConfigs.schema = abbreviate(dev_experiment_name + "_" + dev_system_name);
     dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_hw";
     dev_networkTableName = dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_netw";
