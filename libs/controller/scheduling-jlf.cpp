@@ -201,6 +201,7 @@ void Controller::Scheduling()
         {
             continue;
         }
+        // TODO: assure the correct number of people and traffic pipelines before starting the scheduling
 
         std::cout << "===================== before ==========================" << std::endl;
         for (auto& [task_name, task] : untrimmedTaskList) {
@@ -228,7 +229,7 @@ void Controller::Scheduling()
                 if (taskList.find(taskType) == taskList.end())
                 {
                     taskList[taskType] = new TaskHandle(*taskHandle);
-                    taskList[taskType]->tk_pipelineModels.front()->name = taskName + "-datasource";
+                    taskList[taskType]->tk_pipelineModels.front()->name = taskName + "_datasource";
                     taskList[taskType]->tk_name = taskType;
                 }
                 else
@@ -237,7 +238,7 @@ void Controller::Scheduling()
                     taskList[taskType]->tk_pipelineModels.back()->downstreams = {};
                     auto yolo = taskList[taskType]->tk_pipelineModels.front()->downstreams.front().first;
                     taskList[taskType]->tk_pipelineModels.back()->downstreams.emplace_back(std::make_pair(yolo, -1));
-                    taskList[taskType]->tk_pipelineModels.back()->name = taskName + "-datasource";
+                    taskList[taskType]->tk_pipelineModels.back()->name = taskName + "_datasource";
                 }
             }
         }
@@ -250,7 +251,7 @@ void Controller::Scheduling()
                 {
                     continue;
                 }
-                model->name = taskType + "-" + model->name;
+                model->name = taskType + "_" + model->name;
                 if (model->name.find("yolo") != std::string::npos)
                 {
                     continue;
@@ -346,7 +347,7 @@ void Controller::Scheduling()
                     // collect model information
                     
                     // parse name
-                    std::size_t pos1 = model->name.find("-");
+                    std::size_t pos1 = model->name.find("_");
                     std::string model_name = model->name.substr(pos1 + 1);
 
                     // CHECKME: what is the system FPS
@@ -368,7 +369,7 @@ void Controller::Scheduling()
                     // CHECKME: get width, height
                     // parse the resolution of the model
                     // std::cout << "yolo name: " << model->name << std::endl;
-                    std::size_t pos = model_name.find("-");
+                    std::size_t pos = model_name.find("_");
                     std::string yolo = model_name.substr(0, pos);
                     int rs;
                     try
@@ -445,7 +446,7 @@ void Controller::Scheduling()
                 auto downstream = client_model->downstreams.front().first;
                 std::unique_lock<std::mutex> model_lock(downstream->pipelineModelMutex);
                 std::string model_name = downstream->name;
-                size_t pos = model_name.find("-");
+                size_t pos = model_name.find("_");
                 model_name = model_name.substr(pos + 1);
                 std::string model_device = downstream->device;
                 std::string model_device_typename = downstream->deviceTypeName;
