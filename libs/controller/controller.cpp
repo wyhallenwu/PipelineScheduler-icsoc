@@ -299,7 +299,53 @@ void Controller::initialiseGPU(NodeHandle *node) {
 }
 
 void Controller::basicGPUScheduling() {
+    std::map<std::string, std::vector<ContainerHandle *>> scheduledContainers;
+    for (auto device: devices.list) {
+        for (auto &task: ctrl_scheduledPipelines.list) {
+            for (auto &model: task.second->tk_pipelineModels) {
+                for (auto &container: model->task->tk_subTasks[model->name]) {
+                    if (container->device_agent->name != device.first) {
+                        continue;
+                    }
+                    if (container->name.find("datasource") != std::string::npos || 
+                        container->name.find("sink") != std::string::npos) {
+                        continue;
+                    }
+                    scheduledContainers[device.first].push_back(container);
+                }
+            }
+        }
+        std::sort(scheduledContainers[device.first].begin(), scheduledContainers[device.first].end(),
+                [](ContainerHandle *a, ContainerHandle *b) {
+                    auto aMemUsage = a->getExpectedTotalMemUsage();
+                    auto bMemUsage = b->getExpectedTotalMemUsage();
+                    return aMemUsage > bMemUsage;
+                });
+    }
+    for (auto device: devices.list) {
+        std::vector<GPUHandle *> gpus = device.second->gpuHandles;
+        for (auto &container: scheduledContainers[device.first]) {
+            MemUsageType containerMemUsage = container->getExpectedTotalMemUsage();
+            MemUsageType smallestGap  = std::numeric_limits<MemUsageType>::max();
+            int8_t smallestGapIndex = -1;
+            for (auto &gpu: gpus) {
+                MemUsageType gap = gpu->memLimit - gpu->currentMemUsage - containerMemUsage;
+                if (gap < 0) {
+                    continue;
+                }
+                if (gap < smallestGap) {
+                    smallestGap = gap;
+                    smallestGapIndex = gpu->number;
+                }
+            }
+            if (smallestGapIndex == -1) {
+                spdlog::get("container_agent")->error("No GPU available for container {}", container->name);
+                continue;
+            }
+            gpus[smallestGapIndex]->addContainer(container);
+        }
 
+    }
 }
 
 /**
@@ -424,6 +470,13 @@ void Controller::ApplyScheduling() {
 
         }
     }
+
+    // Basic GPU scheduling
+    if (ctrl_systemName != "ppp") {
+        basicGPUScheduling();
+    }
+
+
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
             int i = 0;
