@@ -98,7 +98,7 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
 // ============================================================================================================================================ //
 
 bool GPUHandle::addContainer(ContainerHandle *container) {
-    if (container->name.find("datasource") != std::string::npos || 
+    if (container->name.find("datasource") != std::string::npos ||
         container->name.find("sink") != std::string::npos) {
         containers.insert({container->name, container});
         container->gpuHandle = this;
@@ -115,7 +115,7 @@ bool GPUHandle::addContainer(ContainerHandle *container) {
             container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage +
             container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].rssMemUsage;
     }
-    
+
     if (currentMemUsage > memLimit) {
         spdlog::get("container_agent")->error("Container {} cannot be assigned to GPU {} of {}"
                                             "due to memory limit", container->name, number, hostName);
@@ -435,6 +435,43 @@ void Controller::ApplyScheduling() {
 
         }
     }
+
+    std::cout << "b3" << std::endl;
+    // debugging:
+    // if (ctrl_scheduledPipelines.list.empty()){
+    //     std::cout << "empty in the debugging before" << std::endl;
+    // }
+    int count = 0;
+    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+        // if (pipe->tk_pipelineModels.empty()) {
+        //     std::cout << "empty in the debugging" << std::endl;
+        // }
+        if (count == 2) {
+            break;
+        }
+        for (auto &model: pipe->tk_pipelineModels) {
+            // If its a datasource, we dont have to do it now
+            // datasource doesnt have upstreams
+            // and the downstreams will be set later
+            // std::cout << "test in debugging" << std::endl;
+            std::cout << "===========Debugging: ==========" <<  std::endl;
+            std::cout << "upstream of model: " << model->name << ", resolution: " << model->dimensions[0] << " " << model->dimensions[1] << std::endl;
+            for (auto us: model->upstreams) {
+                std::cout << us.first->name << ", ";
+            }
+            std::cout << std::endl;
+            std::cout << "dstream of model: " << model->name << std::endl;
+            for (auto ds: model->downstreams) {
+                std::cout << ds.first->name << ", ";
+            }
+            std::cout << std::endl;
+            std::cout << "==============================" << std::endl;
+        }
+        count++;
+    }
+
+    std::cout << "b4" << std::endl;
+
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
             int i = 0;
