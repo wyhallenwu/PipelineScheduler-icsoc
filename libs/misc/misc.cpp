@@ -718,7 +718,9 @@ void trt::to_json(nlohmann::json &j, const trt::TRTConfigs &val) {
     j["obs"] = val.optBatchSize;
     j["mbs"] = val.maxBatchSize;
     j["di"] = val.deviceIndex;
-    j["normalize"] = val.normalize;
+    j["msvc_imgNormScale"] = val.normalizeScale;
+    j["msvc_subVals"] = val.subVals;
+    j["msvc_divVals"] = val.divVals;
 }
 
 void trt::from_json(const nlohmann::json &j, trt::TRTConfigs &val) {
@@ -729,7 +731,11 @@ void trt::from_json(const nlohmann::json &j, trt::TRTConfigs &val) {
     j.at("obs").get_to(val.optBatchSize);
     j.at("mbs").get_to(val.maxBatchSize);
     j.at("di").get_to(val.deviceIndex);
-    j.at("normalize").get_to(val.normalize);
+    std::string normVal;
+    j.at("msvc_imgNormScale").get_to(normVal);
+    val.normalizeScale = fractionToFloat(normVal);
+    j.at("msvc_subVals").get_to(val.subVals);
+    j.at("msvc_divVals").get_to(val.divVals);
 }
 
 void saveGPUAsImg(const cv::cuda::GpuMat &img, std::string name, float scale) {
@@ -846,23 +852,31 @@ void setupLogger(
 ) {
     std::string path = logPath + "/" + loggerName + ".log";
 
-
-
+    // Console sink setup
     if (loggingMode == 0 || loggingMode == 2) {
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         loggerSinks.emplace_back(console_sink);
     }
-    bool auto_flush = true;
+
+    // File sink setup with auto-flush enabled
     if (loggingMode == 1 || loggingMode == 2) {
+        bool auto_flush = true;
         auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path, auto_flush);
         loggerSinks.emplace_back(file_sink);
     }
 
-    logger = std::make_shared<spdlog::logger>("container_agent", loggerSinks.begin(), loggerSinks.end());
+    // Create and configure logger
+    logger = std::make_shared<spdlog::logger>("container_agent", begin(loggerSinks), end(loggerSinks));
     spdlog::register_logger(logger);
 
-    spdlog::get("container_agent")->set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
-    spdlog::get("container_agent")->set_level(spdlog::level::level_enum(verboseLevel));
+    // Set log pattern
+    logger->set_pattern("[%C-%m-%d %H:%M:%S.%f] [%l] %v");
+
+    // Set log level
+    logger->set_level(static_cast<spdlog::level::level_enum>(verboseLevel));
+
+    // Ensure logger flushes on every log (optional, for immediate write to file)
+    logger->flush_on(spdlog::level::trace);
 }
 
 
@@ -1006,8 +1020,22 @@ std::map<std::string, std::string> keywordAbbrs = {
     {"nxavier5", "nx5"},
     {"datasource", "dsrc"},
     {"traffic", "trfc"},
+    {"traffic1", "trfc1"},
+    {"traffic2", "trfc2"},
+    {"traffic3", "trfc3"},
+    {"traffic4", "trfc4"},
+    {"traffic5", "trfc5"},
+    {"traffic6", "trfc6"},
+    {"traffic7", "trfc8"},
     {"building", "bldg"},
     {"people", "ppl"},
+    {"people1", "ppl1"},
+    {"people2", "ppl2"},
+    {"people3", "ppl3"},
+    {"people4", "ppl4"},
+    {"merged", "mrgd"},
+    {"mergedtraffic", "mrgdtrfc"},
+    {"mergedpeople", "mrgdppl"},
     {"yolov5", "y5"},
     {"yolov5n", "y5n"},
     {"yolov5s", "y5s"},

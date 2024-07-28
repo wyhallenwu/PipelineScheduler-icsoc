@@ -39,6 +39,7 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     wait_time_ms = 1000 / jsonConfigs.at("msvc_idealBatchSize").get<int>();
     skipRatio = 30.f / jsonConfigs.at("msvc_idealBatchSize").get<int>();
     link = link.substr(link.find_last_of('/') + 1);
+    msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
 };
 
 void DataReader::Process() {
@@ -61,7 +62,8 @@ void DataReader::Process() {
         if (!source.read(frame)) {
             if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
                 spdlog::get("container_agent")->info("No more frames to read, exiting Video Processing.");
-                return;
+                stopThread();
+                continue;
             }
             spdlog::get("container_agent")->info("Resetting Video Processing.");
             source.set(cv::CAP_PROP_POS_FRAMES, 0);

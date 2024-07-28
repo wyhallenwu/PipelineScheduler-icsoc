@@ -57,6 +57,25 @@ struct GPUPortion : GPULane {
     GPUPortion* prev = nullptr;
 };
 
+struct GPUHandle {
+    std::string type;
+    std::string hostName;
+    std::uint16_t number;
+    MemUsageType currentMemUsage = 0;
+    MemUsageType memLimit = 9999999; // MB
+    std::uint16_t numLanes;
+
+    std::map<std::string, ContainerHandle *> containers = {};
+
+    GPUHandle() = default;
+
+    GPUHandle(const std::string &type, const std::string &hostName, std::uint16_t number, MemUsageType memLimit, std::uint16_t numLanes)
+        : type(type), hostName(hostName), number(number), memLimit(memLimit), numLanes(numLanes) {}
+
+    bool addContainer(ContainerHandle *container);
+    bool removeContainer(ContainerHandle *container);
+};
+
 struct GPUPortionList {
     GPUPortion *head = nullptr;
     std::vector<GPUPortion *> list;
@@ -80,6 +99,8 @@ struct NodeHandle {
     std::map<std::string, ContainerHandle *> containers;
     // The latest network entries to determine the network conditions and latencies of transferring data
     std::map<std::string, NetworkEntryType> latestNetworkEntries = {};
+    // GPU Handle;
+    std::vector<GPUHandle*> gpuHandles;
     //
     uint8_t numGPULanes;
     //
@@ -210,9 +231,13 @@ struct ContainerHandle {
     uint64_t startTime;
     //
     uint64_t endTime;
+    // GPU Handle
+    GPUHandle *gpuHandle = nullptr;
     //
     GPUPortion *executionLane = nullptr;
-    //
+    // points to the pipeline model that this container is part of
+    PipelineModel *pipelineModel = nullptr;
+
     mutable std::mutex containerHandleMutex;
 
     ContainerHandle() = default;
@@ -231,6 +256,7 @@ struct ContainerHandle {
                 const std::string model_file = "",
                 NodeHandle* device_agent = nullptr,
                 TaskHandle* task = nullptr,
+                PipelineModel* pipelineModel = nullptr,
                 const std::vector<ContainerHandle*>& upstreams = {},
                 const std::vector<ContainerHandle*>& downstreams = {},
                 const std::vector<QueueLengthType>& queueSizes = {})
@@ -247,6 +273,7 @@ struct ContainerHandle {
       model_file(model_file),
       device_agent(device_agent),
       task(task),
+      pipelineModel(pipelineModel),
       upstreams(upstreams),
       downstreams(downstreams),
       queueSizes(queueSizes) {}
@@ -286,7 +313,9 @@ struct ContainerHandle {
         expectedThroughput = other.expectedThroughput;
         startTime = other.startTime;
         endTime = other.endTime;
+        gpuHandle = other.gpuHandle;
         executionLane = other.executionLane;
+        pipelineModel = other.pipelineModel;
     }
 
     // Copy assignment operator
@@ -324,7 +353,9 @@ struct ContainerHandle {
             expectedThroughput = other.expectedThroughput;
             startTime = other.startTime;
             endTime = other.endTime;
+            gpuHandle = other.gpuHandle;
             executionLane = other.executionLane;
+            pipelineModel = other.pipelineModel;
         }
         return *this;
     }
@@ -371,6 +402,8 @@ struct PipelineModel {
     // Batching deadline
     uint64_t batchingDeadline = 9999999999;
 
+    std::vector<int> dimensions = {-1, -1};
+
     std::string device;
     std::string deviceTypeName;
     NodeHandle *deviceAgent;
@@ -381,6 +414,9 @@ struct PipelineModel {
     std::vector<std::string> possibleDevices;
     // Manifestations are the list of containers that will be created for this model
     std::vector<ContainerHandle *> manifestations;
+
+    // Source
+    std::string datasourceName;
 
     mutable std::mutex pipelineModelMutex;
 
@@ -455,11 +491,13 @@ struct PipelineModel {
         merged = other.merged;
         toBeRun = other.toBeRun;
         possibleDevices = other.possibleDevices;
+        dimensions = other.dimensions;
         manifestations = {};
         for (auto& container : other.manifestations) {
             manifestations.push_back(new ContainerHandle(*container));
         }
         deviceAgent = other.deviceAgent;
+        datasourceName = other.datasourceName;
     }
 
     // Assignment operator
@@ -494,11 +532,13 @@ struct PipelineModel {
             merged = other.merged;
             toBeRun = other.toBeRun;
             possibleDevices = other.possibleDevices;
+            dimensions = other.dimensions;
             manifestations = {};
             for (auto& container : other.manifestations) {
                 manifestations.push_back(new ContainerHandle(*container));
             }
             deviceAgent = other.deviceAgent;
+            datasourceName = other.datasourceName;
         }
         return *this;
     }
@@ -731,6 +771,8 @@ private:
     bool modelTemporalScheduling(PipelineModel *pipelineModel);
     void temporalScheduling();
 
+    void basicGPUScheduling();
+
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "", const std::string &streamName = "");
 
     void checkNetworkConditions();
@@ -779,6 +821,8 @@ private:
         SystemInfo reply;
         grpc::ServerAsyncResponseWriter<SystemInfo> responder;
     };
+
+    void initialiseGPU(NodeHandle *node);
 
     class DummyDataRequestHandler : public RequestHandler {
     public:
@@ -946,7 +990,7 @@ private:
         std::map<std::string, TaskHandle*> list = {};
         mutable std::mutex tasksMutex;
     };
-    Tasks ctrl_unscheduledPipelines, ctrl_scheduledPipelines, ctrl_pastScheduledPipelines;
+    Tasks ctrl_unscheduledPipelines, ctrl_savedUnscheduledPipelines, ctrl_scheduledPipelines, ctrl_pastScheduledPipelines;
 
     struct Containers {
     public:

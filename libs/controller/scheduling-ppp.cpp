@@ -119,10 +119,12 @@ void Controller::Scheduling() {
                 std::chrono::system_clock::now() - ctrl_nextSchedulingTime).count() < 10) {
             continue;
         }
-        auto taskList = ctrl_unscheduledPipelines.getMap();
+        auto taskList = ctrl_savedUnscheduledPipelines.getMap();
         if (taskList.empty()) {
             continue;
         }
+        ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
+
         // for (auto [taskName, taskHandle]: taskList) {
         //     queryingProfiles(taskHandle);
         //     getInitialBatchSizes(taskHandle, taskHandle->tk_slo);

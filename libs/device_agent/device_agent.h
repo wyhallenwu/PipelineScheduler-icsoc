@@ -65,6 +65,8 @@ public:
 
     void collectRuntimeMetrics();
 
+    void limitBandwidth(const std::string& scriptPath, const std::string& jsonFilePath);
+
 private:
     void testNetwork(float min_size, float max_size, int num_loops);
 
@@ -91,9 +93,9 @@ private:
                 "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
                 "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
-                        R"(%s pipeline-base-container %s --name %s --json='%s' --device %i --port %i --port_offset %i)",
-                        dev_system_name + "_" + cont_name, executable, cont_name, start_string, device, port, dev_port_offset) +
-                " --log_dir= ../logs --logging_mode 1";
+                        R"(%s pipeline-base-container %s --name %s --json '%s' --device %i --port %i --port_offset %i)",
+                        cont_name, executable, cont_name, start_string, device, port, dev_port_offset) +
+                " --log_dir ../logs --logging_mode 1";
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         return system(command.c_str());

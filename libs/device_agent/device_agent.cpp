@@ -47,6 +47,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
     dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
     dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
+    dev_type = type;
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
@@ -271,16 +272,17 @@ void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
         EmptyMessage reply;
         ClientContext context;
         Status status;
-        int size = (int) dist(gen);
+        int size = std::abs((int) dist(gen));
         timestamp = std::chrono::high_resolution_clock::now();
         request.set_origin_name(dev_name);
         request.set_gen_time(std::chrono::duration_cast<TimePrecisionType>(timestamp.time_since_epoch()).count());
+        spdlog::get("container_agent")->debug("Sending data of size: {}", size);
         request.set_data(data.data(), size);
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 controller_stub->AsyncSendDummyData(&context, request, controller_sending_cq));
         finishGrpc(rpc, reply, status, controller_sending_cq);
     }
-    spdlog::get("container_agent")->trace("Network test completed");
+    spdlog::get("container_agent")->info("Network test completed");
 }
 
 bool DeviceAgent::CreateContainer(
@@ -298,7 +300,7 @@ bool DeviceAgent::CreateContainer(
 ) {
     std::string modelName = getContainerName(dev_type, model);
     try {
-        std::string cont_name = abbreviate(pipe_name + "_" + dev_containerLib[modelName].taskName + "_" + std::to_string(replica_id));
+        std::string cont_name = abbreviate(pipe_name + "_" + ModelTypeList[model] + "_" + std::to_string(replica_id));
         std::cout << "Creating container: " << cont_name << std::endl;
         std::string executable = dev_containerLib[modelName].runCommand;
         json start_config;
@@ -306,7 +308,8 @@ bool DeviceAgent::CreateContainer(
             start_config["experimentName"] = dev_experiment_name;
             start_config["systemName"] = dev_system_name;
             start_config["pipelineName"] = pipe_name;
-            runDocker(executable, cont_name, to_string(start_config), device, 0);
+            uint16_t port = std::stoi(upstreams.at(0).ip().substr(upstreams.at(0).ip().find(':') + 1));
+            runDocker(executable, cont_name, to_string(start_config), device, port);
             return true;
         }
 
@@ -330,10 +333,13 @@ bool DeviceAgent::CreateContainer(
         }
         if (model == ModelType::DataSource) {
             base_config[0]["msvc_dataShape"] = {input_dims};
-        } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
-            base_config[0]["msvc_dataShape"] = {input_dims};
-            base_config[0]["msvc_type"] = 500;
+            base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
         } else {
+            if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
+                base_config[0]["msvc_dataShape"] = {input_dims};
+                base_config[0]["msvc_type"] = 500;
+                base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
+            }
             base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
             base_config[2]["path"] = model_file;
         }
@@ -342,6 +348,10 @@ bool DeviceAgent::CreateContainer(
         // adjust receiver upstreams
         base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = upstreams.at(0).name();
         base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {upstreams.at(0).ip()};
+        if (model == ModelType::DataSource || model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
+            std::string dataDir = "../data/";
+            base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {dataDir + upstreams.at(0).ip()};
+        }
         if (upstreams.at(0).gpu_connection()) {
             base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
         } else {
@@ -350,12 +360,13 @@ bool DeviceAgent::CreateContainer(
 
         // adjust sender downstreams
         json sender = base_config.back();
-        json *postprocessor = &base_config[base_config.size() - 2];
+        uint16_t postprocessorIndex = base_config.size() - 2;
         json post_down = base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"][0];
         base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"] = json::array();
         base_config.erase(base_config.size() - 1);
         int i = 1;
         for (auto &d: downstreams) {
+            json *postprocessor = &base_config[postprocessorIndex];
             sender["msvc_name"] = sender["msvc_name"].get<std::string>() + std::to_string(i);
             sender["msvc_dnstreamMicroservices"][0]["nb_name"] = d.name();
             sender["msvc_dnstreamMicroservices"][0]["nb_link"] = {d.ip()};
@@ -375,6 +386,7 @@ bool DeviceAgent::CreateContainer(
 
         // start container
         start_config["container"]["cont_pipeline"] = base_config;
+        std::cout << start_config.dump(4) << std::endl;
         unsigned int control_port = CONTAINER_BASE_PORT + dev_port_offset + containers.size();
         runDocker(executable, cont_name, to_string(start_config), device, control_port);
         std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
@@ -518,7 +530,7 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new ReportStartRequestHandler(service, cq, device_agent);
 
-        int pid = getContainerProcessPid(device_agent->dev_system_name + "_" + request.msvc_name());
+        int pid = getContainerProcessPid(request.msvc_name());
         device_agent->containers[request.msvc_name()].pid = pid;
         device_agent->dev_profiler->addPid(pid);
         spdlog::get("container_agent")->info("Received start report from {} with pid: {}", request.msvc_name(), pid);
@@ -537,9 +549,9 @@ void DeviceAgent::ExecuteNetworkTestRequestHandler::Proceed() {
         service->RequestExecuteNetworkTest(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new ExecuteNetworkTestRequestHandler(service, cq, device_agent);
-        device_agent->testNetwork((float) request.min(), (float) request.max(), request.repetitions());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
+        device_agent->testNetwork((float) request.min(), (float) request.max(), request.repetitions());
     } else {
         GPR_ASSERT(status == FINISH);
         delete this;
@@ -580,14 +592,23 @@ void DeviceAgent::StopContainerRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new StopContainerRequestHandler(service, cq, device_agent);
         if (device_agent->containers.find(request.name()) == device_agent->containers.end()) {
-            status = FINISH;
-            responder.Finish(reply, Status::CANCELLED, this);
-            return;
+            if (request.name().find("sink") != std::string::npos) {
+                std::string command = "docker stop " + request.name();
+                int status = system(command.c_str());
+                spdlog::get("container_agent")->info("Stopped container: {} with status: {}", request.name(), status);
+            } else {
+                spdlog::get("container_agent")->warn("Container {} not found for deletion!", request.name());
+                status = FINISH;
+                responder.Finish(reply, Status::CANCELLED, this);
+                return;
+            }
+        } else {
+            spdlog::get("container_agent")->info("Stopping container: {}", request.name());
+            DeviceAgent::StopContainer(device_agent->containers[request.name()], request.forced());
+            unsigned int pid = device_agent->containers[request.name()].pid;
+            device_agent->containers.erase(request.name());
+            device_agent->dev_profiler->removePid(pid);
         }
-        DeviceAgent::StopContainer(device_agent->containers[request.name()], request.forced());
-        unsigned int pid = device_agent->containers[request.name()].pid;
-        device_agent->containers.erase(request.name());
-        device_agent->dev_profiler->removePid(pid);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
@@ -670,4 +691,62 @@ void DeviceAgent::UpdateResolutionRequestHandler::Proceed() {
         GPR_ASSERT(status == FINISH);
         delete this;
     }
+}
+
+// Function to run the bash script with parameters from a JSON file
+void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::string& jsonFilePath) {
+    // Read JSON file
+    std::ifstream json_file(jsonFilePath);
+    if (!json_file.is_open()) {
+        std::cerr << "Failed to open " << jsonFilePath << std::endl;
+        return;
+    }
+
+    json config;
+    json_file >> config;
+
+    std::string interface = config["interface"];
+    auto bandwidth_limits = config["bandwidth_limits"];
+
+    if (bandwidth_limits.empty()) {
+        std::cerr << "No bandwidth limits found in the JSON file." << std::endl;
+        return;
+    }
+
+    auto start = std::chrono::system_clock::now();
+
+    int bwThresholdIndex = 0;
+
+    ClockType nextThresholdSetTime = start + std::chrono::seconds(bandwidth_limits[bwThresholdIndex]["time"]); 
+    while (isRunning()) {
+        if (bwThresholdIndex >= bandwidth_limits.size()) {
+            break;
+        }
+        if (std::chrono::system_clock::now() >= nextThresholdSetTime) {
+            Stopwatch stopwatch;
+
+            auto limit = bandwidth_limits[bwThresholdIndex];
+            int time_spot = limit["time"];
+            int mbps = limit["mbps"];
+
+            // Build and execute the command
+            std::string command = "sudo bash " + scriptPath + " " + interface + " " + std::to_string(mbps);
+            spdlog::get("container_agent")->info("{0:s} Setting BW limit to {1:d}", dev_name, mbps);
+            int result = system(command.c_str());
+            spdlog::get("container_agent")->info("Command executed with result: {0:d}", result);
+
+            if (bwThresholdIndex == bandwidth_limits.size() - 1) {
+                break;
+            }
+            auto distanceToNext = bandwidth_limits[++bwThresholdIndex]["time"].get<int>() - bandwidth_limits[bwThresholdIndex - 1]["time"].get<int>();
+            nextThresholdSetTime += std::chrono::seconds(distanceToNext);
+
+            auto sleepTime = nextThresholdSetTime - std::chrono::system_clock::now();
+            std::this_thread::sleep_for(sleepTime + std::chrono::nanoseconds(10000000));
+
+        }
+    }
+
+    // QUANG: Remove the bandwidth limit
+    std::cout << "Finished bandwidth limiting." << std::endl;
 }
