@@ -452,7 +452,7 @@ void Controller::Scheduling()
         }
 
         // debugging
-        std::cout << "============== debug ====================" << std::endl;
+        std::cout << "========================= Task Info =========================" << std::endl;
         for (auto &task_name : taskTypes)
         {
             auto client_profiles = clientProfilesCSJF[task_name];
@@ -461,14 +461,14 @@ void Controller::Scheduling()
             std::cout << task_name << ", n model: " << model_profiles.infos.size() << std::endl;
             for (auto &client_info : client_profiles.infos)
             {
-                std::cout << "client name: " << client_info.name << ", " << client_info.task_name << ", client address: " << client_info.model << std::endl;
+                std::cout << "client name: " << client_info.name << ", " << client_info.task_name << ", client address: " << client_info.model << ", client device: " << client_info.model->device << std::endl;
             }
             for (auto &model_info : model_profiles.infos)
             {
                 std::cout << model_info.second.front().name << std::endl;
             }
         }
-        std::cout << "=========================================" << std::endl;
+        std::cout << "=============================================================" << std::endl;
 
         for (auto &task_name : taskTypes)
         {
@@ -608,19 +608,21 @@ void Controller::Scheduling()
             std::cout << "SCHEDULING END" << std::endl;
 
             // for debugging mappings
+            std::cout << "================================ Mapping ===================================" << std::endl;
             for (auto &mapping : mappings)
             {
-                std::cout << "***********************************************************" << std::endl;
+                
                 auto model_info = std::get<0>(mapping);
                 std::cout << "Model name: " << std::get<0>(model_info) << ", acc: " << std::get<1>(model_info) << ", batch_size: " << std::endl;
                 auto clients_info = std::get<1>(mapping);
                 for (auto &client : clients_info)
                 {
-                    std::cout << "Client name: " << client.name << ", budget: " << client.budget << ", lat: " << client.transmission_latency << std::endl;
+                    std::cout << "Client name: " << client.name << ", budget: " << client.budget << ", lat: " << client.transmission_latency << ", client device: " << client.model->device << std::endl;
                 }
                 std::cout << "Batch size: " << std::get<2>(mapping) << std::endl;
-                std::cout << "***********************************************************" << std::endl;
+                std::cout <<"-----------------------------------" << std::endl;
             }
+            std::cout << "============================= End Mapping =================================" << std::endl;
 
             // for debugging
             std::cout << "============================== check all clients downstream ==================================" << task_name << std::endl;
@@ -628,25 +630,29 @@ void Controller::Scheduling()
             {
                 auto p = client.model;
                 std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
+                std::cout << "datasource name: " << p->datasourceName;
                 for (auto &ds : p->downstreams)
                 {
-                    std::cout << ds.first->name << std::endl;
+                    std::cout << ", ds name: " << ds.first->name << std::endl;
                 }
                 lock.unlock();
             }
+            std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
 
             std::cout << "================================= check all models upstream ==================================" << task_name << std::endl;
             for (auto &model : model_profiles_jf.infos)
             {
                 auto p = model.second.front().model;
                 std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
+                std::cout << "model name: " << p->name;
                 for (auto us : p->upstreams)
                 {
-                    std::cout << us.first->name << ", address of client: " << us.first << "; ";
+                    std::cout << ", us name: " <<us.first->name << ", address of client: " << us.first << "; ";
                 }
                 std::cout << std::endl;
                 lock.unlock();
             }
+            std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
         }
 
         // TODO: test

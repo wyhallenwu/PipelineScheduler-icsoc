@@ -448,6 +448,7 @@ void Controller::ApplyScheduling() {
     //     std::cout << "empty in the debugging before" << std::endl;
     // }
     int count = 0;
+    std::cout << "==================== In ApplySchedule =====================" << std::endl;
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         // if (pipe->tk_pipelineModels.empty()) {
         //     std::cout << "empty in the debugging" << std::endl;
@@ -460,21 +461,34 @@ void Controller::ApplyScheduling() {
             // datasource doesnt have upstreams
             // and the downstreams will be set later
             // std::cout << "test in debugging" << std::endl;
-            std::cout << "===========Debugging: ==========" <<  std::endl;
-            std::cout << "upstream of model: " << model->name << ", resolution: " << model->dimensions[0] << " " << model->dimensions[1] << std::endl;
-            for (auto us: model->upstreams) {
-                std::cout << us.first->name << ", ";
+            // std::cout << "===========Debugging: ==========" <<  std::endl;
+            // std::cout << "upstream of model: " << model->name << ", resolution: " << model->dimensions[0] << " " << model->dimensions[1] << std::endl;
+            // for (auto us: model->upstreams) {
+            //     std::cout << us.first->name << ", ";
+            // }
+            // std::cout << std::endl;
+            // std::cout << "dstream of model: " << model->name << std::endl;
+            // for (auto ds: model->downstreams) {
+            //     std::cout << ds.first->name << ", ";
+            // }
+            // std::cout << std::endl;
+            // std::cout << "==============================" << std::endl;
+            
+            if (model->name.find("datasource") != std::string::npos) {
+                std::cout << "datasource name: " << model->datasourceName;
+                if (model->downstreams.size() > 1) {
+                    std::cerr << " datasource has more than one downstreams" << std::endl;
+                    std::exit(1);
+                }
+                for (auto &ds: model->downstreams) {
+                    std::cout << ", ds name: " << ds.first->name;
+                }
+                std::cout << std::endl;
             }
-            std::cout << std::endl;
-            std::cout << "dstream of model: " << model->name << std::endl;
-            for (auto ds: model->downstreams) {
-                std::cout << ds.first->name << ", ";
-            }
-            std::cout << std::endl;
-            std::cout << "==============================" << std::endl;
         }
         count++;
     }
+    std::cout << "==================== End ApplySchedule =====================" << std::endl;
 
     std::cout << "b4" << std::endl;
 
