@@ -189,7 +189,18 @@
                 "obs": 1,
                 "path": "../models/platedet_dyn_nms_agx_fp32_16_1.engine",
                 "prec": 4,
-                "device": 0
+                "device": 0,
+                "msvc_imgNormScale": "1/255",
+                "msvc_subVals": [
+                    0,
+                    0,
+                    0
+                ],
+                "msvc_divVals": [
+                    1,
+                    1,
+                    1
+                ]
             },
             {
                 "msvc_name": "postprocessor",

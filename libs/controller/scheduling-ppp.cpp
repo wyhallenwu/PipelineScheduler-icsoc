@@ -27,7 +27,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 possibleDevicePairList.push_back({deviceName, deviceName2});
             }
         }
-        std::string containerName = model->name + "-" + model->deviceTypeName;
+        std::string containerName = model->name + "_" + model->deviceTypeName;
         if (!task->tk_newlyAdded) {
             model->arrivalProfiles.arrivalRates = queryArrivalRate(
                 *ctrl_metricsServerConn,
@@ -44,7 +44,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
         for (const auto &pair : possibleDevicePairList) {
             std::string senderDeviceType = getDeviceTypeName(deviceList.at(pair.first)->type);
             std::string receiverDeviceType = getDeviceTypeName(deviceList.at(pair.second)->type);
-            containerName = model->name + "-" + receiverDeviceType;
+            containerName = model->name + "_" + receiverDeviceType;
             std::unique_lock lock(devices.list[pair.first]->nodeHandleMutex);
             NetworkEntryType entry = devices.list[pair.first]->latestNetworkEntries[receiverDeviceType];
             lock.unlock();
@@ -66,9 +66,9 @@ void Controller::queryingProfiles(TaskHandle *task) {
             model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
         }
 
-        for (const auto deviceName : model->possibleDevices) {
+        for (const auto &deviceName : model->possibleDevices) {
             std::string deviceTypeName = getDeviceTypeName(deviceList.at(deviceName)->type);
-            containerName = model->name + "-" + deviceTypeName;
+            containerName = model->name + "_" + deviceTypeName;
             ModelProfile profile = queryModelProfile(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
