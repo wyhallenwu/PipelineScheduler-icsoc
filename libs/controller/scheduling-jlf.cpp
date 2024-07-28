@@ -207,7 +207,7 @@ void Controller::Scheduling()
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto untrimmedTaskList = ctrl_unscheduledPipelines.getMap();
         auto deviceList = devices.getMap();
-        if (untrimmedTaskList.size() < 1)
+        if (untrimmedTaskList.size() < 4)
         {
             continue;
         }
@@ -255,14 +255,14 @@ void Controller::Scheduling()
         }
 
 
-        // TODO: assure the correct number of people and traffic pipelines in better way
-        if (taskList["traffic"] == nullptr || taskList["people"] == nullptr)
-        {
-            continue;
-        } else if (taskList["traffic"]->tk_pipelineModels.size() != 2 || taskList["people"]->tk_pipelineModels.size() != 2)
-        {
-            continue;
-        }
+        // // TODO: assure the correct number of people and traffic pipelines in better way
+        // if (taskList["traffic"] == nullptr || taskList["people"] == nullptr)
+        // {
+        //     continue;
+        // } else if (taskList["traffic"]->tk_pipelineModels.size() != 2 || taskList["people"]->tk_pipelineModels.size() != 2)
+        // {
+        //     continue;
+        // }
 
         for (auto &taskType : taskTypes)
         {
