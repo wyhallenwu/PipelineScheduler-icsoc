@@ -26,7 +26,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 possibleDevicePairList.push_back({deviceName, deviceName2});
             }
         }
-        std::string containerName = model->name + "-" + model->deviceTypeName;
+        std::string containerName = model->name + "_" + model->deviceTypeName;
         if (!task->tk_newlyAdded) {
             model->arrivalProfiles.arrivalRates = queryArrivalRate(
                 *ctrl_metricsServerConn,
@@ -41,7 +41,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
         }
         for (const auto deviceName : model->possibleDevices) {
             std::string deviceTypeName = getDeviceTypeName(deviceList.at(deviceName)->type);
-            containerName = model->name + "-" + deviceTypeName;
+            containerName = model->name + "_" + deviceTypeName;
             ModelProfile profile = queryModelProfile(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
