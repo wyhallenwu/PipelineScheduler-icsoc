@@ -424,9 +424,9 @@ namespace trt {
         int8_t deviceIndex = 0;
 
         size_t maxWorkspaceSize = 1 << 30;
-        bool normalize = false;
         std::array<float, 3> subVals{0.f, 0.f, 0.f};
         std::array<float, 3> divVals{1.f, 1.f, 1.f};
+        float normalizeScale = 1.f;
     };
 
     void to_json(nlohmann::json &j, const TRTConfigs &val);

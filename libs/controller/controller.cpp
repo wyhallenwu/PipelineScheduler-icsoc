@@ -533,17 +533,15 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     }
     std::string modelName = splitString(model->name, "_").back();
 
-    int class_of_interest;
-    if (model->name.find("datasource") != std::string::npos || model->name.find("dsrc") != std::string::npos) {
-        class_of_interest = -1;
-    } else {
+    int class_of_interest = -1;
+    if (!model->upstreams.empty() && model->name.find("datasource") == std::string::npos && model->name.find("dsrc") == std::string::npos) {
         class_of_interest = model->upstreams[0].second;
     }
 
     std::string subTaskName = model->name;
     std::string containerName = ctrl_systemName + "_" + model->name + "_" + std::to_string(i);
     // the name of the container type to look it up in the container library
-    std::string containerTypeName = modelName + "-" + getDeviceTypeName(device->type);
+    std::string containerTypeName = modelName + "_" + getDeviceTypeName(device->type);
     
     auto *container = new ContainerHandle{containerName,
                                           class_of_interest,
@@ -633,7 +631,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         Neighbor *up = request.add_upstream();
         up->set_name("video_source");
         up->set_ip(container->pipelineModel->datasourceName);
-        up->set_class_of_interest(-1);
+        up->set_class_of_interest(-2);
         up->set_gpu_connection(false);
     } else {
         for (auto upstr: container->upstreams) {
@@ -645,6 +643,13 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
                                    (container->cuda_device == upstr->cuda_device));
             up->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
             //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
+        }
+        if (request.upstream_size() == 0) {
+            Neighbor *up = request.add_upstream();
+            up->set_name("dummy");
+            up->set_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
+            up->set_class_of_interest(-2);
+            up->set_gpu_connection(false);
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
