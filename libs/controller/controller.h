@@ -358,6 +358,8 @@ struct ContainerHandle {
         }
         return *this;
     }
+
+    MemUsageType getExpectedTotalMemUsage() const;
 };
 
 struct PipelineModel {
