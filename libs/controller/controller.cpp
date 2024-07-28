@@ -107,14 +107,7 @@ bool GPUHandle::addContainer(ContainerHandle *container) {
     }
     MemUsageType potentialMemUsage;
     BatchSizeType batchSize = container->pipelineModel->batchSize;
-    if (container->device_agent->type == SystemDeviceType::Server) {
-        potentialMemUsage = currentMemUsage +
-            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage;
-    } else {
-        potentialMemUsage = currentMemUsage +
-            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage +
-            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].rssMemUsage;
-    }
+    potentialMemUsage = currentMemUsage + container->getExpectedTotalMemUsage();
     
     if (currentMemUsage > memLimit) {
         spdlog::get("container_agent")->error("Container {} cannot be assigned to GPU {} of {}"
@@ -136,12 +129,7 @@ bool GPUHandle::removeContainer(ContainerHandle *container) {
     containers.erase(container->name);
     container->gpuHandle = nullptr;
     BatchSizeType batchSize = container->pipelineModel->batchSize;
-    if (container->device_agent->type == SystemDeviceType::Server) {
-        currentMemUsage -= container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage;
-    } else {
-        currentMemUsage -= container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage +
-            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].rssMemUsage;
-    }
+    currentMemUsage -= container->getExpectedTotalMemUsage();
 
     spdlog::get("container_agent")->info("Container {} successfully removed from GPU {} of {}", container->name, number, hostName);
     return true;
@@ -254,6 +242,15 @@ Controller::~Controller() {
 // ============================================================================================================================================= //
 // ============================================================================================================================================= //
 
+MemUsageType ContainerHandle::getExpectedTotalMemUsage() const {
+    if (device_agent->name == "server") {
+        return pipelineModel->processProfiles.at("server").batchInfer[pipelineModel->batchSize].gpuMemUsage / 1000;
+    }
+    std::string deviceTypeName = getDeviceTypeName(device_agent->type);
+    return (pipelineModel->processProfiles.at(deviceTypeName).batchInfer[pipelineModel->batchSize].gpuMemUsage +
+            pipelineModel->processProfiles.at(deviceTypeName).batchInfer[pipelineModel->batchSize].rssMemUsage) / 1000;
+}
+
 bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
     TaskHandle *task = new TaskHandle{t.name, t.fullName, t.type, t.source, t.device, t.slo, {}, 0};
@@ -302,7 +299,53 @@ void Controller::initialiseGPU(NodeHandle *node) {
 }
 
 void Controller::basicGPUScheduling() {
+    std::map<std::string, std::vector<ContainerHandle *>> scheduledContainers;
+    for (auto device: devices.list) {
+        for (auto &task: ctrl_scheduledPipelines.list) {
+            for (auto &model: task.second->tk_pipelineModels) {
+                for (auto &container: model->task->tk_subTasks[model->name]) {
+                    if (container->device_agent->name != device.first) {
+                        continue;
+                    }
+                    if (container->name.find("datasource") != std::string::npos || 
+                        container->name.find("sink") != std::string::npos) {
+                        continue;
+                    }
+                    scheduledContainers[device.first].push_back(container);
+                }
+            }
+        }
+        std::sort(scheduledContainers[device.first].begin(), scheduledContainers[device.first].end(),
+                [](ContainerHandle *a, ContainerHandle *b) {
+                    auto aMemUsage = a->getExpectedTotalMemUsage();
+                    auto bMemUsage = b->getExpectedTotalMemUsage();
+                    return aMemUsage > bMemUsage;
+                });
+    }
+    for (auto device: devices.list) {
+        std::vector<GPUHandle *> gpus = device.second->gpuHandles;
+        for (auto &container: scheduledContainers[device.first]) {
+            MemUsageType containerMemUsage = container->getExpectedTotalMemUsage();
+            MemUsageType smallestGap  = std::numeric_limits<MemUsageType>::max();
+            int8_t smallestGapIndex = -1;
+            for (auto &gpu: gpus) {
+                MemUsageType gap = gpu->memLimit - gpu->currentMemUsage - containerMemUsage;
+                if (gap < 0) {
+                    continue;
+                }
+                if (gap < smallestGap) {
+                    smallestGap = gap;
+                    smallestGapIndex = gpu->number;
+                }
+            }
+            if (smallestGapIndex == -1) {
+                spdlog::get("container_agent")->error("No GPU available for container {}", container->name);
+                continue;
+            }
+            gpus[smallestGapIndex]->addContainer(container);
+        }
 
+    }
 }
 
 /**
@@ -427,6 +470,13 @@ void Controller::ApplyScheduling() {
 
         }
     }
+
+    // Basic GPU scheduling
+    if (ctrl_systemName != "ppp") {
+        basicGPUScheduling();
+    }
+
+
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
             int i = 0;
