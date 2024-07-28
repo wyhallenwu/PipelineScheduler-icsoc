@@ -300,7 +300,7 @@ bool DeviceAgent::CreateContainer(
 ) {
     std::string modelName = getContainerName(dev_type, model);
     try {
-        std::string cont_name = abbreviate(pipe_name + "_" + dev_containerLib[modelName].taskName + "_" + std::to_string(replica_id));
+        std::string cont_name = abbreviate(pipe_name + "_" + ModelTypeList[model] + "_" + std::to_string(replica_id));
         std::cout << "Creating container: " << cont_name << std::endl;
         std::string executable = dev_containerLib[modelName].runCommand;
         json start_config;
@@ -334,11 +334,12 @@ bool DeviceAgent::CreateContainer(
         if (model == ModelType::DataSource) {
             base_config[0]["msvc_dataShape"] = {input_dims};
             base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
-        } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
-            base_config[0]["msvc_dataShape"] = {input_dims};
-            base_config[0]["msvc_type"] = 500;
-            base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
         } else {
+            if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
+                base_config[0]["msvc_dataShape"] = {input_dims};
+                base_config[0]["msvc_type"] = 500;
+                base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
+            }
             base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
             base_config[2]["path"] = model_file;
         }
@@ -529,7 +530,7 @@ void DeviceAgent::ReportStartRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new ReportStartRequestHandler(service, cq, device_agent);
 
-        int pid = getContainerProcessPid(device_agent->dev_system_name + "_" + request.msvc_name());
+        int pid = getContainerProcessPid(request.msvc_name());
         device_agent->containers[request.msvc_name()].pid = pid;
         device_agent->dev_profiler->addPid(pid);
         spdlog::get("container_agent")->info("Received start report from {} with pid: {}", request.msvc_name(), pid);
@@ -548,9 +549,9 @@ void DeviceAgent::ExecuteNetworkTestRequestHandler::Proceed() {
         service->RequestExecuteNetworkTest(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new ExecuteNetworkTestRequestHandler(service, cq, device_agent);
-        device_agent->testNetwork((float) request.min(), (float) request.max(), request.repetitions());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
+        device_agent->testNetwork((float) request.min(), (float) request.max(), request.repetitions());
     } else {
         GPR_ASSERT(status == FINISH);
         delete this;
@@ -591,14 +592,23 @@ void DeviceAgent::StopContainerRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new StopContainerRequestHandler(service, cq, device_agent);
         if (device_agent->containers.find(request.name()) == device_agent->containers.end()) {
-            status = FINISH;
-            responder.Finish(reply, Status::CANCELLED, this);
-            return;
+            if (request.name().find("sink") != std::string::npos) {
+                std::string command = "docker stop " + request.name();
+                int status = system(command.c_str());
+                spdlog::get("container_agent")->info("Stopped container: {} with status: {}", request.name(), status);
+            } else {
+                spdlog::get("container_agent")->warn("Container {} not found for deletion!", request.name());
+                status = FINISH;
+                responder.Finish(reply, Status::CANCELLED, this);
+                return;
+            }
+        } else {
+            spdlog::get("container_agent")->info("Stopping container: {}", request.name());
+            DeviceAgent::StopContainer(device_agent->containers[request.name()], request.forced());
+            unsigned int pid = device_agent->containers[request.name()].pid;
+            device_agent->containers.erase(request.name());
+            device_agent->dev_profiler->removePid(pid);
         }
-        DeviceAgent::StopContainer(device_agent->containers[request.name()], request.forced());
-        unsigned int pid = device_agent->containers[request.name()].pid;
-        device_agent->containers.erase(request.name());
-        device_agent->dev_profiler->removePid(pid);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
