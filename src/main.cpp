@@ -11,6 +11,7 @@ ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn,
 ABSL_FLAG(uint16_t, logging_mode, 0, "0:stdout, 1:file, 2:both");
 
 int main(int argc, char **argv) {
+    absl::ParseCommandLine(argc, argv);
     std::vector<spdlog::sink_ptr> loggerSinks;
     std::shared_ptr<spdlog::logger> logger;
     setupLogger(
