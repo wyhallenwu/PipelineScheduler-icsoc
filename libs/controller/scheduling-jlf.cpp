@@ -33,7 +33,7 @@ void Controller::queryingProfiles(TaskHandle *task)
                 possibleDevicePairList.push_back({deviceName, deviceName2});
             }
         }
-        std::string containerName = model->name + "-" + model->deviceTypeName;
+        std::string containerName = model->name + "_" + model->deviceTypeName;
         if (!task->tk_newlyAdded)
         {
             model->arrivalProfiles.arrivalRates = queryArrivalRate(
@@ -51,7 +51,7 @@ void Controller::queryingProfiles(TaskHandle *task)
         {
             std::string senderDeviceType = getDeviceTypeName(deviceList.at(pair.first)->type);
             std::string receiverDeviceType = getDeviceTypeName(deviceList.at(pair.second)->type);
-            containerName = model->name + "-" + receiverDeviceType;
+            containerName = model->name + "_" + receiverDeviceType;
             std::unique_lock lock(devices.list[pair.first]->nodeHandleMutex);
             NetworkEntryType entry = devices.list[pair.first]->latestNetworkEntries[receiverDeviceType];
             lock.unlock();
@@ -75,7 +75,7 @@ void Controller::queryingProfiles(TaskHandle *task)
         for (const auto deviceName : model->possibleDevices)
         {
             std::string deviceTypeName = getDeviceTypeName(deviceList.at(deviceName)->type);
-            containerName = model->name + "-" + deviceTypeName;
+            containerName = model->name + "_" + deviceTypeName;
             ModelProfile profile = queryModelProfile(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
@@ -388,7 +388,7 @@ void Controller::Scheduling()
                     std::string model_name = model->name.substr(pos1 + 1);
 
                     // CHECKME: what is the system FPS
-                    std::string containerName = model_name + "-" + model->deviceTypeName;
+                    std::string containerName = model_name + "_" + model->deviceTypeName;
                     std::cout << "model name in finding: " << model_name << std::endl;
                     // std::cout << "model device name: " << model->device << ", model device type name: " << model->deviceTypeName << std::endl;
                     // std::cout << "taskName: " << ctrl_containerLib[containerName].taskName << ", " << ctrl_containerLib[containerName].modelName << std::endl;
@@ -489,7 +489,7 @@ void Controller::Scheduling()
                 model_name = model_name.substr(pos + 1);
                 std::string model_device = downstream->device;
                 std::string model_device_typename = downstream->deviceTypeName;
-                std::string containerName = model_name + "-" + model_device_typename;
+                std::string containerName = model_name + "_" + model_device_typename;
                 model_lock.unlock();
                 client_lock.unlock();
 
