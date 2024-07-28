@@ -318,7 +318,7 @@ void Controller::basicGPUScheduling() {
 void Controller::ApplyScheduling() {
 //    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
     // collect all running containers by device and model name
-   while (true) { // TODO: REMOVE. ONLY FOR TESTING
+//    while (true) { // TODO: REMOVE. ONLY FOR TESTING
     std::vector<ContainerHandle *> new_containers;
     std::unique_lock lock_devices(devices.devicesMutex);
     std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
@@ -391,9 +391,7 @@ void Controller::ApplyScheduling() {
             if (candidate_size < model->numReplicas) {
                 // start additional containers
                 for (unsigned int i = candidate_size; i < model->numReplicas; i++) {
-                    std::cout << "bb" << std::endl;
                     ContainerHandle *container = TranslateToContainer(model, devices.list[model->device], i);
-                    std::cout << "bb-e" << std::endl;
                     if (container == nullptr) {
                         continue;
                     }
@@ -436,41 +434,41 @@ void Controller::ApplyScheduling() {
         }
     }
 
-    std::cout << "b3" << std::endl;
-    // debugging:
-    // if (ctrl_scheduledPipelines.list.empty()){
-    //     std::cout << "empty in the debugging before" << std::endl;
+    // std::cout << "b3" << std::endl;
+    // // debugging:
+    // // if (ctrl_scheduledPipelines.list.empty()){
+    // //     std::cout << "empty in the debugging before" << std::endl;
+    // // }
+    // int count = 0;
+    // for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+    //     // if (pipe->tk_pipelineModels.empty()) {
+    //     //     std::cout << "empty in the debugging" << std::endl;
+    //     // }
+    //     if (count == 2) {
+    //         break;
+    //     }
+    //     for (auto &model: pipe->tk_pipelineModels) {
+    //         // If its a datasource, we dont have to do it now
+    //         // datasource doesnt have upstreams
+    //         // and the downstreams will be set later
+    //         // std::cout << "test in debugging" << std::endl;
+    //         std::cout << "===========Debugging: ==========" <<  std::endl;
+    //         std::cout << "upstream of model: " << model->name << ", resolution: " << model->dimensions[0] << " " << model->dimensions[1] << std::endl;
+    //         for (auto us: model->upstreams) {
+    //             std::cout << us.first->name << ", ";
+    //         }
+    //         std::cout << std::endl;
+    //         std::cout << "dstream of model: " << model->name << std::endl;
+    //         for (auto ds: model->downstreams) {
+    //             std::cout << ds.first->name << ", ";
+    //         }
+    //         std::cout << std::endl;
+    //         std::cout << "==============================" << std::endl;
+    //     }
+    //     count++;
     // }
-    int count = 0;
-    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
-        // if (pipe->tk_pipelineModels.empty()) {
-        //     std::cout << "empty in the debugging" << std::endl;
-        // }
-        if (count == 2) {
-            break;
-        }
-        for (auto &model: pipe->tk_pipelineModels) {
-            // If its a datasource, we dont have to do it now
-            // datasource doesnt have upstreams
-            // and the downstreams will be set later
-            // std::cout << "test in debugging" << std::endl;
-            std::cout << "===========Debugging: ==========" <<  std::endl;
-            std::cout << "upstream of model: " << model->name << ", resolution: " << model->dimensions[0] << " " << model->dimensions[1] << std::endl;
-            for (auto us: model->upstreams) {
-                std::cout << us.first->name << ", ";
-            }
-            std::cout << std::endl;
-            std::cout << "dstream of model: " << model->name << std::endl;
-            for (auto ds: model->downstreams) {
-                std::cout << ds.first->name << ", ";
-            }
-            std::cout << std::endl;
-            std::cout << "==============================" << std::endl;
-        }
-        count++;
-    }
 
-    std::cout << "b4" << std::endl;
+    // std::cout << "b4" << std::endl;
 
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
@@ -504,7 +502,7 @@ void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-   } // TODO: REMOVE. ONLY FOR TESTING
+//    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
