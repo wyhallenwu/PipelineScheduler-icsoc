@@ -1,11 +1,11 @@
 #include "device_agent.h"
 
+ABSL_FLAG(std::string, name, "", "name of the device");
+ABSL_FLAG(std::string, device_type, "", "string that identifies the device type");
+ABSL_FLAG(std::string, controller_url, "", "string that identifies the controller url without port!");
 ABSL_FLAG(uint16_t, dev_verbose, 0, "Verbosity level of the Device Agent.");
 ABSL_FLAG(uint16_t, dev_loggingMode, 0, "Logging mode of the Device Agent. 0:stdout, 1:file, 2:both");
 ABSL_FLAG(std::string, dev_logPath, "../logs", "Path to the log dir for the Device Agent.");
-
-ABSL_FLAG(std::string, device_type, "", "string that identifies the device type");
-ABSL_FLAG(std::string, controller_url, "", "string that identifies the controller url without port!");
 ABSL_FLAG(uint16_t, dev_port_offset, 0, "port offset for starting the control communication");
 
 const int CONTAINER_BASE_PORT = 50001;
