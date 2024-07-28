@@ -488,7 +488,7 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     std::string subTaskName = model->name;
     std::string containerName = ctrl_systemName + "_" + model->name + "_" + std::to_string(i);
     // the name of the container type to look it up in the container library
-    std::string containerTypeName = modelName + "-" + getDeviceTypeName(device->type);
+    std::string containerTypeName = modelName + "_" + getDeviceTypeName(device->type);
     
     auto *container = new ContainerHandle{containerName,
                                           class_of_interest,
