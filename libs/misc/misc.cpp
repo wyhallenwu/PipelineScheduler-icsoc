@@ -264,8 +264,8 @@ NetworkProfile queryNetworkProfile(
     }
 
     if (taskName.find("yolo") != std::string::npos) {
-        std::vector<int> res = {320, 512, 608}; // The package sizes we have data
-        int foundRes = 0;;
+        std::vector<int> res = {320, 512}; // The package sizes we have data
+        int foundRes = 0;
         for (const auto &reso : res) {
             if (modelName.find(std::to_string(reso)) != std::string::npos) {
                 foundRes = reso;
@@ -1100,6 +1100,8 @@ std::map<ModelType, std::string> ModelTypeList = {
     {DataSource, "datasource"},
     {Sink, "sink"},
     {Yolov5n, "yolov5n"},
+    {Yolov5n320, "yolov5n320"},
+    {Yolov5n512, "yolov5n512"},
     {Yolov5s, "yolov5s"},
     {Yolov5m, "yolov5m"},
     {Yolov5nDsrc, "yolov5ndsrc"},
@@ -1119,6 +1121,10 @@ std::map<std::string, ModelType> ModelTypeReverseList = {
     {"dsrc", DataSource},
     {"sink", Sink},
     {"yolov5n", Yolov5n},
+    {"yolov5n320", Yolov5n320},
+    {"yolov5n512", Yolov5n512},
+    {"y5n320", Yolov5n320},
+    {"y5n512", Yolov5n512},
     {"y5n", Yolov5n},
     {"yolov5s", Yolov5s},
     {"y5s", Yolov5s},

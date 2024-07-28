@@ -318,7 +318,7 @@ void Controller::ApplyScheduling() {
 //    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
     // collect all running containers by device and model name
 //    while (true) { // TODO: REMOVE. ONLY FOR TESTING
-    if (ctrl_scheduledPipelines.list.empty()){
+    if (ctrl_scheduledPipelines.list.empty()) {
         std::cout << "empty pipeline in the beginning" << std::endl;
     }
     std::vector<ContainerHandle *> new_containers;
@@ -332,7 +332,7 @@ void Controller::ApplyScheduling() {
     // All the invalid will be stopped and removed.
     for (auto &[deviceName, device]: devices.list) {
         std::unique_lock lock_device(device->nodeHandleMutex);
-        for (auto &[modelName, model] : device->modelList) {
+        for (auto &[modelName, model]: device->modelList) {
             model->toBeRun = false;
         }
     }
@@ -369,7 +369,7 @@ void Controller::ApplyScheduling() {
             std::string modelFullName = model->name;
 
             // check if the pipeline already been scheduled once before
-            PipelineModel* pastModel = nullptr;
+            PipelineModel *pastModel = nullptr;
             if (ctrl_pastScheduledPipelines.list.find(pipeName) != ctrl_pastScheduledPipelines.list.end()) {
 
                 auto it = std::find_if(ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.begin(),
@@ -380,7 +380,7 @@ void Controller::ApplyScheduling() {
                 // if the model is found in the past scheduled pipelines, its containers can be reused
                 if (it != ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.end()) {
                     pastModel = *it;
-                    std::vector<ContainerHandle*> pastModelContainers = pastModel->task->tk_subTasks[model->name];
+                    std::vector<ContainerHandle *> pastModelContainers = pastModel->task->tk_subTasks[model->name];
                     for (auto container: pastModelContainers) {
                         if (container->device_agent->name == model->device) {
                             model->task->tk_subTasks[model->name].push_back(container);
@@ -473,7 +473,7 @@ void Controller::ApplyScheduling() {
             // }
             // std::cout << std::endl;
             // std::cout << "==============================" << std::endl;
-            
+
             if (model->name.find("datasource") != std::string::npos) {
                 std::cout << "datasource name: " << model->datasourceName;
                 if (model->downstreams.size() > 1) {
@@ -537,7 +537,7 @@ bool CheckMergable(const std::string &m) {
 
 ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i) {
     if (model->name.find("datasource") != std::string::npos) {
-        for (auto &[downstream, coi] : model->downstreams) {
+        for (auto &[downstream, coi]: model->downstreams) {
             if ((downstream->name.find("yolov5n") != std::string::npos ||
                  downstream->name.find("retina1face") != std::string::npos) &&
                 downstream->device != "server") {
@@ -548,7 +548,8 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     std::string modelName = splitString(model->name, "_").back();
 
     int class_of_interest = -1;
-    if (!model->upstreams.empty() && model->name.find("datasource") == std::string::npos && model->name.find("dsrc") == std::string::npos) {
+    if (!model->upstreams.empty() && model->name.find("datasource") == std::string::npos &&
+        model->name.find("dsrc") == std::string::npos) {
         class_of_interest = model->upstreams[0].second;
     }
 
@@ -571,12 +572,15 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
                                           device,
                                           model->task,
                                           model};
-    
-    if (model->name.find("datasource") != std::string::npos ||
-        model->name.find("yolov5ndsrc") != std::string::npos || 
-        model->name.find("retina1facedsrc") != std::string::npos) {
+
+    if (subTaskName.find("datasource") != std::string::npos ||
+        subTaskName.find("dsrc") != std::string::npos) {
         container->dimensions = ctrl_containerLib[containerTypeName].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0].get<std::vector<int>>();
-    } else if (model->name.find("sink") == std::string::npos) {
+    } else if (subTaskName.find("320") != std::string::npos) {
+        container->dimensions = {3, 320, 320};
+    } else if (subTaskName.find("512") != std::string::npos) {
+        container->dimensions = {3, 512, 512};
+    } else if (subTaskName.find("sink") == std::string::npos) {
         container->dimensions = ctrl_containerLib[containerTypeName].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
     }
 
@@ -1486,7 +1490,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             gender->downstreams.push_back({sink, -1});
             arcface->downstreams.push_back({sink, -1});
 
-            if (!sourceName.empty()) {         
+            if (!sourceName.empty()) {
                 retina1face->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][retina1face->name];
                 emotionnet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][emotionnet->name];
                 age->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][age->name];
@@ -1501,10 +1505,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
     }
 }
 
-PipelineModelListType deepCopyPipelineModelList(const PipelineModelListType& original) {
+PipelineModelListType deepCopyPipelineModelList(const PipelineModelListType &original) {
     PipelineModelListType newList;
     newList.reserve(original.size());
-    for (const auto* model : original) {
+    for (const auto *model: original) {
         newList.push_back(new PipelineModel(*model));
     }
     return newList;

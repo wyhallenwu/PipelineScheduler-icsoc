@@ -207,7 +207,7 @@ void Controller::Scheduling()
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto untrimmedTaskList = ctrl_unscheduledPipelines.getMap();
         auto deviceList = devices.getMap();
-        if (untrimmedTaskList.size() < 4)
+        if (untrimmedTaskList.size() < 1)
         {
             continue;
         }
@@ -227,7 +227,7 @@ void Controller::Scheduling()
         std::cout << "======================================================" << std::endl;
         std::map<std::string, TaskHandle *> taskList = {};
 
-        std::vector<std::string> taskTypes = {"traffic", "people"};
+        std::vector<std::string> taskTypes = {"traffic"};
         for (auto taskType : taskTypes)
         {
             std::vector<std::string> taskNameToRemove;
