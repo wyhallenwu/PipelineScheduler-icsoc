@@ -23,23 +23,11 @@
         "runCommand": "./Container_Yolov5",
         "modelPath": "../models/yolov5n_320_dynamic_nms_3090_fp32_16_1.engine"
     },
-    "yolov5n416_server": {
-        "taskName": "yolov5",
-        "templateConfigPath": "../jsons/yolov5.json",
-        "runCommand": "./Container_Yolov5",
-        "modelPath": "../models/yolov5n_416_dynamic_nms_3090_fp32_16_1.engine"
-    },
     "yolov5n512_server": {
         "taskName": "yolov5",
         "templateConfigPath": "../jsons/yolov5.json",
         "runCommand": "./Container_Yolov5",
         "modelPath": "../models/yolov5n_512_dynamic_nms_3090_fp32_16_1.engine"
-    },
-    "yolov5n608_server": {
-        "taskName": "yolov5",
-        "templateConfigPath": "../jsons/yolov5.json",
-        "runCommand": "./Container_Yolov5",
-        "modelPath": "../models/yolov5n_608_dynamic_nms_3090_fp32_16_1.engine"
     },
     "yolov5s_server": {
         "taskName": "yolov5",

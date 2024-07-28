@@ -960,6 +960,7 @@ std::string abbreviate(const std::string &keyphrase, const std::string delimiter
     std::vector<std::string> words = splitString(keyphrase, delimiter);
     std::string abbr = "";
     for (const auto &word : words) {
+        // TODO: inspect potentially dead code in if statement
         if (word.find("-") != std::string::npos) {
             abbr += abbreviate(word, "-");
             if (word != words.back()) {
@@ -1083,6 +1084,8 @@ std::map<ModelType, std::string> ModelTypeList = {
     {DataSource, "datasource"},
     {Sink, "sink"},
     {Yolov5n, "yolov5n"},
+    {Yolov5n320, "yolov5n320"},
+    {Yolov5n512, "yolov5n512"},
     {Yolov5s, "yolov5s"},
     {Yolov5m, "yolov5m"},
     {Yolov5nDsrc, "yolov5ndsrc"},
@@ -1103,6 +1106,10 @@ std::map<std::string, ModelType> ModelTypeReverseList = {
     {"sink", Sink},
     {"yolov5n", Yolov5n},
     {"y5n", Yolov5n},
+    {"yolov5n320", Yolov5n320},
+    {"y5n320", Yolov5n320},
+    {"yolov5n512", Yolov5n512},
+    {"y5n512", Yolov5n512},
     {"yolov5s", Yolov5s},
     {"y5s", Yolov5s},
     {"yolov5m", Yolov5m},
@@ -1147,13 +1154,13 @@ bool isFileEmpty(const std::string& filePath) {
 }
 
 std::string getContainerName(const std::string& deviceTypeName, const std::string& modelName) {
-    return modelName + "-" + deviceTypeName;
+    return modelName + "_" + deviceTypeName;
 }
 
 std::string getContainerName(const SystemDeviceType& deviceType, const ModelType& modelType) {
     std::string deviceAbbr = SystemDeviceTypeList.at(deviceType);
     std::string modelAbbr = ModelTypeList.at(modelType);
-    return modelAbbr + "-" + deviceAbbr;
+    return modelAbbr + "_" + deviceAbbr;
 }
 
 std::string getDeviceTypeAbbr(const SystemDeviceType &deviceType) {

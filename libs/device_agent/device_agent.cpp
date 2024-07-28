@@ -96,7 +96,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             dev_logger
     );
 
-    dev_containerLib = getContainerLib(abbreviate(SystemDeviceTypeList[type]));
+    dev_containerLib = getContainerLib(SystemDeviceTypeList[type]);
     dev_metricsServerConfigs.schema = abbreviate(dev_experiment_name + "_" + dev_system_name);
     dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_hw";
     dev_networkTableName = dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_netw";
@@ -300,7 +300,8 @@ bool DeviceAgent::CreateContainer(
 ) {
     std::string modelName = getContainerName(dev_type, model);
     try {
-        std::string cont_name = abbreviate(pipe_name + "_" + ModelTypeList[model] + "_" + std::to_string(replica_id));
+        std::string cont_name = dev_experiment_name + "_" + dev_system_name + "_" + pipe_name + "_" +
+                                ModelTypeList[model] + "_" + std::to_string(replica_id);
         std::cout << "Creating container: " << cont_name << std::endl;
         std::string executable = dev_containerLib[modelName].runCommand;
         json start_config;
