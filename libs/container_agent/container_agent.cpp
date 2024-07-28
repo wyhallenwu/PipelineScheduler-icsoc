@@ -1,6 +1,5 @@
 #include "container_agent.h"
 
-ABSL_FLAG(std::string, name, "", "base name of container");
 ABSL_FLAG(std::optional<std::string>, json, std::nullopt, "configurations for microservices as json");
 ABSL_FLAG(std::optional<std::string>, json_path, std::nullopt, "json for configuration inside a file");
 ABSL_FLAG(std::optional<std::string>, trt_json, std::nullopt, "optional json for TRTConfiguration");
@@ -36,7 +35,6 @@ void addProfileConfigs(json &msvcConfigs, const json &profileConfigs) {
 json loadRunArgs(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
 
-    std::string name = absl::GetFlag(FLAGS_name);
     int8_t device = (int8_t) absl::GetFlag(FLAGS_device);
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     uint16_t loggingMode = absl::GetFlag(FLAGS_logging_mode);
@@ -47,6 +45,7 @@ json loadRunArgs(int argc, char **argv) {
 
     std::tuple<json, json> configs = msvcconfigs::loadJson();
     json containerConfigs = std::get<0>(configs);
+    std::string name = containerConfigs["cont_name"];
     json profilingConfigs = std::get<1>(configs);
 
     BatchSizeType minBatch = profilingConfigs.at("profile_minBatch");
@@ -83,7 +82,6 @@ json loadRunArgs(int argc, char **argv) {
     );
 
     containerConfigs["cont_device"] = device;
-    containerConfigs["cont_name"] = name;
     containerConfigs["cont_logLevel"] = logLevel;
     containerConfigs["cont_loggingMode"] = loggingMode;
     containerConfigs["cont_logPath"] = logPath;
@@ -755,11 +753,16 @@ void ContainerAgent::collectRuntimeMetrics() {
                 cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
     }
 
-    while (run) {
-        if (cont_taskName == "dsrc" || cont_taskName == "datasource") {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-            continue;
+    if (cont_msvcsList[0]->msvc_type == MicroserviceType::DataReader) {
+        while (run) {
+            if (cont_msvcsList[0]->STOP_THREADS) {
+                run = false;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+    }
+
+    while (run) {
         bool hwMetricsScraped = false;
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
@@ -809,12 +812,8 @@ void ContainerAgent::collectRuntimeMetrics() {
                     spdlog::get("container_agent")->trace("{0:s} pushed hardware metrics to the database.", cont_name);
                 }
                 if (cont_msvcsList[0]->STOP_THREADS) {
-                    // Summarizing the profiling results into a single table
-                    // updateProfileTable();
-                    for (auto msvc: cont_msvcsList) {
-                        msvc->STOP_THREADS = true;
-                    }
                     run = false;
+                    continue;
                 }
             }
 
@@ -979,7 +978,9 @@ void ContainerAgent::collectRuntimeMetrics() {
         spdlog::get("container_agent")->trace("{0:s} Container Agent's Metric Reporter sleeps for {1:d} milliseconds.", cont_name, sleepPeriod.count());
         std::this_thread::sleep_for(sleepPeriod);
     }
-
+    for (auto msvc: cont_msvcsList) {
+        msvc->stopThread();
+    }
 }
 
 void ContainerAgent::updateProfileTable() {

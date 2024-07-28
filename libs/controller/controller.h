@@ -56,6 +56,25 @@ struct GPUPortion {
     GPUPortion* prev = nullptr;
 };
 
+struct GPUHandle {
+    std::string type;
+    std::string hostName;
+    std::uint16_t number;
+    MemUsageType currentMemUsage = 0;
+    MemUsageType memLimit = 9999999; // MB
+    std::uint16_t numLanes;
+
+    std::map<std::string, ContainerHandle *> containers = {};
+
+    GPUHandle() = default;
+
+    GPUHandle(const std::string &type, const std::string &hostName, std::uint16_t number, MemUsageType memLimit, std::uint16_t numLanes)
+        : type(type), hostName(hostName), number(number), memLimit(memLimit), numLanes(numLanes) {}
+
+    bool addContainer(ContainerHandle *container);
+    bool removeContainer(ContainerHandle *container);
+};
+
 struct GPUPortionList {
     GPUPortion *head = nullptr;
     std::vector<GPUPortion *> list;
@@ -79,6 +98,8 @@ struct NodeHandle {
     std::map<std::string, ContainerHandle *> containers;
     // The latest network entries to determine the network conditions and latencies of transferring data
     std::map<std::string, NetworkEntryType> latestNetworkEntries = {};
+    // GPU Handle;
+    std::vector<GPUHandle*> gpuHandles;
     //
     uint8_t numGPULanes;
     //
@@ -209,10 +230,13 @@ struct ContainerHandle {
     uint64_t startTime;
     //
     uint64_t endTime;
+    // GPU Handle
+    GPUHandle *gpuHandle = nullptr;
     //
     GPUPortion *executionLane = nullptr;
     // points to the pipeline model that this container is part of
     PipelineModel *pipelineModel = nullptr;
+
     mutable std::mutex containerHandleMutex;
 
     ContainerHandle() = default;
@@ -288,6 +312,7 @@ struct ContainerHandle {
         expectedThroughput = other.expectedThroughput;
         startTime = other.startTime;
         endTime = other.endTime;
+        gpuHandle = other.gpuHandle;
         executionLane = other.executionLane;
         pipelineModel = other.pipelineModel;
     }
@@ -327,11 +352,14 @@ struct ContainerHandle {
             expectedThroughput = other.expectedThroughput;
             startTime = other.startTime;
             endTime = other.endTime;
+            gpuHandle = other.gpuHandle;
             executionLane = other.executionLane;
             pipelineModel = other.pipelineModel;
         }
         return *this;
     }
+
+    MemUsageType getExpectedTotalMemUsage() const;
 };
 
 struct PipelineModel {
@@ -752,6 +780,8 @@ private:
     bool modelTemporalScheduling(PipelineModel *pipelineModel);
     void temporalScheduling();
 
+    void basicGPUScheduling();
+
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "", const std::string &streamName = "");
 
     void checkNetworkConditions();
@@ -800,6 +830,8 @@ private:
         SystemInfo reply;
         grpc::ServerAsyncResponseWriter<SystemInfo> responder;
     };
+
+    void initialiseGPU(NodeHandle *node);
 
     class DummyDataRequestHandler : public RequestHandler {
     public:
