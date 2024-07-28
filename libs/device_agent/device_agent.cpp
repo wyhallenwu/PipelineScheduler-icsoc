@@ -610,7 +610,6 @@ void DeviceAgent::StopContainerRequestHandler::Proceed() {
             DeviceAgent::StopContainer(device_agent->containers[request.name()], request.forced());
             unsigned int pid = device_agent->containers[request.name()].pid;
             device_agent->containers.erase(request.name());
-            device_agent->dev_profiler->removePid(pid);
         }
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
