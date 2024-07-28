@@ -99,7 +99,7 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
 // ============================================================================================================================================ //
 
 bool GPUHandle::addContainer(ContainerHandle *container) {
-    if (container->name.find("datasource") != std::string::npos || 
+    if (container->name.find("datasource") != std::string::npos ||
         container->name.find("sink") != std::string::npos) {
         containers.insert({container->name, container});
         container->gpuHandle = this;
@@ -116,7 +116,7 @@ bool GPUHandle::addContainer(ContainerHandle *container) {
             container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage +
             container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].rssMemUsage;
     }
-    
+
     if (currentMemUsage > memLimit) {
         spdlog::get("container_agent")->error("Container {} cannot be assigned to GPU {} of {}"
                                             "due to memory limit", container->name, number, hostName);
@@ -488,9 +488,10 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     }
 
     std::string subTaskName = model->name;
-    std::string containerName = ctrl_systemName + "_" + model->name + "_" + std::to_string(i);
+    std::string containerName = ctrl_experimentName + "_" + ctrl_systemName + "_" + model->task->tk_name + "_" +
+            model->name + "_" + std::to_string(i);
     // the name of the container type to look it up in the container library
-    std::string containerTypeName = modelName + "-" + getDeviceTypeName(device->type);
+    std::string containerTypeName = modelName + "_" + getDeviceTypeName(device->type);
     
     auto *container = new ContainerHandle{containerName,
                                           class_of_interest,
@@ -541,7 +542,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     ClientContext context;
     EmptyMessage reply;
     Status status;
-    std::string pipelineName = splitString(container->name, "_").front();
+    std::string pipelineName = splitString(container->name, "_")[2];
     request.set_pipeline_name(pipelineName);
     request.set_model(container->model);
     request.set_model_file(container->model_file);

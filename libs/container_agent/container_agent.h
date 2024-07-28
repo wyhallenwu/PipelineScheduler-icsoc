@@ -21,7 +21,6 @@
 #include "indevicecommunication.grpc.pb.h"
 #include "controller.h"
 
-ABSL_DECLARE_FLAG(std::string, name);
 ABSL_DECLARE_FLAG(std::optional<std::string>, json);
 ABSL_DECLARE_FLAG(std::optional<std::string>, json_path);
 ABSL_DECLARE_FLAG(std::optional<std::string>, trt_json);
