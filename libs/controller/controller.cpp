@@ -108,14 +108,7 @@ bool GPUHandle::addContainer(ContainerHandle *container) {
     }
     MemUsageType potentialMemUsage;
     BatchSizeType batchSize = container->pipelineModel->batchSize;
-    if (container->device_agent->type == SystemDeviceType::Server) {
-        potentialMemUsage = currentMemUsage +
-            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage;
-    } else {
-        potentialMemUsage = currentMemUsage +
-            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage +
-            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].rssMemUsage;
-    }
+    potentialMemUsage = currentMemUsage + container->getExpectedTotalMemUsage();
     
     if (currentMemUsage > memLimit) {
         spdlog::get("container_agent")->error("Container {} cannot be assigned to GPU {} of {}"
@@ -137,12 +130,7 @@ bool GPUHandle::removeContainer(ContainerHandle *container) {
     containers.erase(container->name);
     container->gpuHandle = nullptr;
     BatchSizeType batchSize = container->pipelineModel->batchSize;
-    if (container->device_agent->type == SystemDeviceType::Server) {
-        currentMemUsage -= container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage;
-    } else {
-        currentMemUsage -= container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].gpuMemUsage +
-            container->pipelineModel->processProfiles.at(hostName).batchInfer[batchSize].rssMemUsage;
-    }
+    currentMemUsage -= container->getExpectedTotalMemUsage();
 
     spdlog::get("container_agent")->info("Container {} successfully removed from GPU {} of {}", container->name, number, hostName);
     return true;
@@ -254,6 +242,15 @@ Controller::~Controller()
 // ============================================================================================================================================= //
 // ============================================================================================================================================= //
 // ============================================================================================================================================= //
+
+MemUsageType ContainerHandle::getExpectedTotalMemUsage() const {
+    if (device_agent->name == "server") {
+        return pipelineModel->processProfiles.at("server").batchInfer[pipelineModel->batchSize].gpuMemUsage / 1000;
+    }
+    std::string deviceTypeName = getDeviceTypeName(device_agent->type);
+    return (pipelineModel->processProfiles.at(deviceTypeName).batchInfer[pipelineModel->batchSize].gpuMemUsage +
+            pipelineModel->processProfiles.at(deviceTypeName).batchInfer[pipelineModel->batchSize].rssMemUsage) / 1000;
+}
 
 bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
