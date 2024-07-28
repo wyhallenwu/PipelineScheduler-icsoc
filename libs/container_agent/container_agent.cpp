@@ -1,6 +1,5 @@
 #include "container_agent.h"
 
-ABSL_FLAG(std::string, name, "", "base name of container");
 ABSL_FLAG(std::optional<std::string>, json, std::nullopt, "configurations for microservices as json");
 ABSL_FLAG(std::optional<std::string>, json_path, std::nullopt, "json for configuration inside a file");
 ABSL_FLAG(std::optional<std::string>, trt_json, std::nullopt, "optional json for TRTConfiguration");
@@ -36,7 +35,6 @@ void addProfileConfigs(json &msvcConfigs, const json &profileConfigs) {
 json loadRunArgs(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
 
-    std::string name = absl::GetFlag(FLAGS_name);
     int8_t device = (int8_t) absl::GetFlag(FLAGS_device);
     uint16_t logLevel = absl::GetFlag(FLAGS_verbose);
     uint16_t loggingMode = absl::GetFlag(FLAGS_logging_mode);
@@ -47,6 +45,7 @@ json loadRunArgs(int argc, char **argv) {
 
     std::tuple<json, json> configs = msvcconfigs::loadJson();
     json containerConfigs = std::get<0>(configs);
+    std::string name = containerConfigs["cont_name"];
     json profilingConfigs = std::get<1>(configs);
 
     BatchSizeType minBatch = profilingConfigs.at("profile_minBatch");
@@ -83,7 +82,6 @@ json loadRunArgs(int argc, char **argv) {
     );
 
     containerConfigs["cont_device"] = device;
-    containerConfigs["cont_name"] = name;
     containerConfigs["cont_logLevel"] = logLevel;
     containerConfigs["cont_loggingMode"] = loggingMode;
     containerConfigs["cont_logPath"] = logPath;
