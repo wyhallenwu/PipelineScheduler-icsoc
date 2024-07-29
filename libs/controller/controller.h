@@ -249,8 +249,8 @@ struct ContainerHandle {
       downstreams(downstreams),
       upstreams(upstreams),
       queueSizes(queueSizes),
-      timeBudgetLeft(timeBudgetLeft),
-      pipelineModel(pipelineModel) {}
+      pipelineModel(pipelineModel),
+      timeBudgetLeft(timeBudgetLeft) {}
     
     // Copy constructor
     ContainerHandle(const ContainerHandle& other) {
