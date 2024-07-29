@@ -9,6 +9,9 @@ ABSL_FLAG(std::string, log_dir, "../logs", "Log path for the container");
 ABSL_FLAG(uint16_t, port, 0, "receiving port for the sink");
 ABSL_FLAG(uint16_t, verbose, 2, "verbose level 0:trace, 1:debug, 2:info, 3:warn, 4:error, 5:critical, 6:off");
 ABSL_FLAG(uint16_t, logging_mode, 0, "0:stdout, 1:file, 2:both");
+//dummy flags to make command sync with other containers
+ABSL_FLAG(std::optional<int16_t>, device, 0, "UNUSED FOR SINK - NO EFFECT");
+ABSL_FLAG(std::optional<uint16_t>, port_offset, 0, "UNUSED FOR SINK - NO EFFECT");
 
 int main(int argc, char **argv) {
     absl::ParseCommandLine(argc, argv);
