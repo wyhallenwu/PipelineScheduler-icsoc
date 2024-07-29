@@ -312,7 +312,7 @@ void Controller::basicGPUScheduling() {
                     if (container->device_agent->name != device.first) {
                         continue;
                     }
-                    if (container->name.find("datasource") != std::string::npos || 
+                    if (container->name.find("datasource") != std::string::npos ||
                         container->name.find("sink") != std::string::npos) {
                         continue;
                     }
@@ -485,13 +485,6 @@ void Controller::ApplyScheduling() {
         }
     }
 
-    // Basic GPU scheduling
-    if (ctrl_systemName != "ppp") {
-        basicGPUScheduling();
-    }
-
-
-
     std::cout << "b3" << std::endl;
     // debugging:
     // if (ctrl_scheduledPipelines.list.empty()){
@@ -541,6 +534,13 @@ void Controller::ApplyScheduling() {
     std::cout << "==================== End ApplySchedule =====================" << std::endl;
 
     std::cout << "b4" << std::endl;
+
+
+    // Basic GPU scheduling
+    if (ctrl_systemName != "ppp") {
+        basicGPUScheduling();
+    }
+
 
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {

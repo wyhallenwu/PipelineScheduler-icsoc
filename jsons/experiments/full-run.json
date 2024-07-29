@@ -1,6 +1,6 @@
 {
     "expName": "full",
-    "system_fps": 30,
+    "system_fps": 15,
     "systemName": "ppp",
     "runtime": 60,
     "port_offset": 0,
