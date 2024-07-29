@@ -10,7 +10,7 @@ void Controller::initiateGPULanes(NodeHandle &node) {
     if (node.name != "server") {
         return;
     }
-    auto deviceList = devices.getMap();
+    auto deviceList = devices.list;
     
     if (deviceList.find(node.name) == deviceList.end()) {
         spdlog::get("container_agent")->error("Device {0:s} is not found in the device list", node.name);
@@ -21,6 +21,8 @@ void Controller::initiateGPULanes(NodeHandle &node) {
 
     for (auto i = 0; i < node.numGPULanes; i++) {
         node.gpuLanes.push_back(new GPULane{});
+        node.gpuLanes.back()->laneNum = i;
+        node.gpuLanes.back()->dutyCycle = 0;
         // Initially the number of portions is the number of lanes
         node.freeGPUPortions.list.push_back(new GPUPortion{});
         node.freeGPUPortions.list.back()->lane = node.gpuLanes.back();
@@ -34,100 +36,6 @@ void Controller::initiateGPULanes(NodeHandle &node) {
     }
 }
 
-void Controller::insertFreeGPUPortion(GPUPortion*& head, GPUPortion *freePortion) {
-    if (head == nullptr) {
-        head = freePortion;
-        return;
-    }
-    GPUPortion *curr = head;
-    while (true) {
-        if (curr == head && (curr->end - curr->start) < (freePortion->end - freePortion->start)) {
-            freePortion->next = curr;
-            freePortion->prev = curr->prev;
-            curr->prev = freePortion;
-            freePortion->prev->next = freePortion;
-            head = freePortion;
-            return;
-        } else if (curr->next == nullptr) {
-            curr->next = freePortion;
-            freePortion->prev = curr;
-            return;
-        } else if ((curr->end - curr->start) < (freePortion->end - freePortion->start) && 
-                   (curr->prev->end - curr->prev->start) >= (freePortion->end - freePortion->start)) {
-            
-            freePortion->next = curr;
-            freePortion->prev = curr->prev;
-
-            curr->prev = freePortion;
-            freePortion->prev->next = freePortion;
-            return;
-        }
-
-        curr = curr->next;
-    }
-}
-
-GPUPortion* Controller::findFreePortionForInsertion(GPUPortion *head, GPUPortion *scheduledPortion) {
-    GPUPortion *curr = head;
-    while (true) {
-        if (curr->start <= scheduledPortion->start && curr->end >= scheduledPortion->end) {
-            return curr;
-        }
-        if (curr->next == nullptr) {
-            return nullptr;
-        }
-        curr = curr->next;
-    }
-}
-
-/**
- * @brief 
- * 
- * @param node 
- * @param scheduledPortion 
- * @param toBeDividedFreePortion 
- */
-std::pair<GPUPortion *, GPUPortion *> Controller::insertUsedGPUPortion(GPUPortion *head, GPUPortion *scheduledPortion, GPUPortion *toBeDividedFreePortion) {
-    // new portion on the left
-    uint64_t newStart = toBeDividedFreePortion->start;
-    uint64_t newEnd = scheduledPortion->end;
-
-    GPUPortion* leftPortion = nullptr;
-    GPUPortion* rightPortion = nullptr;
-    // Create a new portion on the left only if it is large enough
-    if (newEnd - newStart >= MINIMUM_PORTION_SIZE) {
-        leftPortion = new GPUPortion{};
-        leftPortion->start = newEnd;
-        leftPortion->end = newStart;
-        leftPortion->lane = scheduledPortion->lane;
-    }
-
-    // new portion on the right
-    newStart = scheduledPortion->start;
-    newEnd = toBeDividedFreePortion->end;
-    // Create a new portion on the right only if it is large enough
-    if (newEnd - newStart >= MINIMUM_PORTION_SIZE) {
-        rightPortion = new GPUPortion{};
-        rightPortion->start = newStart;
-        rightPortion->end = newEnd;
-        rightPortion->lane = scheduledPortion->lane;
-    }
-
-    // Delete the old portion as it has been divided into two new free portions and an occupied portion
-    toBeDividedFreePortion->prev->next = toBeDividedFreePortion->next;
-    toBeDividedFreePortion->next->prev = toBeDividedFreePortion->prev;
-    delete toBeDividedFreePortion;
-
-    if (leftPortion != nullptr) {
-        insertFreeGPUPortion(head, leftPortion);
-    }
-
-    if (rightPortion != nullptr) {
-        insertFreeGPUPortion(head, rightPortion);
-    }
-
-    return {leftPortion, rightPortion};
-}
 
 // ==============================================================================================================================================
 // ==============================================================================================================================================
@@ -249,7 +157,7 @@ void Controller::Scheduling() {
         }
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto taskList = ctrl_unscheduledPipelines.getMap();
-        if (taskList.size() < 5) { // TODO: Remove this
+        if (taskList.size() < 4) { // TODO: Remove this
             continue;
         }
         if (taskList.empty()) {
@@ -258,10 +166,10 @@ void Controller::Scheduling() {
 
         for (auto &[taskName, taskHandle]: taskList) {
             queryingProfiles(taskHandle);
-            getInitialBatchSizes(taskHandle, taskHandle->tk_slo);
-            shiftModelToEdge(taskHandle->tk_pipelineModels, taskHandle->tk_pipelineModels.front(), taskHandle->tk_slo, taskHandle->tk_pipelineModels.front()->device);
+            getInitialBatchSizes(taskHandle, taskHandle->tk_slo / 2);
+            shiftModelToEdge(taskHandle->tk_pipelineModels, taskHandle->tk_pipelineModels.front(), taskHandle->tk_slo / 2, taskHandle->tk_pipelineModels.front()->device);
             for (auto &model: taskHandle->tk_pipelineModels) {
-                model->name = taskName + "-" + model->name;
+                model->name = taskName + "_" + model->name;
             }
             taskHandle->tk_newlyAdded = false;
         }
@@ -278,7 +186,7 @@ void Controller::Scheduling() {
                 }
             }
         }
-        // temporalScheduling();
+        estimatePipelineTiming();
         ctrl_scheduledPipelines = ctrl_mergedPipelines;
         ApplyScheduling();
         schedulingSW.stop();
@@ -287,26 +195,192 @@ void Controller::Scheduling() {
     }
 }
 
+/**
+ * @brief insert the newly created free portion into the sorted list of free portions
+ * Since the list is sorted, we can insert the new portion by traversing the list from the head
+ * Complexity: O(n)
+ * 
+ * @param head 
+ * @param freePortion 
+ */
+void Controller::insertFreeGPUPortion(GPUPortionList &portionList, GPUPortion *freePortion) {
+    auto &head = portionList.head;
+    if (head == nullptr) {
+        head = freePortion;
+        return;
+    }
+    GPUPortion *curr = head;
+    auto it = portionList.list.begin();
+    while (true) {
+        if ((curr->end - curr->start) >= (freePortion->end - freePortion->start)) {
+            if (curr == head) {
+                freePortion->next = curr;
+                curr->prev = freePortion;
+                head = freePortion;
+                portionList.list.insert(it, freePortion);
+                return;
+            } else if ((curr->prev->end - curr->prev->start) < (freePortion->end - freePortion->start)) {
+                freePortion->next = curr;
+                freePortion->prev = curr->prev;
+                curr->prev = freePortion;
+                freePortion->prev->next = freePortion;
+                head = freePortion;
+                portionList.list.insert(it, freePortion);
+                return;
+            }
+        } else {
+            if (curr->next == nullptr) {
+                curr->next = freePortion;
+                freePortion->prev = curr;
+                portionList.list.push_back(freePortion);
+                return;
+            } else if ((curr->next->end - curr->next->start) > (freePortion->end - freePortion->start)) {
+                freePortion->next = curr->next;
+                freePortion->prev = curr;
+                curr->next = freePortion;
+                freePortion->next->prev = freePortion;
+                portionList.list.insert(it, freePortion);
+                return;
+            } else {
+                curr = curr->next;
+            }
+        }
+        it++;
+    }
+}
+
+GPUPortion* Controller::findFreePortionForInsertion(GPUPortionList &portionList, ContainerHandle *container) {
+    auto &head = portionList.head;
+    GPUPortion *curr = head;
+    while (true) {
+        auto laneDutyCycle = curr->lane->dutyCycle;
+        if (curr->start <= container->startTime && 
+            curr->end >= container->endTime &&
+            container->pipelineModel->localDutyCycle >= laneDutyCycle) {
+            return curr;
+        }
+        if (curr->next == nullptr) {
+            return nullptr;
+        }
+        curr = curr->next;
+    }
+}
+
+/**
+ * @brief 
+ * 
+ * @param node 
+ * @param scheduledPortion 
+ * @param toBeDividedFreePortion 
+ */
+std::pair<GPUPortion *, GPUPortion *> Controller::insertUsedGPUPortion(GPUPortionList &portionList, ContainerHandle *container, GPUPortion *toBeDividedFreePortion) {
+    auto &head = portionList.head;
+    // new portion on the left
+    uint64_t newStart = toBeDividedFreePortion->start;
+    uint64_t newEnd = container->startTime;
+
+    GPUPortion* leftPortion = nullptr;
+    GPUPortion* rightPortion = nullptr;
+    // Create a new portion on the left only if it is large enough
+    if (newEnd - newStart >= MINIMUM_PORTION_SIZE) {
+        leftPortion = new GPUPortion{};
+        leftPortion->start = newStart;
+        leftPortion->end = newEnd;
+        leftPortion->lane = toBeDividedFreePortion->lane;
+    }
+
+    // new portion on the right
+    newStart = container->endTime;
+    auto laneDutyCycle = toBeDividedFreePortion->lane->dutyCycle;
+    if (laneDutyCycle == 0) {
+        if (container->pipelineModel->localDutyCycle == 0) {
+            throw std::runtime_error("Duty cycle of the container 0");
+        }
+        int64_t slack = container->pipelineModel->task->tk_slo - container->pipelineModel->localDutyCycle * 2;
+        if (slack < 0) {
+            throw std::runtime_error("Slack is negative. Duty cycle is larger than the SLO");
+        }
+        laneDutyCycle = container->pipelineModel->localDutyCycle;
+        newEnd = container->pipelineModel->localDutyCycle;
+    } else {
+        newEnd = toBeDividedFreePortion->end;
+    }
+    // Create a new portion on the right only if it is large enough
+    if (newEnd - newStart >= MINIMUM_PORTION_SIZE) {
+        rightPortion = new GPUPortion{};
+        rightPortion->start = newStart;
+        rightPortion->end = newEnd;
+        rightPortion->lane = toBeDividedFreePortion->lane;
+    }
+
+    toBeDividedFreePortion->lane->dutyCycle = laneDutyCycle;
+    auto it = std::find(portionList.list.begin(), portionList.list.end(), toBeDividedFreePortion);
+    portionList.list.erase(it);
+
+    // Delete the old portion as it has been divided into two new free portions and an occupied portion
+    if (toBeDividedFreePortion->prev != nullptr) {
+        toBeDividedFreePortion->prev->next = toBeDividedFreePortion->next;
+    } else {
+        head = toBeDividedFreePortion->next;
+    }
+    if (toBeDividedFreePortion->next != nullptr) {
+        toBeDividedFreePortion->next->prev = toBeDividedFreePortion->prev;
+    }
+    delete toBeDividedFreePortion;
+
+    if (leftPortion != nullptr) {
+        insertFreeGPUPortion(portionList, leftPortion);
+    }
+
+    if (rightPortion != nullptr) {
+        insertFreeGPUPortion(portionList, rightPortion);
+    }
+
+    return {leftPortion, rightPortion};
+}
+
 bool Controller::containerTemporalScheduling(ContainerHandle *container) {
+    auto portion = findFreePortionForInsertion(devices.list["server"]->freeGPUPortions, container);
+
+    if (portion == nullptr) {
+        spdlog::get("container_agent")->error("No free portion found for container {0:s}", container->name);
+        return false;
+    }
+    auto newPortions = insertUsedGPUPortion(devices.list["server"]->freeGPUPortions, container, portion);
+
 
 }
 
 bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel) {
-    if (pipelineModel->name.find("datasource") != std::string::npos) {
-        return true;
+    if (pipelineModel->name.find("datasource") == std::string::npos &&
+        pipelineModel->name.find("dsrc") == std::string::npos &&
+        pipelineModel->name.find("sink") == std::string::npos) {
+        for (auto &container : pipelineModel->task->tk_subTasks[pipelineModel->name]) {
+            container->startTime = pipelineModel->startTime;
+            container->endTime = pipelineModel->endTime;
+            container->batchingDeadline = pipelineModel->batchingDeadline;
+            containerTemporalScheduling(container);
+        }    
     }
-    for (auto container : pipelineModel->manifestations) {
-        containerTemporalScheduling(container);
-    }
+    
     for (auto downstream : pipelineModel->downstreams) {
         modelTemporalScheduling(downstream.first);
     }
+    pipelineModel->gpuScheduled = true;
     return true;
 }
 
 void Controller::temporalScheduling() {
+    for (auto &[deviceName, deviceHandle]: devices.list) {
+        initiateGPULanes(*deviceHandle);
+    }
     for (auto &[taskName, taskHandle]: ctrl_scheduledPipelines.list) {
-        
+        for (auto &model: taskHandle->tk_pipelineModels) {
+            if (model->gpuScheduled) {
+                continue;
+            }
+            modelTemporalScheduling(model);
+        }
     }
 }
 
@@ -325,7 +399,7 @@ bool Controller::mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const 
             if (pair2.first != upstreamDevice || pair2.second != device || pair2.second != pair1.second) {
                 continue;
             }
-            std::pair<std::string, std::string> newPair = {pair1.first + "-" + upstreamDevice, pair1.second};
+            std::pair<std::string, std::string> newPair = {pair1.first + "_" + upstreamDevice, pair1.second};
             newProfile.insert({newPair, {}});
             newProfile[newPair].p95TransferDuration = 
                 mergedD2DProfile->at(pair1).p95TransferDuration * coefficient1 +
@@ -492,9 +566,9 @@ TaskHandle* Controller::mergePipelines(const std::string& taskName) {
             continue;
         }
         for (auto &oldDownstream : model->downstreams) {
-            std::string oldDnstreamModelName = splitString(oldDownstream.first->name, "-").back();
+            std::string oldDnstreamModelName = splitString(oldDownstream.first->name, "_").back();
             for (auto &newDownstream : mergedPipeline->tk_pipelineModels) {
-                std::string newDownstreamModelName = splitString(newDownstream->name, "-").back();
+                std::string newDownstreamModelName = splitString(newDownstream->name, "_").back();
                 if (oldDnstreamModelName == newDownstreamModelName && oldDownstream.first->device == newDownstream->device) {
                     model->downstreams.emplace_back(std::make_pair(newDownstream, oldDownstream.second));
                     newDownstream->upstreams.emplace_back(std::make_pair(model, oldDownstream.second));
@@ -524,8 +598,8 @@ TaskHandle* Controller::mergePipelines(const std::string& taskName) {
         if (model->device != "server") {
             continue;
         }
-        auto names = splitString(model->name, "-");
-        model->name = "merged" + taskName + "-" + names[1];
+        auto names = splitString(model->name, "_");
+        model->name = "merged" + taskName + "_" + names[1];
     }
     mergedPipeline->tk_src_device = "merged";
     mergedPipeline->tk_name = "merged" + taskName.substr(0, taskName.length());
@@ -557,9 +631,6 @@ void Controller::mergePipelines() {
                 continue;
             }
             estimatePipelineLatency(mergedModel, mergedModel->expectedStart2HereLatency);
-        }
-        for (auto &mergedModel : mergedPipeline->tk_pipelineModels) {
-            estimateBatchingDeadline(mergedModel);
         }
         for (auto &mergedModel : mergedPipeline->tk_pipelineModels) {
             mergedModel->task = mergedPipeline;
@@ -815,15 +886,69 @@ void Controller::estimatePipelineLatency(PipelineModel *currModel, const uint64_
     }
 }
 
-void Controller::estimateBatchingDeadline(PipelineModel *currModel) {
-    if (currModel->name.find("datasource") != std::string::npos || currModel->name.find("sink") != std::string::npos) {
+void Controller::estimateModelTiming(PipelineModel *currModel) {
+
+    if (currModel->name.find("datasource") != std::string::npos || 
+        currModel->name.find("sink") != std::string::npos) {
         currModel->batchingDeadline = 0;
-    } else {
-        auto batchSize = currModel->batchSize;
-        auto profile = currModel->processProfiles.at(currModel->deviceTypeName);
-        currModel->batchingDeadline = currModel->expectedStart2HereLatency - 
-                                      profile.batchInfer.at(batchSize).p95inferLat * batchSize * 1.05 -
-                                      profile.batchInfer.at(batchSize).p95postLat;
+        currModel->startTime = 0;
+        currModel->endTime = 0;
+        if (currModel->name.find("sink") != std::string::npos) {
+            for (auto &upstream : currModel->upstreams) {
+                currModel->localDutyCycle = std::max(currModel->localDutyCycle, upstream.first->endTime);
+            }
+        }
+        return;
+    }
+    auto batchSize = currModel->batchSize;
+    auto profile = currModel->processProfiles.at(currModel->deviceTypeName);
+
+    uint64_t maxStartTime = currModel->startTime;
+    for (auto &upstream : currModel->upstreams) {
+        if (upstream.first->device != currModel->device) {
+            continue;
+        }
+        maxStartTime = std::max(maxStartTime, upstream.first->endTime);
+    }
+    currModel->startTime = maxStartTime;
+    currModel->endTime = currModel->startTime + currModel->expectedMaxProcessLatency;
+    currModel->batchingDeadline = currModel->endTime -
+                                  profile.batchInfer.at(batchSize).p95inferLat * batchSize * 1.05 -
+                                  profile.batchInfer.at(batchSize).p95postLat;
+    
+    for (auto &downstream : currModel->downstreams) {
+        estimateModelTiming(downstream.first);
+    }
+}
+
+void Controller::estimatePipelineTiming() {
+    auto tasks = ctrl_mergedPipelines.getMap();
+    for (auto &[taskName, task]: tasks) {
+        for (auto &model: task->tk_pipelineModels) {
+            if (model->device != "server") {
+                continue;
+            }
+            // If the model has already been estimated, we should not estimate it again
+            if (model->endTime != 0 && model->startTime != 0) {
+                continue;
+            }
+            estimateModelTiming(model);
+        }
+        uint64_t localDutyCycle;
+        for (auto &model: task->tk_pipelineModels) {
+            if (model->device != "server") {
+                continue;
+            }
+            if (model->name.find("sink") != std::string::npos) {
+                localDutyCycle = model->localDutyCycle;
+            }
+        }
+        for (auto &model: task->tk_pipelineModels) {
+            if (model->device != "server") {
+                continue;
+            }
+            model->localDutyCycle = localDutyCycle;
+        }
     }
 }
 

@@ -750,7 +750,7 @@ private:
     void estimateModelNetworkLatency(PipelineModel *currModel);
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
-    void estimateBatchingDeadline(PipelineModel *model);
+    void estimateModelTiming(PipelineModel *model);
 
     void getInitialBatchSizes(TaskHandle *task, uint64_t slo);
     void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
@@ -1058,9 +1058,10 @@ private:
 
     uint16_t ctrl_numGPULanes = NUM_LANES_PER_GPU * NUM_GPUS, ctrl_numGPUPortions;
 
-    void insertFreeGPUPortion(GPUPortion*& head, GPUPortion *freePortion);
-    std::pair<GPUPortion *, GPUPortion *> insertUsedGPUPortion(GPUPortion *head, GPUPortion *scheduledPortion, GPUPortion *toBeDividedFreePortion);
-    GPUPortion* findFreePortionForInsertion(GPUPortion *head, GPUPortion *scheduledPortion);
+    void insertFreeGPUPortion(GPUPortionList &portionList, GPUPortion *freePortion);
+    std::pair<GPUPortion *, GPUPortion *> insertUsedGPUPortion(GPUPortionList &portionList, ContainerHandle *container, GPUPortion *toBeDividedFreePortion);
+    GPUPortion* findFreePortionForInsertion(GPUPortionList &portionList, ContainerHandle *container);
+    void estimatePipelineTiming();
 
     Tasks ctrl_mergedPipelines;
 };
