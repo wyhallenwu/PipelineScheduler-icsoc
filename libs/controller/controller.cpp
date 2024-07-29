@@ -459,7 +459,7 @@ void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-    } // TODO: REMOVE. ONLY FOR TESTING
+//    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
@@ -467,12 +467,17 @@ bool CheckMergable(const std::string &m) {
 }
 
 ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i) {
-    std::string modelName = splitString(model->name, "-").back();
-    if (model->name.find("yolov5n") != std::string::npos && model->device != "server") {
-        model->name = replaceSubstring(model->name, "yolov5n", "yolov5ndsrc");
-    } else if (model->name.find("retina1face") != std::string::npos && model->device != "server") {
-        model->name = replaceSubstring(model->name, "retina1face", "retina1facedsrc");
+    if (model->name.find("datasource") != std::string::npos) {
+        for (auto &[downstream, coi] : model->downstreams) {
+            if ((downstream->name.find("yolov5n") != std::string::npos ||
+                 downstream->name.find("retina1face") != std::string::npos) &&
+                downstream->device != "server") {
+                return nullptr;
+            }
+        }
     }
+    std::string modelName = splitString(model->name, "_").back();
+
     int class_of_interest;
     if (model->name.find("datasource") != std::string::npos || model->name.find("dsrc") != std::string::npos) {
         class_of_interest = -1;
@@ -1176,7 +1181,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            arcface->possibleDevices = {startDevice, "server"};
+            arcface->possibleDevices = {"server"};
             retina1face->downstreams.push_back({arcface, -1});
 
             auto *carbrand = new PipelineModel{
@@ -1189,7 +1194,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 2}}
             };
-            carbrand->possibleDevices = {startDevice, "server"};
+            carbrand->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({carbrand, 2});
 
             auto *platedet = new PipelineModel{
@@ -1202,7 +1207,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 2}}
             };
-            platedet->possibleDevices = {startDevice, "server"};
+            platedet->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({platedet, 2});
 
             auto *sink = new PipelineModel{
@@ -1213,7 +1218,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {},
                     {},
-                    {{arcface, -1}, {carbrand, -1}, {platedet, -1}}
+                    {{retina1face, -1}, {carbrand, -1}, {platedet, -1}}
             };
             sink->possibleDevices = {"server"};
             arcface->downstreams.push_back({sink, -1});
@@ -1269,7 +1274,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 0}}
             };
-            movenet->possibleDevices = {startDevice, "server"};
+            movenet->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({movenet, 0});
 
             auto *gender = new PipelineModel{
@@ -1282,7 +1287,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            gender->possibleDevices = {startDevice, "server"};
+            gender->possibleDevices = {"server"};
             retina1face->downstreams.push_back({gender, -1});
 
             auto *age = new PipelineModel{
@@ -1295,7 +1300,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            age->possibleDevices = {startDevice, "server"};
+            age->possibleDevices = {"server"};
             retina1face->downstreams.push_back({age, -1});
 
             auto *sink = new PipelineModel{
@@ -1349,7 +1354,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            emotionnet->possibleDevices = {startDevice, "server"};
+            emotionnet->possibleDevices = {"server"};
             retina1face->downstreams.push_back({emotionnet, -1});
 
             auto *age = new PipelineModel{
@@ -1388,7 +1393,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            arcface->possibleDevices = {startDevice, "server"};
+            arcface->possibleDevices = {"server"};
             retina1face->downstreams.push_back({arcface, -1});
 
             auto *sink = new PipelineModel{

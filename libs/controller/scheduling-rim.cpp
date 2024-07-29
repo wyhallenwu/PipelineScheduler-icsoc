@@ -148,7 +148,7 @@ void Controller::Scheduling() {
                     std::cerr << "Unknown exception in rim_action" << std::endl;
                 }
 
-                setRandomMemUtilization(devices);
+                // setRandomMemUtilization(devices);
 
                 processedTasks.push_back(task_name);
             } catch (const std::exception& e) {
