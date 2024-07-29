@@ -4,6 +4,8 @@
 
 // Helper functions
 
+const BatchSizeType RIM_BATCH_SIZE = 8;
+
 std::string device_type_str(NodeHandle *device)
 {
     // std::lock_guard<std::mutex> lock(device->nodeHandleMutex);
@@ -31,7 +33,9 @@ uint64_t calc_model_fps(PipelineModel *currModel, NodeHandle *device)
     std::lock_guard<std::mutex> model_lock(currModel->pipelineModelMutex);
     // std::lock_guard<std::mutex> device_lock(device->nodeHandleMutex);
 
-    uint64_t batchSize = 8;
+    uint64_t batchSize = RIM_BATCH_SIZE;
+
+    currModel->batchSize = batchSize;
 
     std::string device_type = device_type_str(device);
 

@@ -359,6 +359,8 @@ enum ModelType {
     DataSource,
     Sink,
     Yolov5n,
+    Yolov5n320,
+    Yolov5n512,
     Yolov5s,
     Yolov5m,
     Yolov5nDsrc,
