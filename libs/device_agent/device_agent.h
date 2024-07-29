@@ -16,12 +16,13 @@
 
 using trt::TRTConfigs;
 
+ABSL_DECLARE_FLAG(std::string, name);
+ABSL_DECLARE_FLAG(std::string, device_type);
+ABSL_DECLARE_FLAG(std::string, controller_url);
 ABSL_DECLARE_FLAG(std::string, dev_configPath);
 ABSL_DECLARE_FLAG(uint16_t, dev_verbose);
 ABSL_DECLARE_FLAG(uint16_t, dev_loggingMode);
 ABSL_DECLARE_FLAG(uint16_t, dev_port_offset);
-ABSL_DECLARE_FLAG(std::string, device_type);
-ABSL_DECLARE_FLAG(std::string, controller_url);
 
 typedef std::tuple<
     std::string, // container name
