@@ -90,18 +90,12 @@ struct NodeHandle {
     std::shared_ptr<ControlCommunication::Stub> stub;
     CompletionQueue *cq;
     SystemDeviceType type;
-    int num_processors; // number of processing units, 1 for Edge or # GPUs for server
-    std::vector<double> processors_utilization; // utilization per pu
-    std::vector<unsigned long> mem_size; // memory size in MB
-    std::vector<double> mem_utilization; // memory utilization per pu
     int next_free_port;
     std::map<std::string, ContainerHandle *> containers;
     // The latest network entries to determine the network conditions and latencies of transferring data
     std::map<std::string, NetworkEntryType> latestNetworkEntries = {};
     // GPU Handle;
     std::vector<GPUHandle*> gpuHandles;
-    //
-    uint8_t numGPULanes;
     //
     std::vector<GPULane *> gpuLanes;
     GPUPortionList freeGPUPortions;
@@ -121,10 +115,6 @@ struct NodeHandle {
                std::shared_ptr<ControlCommunication::Stub> stub,
                grpc::CompletionQueue* cq,
                SystemDeviceType type,
-               int num_processors,
-               std::vector<double> processors_utilization,
-               std::vector<unsigned long> mem_size,
-               std::vector<double> mem_utilization,
                int next_free_port,
                std::map<std::string, ContainerHandle*> containers)
         : name(name),
@@ -132,10 +122,6 @@ struct NodeHandle {
           stub(std::move(stub)),
           cq(cq),
           type(type),
-          num_processors(num_processors),
-          processors_utilization(std::move(processors_utilization)),
-          mem_size(std::move(mem_size)),
-          mem_utilization(std::move(mem_utilization)),
           next_free_port(next_free_port),
           containers(std::move(containers)) {}
 
@@ -148,10 +134,6 @@ struct NodeHandle {
         stub = other.stub;
         cq = other.cq;
         type = other.type;
-        num_processors = other.num_processors;
-        processors_utilization = other.processors_utilization;
-        mem_size = other.mem_size;
-        mem_utilization = other.mem_utilization;
         next_free_port = other.next_free_port;
         containers = other.containers;
         latestNetworkEntries = other.latestNetworkEntries;
@@ -167,10 +149,6 @@ struct NodeHandle {
             stub = other.stub;
             cq = other.cq;
             type = other.type;
-            num_processors = other.num_processors;
-            processors_utilization = other.processors_utilization;
-            mem_size = other.mem_size;
-            mem_utilization = other.mem_utilization;
             next_free_port = other.next_free_port;
             containers = other.containers;
             latestNetworkEntries = other.latestNetworkEntries;
@@ -190,7 +168,6 @@ struct ContainerHandle {
     float arrival_rate;
 
     int batch_size;
-    int cuda_device;
     int recv_port;
     std::string model_file;
 
@@ -250,7 +227,6 @@ struct ContainerHandle {
                 uint64_t inference_deadline = 0,
                 float arrival_rate = 0.0f,
                 const int batch_size = 0,
-                const int cuda_device = 0,
                 const int recv_port = 0,
                 const std::string model_file = "",
                 NodeHandle* device_agent = nullptr,
@@ -267,15 +243,14 @@ struct ContainerHandle {
       inference_deadline(inference_deadline),
       arrival_rate(arrival_rate),
       batch_size(batch_size),
-      cuda_device(cuda_device),
       recv_port(recv_port),
       model_file(model_file),
       device_agent(device_agent),
       task(task),
-      pipelineModel(pipelineModel),
-      upstreams(upstreams),
       downstreams(downstreams),
-      queueSizes(queueSizes) {}
+      upstreams(upstreams),
+      queueSizes(queueSizes),
+      pipelineModel(pipelineModel) {}
     
     // Copy constructor
     ContainerHandle(const ContainerHandle& other) {
@@ -291,7 +266,6 @@ struct ContainerHandle {
         inference_deadline = other.inference_deadline;
         arrival_rate = other.arrival_rate;
         batch_size = other.batch_size;
-        cuda_device = other.cuda_device;
         recv_port = other.recv_port;
         model_file = other.model_file;
         device_agent = other.device_agent;
@@ -331,7 +305,6 @@ struct ContainerHandle {
             inference_deadline = other.inference_deadline;
             arrival_rate = other.arrival_rate;
             batch_size = other.batch_size;
-            cuda_device = other.cuda_device;
             recv_port = other.recv_port;
             model_file = other.model_file;
             device_agent = other.device_agent;
@@ -441,7 +414,7 @@ struct PipelineModel {
                   bool merged = false,
                   bool toBeRun = true,
                   const std::vector<std::string>& possibleDevices = {})
-        : device(device),
+        :
           name(name),
           task(task),
           isSplitPoint(isSplitPoint),
@@ -456,6 +429,7 @@ struct PipelineModel {
           expectedQueueingLatency(expectedQueueingLatency),
           expectedAvgPerQueryLatency(expectedAvgPerQueryLatency),
           expectedMaxProcessLatency(expectedMaxProcessLatency),
+          device(device),
           deviceTypeName(deviceTypeName),
           merged(merged),
           toBeRun(toBeRun),
@@ -573,7 +547,6 @@ struct TaskHandle {
     }
 
     TaskHandle(const std::string& tk_name,
-               const std::string& tk_fullName,
                PipelineType tk_type,
                const std::string& tk_source,
                const std::string& tk_src_device,
@@ -823,7 +796,7 @@ private:
         grpc::ServerAsyncResponseWriter<SystemInfo> responder;
     };
 
-    void initialiseGPU(NodeHandle *node);
+    void initialiseGPU(NodeHandle *node, int numGPUs, std::vector<int> memLimits);
 
     class DummyDataRequestHandler : public RequestHandler {
     public:
@@ -851,7 +824,7 @@ private:
 
     void AdjustBatchSize(ContainerHandle *msvc, int new_bs);
 
-    void AdjustCudaDevice(ContainerHandle *msvc, unsigned int new_device);
+    void AdjustCudaDevice(ContainerHandle *msvc, GPUHandle *new_device);
 
     void AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution);
 
@@ -900,11 +873,11 @@ private:
 
         std::vector<NodeHandle *> getList() {
             std::lock_guard<std::mutex> lock(devicesMutex);
-            std::vector<NodeHandle *> devices;
+            std::vector<NodeHandle *> elements;
             for (auto &d: list) {
-                devices.push_back(d.second);
+                elements.push_back(d.second);
             }
-            return devices;
+            return elements;
         }
 
         std::map<std::string, NodeHandle*> getMap() {
@@ -1012,11 +985,11 @@ private:
 
         std::vector<ContainerHandle *> getList() {
             std::lock_guard<std::mutex> lock(containersMutex);
-            std::vector<ContainerHandle *> containers;
+            std::vector<ContainerHandle *> elements;
             for (auto &c: list) {
-                containers.push_back(c.second);
+                elements.push_back(c.second);
             }
-            return containers;
+            return elements;
         }
 
         std::map<std::string, ContainerHandle *> getMap() {
