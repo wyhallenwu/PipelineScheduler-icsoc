@@ -1,9 +1,9 @@
 {
     "expName": "full",
     "system_fps": 30,
-    "systemName": "ppp",
+    "systemName": "dis",
     "runtime": 60,
-    "port_offset": 0,
+    "port_offset": 1000,
     "initial_pipelines": [
         {
             "pipeline_name": "people1",
