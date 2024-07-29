@@ -10,7 +10,6 @@
 #include "absl/strings/str_format.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/flag.h"
-#include <condition_variable>
 
 using grpc::Status;
 using grpc::CompletionQueue;
@@ -1031,11 +1030,9 @@ private:
 
     uint16_t ctrl_systemFPS;
 
-    void setRandomMemUtilization(Devices& devices);
+    void setRandomMemUtilization(Controller::Devices& devices);
     void rim_action(TaskHandle *task);
 };
-
-// ========================================================== added ================================================================
 
 
 #endif //PIPEPLUSPLUS_CONTROLLER_H

@@ -79,36 +79,36 @@ void Controller::queryingProfiles(TaskHandle *task) {
     }
 }
 
-void Controller::setRandomMemUtilization(Controller::Devices& devices) {
-    std::lock_guard<std::mutex> lock(devices.devicesMutex);
+// void Controller::setRandomMemUtilization(Controller::Devices& devices) {
+//     std::lock_guard<std::mutex> lock(devices.devicesMutex);
     
-    // Seed the random number generator
-    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+//     // Seed the random number generator
+//     std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
-    std::cout << "Memory Utilization after setting random values:" << std::endl;
-    std::cout << std::fixed << std::setprecision(4);  // Set output precision to 2 decimal places
+//     std::cout << "Memory Utilization after setting random values:" << std::endl;
+//     std::cout << std::fixed << std::setprecision(4);  // Set output precision to 2 decimal places
 
-    for (auto& pair : devices.list) {
-        NodeHandle* node = pair.second;
+//     for (auto& pair : devices.list) {
+//         NodeHandle* node = pair.second;
         
-        // Skip if the device is a server
-        if (node->name == "server") {
-            continue;
-        }
+//         // Skip if the device is a server
+//         if (node->name == "server") {
+//             continue;
+//         }
 
-        // Ensure mem_utilization has one element
-        if (node->mem_utilization.empty()) {
-            node->mem_utilization.resize(1, 0.0);
-        }
+//         // Ensure mem_utilization has one element
+//         if (node->mem_utilization.empty()) {
+//             node->mem_utilization.resize(1, 0.0);
+//         }
 
-        // Set random mem_utilization between 0.0 and 1.0
-        node->mem_utilization[0] = static_cast<double>(std::rand()) / RAND_MAX;
+//         // Set random mem_utilization between 0.0 and 1.0
+//         node->mem_utilization[0] = static_cast<double>(std::rand()) / RAND_MAX;
 
-        // Print the device name and its new utilization
-        std::cout << "Device: " << node->name << ", Utilization: " 
-                  << node->mem_utilization[0] * 100 << "%" << std::endl;
-    }
-}
+//         // Print the device name and its new utilization
+//         std::cout << "Device: " << node->name << ", Utilization: " 
+//                   << node->mem_utilization[0] * 100 << "%" << std::endl;
+//     }
+// }
 
 void Controller::Scheduling() {
     while (running) {
