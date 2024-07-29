@@ -174,7 +174,7 @@ void Controller::Scheduling() {
 
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
         ApplyScheduling();
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
         // break;
     }
 }

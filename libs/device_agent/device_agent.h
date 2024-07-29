@@ -16,12 +16,13 @@
 
 using trt::TRTConfigs;
 
+ABSL_DECLARE_FLAG(std::string, name);
+ABSL_DECLARE_FLAG(std::string, device_type);
+ABSL_DECLARE_FLAG(std::string, controller_url);
 ABSL_DECLARE_FLAG(std::string, dev_configPath);
 ABSL_DECLARE_FLAG(uint16_t, dev_verbose);
 ABSL_DECLARE_FLAG(uint16_t, dev_loggingMode);
 ABSL_DECLARE_FLAG(uint16_t, dev_port_offset);
-ABSL_DECLARE_FLAG(std::string, device_type);
-ABSL_DECLARE_FLAG(std::string, controller_url);
 
 typedef std::tuple<
     std::string, // container name
@@ -91,7 +92,7 @@ private:
                 "docker run --network=host -v /ssd0/tung/PipePlusPlus/data/:/app/data/  "
                 "-v /ssd0/tung/PipePlusPlus/logs/:/app/logs/ -v /ssd0/tung/PipePlusPlus/models/:/app/models/ "
                 "-v /ssd0/tung/PipePlusPlus/model_profiles/:/app/model_profiles/ "
-                "-d --rm --runtime nvidia --gpus all --name " +
+                "-d --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
                         R"(%s pipeline-base-container %s --json '%s' --device %i --port %i --port_offset %i)",
                         cont_name, executable, start_string, device, port, dev_port_offset) +
