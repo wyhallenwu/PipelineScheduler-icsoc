@@ -1,11 +1,11 @@
 #include "device_agent.h"
 
+ABSL_FLAG(std::string, name, "", "name of the device");
+ABSL_FLAG(std::string, device_type, "", "string that identifies the device type");
+ABSL_FLAG(std::string, controller_url, "", "string that identifies the controller url without port!");
 ABSL_FLAG(uint16_t, dev_verbose, 0, "Verbosity level of the Device Agent.");
 ABSL_FLAG(uint16_t, dev_loggingMode, 0, "Logging mode of the Device Agent. 0:stdout, 1:file, 2:both");
 ABSL_FLAG(std::string, dev_logPath, "../logs", "Path to the log dir for the Device Agent.");
-
-ABSL_FLAG(std::string, device_type, "", "string that identifies the device type");
-ABSL_FLAG(std::string, controller_url, "", "string that identifies the controller url without port!");
 ABSL_FLAG(uint16_t, dev_port_offset, 0, "port offset for starting the control communication");
 
 const int CONTAINER_BASE_PORT = 50001;
@@ -290,6 +290,7 @@ bool DeviceAgent::CreateContainer(
         std::string model_file,
         std::string pipe_name,
         BatchSizeType batch_size,
+        BatchSizeType fps,
         std::vector<int> input_dims,
         int replica_id,
         int allocation_mode,
@@ -334,13 +335,12 @@ bool DeviceAgent::CreateContainer(
         }
         if (model == ModelType::DataSource) {
             base_config[0]["msvc_dataShape"] = {input_dims};
-            base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
+            base_config[0]["msvc_idealBatchSize"] = fps;
+        } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
+            base_config[0]["msvc_dataShape"] = {input_dims};
+            base_config[0]["msvc_type"] = 500;
+            base_config[0]["msvc_idealBatchSize"] = fps;
         } else {
-            if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
-                base_config[0]["msvc_dataShape"] = {input_dims};
-                base_config[0]["msvc_type"] = 500;
-                base_config[0]["msvc_idealBatchSize"] = 15; //FIXME: hardcoded
-            }
             base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
             base_config[2]["path"] = model_file;
         }
@@ -570,7 +570,7 @@ void DeviceAgent::StartContainerRequestHandler::Proceed() {
             input_dims.push_back(dim);
         }
         bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.model_file(),
-                                                     request.pipeline_name(), request.batch_size(), input_dims,
+                                                     request.pipeline_name(), request.batch_size(), request.fps(), input_dims,
                                                      request.replica_id(), request.allocation_mode(), request.device(),
                                                      request.slo(), request.upstream(), request.downstream());
         if (!success) {
