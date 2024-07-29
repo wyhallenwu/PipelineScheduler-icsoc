@@ -2,7 +2,7 @@
     "expName": "ex0",
     "system_fps": 15,
     "systemName": "jlf",
-    "runtime": 1,
+    "runtime": 60,
     "port_offset": 2000,
     "initial_pipelines": [
         {
