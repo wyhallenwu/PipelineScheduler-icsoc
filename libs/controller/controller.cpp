@@ -672,7 +672,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         // request.set_device(container->gpuHandle->number);
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dgit addis(0, 1);
+        std::uniform_int_distribution<> dis(0, 3);
         request.set_device(dis(gen));
     }
     request.set_slo(container->inference_deadline);
