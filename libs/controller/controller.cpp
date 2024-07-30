@@ -277,6 +277,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     for (auto &model: task->tk_pipelineModels) {
         model->datasourceName = t.source;
         model->task = task;
+        
     }
     std::unique_lock<std::mutex> lock2(ctrl_unscheduledPipelines.tasksMutex);
     std::unique_lock<std::mutex> lock3(ctrl_savedUnscheduledPipelines.tasksMutex);
@@ -1350,7 +1351,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {},
                     {},
-                    {{retina1face, -1}, {carbrand, -1}, {platedet, -1}}
+                    {{arcface, -1}, {carbrand, -1}, {platedet, -1}}
             };
             sink->possibleDevices = {"server"};
             arcface->downstreams.push_back({sink, -1});

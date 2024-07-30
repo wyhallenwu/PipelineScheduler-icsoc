@@ -800,7 +800,7 @@ int check_and_assign(std::vector<ModelInfoJF> &model, std::vector<ClientInfoJF> 
 
 // helper functions
 
-std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models, const ClientInfoJF &client, int max_available_batch_size);
+std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models, const ClientInfoJF &client, int max_available_batch_size = 16);
 void differenceClients(std::vector<ClientInfoJF> &src, const std::vector<ClientInfoJF> &diff);
 
 // --------------------------------------------------------------------------------------------------------
@@ -826,6 +826,7 @@ public:
                 remainTasks.push_back(t);
             }
         }
+        isPipelineInitialised = true;
     }
 
     void InitRemain() {
@@ -863,7 +864,6 @@ public:
 
 
 private:
-
     void initiateGPULanes(NodeHandle &node);
 
     NetworkEntryType initNetworkCheck(NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
@@ -1185,6 +1185,8 @@ private:
     std::map<std::string, ModelProfilesJF> modelProfilesCSJF;
     // ClientProfilesJF client_profiles_jf;
     // ModelProfilesJF model_profiles_jf;
+
+    std::atomic<bool> isPipelineInitialised = false;
 };
 
 

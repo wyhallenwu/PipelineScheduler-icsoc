@@ -207,7 +207,7 @@ void Controller::Scheduling()
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto untrimmedTaskList = ctrl_unscheduledPipelines.getMap();
         auto deviceList = devices.getMap();
-        if (untrimmedTaskList.size() < 4)
+        if (!isPipelineInitialised)
         {
             continue;
         }
@@ -263,6 +263,8 @@ void Controller::Scheduling()
         // {
         //     continue;
         // }
+        
+        std::map<std::string, uint64_t> pipelineSLOs;
 
         for (auto &taskType : taskTypes)
         {
@@ -290,20 +292,22 @@ void Controller::Scheduling()
                 {
                     continue;
                 }
-                estimateModelLatency(model);
+            }
+            // Assigned dummy value for yolo batch size
+            taskList[taskType]->tk_pipelineModels.at(1)->batchSize = 1;
+            for (auto &model : taskList[taskType]->tk_pipelineModels) {
                 estimateModelNetworkLatency(model);
+                estimateModelLatency(model);
             }
             for (auto &model : taskList[taskType]->tk_pipelineModels)
             {
-                if (model->name.find("yolo") != std::string::npos)
+                if (model->name.find("datasource") == std::string::npos)
                 {
-                    for (auto &downstream : model->downstreams)
-                    {
-                        estimatePipelineLatency(downstream.first, 0);
-                    }
-                    break;
+                    continue;
                 }
+                estimatePipelineLatency(model, 0);
             }
+            pipelineSLOs[taskType] = taskList[taskType]->tk_slo;
             taskList[taskType]->tk_slo -= taskList[taskType]->tk_pipelineModels.back()->expectedStart2HereLatency;
 
             for (auto &model : taskList[taskType]->tk_pipelineModels)
@@ -312,7 +316,7 @@ void Controller::Scheduling()
                 {
                     continue;
                 }
-                model->timeBudgetLeft = taskList[taskType]->tk_pipelineModels.back()->expectedStart2HereLatency - model->expectedStart2HereLatency +
+                model->timeBudgetLeft = pipelineSLOs[taskList[taskType]->tk_name] - model->expectedStart2HereLatency +
                                         model->expectedMaxProcessLatency + model->expectedQueueingLatency;
             }
         }
@@ -691,13 +695,22 @@ void Controller::Scheduling()
 
             for (auto &model : task.second->tk_pipelineModels)
             {
-                if (model->name.find("yolo") == std::string::npos || model->batchSize == 0)
-                {
-                    estimateModelLatency(model);
-                    model->timeBudgetLeft = task.second->tk_pipelineModels.back()->expectedStart2HereLatency - model->expectedStart2HereLatency +
-                                            model->expectedMaxProcessLatency + model->expectedQueueingLatency;
-                }
+                estimateModelLatency(model);
             }
+            for (auto &model : task.second->tk_pipelineModels)
+            {
+                if (model->name.find("datasource") == std::string::npos)
+                {
+                    continue;
+                }
+                estimateModelNetworkLatency(model);
+            }
+            for (auto &model : task.second->tk_pipelineModels)
+            {
+                model->timeBudgetLeft = pipelineSLOs[task.second->tk_name] - model->expectedStart2HereLatency -
+                                            model->expectedMaxProcessLatency + model->expectedQueueingLatency + model->expectedTransferLatency;
+            }
+            task.second->tk_slo = pipelineSLOs[task.second->tk_name];
         }
 
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
@@ -1133,6 +1146,10 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model)
  */
 uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate)
 {
+    if (arrival_rate == 0)
+    {
+        return 0;
+    }
     float rho = arrival_rate / preprocess_rate;
     float numQueriesInSystem = rho / (1 - rho);
     float averageQueueLength = rho * rho / (1 - rho);
