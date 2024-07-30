@@ -517,7 +517,8 @@ void BaseReqBatcher::executeBatch(ClockType time, BatchTimeType &genTime, Reques
 }
 
 template<typename T>
-bool BaseReqBatcher::validateRequest(Request<T> &req) {
+bool BaseReqBatcher::
+validateRequest(Request<T> &req) {
     // Meaning the the timeout in pop() has been reached and no request was actually popped
     if (strcmp(req.req_travelPath[0].c_str(), "empty") == 0) {
         return false;
@@ -773,7 +774,7 @@ bool BaseReqBatcher::checkReqEligibility(std::vector<ClockType> &currReq_time) {
     }
     auto now = std::chrono::high_resolution_clock::now();
     auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - currReq_time[0]).count();
-    if (diff > msvc_svcLevelObjLatency) {
+    if (diff > msvc_pipelineSLO - msvc_timeBudgetLeft && msvc_DROP_MODE == DROP_MODE::LAZY) {
         this->droppedReqCount++;
         spdlog::get("container_agent")->trace("{0:s} dropped the {1:d}th request.", msvc_name, this->droppedReqCount);
         return false;
