@@ -692,6 +692,7 @@ public:
                 remainTasks.push_back(t);
             }
         }
+        isPipelineInitialised = true;
     }
 
     void InitRemain() {
@@ -728,7 +729,6 @@ public:
     );
 
 private:
-
     void initiateGPULanes(NodeHandle &node);
 
     NetworkEntryType initNetworkCheck(NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
@@ -1041,6 +1041,8 @@ private:
     std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
 
     uint16_t ctrl_systemFPS;
+
+    std::atomic<bool> isPipelineInitialised = false;
 
     void setRandomMemUtilization(Controller::Devices& devices);
     void rim_action(TaskHandle *task);
