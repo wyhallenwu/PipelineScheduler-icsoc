@@ -1073,6 +1073,7 @@ void ContainerAgent::HandleRecvRpcs() {
     new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateResolutionRequestHandler(&service, server_cq.get(), this);
+    new UpdateTimeKeepingRequestHandler(&service, server_cq.get(), this);
     new SyncDatasourcesRequestHandler(&service, server_cq.get(), this);
     void *tag;
     bool ok;
@@ -1192,6 +1193,28 @@ void ContainerAgent::UpdateResolutionRequestHandler::Proceed() {
             container_agent->cont_msvcsList[1]->dnstreamMicroserviceList[0].expectedShape = {resolution};
         }
 
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void ContainerAgent::UpdateTimeKeepingRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateTimeKeeping(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateTimeKeepingRequestHandler(service, cq, container_agent);
+        // TODO: @Tung please use the values as you need
+        request.slo();
+        request.cont_slo();
+        request.timebudget();
+        request.starttime();
+        request.endtime();
+        request.localdutycycle();
+        request.cyclestarttime();
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

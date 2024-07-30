@@ -25,6 +25,7 @@ using controlcommunication::Neighbor;
 using controlcommunication::LoopRange;
 using controlcommunication::DummyMessage;
 using controlcommunication::ContainerConfig;
+using controlcommunication::TimeKeeping;
 using controlcommunication::ContainerLink;
 using controlcommunication::ContainerInts;
 using controlcommunication::ContainerSignal;
