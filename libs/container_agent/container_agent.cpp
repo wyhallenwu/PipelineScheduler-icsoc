@@ -1162,6 +1162,10 @@ void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new UpdateBatchSizeRequestHandler(service, cq, msvcs);
         for (auto msvc : *msvcs) {
+            // The batch size of the data reader (aka FPS) should be updated by `UpdateBatchSizeRequestHandler`
+            if (msvc->msvc_type == msvcconfigs::MicroserviceType::DataReader) {
+                continue;
+            }
             msvc->msvc_idealBatchSize = request.value();
         }
         status = FINISH;
