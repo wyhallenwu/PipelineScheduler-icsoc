@@ -106,6 +106,10 @@ json loadRunArgs(int argc, char **argv) {
     }
 
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
+        containerConfigs.at("cont_pipeline")[i]["msvc_batchMode"] = containerConfigs["cont_batchMode"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_dropMode"] = containerConfigs["cont_dropMode"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_timeBudgetLeft"] = containerConfigs["cont_timeBudgetLeft"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_pipelineSLO"] = containerConfigs["cont_pipelineSLO"];
         containerConfigs.at("cont_pipeline")[i]["msvc_experimentName"] = containerConfigs["cont_experimentName"];
         containerConfigs.at("cont_pipeline")[i]["msvc_systemName"] = containerConfigs["cont_systemName"];
         containerConfigs.at("cont_pipeline")[i]["msvc_contName"] = name;

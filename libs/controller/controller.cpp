@@ -107,7 +107,6 @@ bool GPUHandle::addContainer(ContainerHandle *container) {
         return true;
     }
     MemUsageType potentialMemUsage;
-    BatchSizeType batchSize = container->pipelineModel->batchSize;
     potentialMemUsage = currentMemUsage + container->getExpectedTotalMemUsage();
     
     if (currentMemUsage > memLimit) {
@@ -254,7 +253,7 @@ MemUsageType ContainerHandle::getExpectedTotalMemUsage() const {
 
 bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     std::cout << "Adding task: " << t.name << std::endl;
-    TaskHandle *task = new TaskHandle{t.name, t.fullName, t.type, t.source, t.device, t.slo, {}, 0};
+    TaskHandle *task = new TaskHandle{t.name, t.type, t.source, t.device, t.slo, {}, 0};
 
     std::map<std::string, NodeHandle*> deviceList = devices.getMap();
 
@@ -285,16 +284,16 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     return true;
 }
 
-void Controller::initialiseGPU(NodeHandle *node) {
+void Controller::initialiseGPU(NodeHandle *node, int numGPUs, std::vector<int> memLimits) {
     if (node->name == "server") {
-        for (uint8_t gpuIndex = 0; gpuIndex < NUM_GPUS; gpuIndex++) {
+        for (uint8_t gpuIndex = 0; gpuIndex < numGPUs; gpuIndex++) {
             std::string gpuName = "gpu" + std::to_string(gpuIndex);
-            GPUHandle *gpuNode = new GPUHandle{"3090", "server", gpuIndex, 22000, NUM_LANES_PER_GPU};
+            GPUHandle *gpuNode = new GPUHandle{"3090", "server", gpuIndex, memLimits[gpuIndex], NUM_LANES_PER_GPU};
             node->gpuHandles.emplace_back(gpuNode);
         }
     } else {
-        MemUsageType memSize = node->type == SystemDeviceType::AGXXavier ? 30000 : 5000;
-        GPUHandle *gpuNode = new GPUHandle{node->name, node->name, 0, memSize, 1};
+        //MemUsageType memSize = node->type == SystemDeviceType::AGXXavier ? 30000 : 5000;
+        GPUHandle *gpuNode = new GPUHandle{node->name, node->name, 0, memLimits[0] - 1500, 1};
         node->gpuHandles.emplace_back(gpuNode);
     }
 }
@@ -486,14 +485,14 @@ void Controller::ApplyScheduling() {
             for (auto *candidate: candidates) {
                 if (candidate->device_agent->name != model->device) {
                     candidate->batch_size = model->batchSize;
-                    candidate->cuda_device = model->cudaDevices[i++];
+                    //candidate->cuda_device = model->cudaDevices[i++];
                     MoveContainer(candidate, devices.list[model->device]);
                     continue;
                 }
                 if (candidate->batch_size != model->batchSize)
                     AdjustBatchSize(candidate, model->batchSize);
-                if (candidate->cuda_device != model->cudaDevices[i++])
-                    AdjustCudaDevice(candidate, model->cudaDevices[i - 1]);
+                //if (candidate->cuda_device != model->cudaDevices[i++])
+                //    AdjustCudaDevice(candidate, model->cudaDevices[i - 1]);
             }
         }
     }
@@ -551,7 +550,6 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
                                           model->batchingDeadline,
                                           0.0,
                                           model->batchSize,
-                                          model->cudaDevices[i],
                                           device->next_free_port++,
                                           ctrl_containerLib[containerTypeName].modelPath,
                                           device,
@@ -600,10 +598,12 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     request.set_allocation_mode(easy_allocation);
     request.set_fps(ctrl_systemFPS);
     if (container->model == DataSource || container->model == Sink) {
-        container->cuda_device = -1;
+        request.set_device(-1);
+    } else {
+        request.set_device(container->gpuHandle->number);
     }
-    request.set_device(container->cuda_device);
     request.set_slo(container->inference_deadline);
+    request.set_timebudget(container->timeBudgetLeft);
     for (auto dim: container->dimensions) {
         request.add_input_dimensions(dim);
     }
@@ -616,7 +616,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             dwn->set_gpu_connection(false);
         } else {
             dwn->set_gpu_connection((container->device_agent == dwnstr->device_agent) &&
-                                    (container->cuda_device == dwnstr->cuda_device));
+                                    (container->gpuHandle == dwnstr->gpuHandle));
             dwn->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
             //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
         }
@@ -642,7 +642,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             up->set_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
             up->set_class_of_interest(-2);
             up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
-                                   (container->cuda_device == upstr->cuda_device));
+                                   (container->gpuHandle == upstr->gpuHandle));
             up->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
             //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
         }
@@ -694,7 +694,7 @@ void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
     container->device_agent = device;
     container->recv_port = device->next_free_port++;
     device->containers.insert({container->name, container});
-    container->cuda_device = container->cuda_device;
+    container->gpuHandle = container->gpuHandle;
     // StartContainer(container, !(start_dsrc || merge_dsrc));
     // for (auto upstr: container->upstreams) {
     //     if (start_dsrc) {
@@ -756,9 +756,8 @@ void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs)
     spdlog::get("container_agent")->info("Batch size of {0:s} adjusted to {1:d}", msvc->name, new_bs);
 }
 
-void Controller::AdjustCudaDevice(ContainerHandle *msvc, unsigned int new_device)
-{
-    msvc->cuda_device = new_device;
+void Controller::AdjustCudaDevice(ContainerHandle *msvc, GPUHandle *new_device) {
+    msvc->gpuHandle = new_device;
     // TODO: also adjust actual running container
 }
 
@@ -912,14 +911,12 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
                                      new CompletionQueue(),
                                      static_cast<SystemDeviceType>(request.device_type()),
-                                     request.processors(), std::vector<double>(request.processors(), 0.0),
-                                     std::vector<unsigned long>(request.memory().begin(), request.memory().end()),
-                                     std::vector<double>(request.processors(), 0.0), DATA_BASE_PORT + controller->ctrl_port_offset, {}};
+                                     DATA_BASE_PORT + controller->ctrl_port_offset, {}};
         reply.set_name(controller->ctrl_systemName);
         reply.set_experiment(controller->ctrl_experimentName);
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
-        controller->initialiseGPU(node);
+        controller->initialiseGPU(node, request.processors(), std::vector<int>(request.memory().begin(), request.memory().end()));
         controller->devices.addDevice(deviceName, node);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
         controller->queryInDeviceNetworkEntries(controller->devices.list.at(deviceName));
