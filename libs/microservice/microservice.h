@@ -188,13 +188,13 @@ public:
      * 
      * @param request 
      */
-    Request<LocalCPUReqDataType> pop1(uint16_t timeout = 100) {
+    Request<LocalCPUReqDataType> pop1(uint16_t timeout = 100000) { // 100ms
         std::unique_lock<std::mutex> lock(q_mutex);
 
         Request<LocalCPUReqDataType> request;
         isEmpty = !q_condition.wait_for(
                 lock,
-                std::chrono::milliseconds(timeout),
+                TimePrecisionType(timeout),
                 [this]() { return !q_cpuQueue.empty(); }
         );
         if (!isEmpty) {
@@ -211,12 +211,12 @@ public:
      * 
      * @param request 
      */
-    Request<LocalGPUReqDataType> pop2(uint16_t timeout = 100) {
+    Request<LocalGPUReqDataType> pop2(uint16_t timeout = 100000) { // 100ms
         std::unique_lock<std::mutex> lock(q_mutex);
         Request<LocalGPUReqDataType> request;
         isEmpty = !q_condition.wait_for(
                 lock,
-                std::chrono::milliseconds(timeout),
+                TimePrecisionType(timeout),
                 [this]() { return !q_gpuQueue.empty(); }
         );
         if (!isEmpty) {
@@ -566,7 +566,8 @@ private:
 
 enum class BATCH_MODE {
     FIXED,
-    DYNAMIC // Lazy batching
+    DYNAMIC, // Lazy batching
+    OURS
 };
 
 enum class DROP_MODE {
@@ -723,6 +724,8 @@ public:
         return {};
     }
 
+    virtual void updateCycleTiming() {};
+
     bool RELOADING = true;
 
     std::ofstream msvc_logFile;
@@ -777,6 +780,8 @@ protected:
     uint64_t msvc_localDutyCycle;
     //
     ClockType msvc_cycleStartTime;
+    //
+    ClockType msvc_nextBatchTime;
     
     //
     MsvcSLOType msvc_interReqTime = 1;

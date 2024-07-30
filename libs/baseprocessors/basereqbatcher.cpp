@@ -216,6 +216,22 @@ BaseReqBatcherConfigs BaseReqBatcher::loadConfigsFromJson(const json &jsonConfig
     return configs;
 }
 
+void BaseReqBatcher::updateCycleTiming() {
+    auto numCyclesSince = std::chrono::duration_cast<TimePrecisionType>(
+            std::chrono::high_resolution_clock::now() - msvc_cycleStartTime).count() / msvc_localDutyCycle;
+
+    ClockType lastCycleStartTime = msvc_cycleStartTime + TimePrecisionType((int) numCyclesSince * msvc_localDutyCycle);
+    ClockType nextCycleStartTime = lastCycleStartTime + TimePrecisionType(msvc_localDutyCycle);
+
+    // The time when the next batch should be batched for execution
+    msvc_nextBatchTime = nextCycleStartTime + TimePrecisionType(msvc_contEndTime) -
+                         TimePrecisionType(
+                            (uint64_t)((msvc_batchInferProfileList.at(msvc_idealBatchSize).p95inferLat +
+                                        msvc_batchInferProfileList.at(msvc_idealBatchSize).p95postLat) * 
+                                       msvc_onBufferBatchSize * 1.1)
+                         );
+}
+
 /**
  * @brief Load the configurations from the json file
  * 
@@ -239,6 +255,11 @@ void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_subVals = configs.msvc_subVals;
     msvc_divVals = configs.msvc_divVals;
     msvc_arrivalRecords.setKeepLength((uint64_t) jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
+
+    if (msvc_BATCH_MODE == BATCH_MODE::OURS) {
+        updateCycleTiming();
+    }
+    msvc_toReloadConfigs = false;
 }
 
 /**
@@ -341,19 +362,29 @@ void BaseReqBatcher::batchRequests() {
             spdlog::get("container_agent")->trace("{0:s} Current active queue index {1:d}.", msvc_name,
                                                   msvc_activeInQueueIndex.at(0));
         }
+        if (isTimeToBatch()) {
+            executeBatch(outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
+        }
         if (msvc_activeInQueueIndex.at(0) == 1) {
             currCPUReq = msvc_InQueue.at(0)->pop1(timeout);
             if (!validateRequest<LocalCPUReqDataType>(currCPUReq)) {
-                executeBatch(timeNow, outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
                 continue;
             }
             currReq = uploadReq(currCPUReq);
         } else if (msvc_activeInQueueIndex.at(0) == 2) {
             currReq = msvc_InQueue.at(0)->pop2(timeout);
             if (!validateRequest<LocalGPUReqDataType>(currReq)) {
-                executeBatch(timeNow, outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
                 continue;
             }
+        }
+        // even if a valid request is not popped, if it's time to batch, we should batch the requests
+        // as it doesn't take much time and otherwise, we are running the risk of the whole batch being late.
+        if (isTimeToBatch()) {
+            executeBatch(outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
+        }
+
+        if (msvc_onBufferBatchSize == 0) {
+            oldestReqTime = std::chrono::high_resolution_clock::now();
         }
 
         msvc_inReqCount++;
@@ -469,57 +500,50 @@ void BaseReqBatcher::batchRequests() {
             );
             continue;
         }
-
-        executeBatch(currReq_genTime, outBatch_genTime, outBatch_slo, outBatch_path, bufferData, prevData);
     }
     msvc_logFile.close();
 }
 
-void BaseReqBatcher::executeBatch(ClockType time, BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
+void BaseReqBatcher::executeBatch(BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
                                   std::vector<RequestData<LocalGPUReqDataType>> &bufferData,
                                   std::vector<RequestData<LocalGPUReqDataType>> &prevData) {
-    if (time < oldestReqTime) {
-        oldestReqTime = time;
-    }
-    // std::cout << "Time taken to preprocess a req is " << stopwatch.elapsed_seconds() << std::endl;
-    // cudaFree(currReq.req_data[0].data.cudaPtr());
-    // First we need to decide if this is an appropriate time to batch the buffered data or if we can wait a little more.
-    // Waiting more means there is a higher chance the earliest request in the buffer will be late eventually.
-    if (this->isTimeToBatch()) {
-        // If true, copy the buffer data into the out queue
-        ClockType timeNow = std::chrono::high_resolution_clock::now();
+    // if (time < oldestReqTime) {
+    //     oldestReqTime = time;
+    // }
 
-        for (auto &req_genTime: genTime) {
-            req_genTime.emplace_back(timeNow);
-        }
+    // If true, copy the buffer data into the out queue
+    ClockType timeNow = std::chrono::high_resolution_clock::now();
 
-        Request<LocalGPUReqDataType> outReq = {
-                genTime,
-                slo,
-                path,
-                msvc_onBufferBatchSize,
-                bufferData,
-                prevData
-        };
-
-        msvc_batchCount++;
-
-        spdlog::get("container_agent")->trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name,
-                                              msvc_onBufferBatchSize);
-        msvc_OutQueue[0]->emplace(outReq);
-        msvc_onBufferBatchSize = 0;
-        genTime.clear();
-        path.clear();
-        slo.clear();
-        bufferData.clear();
-        prevData.clear();
-        timeout = 100;
-        oldestReqTime = std::chrono::high_resolution_clock::time_point::max();;
+    // Moment of batching
+    // This is the FOURTH TIMESTAMP
+    for (auto &req_genTime: genTime) {
+        req_genTime.emplace_back(timeNow);
     }
 
-    spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
-    std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime)
-    );
+    Request<LocalGPUReqDataType> outReq = {
+            genTime,
+            slo,
+            path,
+            msvc_onBufferBatchSize,
+            bufferData,
+            prevData
+    };
+
+    msvc_batchCount++;
+
+    spdlog::get("container_agent")->trace("{0:s} emplaced a request of batch size {1:d} ", msvc_name,
+                                            msvc_onBufferBatchSize);
+    msvc_OutQueue[0]->emplace(outReq);
+    msvc_onBufferBatchSize = 0;
+    genTime.clear();
+    path.clear();
+    slo.clear();
+    bufferData.clear();
+    prevData.clear();
+    oldestReqTime = std::chrono::high_resolution_clock::time_point::max();
+
+    // spdlog::get("container_agent")->trace("{0:s} sleeps for {1:d} millisecond", msvc_name, msvc_interReqTime);
+    // std::this_thread::sleep_for(std::chrono::milliseconds(msvc_interReqTime));
 }
 
 template<typename T>
@@ -751,23 +775,47 @@ void BaseReqBatcher::batchRequestsProfiling() {
  * @return false if otherwise
  */
 bool BaseReqBatcher::isTimeToBatch() {
-    if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
-        if (msvc_onBufferBatchSize == msvc_idealBatchSize) {
-            return true;
-        }
-        // int diff = msvc_svcLevelObjLatency - std::chrono::duration_cast<TimePrecisionType>(
-        //         std::chrono::high_resolution_clock::now() - oldestReqTime).count() -
-        //            msvc_batchInferProfileList.at(msvc_onBufferBatchSize).p95inferLat * msvc_onBufferBatchSize;
-        // if (diff < 10) {
-        //     return true;
-        // }
-        // timeout = diff - 5;
-    } else {
-        if (msvc_onBufferBatchSize == msvc_idealBatchSize) {
-            return true;
-        }
+    // timeout for the pop() function
+    timeout = 100000;
+    if ((msvc_RUNMODE == RUNMODE::PROFILING || 
+         msvc_BATCH_MODE == BATCH_MODE::FIXED) && 
+        msvc_onBufferBatchSize == msvc_idealBatchSize) {
+        timeout = 100;
+        return true;
     }
-    return false;
+
+    // OURS BATCH MODE
+    //First of all, whenever the batch is full, then it's time to batch
+    if (msvc_onBufferBatchSize == msvc_idealBatchSize) {
+        return true;
+    // If the batch is empty, then it doesn't really matter if it's time to batch or not
+    } else if (msvc_onBufferBatchSize == 0) {
+        return false;
+    }
+    // If the time to batch is not yet reached, then calculate the timeout until the next batch time
+    if (std::chrono::high_resolution_clock::now() < msvc_nextBatchTime) {
+        // Time out until the next batch time calculated by duty cycle
+        timeout = std::chrono::duration_cast<TimePrecisionType>(
+            msvc_nextBatchTime - std::chrono::high_resolution_clock::now()).count();
+        
+        auto lastReqWaitTime = std::chrono::duration_cast<TimePrecisionType>(
+                std::chrono::high_resolution_clock::now() - oldestReqTime).count();
+
+        // This is the timeout till the moment the oldest request has to be processed
+        // 1.1 is to make sure the request is not late
+        auto timeOutByLastReq = msvc_contSLO - lastReqWaitTime - 
+                                (msvc_batchInferProfileList.at(msvc_onBufferBatchSize).p95inferLat +
+                                 msvc_batchInferProfileList.at(msvc_onBufferBatchSize).p95postLat) * msvc_onBufferBatchSize * 1.1;
+        
+        timeout = std::min(timeout, (uint64_t) timeOutByLastReq);
+        if (timeout < 100) { //microseconds
+            return true;
+        }
+        return false;
+    }
+
+    updateCycleTiming();
+    return true;
 }
 
 /**
