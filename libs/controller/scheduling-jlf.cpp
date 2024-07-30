@@ -653,6 +653,21 @@ void Controller::Scheduling()
                 lock.unlock();
             }
             std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
+            std::cout << "================================= check all models downstream ==================================" << task_name << std::endl;
+            for (auto &model : model_profiles_jf.infos)
+            {
+                auto p = model.second.front().model;
+                std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
+                std::cout << "model name: " << p->name;
+                for (auto us : p->downstreams)
+                {
+                    std::cout << ", ds name: " <<us.first->name << ", address of client: " << us.first << "; ";
+                }
+                std::cout << std::endl;
+                lock.unlock();
+            }
+            std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << 
+            std::endl;
         }
 
         // TODO: test
@@ -1292,11 +1307,12 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
     int best_value = 0;
 
     // dp
-    auto [max_batch_size, max_index] = findMaxBatchSize(models, clients[0]);
+    auto [max_batch_size, max_index] = findMaxBatchSize(models, clients[0], 16);
 
     // std::cout << "max batch size: " << max_batch_size
     //           << " and index: " << max_index << std::endl;
 
+    std::cout << "max batch size: " << max_batch_size << " and index: " << max_index << std::endl;
     assert(max_batch_size > 0);
 
     // construct the dp matrix

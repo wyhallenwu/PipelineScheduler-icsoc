@@ -296,6 +296,7 @@ bool DeviceAgent::CreateContainer(
         int allocation_mode,
         int device,
         const MsvcSLOType &slo,
+        uint64_t timeBudget,
         const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
         const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
 ) {
@@ -325,6 +326,13 @@ bool DeviceAgent::CreateContainer(
         start_config["container"]["cont_hostDeviceType"] = dev_deviceInfo[dev_type];
         start_config["container"]["cont_name"] = cont_name;
         start_config["container"]["cont_allocationMode"] = allocation_mode;
+        if (dev_system_name == "ppp") {
+            start_config["container"]["cont_batchMode"] = 1;
+        }
+        if (dev_system_name == "ppp" || dev_system_name == "jlf") {
+            start_config["container"]["cont_dropMode"] = 1;
+        }
+        start_config["container"]["cont_timeBudgetLeft"] = timeBudget;
 
         json base_config = start_config["container"]["cont_pipeline"];
 
@@ -570,9 +578,10 @@ void DeviceAgent::StartContainerRequestHandler::Proceed() {
             input_dims.push_back(dim);
         }
         bool success = device_agent->CreateContainer(static_cast<ModelType>(request.model()), request.model_file(),
-                                                     request.pipeline_name(), request.batch_size(), request.fps(), input_dims,
-                                                     request.replica_id(), request.allocation_mode(), request.device(),
-                                                     request.slo(), request.upstream(), request.downstream());
+                                                     request.pipeline_name(), request.batch_size(), request.fps(),
+                                                     input_dims, request.replica_id(), request.allocation_mode(),
+                                                     request.device(), request.slo(), request.timebudget(),
+                                                     request.upstream(), request.downstream());
         if (!success) {
             status = FINISH;
             responder.Finish(reply, Status::CANCELLED, this);

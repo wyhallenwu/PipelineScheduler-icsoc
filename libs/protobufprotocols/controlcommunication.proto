@@ -51,6 +51,7 @@ message ContainerConfig {
   repeated Neighbor upstream = 10;
   repeated Neighbor downstream = 11; 
   int32 fps = 12;
+  uint64 timeBudget = 13;
 }
 
 message ContainerLink {
