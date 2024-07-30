@@ -47,6 +47,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
     dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
     dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
     dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
+    deploy_mode = absl::GetFlag(FLAGS_deploy_mode);
     dev_type = type;
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
