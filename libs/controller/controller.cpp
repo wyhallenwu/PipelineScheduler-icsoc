@@ -388,7 +388,7 @@ void Controller::ApplyScheduling() {
      */
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
-            if (ctrl_systemName != "ppp") {
+            if (ctrl_systemName != "ppp" && ctrl_systemName != "jlf") {
                 model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
                 model->numReplicas = 1;
             }
