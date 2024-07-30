@@ -601,6 +601,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     request.set_slo(container->inference_deadline);
     request.set_timebudget(container->timeBudgetLeft);
     request.set_total_slo(container->task->tk_slo);
+    request.set_fps(ctrl_systemFPS);
     for (auto dim: container->dimensions) {
         request.add_input_dimensions(dim);
     }
