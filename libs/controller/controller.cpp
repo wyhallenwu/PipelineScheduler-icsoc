@@ -490,6 +490,7 @@ void Controller::ApplyScheduling() {
                 }
                 if (candidate->batch_size != model->batchSize)
                     AdjustBatchSize(candidate, model->batchSize);
+                AdjustTiming(candidate);
                 //if (candidate->cuda_device != model->cudaDevices[i++])
                 //    AdjustCudaDevice(candidate, model->cudaDevices[i - 1]);
             }
@@ -561,6 +562,19 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
         container->dimensions = ctrl_containerLib[containerTypeName].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
     }
 
+    // container->timeBudgetLeft for lazy dropping
+    container->timeBudgetLeft = container->pipelineModel->timeBudgetLeft;
+    // container->batchingDeadline for lazy dynamic batching
+    container->batchingDeadline = container->pipelineModel->batchingDeadline;
+    // container start time
+    container->startTime = container->pipelineModel->startTime;
+    // container end time
+    container->endTime = container->pipelineModel->endTime;
+    // container SLO
+    container->localDutyCycle = container->pipelineModel->localDutyCycle;
+    // 
+    container->cycleStartTime = ctrl_currSchedulingTime;
+
     model->task->tk_subTasks[subTaskName].push_back(container);
 
     // for (auto &upstream: model->upstreams) {
@@ -579,6 +593,21 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     //     }
     // }
     return container;
+}
+
+void Controller::AdjustTiming(ContainerHandle *container) {
+    // container->timeBudgetLeft for lazy dropping
+    container->timeBudgetLeft = container->pipelineModel->timeBudgetLeft;
+    // container->batchingDeadline for lazy dynamic batching
+    container->batchingDeadline = container->pipelineModel->batchingDeadline;
+    // container->startTime
+    container->startTime = container->pipelineModel->startTime;
+    // container->endTime
+    container->endTime = container->pipelineModel->endTime;
+    // container SLO
+    container->localDutyCycle = container->pipelineModel->localDutyCycle;
+    // `container->task->tk_slo` for the total SLO of the pipeline
+    container->cycleStartTime = ctrl_currSchedulingTime;
 }
 
 void Controller::StartContainer(ContainerHandle *container, bool easy_allocation) {
