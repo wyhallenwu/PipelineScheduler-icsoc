@@ -11,6 +11,7 @@ service InDeviceCommunication {
   rpc UpdateSender(Connection) returns (google.protobuf.Empty) {}
   rpc UpdateBatchSize(Int32) returns (google.protobuf.Empty) {}
   rpc UpdateResolution(Dimensions) returns (google.protobuf.Empty) {}
+  rpc UpdateTimeKeeping(TimeKeeping) returns (google.protobuf.Empty) {}
   rpc SyncDatasources(Int32) returns (google.protobuf.Empty) {}
   rpc SetStartFrame(Int32) returns (google.protobuf.Empty) {}
   rpc StopExecution(Signal) returns (google.protobuf.Empty) {}
@@ -24,6 +25,16 @@ message Connection {
   string name = 1;
   string ip = 2;
   int32 port = 3;
+}
+
+message TimeKeeping {
+  int32 slo = 1;
+  int32 cont_slo = 2;
+  uint64 timeBudget = 3;
+  uint64 startTime = 4;
+  uint64 endTime = 5;
+  uint64 localDutyCycle = 6;
+  uint64 cycleStartTime = 7;
 }
 
 message Dimensions {
