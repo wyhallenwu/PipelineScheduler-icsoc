@@ -601,8 +601,11 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         // request.set_device(container->gpuHandle->number);
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(3, 4);
+        std::uniform_int_distribution<> dis(0, 3);
         request.set_device(dis(gen));
+        if (container->device_agent->name != "server") {
+            request.set_device(0);
+        }
     }
     request.set_slo(container->inference_deadline);
     for (auto dim: container->dimensions) {

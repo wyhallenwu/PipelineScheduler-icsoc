@@ -97,7 +97,7 @@ private:
                 absl::StrFormat(
                         R"(%s pipeline-base-container %s --json '%s' --device %i --port %i --port_offset %i)",
                         cont_name, executable, start_string, device, port, dev_port_offset) +
-                " --log_dir ../logs --logging_mode 1";
+                " --log_dir ../logs --logging_mode 1 --verbose 0";
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         return system(command.c_str());
