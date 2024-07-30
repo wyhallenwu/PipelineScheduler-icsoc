@@ -272,6 +272,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     for (auto &model: task->tk_pipelineModels) {
         model->datasourceName = t.source;
         model->task = task;
+        
     }
     std::unique_lock<std::mutex> lock2(ctrl_unscheduledPipelines.tasksMutex);
     std::unique_lock<std::mutex> lock3(ctrl_savedUnscheduledPipelines.tasksMutex);
@@ -555,9 +556,7 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
                                           model->task,
                                           model};
     
-    if (model->name.find("datasource") != std::string::npos ||
-        model->name.find("yolov5ndsrc") != std::string::npos || 
-        model->name.find("retina1facedsrc") != std::string::npos) {
+    if (model->name.find("datasource") != std::string::npos) {
         container->dimensions = ctrl_containerLib[containerTypeName].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0].get<std::vector<int>>();
     } else if (model->name.find("sink") == std::string::npos) {
         container->dimensions = ctrl_containerLib[containerTypeName].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
@@ -601,6 +600,9 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         request.set_device(container->gpuHandle->number);
     }
     request.set_slo(container->inference_deadline);
+    request.set_timebudget(container->timeBudgetLeft);
+    request.set_total_slo(container->task->tk_slo);
+    request.set_fps(ctrl_systemFPS);
     for (auto dim: container->dimensions) {
         request.add_input_dimensions(dim);
     }

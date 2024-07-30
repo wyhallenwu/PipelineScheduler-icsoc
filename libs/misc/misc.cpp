@@ -1,5 +1,7 @@
 #include "misc.h"
 
+ABSL_FLAG(uint16_t, deploy_mode, 0, "The deployment mode of the system. 0: development, 1: production");
+
 using json = nlohmann::json;
 
 uint64_t calculateP95(std::vector<uint64_t> &values) {
