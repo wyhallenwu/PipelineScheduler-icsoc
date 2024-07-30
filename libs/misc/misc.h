@@ -18,6 +18,8 @@
 #include "absl/flags/flag.h"
 #include <fstream>
 
+ABSL_DECLARE_FLAG(uint16_t, deploy_mode);
+
 using grpc::Status;
 using grpc::CompletionQueue;
 using grpc::ClientAsyncResponseReader;

@@ -234,6 +234,9 @@ struct ContainerHandle {
                 NodeHandle* device_agent = nullptr,
                 TaskHandle* task = nullptr,
                 PipelineModel* pipelineModel = nullptr,
+                const std::vector<ContainerHandle*>& upstreams = {},
+                const std::vector<ContainerHandle*>& downstreams = {},
+                const std::vector<QueueLengthType>& queueSizes = {},
                 uint64_t timeBudgetLeft = 9999999999)
     : name(name),
       class_of_interest(class_of_interest),
