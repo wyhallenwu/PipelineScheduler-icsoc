@@ -1349,7 +1349,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {},
                     {},
-                    {{retina1face, -1}, {carbrand, -1}, {platedet, -1}}
+                    {{arcface, -1}, {carbrand, -1}, {platedet, -1}}
             };
             sink->possibleDevices = {"server"};
             arcface->downstreams.push_back({sink, -1});
