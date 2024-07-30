@@ -637,7 +637,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     for (auto dwnstr: container->downstreams) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name(dwnstr->name);
-        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
+        dwn->add_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
         if (dwnstr->model == Sink) {
             dwn->set_gpu_connection(false);
@@ -651,21 +651,21 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     if (request.downstream_size() == 0) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name("video_sink");
-        dwn->set_ip("./out.log"); //output log file
+        dwn->add_ip("./out.log"); //output log file
         dwn->set_class_of_interest(-1);
         dwn->set_gpu_connection(false);
     }
     if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinafaceDsrc) {
         Neighbor *up = request.add_upstream();
         up->set_name("video_source");
-        up->set_ip(container->pipelineModel->datasourceName);
+        up->add_ip(container->pipelineModel->datasourceName);
         up->set_class_of_interest(-1);
         up->set_gpu_connection(false);
     } else {
         for (auto upstr: container->upstreams) {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
-            up->set_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
+            up->add_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
             up->set_class_of_interest(-2);
             up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
                                    (container->gpuHandle == upstr->gpuHandle));
