@@ -5,6 +5,7 @@
 #include <grpcpp/grpcpp.h>
 #include "../json/json.h"
 #include <thread>
+#include <random>
 #include "controlcommunication.grpc.pb.h"
 #include <pqxx/pqxx>
 #include "absl/strings/str_format.h"

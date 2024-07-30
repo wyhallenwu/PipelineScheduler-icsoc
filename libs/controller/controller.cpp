@@ -601,7 +601,12 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     if (container->model == DataSource || container->model == Sink) {
         request.set_device(-1);
     } else {
-        request.set_device(container->gpuHandle->number);
+        // TODO: REMOVE QUICKFIX after GPU assigning works
+        // request.set_device(container->gpuHandle->number);
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(0, 3);
+        request.set_device(dis(gen));
     }
     request.set_slo(container->inference_deadline);
     request.set_timebudget(container->timeBudgetLeft);
