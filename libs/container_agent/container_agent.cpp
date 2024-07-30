@@ -1207,14 +1207,13 @@ void ContainerAgent::UpdateTimeKeepingRequestHandler::Proceed() {
         service->RequestUpdateTimeKeeping(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new UpdateTimeKeepingRequestHandler(service, cq, container_agent);
-        // TODO: @Tung please use the values as you need
-        request.slo();
-        request.cont_slo();
-        request.timebudget();
-        request.starttime();
-        request.endtime();
-        request.localdutycycle();
-        request.cyclestarttime();
+        container_agent->cont_msvcsList[1]->msvc_contSLO = request.cont_slo();
+        container_agent->cont_msvcsList[1]->msvc_pipelineSLO = request.pipeline_slo();
+        container_agent->cont_msvcsList[1]->msvc_timeBudgetLeft = request.timebudget();
+        container_agent->cont_msvcsList[1]->msvc_contStartTime = request.starttime();
+        container_agent->cont_msvcsList[1]->msvc_contEndTime = request.endtime();
+        container_agent->cont_msvcsList[1]->msvc_localDutyCycle = request.localdutycycle();
+        container_agent->cont_msvcsList[1]->msvc_cycleStartTime = request.cyclestarttime();
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
