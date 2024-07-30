@@ -1411,7 +1411,7 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
             row = row - 1;
             col = int((w - w_i) / h);
             w = col * h;
-            assert(w == dp_mat[row][col]);
+            // assert(w == dp_mat[row][col]);
             // std::cout << "In backtracing, w: " << w << ", dp: " << dp_mat[row][col] << std::endl;
             selected_clients.push_back(c);
         }

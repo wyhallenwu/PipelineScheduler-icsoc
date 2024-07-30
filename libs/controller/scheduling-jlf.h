@@ -24,7 +24,8 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{datasource, -1}}
+                    {{datasource, -1}},
+                    1
             };
             yolov5n->possibleDevices = {"server"};
             datasource->downstreams.push_back({yolov5n, -1});
@@ -38,7 +39,8 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{datasource, -1}}
+                    {{datasource, -1}},
+                    1
             };
             yolov5n320->possibleDevices = {"server"};
 
@@ -51,7 +53,8 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{datasource, -1}}
+                    {{datasource, -1}},
+                    1
             };
             yolov5n512->possibleDevices = {"server"};
 
@@ -63,7 +66,8 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{datasource, -1}}
+                    {{datasource, -1}},
+                    1
             };
             yolov5s->possibleDevices = {"server"};
 
@@ -188,7 +192,8 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{datasource, -1}}
+                    {{datasource, -1}},
+                    1
             };
             yolov5n->possibleDevices = {"server"};
             datasource->downstreams.push_back({yolov5n, -1});
@@ -202,7 +207,8 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{datasource, -1}}
+                    {{datasource, -1}},
+                    1
             };
             yolov5n320->possibleDevices = {"server"};
 
@@ -214,7 +220,8 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{datasource, -1}}
+                    {{datasource, -1}},
+                    1
             };
             yolov5n512->possibleDevices = {"server"};
 
@@ -226,7 +233,8 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{datasource, -1}}
+                    {{datasource, -1}},
+                    1
             };
             yolov5s->possibleDevices = {"server"};
 
