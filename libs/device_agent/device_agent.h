@@ -71,22 +71,7 @@ public:
 private:
     void testNetwork(float min_size, float max_size, int num_loops);
 
-    bool CreateContainer(
-            ModelType model,
-            std::string model_file,
-            std::string pipe_name,
-            BatchSizeType batch_size,
-            BatchSizeType fps,
-            std::vector<int> input_dims,
-            int replica_id,
-            int allocation_mode,
-            int device,
-            const MsvcSLOType &slo,
-            const MsvcSLOType &total_slo,
-            uint64_t timeBudget,
-            const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
-            const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
-    );
+    bool CreateContainer(ContainerConfig &c);
 
     int runDocker(const std::string &executable, const std::string &cont_name, const std::string &start_string,
                          const int &device, const int &port) {
@@ -284,6 +269,22 @@ private:
 
     private:
         ContainerInts request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+    };
+
+    class UpdateTimeKeepingRequestHandler : public ControlRequestHandler {
+    public:
+        UpdateTimeKeepingRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                      DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        TimeKeeping request;
         EmptyMessage reply;
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };

@@ -608,6 +608,26 @@ void Controller::AdjustTiming(ContainerHandle *container) {
     container->localDutyCycle = container->pipelineModel->localDutyCycle;
     // `container->task->tk_slo` for the total SLO of the pipeline
     container->cycleStartTime = ctrl_currSchedulingTime;
+
+    TimeKeeping request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_slo(container->inference_deadline);
+    request.set_cont_slo(container->batchingDeadline);
+    request.set_timebudget(container->timeBudgetLeft);
+    request.set_starttime(container->startTime);
+    request.set_endtime(container->endTime);
+    request.set_localdutycycle(container->localDutyCycle);
+    request.set_cyclestarttime(std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count());
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            container->device_agent->stub->AsyncUpdateTimeKeeping(&context, request,
+                                                               container->device_agent->cq));
+    finishGrpc(rpc, reply, status, container->device_agent->cq);
+    if (!status.ok()) {
+        spdlog::get("container_agent")->error("Failed to update TimeKeeping for container: {0:s}", container->name);
+        return;
+    }
 }
 
 void Controller::StartContainer(ContainerHandle *container, bool easy_allocation) {
@@ -631,6 +651,11 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     request.set_timebudget(container->timeBudgetLeft);
     request.set_total_slo(container->task->tk_slo);
     request.set_fps(ctrl_systemFPS);
+    request.set_cont_slo(container->batchingDeadline);
+    request.set_starttime(container->startTime);
+    request.set_endtime(container->endTime);
+    request.set_localdutycycle(container->localDutyCycle);
+    request.set_cyclestarttime(std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count());
     for (auto dim: container->dimensions) {
         request.add_input_dimensions(dim);
     }
