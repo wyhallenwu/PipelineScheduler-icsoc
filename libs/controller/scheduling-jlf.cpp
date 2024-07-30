@@ -709,8 +709,18 @@ void Controller::Scheduling()
             {
                 model->timeBudgetLeft = pipelineSLOs[task.second->tk_name] - model->expectedStart2HereLatency -
                                             model->expectedMaxProcessLatency + model->expectedQueueingLatency + model->expectedTransferLatency;
+
+                if (model->name.find("datasource") != std::string::npos ||
+                        model->name.find("sink") != std::string::npos ||
+                        model->name.find("yolo") != std::string::npos)
+                {
+                    continue;
+                }
+                // set specific number of replicas for each downstream
+                auto numReplicas = 4;
             }
             task.second->tk_slo = pipelineSLOs[task.second->tk_name];
+            
         }
 
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
