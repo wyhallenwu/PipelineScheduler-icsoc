@@ -313,7 +313,10 @@
         ],
         "cont_metricServerConfigs": "../jsons/metricsserver.json",
         "cont_numWarmUpBatches": 15,
-        "cont_allocationMode": 1
+        "cont_allocationMode": 1,
+        "cont_batchMode": 0,
+        "cont_dropMode": 0,
+        "cont_timeBudgetLeft": 9999999
     },
     "profiling": {
         "profile_minBatch": 1,

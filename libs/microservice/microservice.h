@@ -564,6 +564,16 @@ private:
     uint64_t totalNumEntries = 0, currNumEntries = 0;
 };
 
+enum class BATCH_MODE {
+    FIXED,
+    DYNAMIC // Lazy batching
+};
+
+enum class DROP_MODE {
+    NO_DROP,
+    LAZY
+};
+
 /**
  * @brief 
  * 
@@ -741,6 +751,12 @@ protected:
      */
     RUNMODE msvc_RUNMODE = RUNMODE::DEPLOYMENT;
 
+    DROP_MODE msvc_DROP_MODE = DROP_MODE::NO_DROP;
+
+    BATCH_MODE msvc_BATCH_MODE = BATCH_MODE::FIXED;
+    // In case `msvc_DROP_MODE` is `LAZY`, this is the time budget left for the current frame
+    uint64_t msvc_timeBudgetLeft = 99999999; 
+
     //Path to specific Application configurations for this microservice
     std::string msvc_appLvlConfigs = "";
 
@@ -750,8 +766,10 @@ protected:
     //type
     MicroserviceType msvc_type;
 
+    //
+    MsvcSLOType msvc_pipelineSLO;
     // in microseconds
-    MsvcSLOType msvc_svcLevelObjLatency;
+    MsvcSLOType msvc_SLO;
     //
     MsvcSLOType msvc_interReqTime = 1;
 
