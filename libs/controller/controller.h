@@ -691,6 +691,7 @@ public:
                 remainTasks.push_back(t);
             }
         }
+        isPipelineInitialised = true;
     }
 
     void InitRemain() {
@@ -1043,7 +1044,9 @@ private:
     std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
 
     uint16_t ctrl_systemFPS;
-    
+
+    std::atomic<bool> isPipelineInitialised = false;
+
 //////////////////////////////////////////////////distream_add//////////////////////////////////////////////////////
     std::mutex nodeHandleMutex;
     struct Partitioner
