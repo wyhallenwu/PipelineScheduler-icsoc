@@ -52,7 +52,9 @@ int main(int argc, char **argv) {
                                      std::string("\"], \"nb_classOfInterest\": -2, "
                                                  "\"nb_maxQueueSize\": 10, \"nb_expectedShape\": [[-1, -1]]}],"
                                                  "\"msvc_containerLogPath\": \".\", \"msvc_maxBatchSize\": 64, "
-                                                 "\"msvc_allocationMode\": 1, \"msvc_numWarmUpBatches\": 0}"));
+                                                 "\"msvc_allocationMode\": 1, \"msvc_numWarmUpBatches\": 0, "
+                                                 "\"msvc_batchMode\": 0, \"msvc_dropMode\": 0, "
+                                                 "\"msvc_timeBudgetLeft\": 9999999, \"msvc_pipelineSLO\": 9999999}"));
     receiver_json["msvc_experimentName"] = j["experimentName"];
     receiver_json["msvc_pipelineName"] = j["pipelineName"];
     receiver_json["msvc_taskName"] = "sink";
@@ -70,7 +72,9 @@ int main(int argc, char **argv) {
                                              "\"msvc_containerLogPath\": \"") +
                                  logPath +
                                  std::string("\", \"msvc_maxBatchSize\": 64, "
-                                             "\"msvc_allocationMode\": 1, \"msvc_numWarmUpBatches\": 0}"));
+                                             "\"msvc_allocationMode\": 1, \"msvc_numWarmUpBatches\": 0, "
+                                             "\"msvc_batchMode\": 0, \"msvc_dropMode\": 0, "
+                                             "\"msvc_timeBudgetLeft\": 9999999, \"msvc_pipelineSLO\": 9999999}"));
     sink_json["msvc_experimentName"] = j["experimentName"];
     sink_json["msvc_pipelineName"] = j["pipelineName"];
     sink_json["msvc_taskName"] = "sink";

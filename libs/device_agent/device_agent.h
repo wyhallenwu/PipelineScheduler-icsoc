@@ -82,6 +82,7 @@ private:
             int allocation_mode,
             int device,
             const MsvcSLOType &slo,
+            const MsvcSLOType &total_slo,
             uint64_t timeBudget,
             const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
             const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
@@ -99,7 +100,7 @@ private:
                         R"(%s pipeline-base-container %s --json '%s' --device %i --port %i --port_offset %i)",
                         cont_name, executable, start_string, device, port, dev_port_offset) +
                 " --log_dir ../logs";
-        if (deploy_mode) {
+        if (!deploy_mode) {
             command += " --verbose 0 --logging_mode 2";
         } else {
             command += " --logging_mode 1";

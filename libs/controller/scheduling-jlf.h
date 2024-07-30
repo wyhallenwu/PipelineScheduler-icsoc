@@ -258,7 +258,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}}
+                    {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}}
             };
             retina1face->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({retina1face, 0});
@@ -275,7 +275,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}}
+                    {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}}
             };
             movenet->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({movenet, 0});

@@ -622,9 +622,8 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
                                           device,
                                           model->task,
                                           model};
-
-    if (subTaskName.find("datasource") != std::string::npos ||
-        subTaskName.find("dsrc") != std::string::npos) {
+    
+    if (model->name.find("datasource") != std::string::npos) {
         container->dimensions = ctrl_containerLib[containerTypeName].templateConfig["container"]["cont_pipeline"][0]["msvc_dataShape"][0].get<std::vector<int>>();
     } else if (subTaskName.find("320") != std::string::npos) {
         container->dimensions = {3, 320, 320};
@@ -678,6 +677,8 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     }
     request.set_slo(container->inference_deadline);
     request.set_timebudget(container->timeBudgetLeft);
+    request.set_total_slo(container->task->tk_slo);
+    request.set_fps(ctrl_systemFPS);
     for (auto dim: container->dimensions) {
         request.add_input_dimensions(dim);
     }
