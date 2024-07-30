@@ -313,7 +313,7 @@ bool DeviceAgent::CreateContainer(
             start_config["experimentName"] = dev_experiment_name;
             start_config["systemName"] = dev_system_name;
             start_config["pipelineName"] = pipe_name;
-            uint16_t port = std::stoi(upstreams.at(0).ip().substr(upstreams.at(0).ip().find(':') + 1));
+            uint16_t port = std::stoi(upstreams.at(0).ip().at(0).substr(upstreams.at(0).ip().at(0).find(':') + 1));
             runDocker(executable, cont_name, to_string(start_config), device, port);
             return true;
         }
@@ -359,10 +359,14 @@ bool DeviceAgent::CreateContainer(
 
         // adjust receiver upstreams
         base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = upstreams.at(0).name();
-        base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {upstreams.at(0).ip()};
+        base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {};
         if (model == ModelType::DataSource || model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
             std::string dataDir = "../data/";
-            base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {dataDir + upstreams.at(0).ip()};
+            base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {dataDir + upstreams.at(0).ip().at(0)};
+        } else {
+            for (auto ip: upstreams.at(0).ip()) {
+                base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"].push_back(ip);
+            }
         }
         if (upstreams.at(0).gpu_connection()) {
             base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
@@ -381,7 +385,10 @@ bool DeviceAgent::CreateContainer(
             json *postprocessor = &base_config[postprocessorIndex];
             sender["msvc_name"] = sender["msvc_name"].get<std::string>() + std::to_string(i);
             sender["msvc_dnstreamMicroservices"][0]["nb_name"] = d.name();
-            sender["msvc_dnstreamMicroservices"][0]["nb_link"] = {d.ip()};
+            sender["msvc_dnstreamMicroservices"][0]["nb_link"] = {};
+            for (auto ip: d.ip()) {
+                sender["msvc_dnstreamMicroservices"][0]["nb_link"].push_back(ip);
+            }
             post_down["nb_name"] = sender["msvc_name"];
             if (d.gpu_connection()) {
                 post_down["nb_commMethod"] = CommMethod::localGPU;

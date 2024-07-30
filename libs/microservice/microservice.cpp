@@ -89,11 +89,10 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         }
     }
     if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-        msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + ".txt";
+        msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_pipelineName + "_" + msvc_name + ".txt";
     } else {
-        msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + "_" + getTimestampString() + ".txt";
+        msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_pipelineName + "_" + msvc_name + "_" + getTimestampString() + ".txt";
     }
-
 
     // Initialize the queues    
     if (isConstructing) {

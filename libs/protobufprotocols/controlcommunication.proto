@@ -33,7 +33,7 @@ message SystemInfo {
 
 message Neighbor {
   string name = 1;
-  string ip = 2;
+  repeated string ip = 2;
   int32 class_of_interest = 3;
   bool gpu_connection = 4;
 }

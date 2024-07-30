@@ -46,7 +46,7 @@ struct GPUPortion;
 struct GPULane {
     std::uint16_t gpuNum;
     std::uint16_t laneNum;
-    std::uint64_t dutyCycle = 9999999999999999;
+    std::uint64_t dutyCycle = 0;
 };
 
 struct GPUPortion : GPULane {
@@ -97,6 +97,8 @@ struct NodeHandle {
     std::map<std::string, NetworkEntryType> latestNetworkEntries = {};
     // GPU Handle;
     std::vector<GPUHandle*> gpuHandles;
+    //
+    uint8_t numGPULanes;
     //
     std::vector<GPULane *> gpuLanes;
     GPUPortionList freeGPUPortions;
@@ -208,6 +210,12 @@ struct ContainerHandle {
     uint64_t startTime;
     //
     uint64_t endTime;
+    //
+    uint64_t localDutyCycle = 0;
+    //
+    uint64_t batchingDeadline;
+    // 
+    ClockType cycleStartTime;
     // GPU Handle
     GPUHandle *gpuHandle = nullptr;
     //
@@ -290,6 +298,8 @@ struct ContainerHandle {
         expectedThroughput = other.expectedThroughput;
         startTime = other.startTime;
         endTime = other.endTime;
+        localDutyCycle = other.localDutyCycle;
+        batchingDeadline = other.batchingDeadline;
         gpuHandle = other.gpuHandle;
         executionLane = other.executionLane;
         pipelineModel = other.pipelineModel;
@@ -330,6 +340,8 @@ struct ContainerHandle {
             expectedThroughput = other.expectedThroughput;
             startTime = other.startTime;
             endTime = other.endTime;
+            localDutyCycle = other.localDutyCycle;
+            batchingDeadline = other.batchingDeadline;
             gpuHandle = other.gpuHandle;
             executionLane = other.executionLane;
             pipelineModel = other.pipelineModel;
@@ -381,6 +393,9 @@ struct PipelineModel {
     uint64_t estimatedStart2HereCost = 0;
     // Batching deadline
     uint64_t batchingDeadline = 9999999999;
+    uint64_t startTime = 0;
+    uint64_t endTime = 0;
+    uint64_t localDutyCycle = 0;
 
     std::vector<int> dimensions = {-1, -1};
 
@@ -390,6 +405,7 @@ struct PipelineModel {
 
     bool merged = false;
     bool toBeRun = true;
+    bool gpuScheduled = false;
 
     std::vector<std::string> possibleDevices;
     // Manifestations are the list of containers that will be created for this model
@@ -471,6 +487,9 @@ struct PipelineModel {
         expectedStart2HereLatency = other.expectedStart2HereLatency;
         estimatedPerQueryCost = other.estimatedPerQueryCost;
         estimatedStart2HereCost = other.estimatedStart2HereCost;
+        startTime = other.startTime;
+        endTime = other.endTime;
+        localDutyCycle = other.localDutyCycle;
         batchingDeadline = other.batchingDeadline;
         deviceTypeName = other.deviceTypeName;
         merged = other.merged;
@@ -513,6 +532,9 @@ struct PipelineModel {
             expectedStart2HereLatency = other.expectedStart2HereLatency;
             estimatedPerQueryCost = other.estimatedPerQueryCost;
             estimatedStart2HereCost = other.estimatedStart2HereCost;
+            startTime = other.startTime;
+            endTime = other.endTime;
+            localDutyCycle = other.localDutyCycle;
             batchingDeadline = other.batchingDeadline;
             deviceTypeName = other.deviceTypeName;
             merged = other.merged;
@@ -842,6 +864,8 @@ private:
 
     void StopContainer(ContainerHandle *container, NodeHandle *device, bool forced = false);
 
+    void AdjustTiming(ContainerHandle *container);
+
     // void optimizeBatchSizeStep(
     //         const Pipeline &models,
     //         std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
@@ -1041,6 +1065,7 @@ private:
     // TODO: Read from config file
     std::uint64_t ctrl_schedulingIntervalSec = 10;//600;
     ClockType ctrl_nextSchedulingTime = std::chrono::system_clock::now();
+    ClockType ctrl_currSchedulingTime = std::chrono::system_clock::now();
 
     std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
 
