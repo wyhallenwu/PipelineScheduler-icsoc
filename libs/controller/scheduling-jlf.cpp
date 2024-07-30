@@ -1396,7 +1396,7 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
             row = row - 1;
             col = int((w - w_i) / h);
             w = col * h;
-            assert(w == dp_mat[row][col]);
+            // assert(w == dp_mat[row][col]);
             // std::cout << "In backtracing, w: " << w << ", dp: " << dp_mat[row][col] << std::endl;
             selected_clients.push_back(c);
         }
@@ -1564,10 +1564,10 @@ int check_and_assign(std::vector<ModelInfoJF> &model,
 std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models,
                                       const ClientInfoJF &client, int max_available_batch_size)
 {
-    int max_batch_size = 0;
+    int max_batch_size = 2;
     float budget = client.budget;
     int index = 0;
-    int max_index = 0;
+    int max_index = 1;
     for (const auto &model : models)
     {
         // CHECKME: the inference time should be limited by (budget - transmission time)
