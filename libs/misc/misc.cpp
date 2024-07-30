@@ -718,9 +718,7 @@ void trt::to_json(nlohmann::json &j, const trt::TRTConfigs &val) {
     j["obs"] = val.optBatchSize;
     j["mbs"] = val.maxBatchSize;
     j["di"] = val.deviceIndex;
-    j["msvc_imgNormScale"] = val.normalizeScale;
-    j["msvc_subVals"] = val.subVals;
-    j["msvc_divVals"] = val.divVals;
+    j["normalize"] = val.normalize;
 }
 
 void trt::from_json(const nlohmann::json &j, trt::TRTConfigs &val) {
@@ -731,11 +729,7 @@ void trt::from_json(const nlohmann::json &j, trt::TRTConfigs &val) {
     j.at("obs").get_to(val.optBatchSize);
     j.at("mbs").get_to(val.maxBatchSize);
     j.at("di").get_to(val.deviceIndex);
-    std::string normVal;
-    j.at("msvc_imgNormScale").get_to(normVal);
-    val.normalizeScale = fractionToFloat(normVal);
-    j.at("msvc_subVals").get_to(val.subVals);
-    j.at("msvc_divVals").get_to(val.divVals);
+    j.at("normalize").get_to(val.normalize);
 }
 
 void saveGPUAsImg(const cv::cuda::GpuMat &img, std::string name, float scale) {
