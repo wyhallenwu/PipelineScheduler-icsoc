@@ -144,7 +144,7 @@ void Controller::Scheduling()
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto taskList = ctrl_unscheduledPipelines.getMap();
 
-        if (taskList.size() < 1) {
+        if (!isPipelineInitialised) {
             continue;
         }
 
