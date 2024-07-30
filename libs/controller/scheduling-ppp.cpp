@@ -599,10 +599,10 @@ TaskHandle* Controller::mergePipelines(const std::string& taskName) {
             continue;
         }
         auto names = splitString(model->name, "_");
-        model->name = "merged" + taskName + "_" + names[1];
+        model->name = taskName + "_" + names[1];
     }
     mergedPipeline->tk_src_device = "merged";
-    mergedPipeline->tk_name = "merged" + taskName.substr(0, taskName.length());
+    mergedPipeline->tk_name = taskName.substr(0, taskName.length());
     mergedPipeline->tk_source  = "merged";
     return mergedPipeline;
 }
