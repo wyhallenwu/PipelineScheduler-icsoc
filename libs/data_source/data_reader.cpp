@@ -77,7 +77,7 @@ void DataReader::Process() {
             frame = resizePadRightBottom(frame, msvc_dataShape[0][1], msvc_dataShape[0][2],
                                          {128, 128, 128}, cv::INTER_AREA);
             RequestMemSizeType frameMemSize = frame.channels() * frame.rows * frame.cols * CV_ELEM_SIZE1(frame.type());
-            Request<LocalCPUReqDataType> req = {{{time, time}}, {msvc_SLO},
+            Request<LocalCPUReqDataType> req = {{{time, time}}, {msvc_contSLO},
                                                 {"[" + msvc_hostDevice + "|" + link + "|" +
                                                  std::to_string(readFrames) +
                                                  "|1|1|" + std::to_string(frameMemSize)  + "]"}, 1,
