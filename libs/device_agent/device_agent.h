@@ -82,6 +82,7 @@ private:
             int allocation_mode,
             int device,
             const MsvcSLOType &slo,
+            const MsvcSLOType &total_slo,
             uint64_t timeBudget,
             const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
             const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
@@ -98,7 +99,12 @@ private:
                 absl::StrFormat(
                         R"(%s pipeline-base-container %s --json '%s' --device %i --port %i --port_offset %i)",
                         cont_name, executable, start_string, device, port, dev_port_offset) +
-                " --log_dir ../logs --logging_mode 1";
+                " --log_dir ../logs";
+        if (!deploy_mode) {
+            command += " --verbose 0 --logging_mode 2";
+        } else {
+            command += " --logging_mode 1";
+        }
         std::cout << command << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         return system(command.c_str());
@@ -285,6 +291,7 @@ private:
     ContainerLibType dev_containerLib;
     SystemDeviceType dev_type;
     DeviceInfoType dev_deviceInfo;
+    std::atomic<bool> deploy_mode = false;
 
     // Basic information
     std::string dev_name;

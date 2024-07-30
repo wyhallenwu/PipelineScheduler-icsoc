@@ -7,25 +7,25 @@
     "initial_pipelines": [
         {
             "pipeline_name": "traffic",
-            "pipeline_target_slo": 50000000,
+            "pipeline_target_slo": 400000,
             "pipeline_type": 0,
             "video_source": "../data/preview/traffic_profiling.mp4",
-            "pipeline_source_device": "nxavier2"
+            "pipeline_source_device": "orinano1"
         }, {
             "pipeline_name": "people",
-            "pipeline_target_slo": 45000000,
+            "pipeline_target_slo": 200000,
             "pipeline_type": 2,
             "video_source": "../data/preview/people_profiling.mp4",
-            "pipeline_source_device": "nxavier3"
+            "pipeline_source_device": "orinano2"
         }, {
             "pipeline_name": "traffic2",
-            "pipeline_target_slo": 1000000,
+            "pipeline_target_slo": 10000,
             "pipeline_type": 2,
             "video_source": "../data/preview/traffic_profiling.mp4",
             "pipeline_source_device": "orinano3"
         }, {
             "pipeline_name": "traffic3",
-            "pipeline_target_slo": 5000000,
+            "pipeline_target_slo": 500000,
             "pipeline_type": 0,
             "video_source": "../data/preview/traffic_profiling.mp4",
             "pipeline_source_device": "nxavier5"
