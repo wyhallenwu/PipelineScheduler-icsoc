@@ -800,7 +800,7 @@ int check_and_assign(std::vector<ModelInfoJF> &model, std::vector<ClientInfoJF> 
 
 // helper functions
 
-std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models, const ClientInfoJF &client, int max_available_batch_size = 64);
+std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models, const ClientInfoJF &client, int max_available_batch_size);
 void differenceClients(std::vector<ClientInfoJF> &src, const std::vector<ClientInfoJF> &diff);
 
 // --------------------------------------------------------------------------------------------------------

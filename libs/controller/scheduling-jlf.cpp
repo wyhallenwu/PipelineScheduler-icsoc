@@ -1307,11 +1307,12 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
     int best_value = 0;
 
     // dp
-    auto [max_batch_size, max_index] = findMaxBatchSize(models, clients[0]);
+    auto [max_batch_size, max_index] = findMaxBatchSize(models, clients[0], 16);
 
     // std::cout << "max batch size: " << max_batch_size
     //           << " and index: " << max_index << std::endl;
 
+    std::cout << "max batch size: " << max_batch_size << " and index: " << max_index << std::endl;
     assert(max_batch_size > 0);
 
     // construct the dp matrix
@@ -1579,10 +1580,10 @@ int check_and_assign(std::vector<ModelInfoJF> &model,
 std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models,
                                       const ClientInfoJF &client, int max_available_batch_size)
 {
-    int max_batch_size = 0;
+    int max_batch_size = 2;
     float budget = client.budget;
     int index = 0;
-    int max_index = 0;
+    int max_index = 1;
     for (const auto &model : models)
     {
         // CHECKME: the inference time should be limited by (budget - transmission time)
