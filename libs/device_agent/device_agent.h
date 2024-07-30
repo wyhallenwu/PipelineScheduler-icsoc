@@ -82,6 +82,7 @@ private:
             int allocation_mode,
             int device,
             const MsvcSLOType &slo,
+            uint64_t timeBudget,
             const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
             const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
     );

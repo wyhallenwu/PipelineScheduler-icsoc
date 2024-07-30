@@ -214,6 +214,7 @@ struct ContainerHandle {
     // points to the pipeline model that this container is part of
     PipelineModel *pipelineModel = nullptr;
 
+    uint64_t timeBudgetLeft = 9999999999;
     mutable std::mutex containerHandleMutex;
 
     ContainerHandle() = default;
@@ -234,7 +235,8 @@ struct ContainerHandle {
                 PipelineModel* pipelineModel = nullptr,
                 const std::vector<ContainerHandle*>& upstreams = {},
                 const std::vector<ContainerHandle*>& downstreams = {},
-                const std::vector<QueueLengthType>& queueSizes = {})
+                const std::vector<QueueLengthType>& queueSizes = {},
+                uint64_t timeBudgetLeft = 9999999999)
     : name(name),
       class_of_interest(class_of_interest),
       model(model),
@@ -250,7 +252,8 @@ struct ContainerHandle {
       downstreams(downstreams),
       upstreams(upstreams),
       queueSizes(queueSizes),
-      pipelineModel(pipelineModel) {}
+      pipelineModel(pipelineModel),
+      timeBudgetLeft(timeBudgetLeft) {}
     
     // Copy constructor
     ContainerHandle(const ContainerHandle& other) {
@@ -289,6 +292,7 @@ struct ContainerHandle {
         gpuHandle = other.gpuHandle;
         executionLane = other.executionLane;
         pipelineModel = other.pipelineModel;
+        timeBudgetLeft = other.timeBudgetLeft;
     }
 
     // Copy assignment operator
@@ -328,6 +332,7 @@ struct ContainerHandle {
             gpuHandle = other.gpuHandle;
             executionLane = other.executionLane;
             pipelineModel = other.pipelineModel;
+            timeBudgetLeft = other.timeBudgetLeft;
         }
         return *this;
     }
@@ -392,6 +397,8 @@ struct PipelineModel {
     // Source
     std::string datasourceName;
 
+    uint64_t timeBudgetLeft = 9999999999;
+
     mutable std::mutex pipelineModelMutex;
 
         // Constructor with default parameters
@@ -413,6 +420,7 @@ struct PipelineModel {
                   const std::string& deviceTypeName = "",
                   bool merged = false,
                   bool toBeRun = true,
+                  uint64_t timeBudgetLeft = 9999999999,
                   const std::vector<std::string>& possibleDevices = {})
         :
           name(name),
@@ -433,6 +441,7 @@ struct PipelineModel {
           deviceTypeName(deviceTypeName),
           merged(merged),
           toBeRun(toBeRun),
+          timeBudgetLeft(timeBudgetLeft),
           possibleDevices(possibleDevices) {}
 
     // Copy constructor
@@ -465,6 +474,7 @@ struct PipelineModel {
         deviceTypeName = other.deviceTypeName;
         merged = other.merged;
         toBeRun = other.toBeRun;
+        timeBudgetLeft = other.timeBudgetLeft;
         possibleDevices = other.possibleDevices;
         dimensions = other.dimensions;
         manifestations = {};
@@ -506,6 +516,7 @@ struct PipelineModel {
             deviceTypeName = other.deviceTypeName;
             merged = other.merged;
             toBeRun = other.toBeRun;
+            timeBudgetLeft = other.timeBudgetLeft;
             possibleDevices = other.possibleDevices;
             dimensions = other.dimensions;
             manifestations = {};
