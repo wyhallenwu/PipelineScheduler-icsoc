@@ -30,7 +30,8 @@ void Sender::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 
 Sender::Sender(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
-
+    msvc_toReloadConfigs = false;
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name);
 }
 
 

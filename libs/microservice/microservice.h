@@ -743,6 +743,7 @@ protected:
     bool READY = false;
 
     json msvc_configs;
+    bool msvc_toReloadConfigs = true;
     /**
      * @brief Running mode of the container, globally set for all microservices inside the container
      * Default to be deployment.

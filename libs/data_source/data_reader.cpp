@@ -26,6 +26,8 @@ inline cv::Mat resizePadRightBottom(
 
 DataReader::DataReader(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
+    msvc_toReloadConfigs = false;
+    spdlog::get("container_agent")->info("{0:s} is created.", __func__);
 };
 
 void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
