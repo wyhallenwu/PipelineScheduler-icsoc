@@ -13,6 +13,7 @@ void BaseSink::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 BaseSink::BaseSink(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
     msvc_name = "sink";
+    msvc_toReloadConfigs = false;
     spdlog::get("container_agent")->info("{0:s} is created.", __func__);
 }
 
