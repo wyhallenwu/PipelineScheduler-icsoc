@@ -207,7 +207,7 @@ void Controller::Scheduling()
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto untrimmedTaskList = ctrl_unscheduledPipelines.getMap();
         auto deviceList = devices.getMap();
-        if (untrimmedTaskList.size() < 4)
+        if (!isPipelineInitialised)
         {
             continue;
         }

@@ -826,6 +826,7 @@ public:
                 remainTasks.push_back(t);
             }
         }
+        isPipelineInitialised = true;
     }
 
     void InitRemain() {
@@ -863,7 +864,6 @@ public:
 
 
 private:
-
     void initiateGPULanes(NodeHandle &node);
 
     NetworkEntryType initNetworkCheck(NodeHandle &node, uint32_t minPacketSize = 1000, uint32_t maxPacketSize = 1228800, uint32_t numLoops = 20);
@@ -1185,6 +1185,8 @@ private:
     std::map<std::string, ModelProfilesJF> modelProfilesCSJF;
     // ClientProfilesJF client_profiles_jf;
     // ModelProfilesJF model_profiles_jf;
+
+    std::atomic<bool> isPipelineInitialised = false;
 };
 
 

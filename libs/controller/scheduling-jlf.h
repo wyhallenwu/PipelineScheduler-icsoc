@@ -91,7 +91,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}, {yolov5m, 0}}
+                    {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}}
             };
             retina1face->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({retina1face, 0});
@@ -122,7 +122,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}, {yolov5m, 2}}
+                    {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}}
             };
             carbrand->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({carbrand, 2});
@@ -139,7 +139,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}, {yolov5m, 2}}
+                    {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}}
             };
             platedet->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({platedet, 2});
@@ -258,7 +258,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}, {yolov5m, 2}}
+                    {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}}
             };
             retina1face->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({retina1face, 0});
@@ -275,7 +275,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {},
                     {},
-                    {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}, {yolov5m, 2}}
+                    {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}}
             };
             movenet->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({movenet, 0});
