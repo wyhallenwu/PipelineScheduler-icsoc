@@ -653,6 +653,21 @@ void Controller::Scheduling()
                 lock.unlock();
             }
             std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
+            std::cout << "================================= check all models downstream ==================================" << task_name << std::endl;
+            for (auto &model : model_profiles_jf.infos)
+            {
+                auto p = model.second.front().model;
+                std::unique_lock<std::mutex> lock(p->pipelineModelMutex);
+                std::cout << "model name: " << p->name;
+                for (auto us : p->downstreams)
+                {
+                    std::cout << ", ds name: " <<us.first->name << ", address of client: " << us.first << "; ";
+                }
+                std::cout << std::endl;
+                lock.unlock();
+            }
+            std::cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << 
+            std::endl;
         }
 
         // TODO: test

@@ -67,17 +67,17 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             };
             yolov5s->possibleDevices = {"server"};
 
-            auto *yolov5m= new PipelineModel{
-                    "server",
-                    "yolov5m",
-                    {},
-                    true,
-                    {},
-                    {},
-                    {},
-                    {{datasource, -1}}
-            };
-            yolov5m->possibleDevices = {"server"};
+        //     auto *yolov5m= new PipelineModel{
+        //             "server",
+        //             "yolov5m",
+        //             {},
+        //             true,
+        //             {},
+        //             {},
+        //             {},
+        //             {{datasource, -1}}
+        //     };
+        //     yolov5m->possibleDevices = {"server"};
 
             auto *retina1face = new PipelineModel{
                     "server",
@@ -94,7 +94,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             yolov5n320->downstreams.push_back({retina1face, 0});
             yolov5n512->downstreams.push_back({retina1face, 0});
             yolov5s->downstreams.push_back({retina1face, 0});
-            yolov5m->downstreams.push_back({retina1face, 0});
+        //     yolov5m->downstreams.push_back({retina1face, 0});
 
 
             auto *arcface = new PipelineModel{
@@ -125,7 +125,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             yolov5n320->downstreams.push_back({carbrand, 2});
             yolov5n512->downstreams.push_back({carbrand, 2});
             yolov5s->downstreams.push_back({carbrand, 2});
-            yolov5m->downstreams.push_back({carbrand, 2});
+        //     yolov5m->downstreams.push_back({carbrand, 2});
 
             auto *platedet = new PipelineModel{
                     "server",
@@ -142,7 +142,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             yolov5n320->downstreams.push_back({platedet, 2});
             yolov5n512->downstreams.push_back({platedet, 2});
             yolov5s->downstreams.push_back({platedet, 2});
-            yolov5m->downstreams.push_back({platedet, 2});
+        //     yolov5m->downstreams.push_back({platedet, 2});
 
             auto *sink = new PipelineModel{
                     "server",
@@ -162,11 +162,11 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             if (!sourceName.empty()) {
                 yolov5n->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5n->name];
                 // jlf added
-                yolov5n->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5n->name];
-                yolov5n320->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5n320->name];
-                yolov5n512->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5n512->name];
-                yolov5s->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5s->name];
-                yolov5m->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5m->name];
+                // yolov5n->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5n->name];
+                // yolov5n320->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5n320->name];
+                // yolov5n512->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5n512->name];
+                // yolov5s->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5s->name];
+                // yolov5m->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][yolov5m->name];
 
                 retina1face->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][retina1face->name];
                 arcface->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][arcface->name];
@@ -174,7 +174,8 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                 platedet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][platedet->name];
             }
 
-            return {datasource, yolov5n, yolov5n320, yolov5n512, yolov5s, yolov5m, retina1face, arcface, carbrand, platedet, sink};
+            return {datasource, yolov5n, yolov5n320, yolov5n512, yolov5s, retina1face, arcface, carbrand, platedet, sink};
+        //     return {datasource, yolov5n, retina1face, arcface, carbrand, platedet, sink};
         }
         case PipelineType::Building_Security: {
             auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
@@ -229,17 +230,17 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             };
             yolov5s->possibleDevices = {"server"};
 
-            auto *yolov5m= new PipelineModel{
-                    "server",
-                    "yolov5m",
-                    {},
-                    true,
-                    {},
-                    {},
-                    {},
-                    {{datasource, -1}}
-            };
-            yolov5m->possibleDevices = {"server"};
+        //     auto *yolov5m= new PipelineModel{
+        //             "server",
+        //             "yolov5m",
+        //             {},
+        //             true,
+        //             {},
+        //             {},
+        //             {},
+        //             {{datasource, -1}}
+        //     };
+        //     yolov5m->possibleDevices = {"server"};
 
             auto *retina1face = new PipelineModel{
                     "server",
@@ -256,7 +257,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             yolov5n320->downstreams.push_back({retina1face, 0});
             yolov5n512->downstreams.push_back({retina1face, 0});
             yolov5s->downstreams.push_back({retina1face, 0});
-            yolov5m->downstreams.push_back({retina1face, 0});
+        //     yolov5m->downstreams.push_back({retina1face, 0});
 
             auto *movenet = new PipelineModel{
                     "server",
@@ -273,7 +274,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
             yolov5n320->downstreams.push_back({movenet, 0});
             yolov5n512->downstreams.push_back({movenet, 0});
             yolov5s->downstreams.push_back({movenet, 0});
-            yolov5m->downstreams.push_back({movenet, 0});
+        //     yolov5m->downstreams.push_back({movenet, 0});
 
             auto *gender = new PipelineModel{
                     "server",
@@ -324,7 +325,8 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                 age->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][age->name];
             }
 
-            return {datasource, yolov5n, yolov5n320, yolov5n512, yolov5s, yolov5m, retina1face, movenet, gender, age, sink};
+            return {datasource, yolov5n, yolov5n320, yolov5n512, yolov5s, retina1face, movenet, gender, age, sink};
+        //     return {datasource, yolov5n, retina1face, movenet, gender, age, sink};
         }
         case PipelineType::Video_Call: {
             auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
