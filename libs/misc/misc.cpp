@@ -1,5 +1,7 @@
 #include "misc.h"
 
+ABSL_FLAG(uint16_t, deploy_mode, 0, "The deployment mode of the system. 0: development, 1: production");
+
 using json = nlohmann::json;
 
 uint64_t calculateP95(std::vector<uint64_t> &values) {
@@ -850,6 +852,11 @@ void setupLogger(
     std::vector<spdlog::sink_ptr> &loggerSinks,
     std::shared_ptr<spdlog::logger> &logger
 ) {
+    // explicitly override the log level and logging mode if the deploy mode is set to `development`
+    if (absl::GetFlag(FLAGS_deploy_mode) == 0) {
+        loggingMode = 2;
+        verboseLevel = 0;
+    }
     std::string path = logPath + "/" + loggerName + ".log";
 
     // Console sink setup
