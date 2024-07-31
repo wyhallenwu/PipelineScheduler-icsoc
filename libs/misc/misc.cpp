@@ -869,11 +869,6 @@ void setupLogger(
     std::vector<spdlog::sink_ptr> &loggerSinks,
     std::shared_ptr<spdlog::logger> &logger
 ) {
-    // explicitly override the log level and logging mode if the deploy mode is set to `development`
-    if (absl::GetFlag(FLAGS_deploy_mode) == 0) {
-        loggingMode = 2;
-        verboseLevel = 0;
-    }
     std::string path = logPath + "/" + loggerName + ".log";
 
     // Console sink setup
