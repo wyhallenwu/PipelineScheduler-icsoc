@@ -188,13 +188,13 @@ public:
      * 
      * @param request 
      */
-    Request<LocalCPUReqDataType> pop1(uint16_t timeout = 100) {
+    Request<LocalCPUReqDataType> pop1(uint32_t timeout = 100000) { // 100ms
         std::unique_lock<std::mutex> lock(q_mutex);
 
         Request<LocalCPUReqDataType> request;
         isEmpty = !q_condition.wait_for(
                 lock,
-                std::chrono::milliseconds(timeout),
+                TimePrecisionType(timeout),
                 [this]() { return !q_cpuQueue.empty(); }
         );
         if (!isEmpty) {
@@ -211,12 +211,12 @@ public:
      * 
      * @param request 
      */
-    Request<LocalGPUReqDataType> pop2(uint16_t timeout = 100) {
+    Request<LocalGPUReqDataType> pop2(uint32_t timeout = 100000) { // 100ms
         std::unique_lock<std::mutex> lock(q_mutex);
         Request<LocalGPUReqDataType> request;
         isEmpty = !q_condition.wait_for(
                 lock,
-                std::chrono::milliseconds(timeout),
+                TimePrecisionType(timeout),
                 [this]() { return !q_gpuQueue.empty(); }
         );
         if (!isEmpty) {
@@ -743,6 +743,7 @@ protected:
     bool READY = false;
 
     json msvc_configs;
+    bool msvc_toReloadConfigs = true;
     /**
      * @brief Running mode of the container, globally set for all microservices inside the container
      * Default to be deployment.
@@ -767,7 +768,16 @@ protected:
     //
     MsvcSLOType msvc_pipelineSLO;
     // in microseconds
-    MsvcSLOType msvc_SLO;
+    MsvcSLOType msvc_contSLO;
+    // 
+    uint64_t msvc_contStartTime;
+    //
+    uint64_t msvc_contEndTime;
+    //
+    uint64_t msvc_localDutyCycle;
+    //
+    ClockType msvc_cycleStartTime;
+    
     //
     MsvcSLOType msvc_interReqTime = 1;
 

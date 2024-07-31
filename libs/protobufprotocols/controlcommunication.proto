@@ -15,6 +15,7 @@ service ControlCommunication {
   rpc SyncDatasource(ContainerLink) returns (google.protobuf.Empty) {}
   rpc UpdateBatchSize(ContainerInts) returns (google.protobuf.Empty) {}
   rpc UpdateResolution(ContainerInts) returns (google.protobuf.Empty) {}
+  rpc UpdateTimeKeeping(TimeKeeping) returns (google.protobuf.Empty) {}
   rpc StopContainer(ContainerSignal) returns (google.protobuf.Empty) {}
 }
 
@@ -33,18 +34,18 @@ message SystemInfo {
 
 message Neighbor {
   string name = 1;
-  string ip = 2;
+  repeated string ip = 2;
   int32 class_of_interest = 3;
   bool gpu_connection = 4;
 }
 
 message ContainerConfig {
-  string pipeline_name = 1;
-  int32 model = 2;
-  string model_file = 3;
-  int32 batch_size = 4;
-  int32 replica_id = 5;
-  bool allocation_mode = 6;
+  string name = 1;
+  string pipeline_name = 2;
+  int32 model = 3;
+  string model_file = 4;
+  int32 batch_size = 5;
+  int32 replica_id = 6;
   int32 device = 7;
   int32 slo = 8;
   repeated uint32 input_dimensions = 9;
@@ -52,6 +53,24 @@ message ContainerConfig {
   repeated Neighbor downstream = 11; 
   int32 fps = 12;
   uint64 timeBudget = 13;
+  int32 total_slo = 14;
+  int32 cont_slo = 15;
+  uint64 startTime = 16;
+  uint64 endTime = 17;
+  uint64 localDutyCycle = 18;
+  uint64 cycleStartTime = 19;
+  bool allocation_mode = 20;
+}
+
+message TimeKeeping {
+  string name = 1;
+  int32 slo = 2;
+  int32 cont_slo = 3;
+  uint64 timeBudget = 4;
+  uint64 startTime = 5;
+  uint64 endTime = 6;
+  uint64 localDutyCycle = 7;
+  uint64 cycleStartTime = 8;
 }
 
 message ContainerLink {

@@ -62,11 +62,15 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_DROP_MODE = jsonConfigs.at("msvc_dropMode");
     msvc_timeBudgetLeft = jsonConfigs.at("msvc_timeBudgetLeft");
     msvc_pipelineSLO = jsonConfigs.at("msvc_pipelineSLO");
+    msvc_contSLO = jsonConfigs.at("msvc_contSLO");
+    msvc_contStartTime = jsonConfigs.at("msvc_contStartTime");
+    msvc_contEndTime = jsonConfigs.at("msvc_contEndTime");
+    msvc_localDutyCycle = jsonConfigs.at("msvc_localDutyCycle");
+    msvc_cycleStartTime = ClockType(TimePrecisionType(jsonConfigs.at("msvc_cycleStartTime")));
     msvc_idealBatchSize = configs.msvc_idealBatchSize;
 
     // Configurations
     msvc_dataShape = configs.msvc_dataShape;
-    msvc_SLO = configs.msvc_svcLevelObjLatency;
     msvc_type = configs.msvc_type;
     PAUSE_THREADS = true;
     msvc_appLvlConfigs = configs.msvc_appLvlConfigs;
@@ -89,11 +93,10 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         }
     }
     if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
-        msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + ".txt";
+        msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_pipelineName + "_" + msvc_name + ".txt";
     } else {
-        msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_name + "_" + getTimestampString() + ".txt";
+        msvc_microserviceLogPath = configs.msvc_containerLogPath + "/" + msvc_pipelineName + "_" + msvc_name + "_" + getTimestampString() + ".txt";
     }
-
 
     // Initialize the queues    
     if (isConstructing) {
