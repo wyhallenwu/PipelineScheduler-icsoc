@@ -40,6 +40,7 @@ BaseBatchInferencer::BaseBatchInferencer(const json &jsonConfigs) : Microservice
     // msvc_engineInputBuffers = msvc_inferenceEngine->getInputBuffers();
     // msvc_engineOutputBuffers = msvc_inferenceEngine->getOutputBuffers();
 
+    msvc_toReloadConfigs = false;
     spdlog::get("container_agent")->info("{0:s} is created.", msvc_name);
 }
 

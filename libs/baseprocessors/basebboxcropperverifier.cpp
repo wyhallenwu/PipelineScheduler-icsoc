@@ -18,6 +18,7 @@ void BaseBBoxCropperVerifier::loadConfigs(const json &jsonConfigs, bool isConstr
 
 BaseBBoxCropperVerifier::BaseBBoxCropperVerifier(const json &jsonConfigs) : BasePostprocessor(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
+    msvc_toReloadConfigs = false;
     spdlog::get("container_agent")->info("{0:s} is created.", msvc_name); 
 }
 
