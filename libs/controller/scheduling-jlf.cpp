@@ -717,7 +717,8 @@ void Controller::Scheduling()
                     continue;
                 }
                 // set specific number of replicas for each downstream
-                auto numReplicas = 4;
+                // auto numReplicas = 4;
+                model->numReplicas = 4;
             }
             task.second->tk_slo = pipelineSLOs[task.second->tk_name];
             
