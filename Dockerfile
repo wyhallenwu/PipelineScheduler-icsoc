@@ -4,6 +4,9 @@ FROM pipeline-scheduler-nx as builder
 USER root
 WORKDIR /home/soulsaver/PipelineScheduler/build
 RUN pip install -U jetson-stats --force
+
+ENV TZ=Asia/Seoul
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 #RUN apt install libspdlog-dev libpqxx-dev -y
 #RUN mkdir /app/build -p
 #COPY ./cmake /app/cmake
