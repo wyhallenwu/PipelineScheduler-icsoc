@@ -250,6 +250,7 @@ BaseReqBatcher::BaseReqBatcher(const json &jsonConfigs) : Microservice(jsonConfi
     loadConfigs(jsonConfigs);
     //set to maximum value
     oldestReqTime = std::chrono::high_resolution_clock::time_point::max();
+    msvc_toReloadConfigs = false;
     spdlog::get("container_agent")->info("{0:s} is created.", msvc_name);
 }
 
@@ -303,6 +304,11 @@ void BaseReqBatcher::batchRequests() {
                  * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
                  * 
                  */
+
+                if (msvc_toReloadConfigs) {
+                    loadConfigs(msvc_configs, true);
+                    msvc_toReloadConfigs = false;
+                }
 
                 if (msvc_logFile.is_open()) {
                     msvc_logFile.close();
@@ -582,6 +588,10 @@ void BaseReqBatcher::batchRequestsProfiling() {
                  * During runtime: log file should come with a new timestamp everytime the microservice is reloaded
                  * 
                  */
+                if (msvc_toReloadConfigs) {
+                    loadConfigs(msvc_configs, true);
+                    msvc_toReloadConfigs = false;
+                }
 
                 if (msvc_logFile.is_open()) {
                     msvc_logFile.close();

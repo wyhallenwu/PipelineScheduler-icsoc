@@ -17,6 +17,7 @@ void BaseClassifier::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 
 BaseClassifier::BaseClassifier(const json &jsonConfigs) : BasePostprocessor(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
+    msvc_toReloadConfigs = false;
     spdlog::get("container_agent")->info("{0:s} is created.", msvc_name); 
 }
 
