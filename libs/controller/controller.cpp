@@ -482,6 +482,9 @@ void Controller::ApplyScheduling() {
             int i = 0;
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
             for (auto *candidate: candidates) {
+                if (std::find(new_containers.begin(), new_containers.end(), candidate) != new_containers.end()) {
+                    continue;
+                }
                 if (candidate->device_agent->name != model->device) {
                     candidate->batch_size = model->batchSize;
                     //candidate->cuda_device = model->cudaDevices[i++];
@@ -538,7 +541,7 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
 
     std::string subTaskName = model->name;
     std::string containerName = ctrl_experimentName + "_" + ctrl_systemName + "_" + model->task->tk_name + "_" +
-            model->name + "_" + std::to_string(i);
+            modelName + "_" + std::to_string(i);
     // the name of the container type to look it up in the container library
     std::string containerTypeName = modelName + "_" + getDeviceTypeName(device->type);
     
@@ -613,6 +616,7 @@ void Controller::AdjustTiming(ContainerHandle *container) {
     ClientContext context;
     EmptyMessage reply;
     Status status;
+    request.set_name(container->name);
     request.set_slo(container->inference_deadline);
     request.set_cont_slo(container->batchingDeadline);
     request.set_timebudget(container->timeBudgetLeft);
@@ -637,6 +641,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     EmptyMessage reply;
     Status status;
     std::string pipelineName = splitString(container->name, "_")[2];
+    request.set_name(container->name);
     request.set_pipeline_name(pipelineName);
     request.set_model(container->model);
     request.set_model_file(container->model_file);
@@ -697,6 +702,13 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             up->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
             //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
         }
+    }
+    if (request.upstream_size() == 0) {
+        Neighbor *up = request.add_upstream();
+        up->set_name("dummy");
+        up->add_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
+        up->set_class_of_interest(-2);
+        up->set_gpu_connection(false);
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container->device_agent->stub->AsyncStartContainer(&context, request,
