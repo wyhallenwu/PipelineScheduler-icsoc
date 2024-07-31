@@ -188,13 +188,13 @@ public:
      * 
      * @param request 
      */
-    Request<LocalCPUReqDataType> pop1(uint16_t timeout = 100) {
+    Request<LocalCPUReqDataType> pop1(uint16_t timeout = 100000) { // 100ms
         std::unique_lock<std::mutex> lock(q_mutex);
 
         Request<LocalCPUReqDataType> request;
         isEmpty = !q_condition.wait_for(
                 lock,
-                std::chrono::milliseconds(timeout),
+                TimePrecisionType(timeout),
                 [this]() { return !q_cpuQueue.empty(); }
         );
         if (!isEmpty) {
@@ -211,12 +211,12 @@ public:
      * 
      * @param request 
      */
-    Request<LocalGPUReqDataType> pop2(uint16_t timeout = 100) {
+    Request<LocalGPUReqDataType> pop2(uint16_t timeout = 100000) { // 100ms
         std::unique_lock<std::mutex> lock(q_mutex);
         Request<LocalGPUReqDataType> request;
         isEmpty = !q_condition.wait_for(
                 lock,
-                std::chrono::milliseconds(timeout),
+                TimePrecisionType(timeout),
                 [this]() { return !q_gpuQueue.empty(); }
         );
         if (!isEmpty) {
