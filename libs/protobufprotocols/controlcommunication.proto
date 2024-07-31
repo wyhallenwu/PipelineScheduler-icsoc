@@ -40,12 +40,12 @@ message Neighbor {
 }
 
 message ContainerConfig {
-  string pipeline_name = 1;
-  int32 model = 2;
-  string model_file = 3;
-  int32 batch_size = 4;
-  int32 replica_id = 5;
-  bool allocation_mode = 6;
+  string name = 1;
+  string pipeline_name = 2;
+  int32 model = 3;
+  string model_file = 4;
+  int32 batch_size = 5;
+  int32 replica_id = 6;
   int32 device = 7;
   int32 slo = 8;
   repeated uint32 input_dimensions = 9;
@@ -59,6 +59,7 @@ message ContainerConfig {
   uint64 endTime = 17;
   uint64 localDutyCycle = 18;
   uint64 cycleStartTime = 19;
+  bool allocation_mode = 20;
 }
 
 message TimeKeeping {

@@ -294,8 +294,7 @@ bool DeviceAgent::CreateContainer(ContainerConfig &c) {
         input_dims.push_back(dim);
     }
     try {
-        std::string cont_name = dev_experiment_name + "_" + dev_system_name + "_" + c.pipeline_name() + "_" +
-                                ModelTypeList[model] + "_" + std::to_string(c.replica_id());
+        std::string cont_name = c.name();
         std::cout << "Creating container: " << cont_name << std::endl;
         std::string executable = dev_containerLib[modelName].runCommand;
         json start_config;
@@ -317,7 +316,7 @@ bool DeviceAgent::CreateContainer(ContainerConfig &c) {
         start_config["container"]["cont_hostDevice"] = dev_name;
         start_config["container"]["cont_hostDeviceType"] = dev_deviceInfo[dev_type];
         start_config["container"]["cont_name"] = cont_name;
-        start_config["container"]["cont_allocationMode"] = c.allocation_mode();
+        start_config["container"]["cont_allocationMode"] = c.allocation_mode() ? 1 : 0;
         if (dev_system_name == "ppp") {
             start_config["container"]["cont_batchMode"] = 1;
         }
