@@ -555,6 +555,7 @@ void Controller::ApplyScheduling() {
                 }
                 if (candidate->batch_size != model->batchSize)
                     AdjustBatchSize(candidate, model->batchSize);
+                AdjustTiming(candidate);
                 //if (candidate->cuda_device != model->cudaDevices[i++])
                 //    AdjustCudaDevice(candidate, model->cudaDevices[i - 1]);
             }
@@ -633,6 +634,19 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
         container->dimensions = ctrl_containerLib[containerTypeName].templateConfig["container"]["cont_pipeline"][1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"][0].get<std::vector<int>>();
     }
 
+    // container->timeBudgetLeft for lazy dropping
+    container->timeBudgetLeft = container->pipelineModel->timeBudgetLeft;
+    // container->batchingDeadline for lazy dynamic batching
+    container->batchingDeadline = container->pipelineModel->batchingDeadline;
+    // container start time
+    container->startTime = container->pipelineModel->startTime;
+    // container end time
+    container->endTime = container->pipelineModel->endTime;
+    // container SLO
+    container->localDutyCycle = container->pipelineModel->localDutyCycle;
+    // 
+    container->cycleStartTime = ctrl_currSchedulingTime;
+
     model->task->tk_subTasks[subTaskName].push_back(container);
 
     // for (auto &upstream: model->upstreams) {
@@ -651,6 +665,41 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     //     }
     // }
     return container;
+}
+
+void Controller::AdjustTiming(ContainerHandle *container) {
+    // container->timeBudgetLeft for lazy dropping
+    container->timeBudgetLeft = container->pipelineModel->timeBudgetLeft;
+    // container->batchingDeadline for lazy dynamic batching
+    container->batchingDeadline = container->pipelineModel->batchingDeadline;
+    // container->startTime
+    container->startTime = container->pipelineModel->startTime;
+    // container->endTime
+    container->endTime = container->pipelineModel->endTime;
+    // container SLO
+    container->localDutyCycle = container->pipelineModel->localDutyCycle;
+    // `container->task->tk_slo` for the total SLO of the pipeline
+    container->cycleStartTime = ctrl_currSchedulingTime;
+
+    TimeKeeping request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_slo(container->inference_deadline);
+    request.set_cont_slo(container->batchingDeadline);
+    request.set_timebudget(container->timeBudgetLeft);
+    request.set_starttime(container->startTime);
+    request.set_endtime(container->endTime);
+    request.set_localdutycycle(container->localDutyCycle);
+    request.set_cyclestarttime(std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count());
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            container->device_agent->stub->AsyncUpdateTimeKeeping(&context, request,
+                                                               container->device_agent->cq));
+    finishGrpc(rpc, reply, status, container->device_agent->cq);
+    if (!status.ok()) {
+        spdlog::get("container_agent")->error("Failed to update TimeKeeping for container: {0:s}", container->name);
+        return;
+    }
 }
 
 void Controller::StartContainer(ContainerHandle *container, bool easy_allocation) {
@@ -679,13 +728,18 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     request.set_timebudget(container->timeBudgetLeft);
     request.set_total_slo(container->task->tk_slo);
     request.set_fps(ctrl_systemFPS);
+    request.set_cont_slo(container->batchingDeadline);
+    request.set_starttime(container->startTime);
+    request.set_endtime(container->endTime);
+    request.set_localdutycycle(container->localDutyCycle);
+    request.set_cyclestarttime(std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count());
     for (auto dim: container->dimensions) {
         request.add_input_dimensions(dim);
     }
     for (auto dwnstr: container->downstreams) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name(dwnstr->name);
-        dwn->set_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
+        dwn->add_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
         dwn->set_class_of_interest(dwnstr->class_of_interest);
         if (dwnstr->model == Sink) {
             dwn->set_gpu_connection(false);
@@ -699,33 +753,26 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     if (request.downstream_size() == 0) {
         Neighbor *dwn = request.add_downstream();
         dwn->set_name("video_sink");
-        dwn->set_ip("./out.log"); //output log file
+        dwn->add_ip("./out.log"); //output log file
         dwn->set_class_of_interest(-1);
         dwn->set_gpu_connection(false);
     }
     if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinafaceDsrc) {
         Neighbor *up = request.add_upstream();
         up->set_name("video_source");
-        up->set_ip(container->pipelineModel->datasourceName);
-        up->set_class_of_interest(-2);
+        up->add_ip(container->pipelineModel->datasourceName);
+        up->set_class_of_interest(-1);
         up->set_gpu_connection(false);
     } else {
         for (auto upstr: container->upstreams) {
             Neighbor *up = request.add_upstream();
             up->set_name(upstr->name);
-            up->set_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
+            up->add_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
             up->set_class_of_interest(-2);
             up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
                                    (container->gpuHandle == upstr->gpuHandle));
             up->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
             //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
-        }
-        if (request.upstream_size() == 0) {
-            Neighbor *up = request.add_upstream();
-            up->set_name("dummy");
-            up->set_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
-            up->set_class_of_interest(-2);
-            up->set_gpu_connection(false);
         }
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(

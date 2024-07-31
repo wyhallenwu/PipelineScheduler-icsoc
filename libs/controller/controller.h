@@ -26,6 +26,7 @@ using controlcommunication::Neighbor;
 using controlcommunication::LoopRange;
 using controlcommunication::DummyMessage;
 using controlcommunication::ContainerConfig;
+using controlcommunication::TimeKeeping;
 using controlcommunication::ContainerLink;
 using controlcommunication::ContainerInts;
 using controlcommunication::ContainerSignal;
@@ -214,6 +215,8 @@ struct ContainerHandle {
     uint64_t localDutyCycle = 0;
     //
     uint64_t batchingDeadline;
+    // 
+    ClockType cycleStartTime;
     // GPU Handle
     GPUHandle *gpuHandle = nullptr;
     //
@@ -1000,6 +1003,8 @@ private:
 
     void StopContainer(ContainerHandle *container, NodeHandle *device, bool forced = false);
 
+    void AdjustTiming(ContainerHandle *container);
+
     // void optimizeBatchSizeStep(
     //         const Pipeline &models,
     //         std::map<ModelType, int> &batch_sizes, std::map<ModelType, int> &estimated_infer_times, int nObjects);
@@ -1195,6 +1200,7 @@ private:
     // TODO: Read from config file
     std::uint64_t ctrl_schedulingIntervalSec = 10;//600;
     ClockType ctrl_nextSchedulingTime = std::chrono::system_clock::now();
+    ClockType ctrl_currSchedulingTime = std::chrono::system_clock::now();
 
     std::map<std::string, std::map<std::string, float>> ctrl_initialRequestRates;
 
