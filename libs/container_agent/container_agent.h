@@ -218,6 +218,21 @@ protected:
         ContainerAgent *container_agent;
     };
 
+    class UpdateTimeKeepingRequestHandler : public RequestHandler {
+    public:
+        UpdateTimeKeepingRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                       ContainerAgent *container_agent)
+                : RequestHandler(service, cq), container_agent(container_agent) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        indevicecommunication::TimeKeeping request;
+        ContainerAgent *container_agent;
+    };
+
     class SyncDatasourcesRequestHandler : public RequestHandler {
     public:
         SyncDatasourcesRequestHandler(InDeviceCommunication::AsyncService *service, ServerCompletionQueue *cq,

@@ -745,6 +745,7 @@ protected:
     bool READY = false;
 
     json msvc_configs;
+    bool msvc_toReloadConfigs = true;
     /**
      * @brief Running mode of the container, globally set for all microservices inside the container
      * Default to be deployment.
@@ -769,7 +770,16 @@ protected:
     //
     MsvcSLOType msvc_pipelineSLO;
     // in microseconds
-    MsvcSLOType msvc_SLO;
+    MsvcSLOType msvc_contSLO;
+    // 
+    uint64_t msvc_contStartTime;
+    //
+    uint64_t msvc_contEndTime;
+    //
+    uint64_t msvc_localDutyCycle;
+    //
+    ClockType msvc_cycleStartTime;
+    
     //
     MsvcSLOType msvc_interReqTime = 1;
 

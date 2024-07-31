@@ -106,6 +106,11 @@ json loadRunArgs(int argc, char **argv) {
     }
 
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
+        containerConfigs.at("cont_pipeline")[i]["msvc_contSLO"] = containerConfigs["cont_SLO"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_contStartTime"] = containerConfigs["cont_startTime"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_contEndTime"] = containerConfigs["cont_endTime"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_localDutyCycle"] = containerConfigs["cont_localDutyCycle"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_cycleStartTime"] = containerConfigs["cont_cycleStartTime"];
         containerConfigs.at("cont_pipeline")[i]["msvc_batchMode"] = containerConfigs["cont_batchMode"];
         containerConfigs.at("cont_pipeline")[i]["msvc_dropMode"] = containerConfigs["cont_dropMode"];
         containerConfigs.at("cont_pipeline")[i]["msvc_timeBudgetLeft"] = containerConfigs["cont_timeBudgetLeft"];
@@ -1068,6 +1073,7 @@ void ContainerAgent::HandleRecvRpcs() {
     new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateResolutionRequestHandler(&service, server_cq.get(), this);
+    new UpdateTimeKeepingRequestHandler(&service, server_cq.get(), this);
     new SyncDatasourcesRequestHandler(&service, server_cq.get(), this);
     void *tag;
     bool ok;
@@ -1157,6 +1163,10 @@ void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new UpdateBatchSizeRequestHandler(service, cq, msvcs);
         for (auto msvc : *msvcs) {
+            // The batch size of the data reader (aka FPS) should be updated by `UpdateBatchSizeRequestHandler`
+            if (msvc->msvc_type == msvcconfigs::MicroserviceType::DataReader) {
+                continue;
+            }
             msvc->msvc_idealBatchSize = request.value();
         }
         status = FINISH;
@@ -1183,6 +1193,27 @@ void ContainerAgent::UpdateResolutionRequestHandler::Proceed() {
             container_agent->cont_msvcsList[1]->dnstreamMicroserviceList[0].expectedShape = {resolution};
         }
 
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void ContainerAgent::UpdateTimeKeepingRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateTimeKeeping(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateTimeKeepingRequestHandler(service, cq, container_agent);
+        container_agent->cont_msvcsList[1]->msvc_contSLO = request.cont_slo();
+        container_agent->cont_msvcsList[1]->msvc_pipelineSLO = request.pipeline_slo();
+        container_agent->cont_msvcsList[1]->msvc_timeBudgetLeft = request.timebudget();
+        container_agent->cont_msvcsList[1]->msvc_contStartTime = request.starttime();
+        container_agent->cont_msvcsList[1]->msvc_contEndTime = request.endtime();
+        container_agent->cont_msvcsList[1]->msvc_localDutyCycle = request.localdutycycle();
+        container_agent->cont_msvcsList[1]->msvc_cycleStartTime = request.cyclestarttime();
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {
