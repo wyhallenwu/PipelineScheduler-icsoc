@@ -188,7 +188,7 @@ public:
      * 
      * @param request 
      */
-    Request<LocalCPUReqDataType> pop1(uint16_t timeout = 100000) { // 100ms
+    Request<LocalCPUReqDataType> pop1(uint32_t timeout = 100000) { // 100ms
         std::unique_lock<std::mutex> lock(q_mutex);
 
         Request<LocalCPUReqDataType> request;
@@ -211,7 +211,7 @@ public:
      * 
      * @param request 
      */
-    Request<LocalGPUReqDataType> pop2(uint16_t timeout = 100000) { // 100ms
+    Request<LocalGPUReqDataType> pop2(uint32_t timeout = 100000) { // 100ms
         std::unique_lock<std::mutex> lock(q_mutex);
         Request<LocalGPUReqDataType> request;
         isEmpty = !q_condition.wait_for(

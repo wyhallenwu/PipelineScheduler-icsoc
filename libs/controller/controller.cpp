@@ -98,7 +98,7 @@ void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskSt
 // ============================================================================================================================================ //
 
 bool GPUHandle::addContainer(ContainerHandle *container) {
-    if (container->name.find("datasource") != std::string::npos || 
+    if (container->name.find("datasource") != std::string::npos ||
         container->name.find("sink") != std::string::npos) {
         containers.insert({container->name, container});
         container->gpuHandle = this;
@@ -127,7 +127,6 @@ bool GPUHandle::removeContainer(ContainerHandle *container) {
     }
     containers.erase(container->name);
     container->gpuHandle = nullptr;
-    BatchSizeType batchSize = container->pipelineModel->batchSize;
     currentMemUsage -= container->getExpectedTotalMemUsage();
 
     spdlog::get("container_agent")->info("Container {} successfully removed from GPU {} of {}", container->name, number, hostName);
@@ -243,7 +242,7 @@ Controller::~Controller() {
 
 MemUsageType ContainerHandle::getExpectedTotalMemUsage() const {
     if (device_agent->name == "server") {
-        return pipelineModel->processProfiles.at("server").batchInfer[pipelineModel->batchSize].gpuMemUsage / 1000;
+        return pipelineModel->processProfiles.at("server").batchInfer[pipelineModel->batchSize].gpuMemUsage;
     }
     std::string deviceTypeName = getDeviceTypeName(device_agent->type);
     return (pipelineModel->processProfiles.at(deviceTypeName).batchInfer[pipelineModel->batchSize].gpuMemUsage +
@@ -288,7 +287,7 @@ void Controller::initialiseGPU(NodeHandle *node, int numGPUs, std::vector<int> m
     if (node->name == "server") {
         for (uint8_t gpuIndex = 0; gpuIndex < numGPUs; gpuIndex++) {
             std::string gpuName = "gpu" + std::to_string(gpuIndex);
-            GPUHandle *gpuNode = new GPUHandle{"3090", "server", gpuIndex, memLimits[gpuIndex], NUM_LANES_PER_GPU};
+            GPUHandle *gpuNode = new GPUHandle{"3090", "server", gpuIndex, memLimits[gpuIndex] - 2000, NUM_LANES_PER_GPU};
             node->gpuHandles.emplace_back(gpuNode);
         }
     } else {
@@ -298,22 +297,18 @@ void Controller::initialiseGPU(NodeHandle *node, int numGPUs, std::vector<int> m
     }
 }
 
-void Controller::basicGPUScheduling() {
+void Controller::basicGPUScheduling(std::vector<ContainerHandle *> new_containers) {
     std::map<std::string, std::vector<ContainerHandle *>> scheduledContainers;
     for (auto device: devices.list) {
-        for (auto &task: ctrl_scheduledPipelines.list) {
-            for (auto &model: task.second->tk_pipelineModels) {
-                for (auto &container: model->task->tk_subTasks[model->name]) {
-                    if (container->device_agent->name != device.first) {
-                        continue;
-                    }
-                    if (container->name.find("datasource") != std::string::npos || 
-                        container->name.find("sink") != std::string::npos) {
-                        continue;
-                    }
-                    scheduledContainers[device.first].push_back(container);
-                }
+        for (auto &container: new_containers) {
+            if (container->device_agent->name != device.first) {
+                continue;
             }
+            if (container->name.find("datasource") != std::string::npos ||
+                container->name.find("sink") != std::string::npos) {
+                continue;
+            }
+            scheduledContainers[device.first].push_back(container);
         }
         std::sort(scheduledContainers[device.first].begin(), scheduledContainers[device.first].end(),
                 [](ContainerHandle *a, ContainerHandle *b) {
@@ -472,7 +467,7 @@ void Controller::ApplyScheduling() {
     }
 
     if (ctrl_systemName != "ppp") {
-        basicGPUScheduling();
+        basicGPUScheduling(new_containers);
     } else {
         temporalScheduling();
     }
@@ -483,6 +478,9 @@ void Controller::ApplyScheduling() {
             int i = 0;
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
             for (auto *candidate: candidates) {
+                if (std::find(new_containers.begin(), new_containers.end(), candidate) != new_containers.end() || candidate->model == Sink) {
+                    continue;
+                }
                 if (candidate->device_agent->name != model->device) {
                     candidate->batch_size = model->batchSize;
                     //candidate->cuda_device = model->cudaDevices[i++];
@@ -539,7 +537,7 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
 
     std::string subTaskName = model->name;
     std::string containerName = ctrl_experimentName + "_" + ctrl_systemName + "_" + model->task->tk_name + "_" +
-            model->name + "_" + std::to_string(i);
+            modelName + "_" + std::to_string(i);
     // the name of the container type to look it up in the container library
     std::string containerTypeName = modelName + "_" + getDeviceTypeName(device->type);
     
@@ -614,6 +612,7 @@ void Controller::AdjustTiming(ContainerHandle *container) {
     ClientContext context;
     EmptyMessage reply;
     Status status;
+    request.set_name(container->name);
     request.set_slo(container->inference_deadline);
     request.set_cont_slo(container->batchingDeadline);
     request.set_timebudget(container->timeBudgetLeft);
@@ -638,6 +637,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     EmptyMessage reply;
     Status status;
     std::string pipelineName = splitString(container->name, "_")[2];
+    request.set_name(container->name);
     request.set_pipeline_name(pipelineName);
     request.set_model(container->model);
     request.set_model_file(container->model_file);
@@ -698,6 +698,13 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             up->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
             //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
         }
+    }
+    if (request.upstream_size() == 0) {
+        Neighbor *up = request.add_upstream();
+        up->set_name("dummy");
+        up->add_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
+        up->set_class_of_interest(-2);
+        up->set_gpu_connection(false);
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container->device_agent->stub->AsyncStartContainer(&context, request,
@@ -826,6 +833,7 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
     finishGrpc(rpc, reply, status, device->cq);
+    container->gpuHandle->removeContainer(container);
     if (!forced) { //not forced means the container is stopped during scheduling and should be removed
         containers.list.erase(container->name);
         container->device_agent->containers.erase(container->name);
@@ -1517,7 +1525,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             gender->downstreams.push_back({sink, -1});
             arcface->downstreams.push_back({sink, -1});
 
-            if (!sourceName.empty()) {         
+            if (!sourceName.empty()) {
                 retina1face->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][retina1face->name];
                 emotionnet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][emotionnet->name];
                 age->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][age->name];
