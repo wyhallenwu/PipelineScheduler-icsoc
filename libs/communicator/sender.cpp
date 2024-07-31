@@ -15,16 +15,23 @@ void Sender::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     SenderConfigs configs = loadConfigsFromJson(jsonConfigs);
 
     stubs = std::vector<std::unique_ptr<DataTransferService::Stub>>();
-    stubs.push_back(
-            DataTransferService::NewStub(
-                    grpc::CreateChannel(dnstreamMicroserviceList.front().link[0], grpc::InsecureChannelCredentials())));
-    multipleStubs = false;
+    for (auto &link: dnstreamMicroserviceList.front().link) {
+        stubs.push_back(
+                DataTransferService::NewStub(
+                        grpc::CreateChannel(link, grpc::InsecureChannelCredentials())));
+    }
+    if (stubs.size() > 1) {
+        multipleStubs = true;
+    } else {
+        multipleStubs = false;
+    }
     READY = true;
 }
 
 Sender::Sender(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
-
+    msvc_toReloadConfigs = false;
+    spdlog::get("container_agent")->info("{0:s} is created.", msvc_name);
 }
 
 

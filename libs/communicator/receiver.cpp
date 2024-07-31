@@ -30,6 +30,7 @@ void Receiver::loadConfigs(const json &jsonConfigs, bool isConstructing) {
         server = builder.BuildAndStart();
         msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
     }
+    msvc_toReloadConfigs = false;
     spdlog::get("container_agent")->trace("{0:s} FINISHED loading configs...", __func__);
 }
 
