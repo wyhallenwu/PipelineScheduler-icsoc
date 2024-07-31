@@ -482,7 +482,7 @@ void Controller::ApplyScheduling() {
             int i = 0;
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
             for (auto *candidate: candidates) {
-                if (std::find(new_containers.begin(), new_containers.end(), candidate) != new_containers.end()) {
+                if (std::find(new_containers.begin(), new_containers.end(), candidate) != new_containers.end() || candidate->model == Sink) {
                     continue;
                 }
                 if (candidate->device_agent->name != model->device) {
