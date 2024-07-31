@@ -85,6 +85,8 @@ private:
                         R"(%s pipeline-base-container %s --json '%s' --device %i --port %i --port_offset %i)",
                         cont_name, executable, start_string, device, port, dev_port_offset) +
                 " --log_dir ../logs";
+
+        spdlog::get("container_agent")->info("Running command: {}", command);
         if (!deploy_mode) {
             command += " --verbose 0 --logging_mode 2";
         } else {

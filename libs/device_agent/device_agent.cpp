@@ -400,7 +400,6 @@ bool DeviceAgent::CreateContainer(ContainerConfig &c) {
 
         // start container
         start_config["container"]["cont_pipeline"] = base_config;
-        std::cout << start_config.dump(4) << std::endl;
         unsigned int control_port = CONTAINER_BASE_PORT + dev_port_offset + containers.size();
         runDocker(executable, cont_name, to_string(start_config), c.device(), control_port);
         std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
