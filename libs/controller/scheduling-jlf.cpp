@@ -714,10 +714,10 @@ void Controller::Scheduling()
                         model->name.find("sink") != std::string::npos ||
                         model->name.find("yolo") != std::string::npos)
                 {
+                    model->numReplicas = 1;
                     continue;
                 }
                 // set specific number of replicas for each downstream
-                // auto numReplicas = 4;
                 model->numReplicas = 4;
             }
             task.second->tk_slo = pipelineSLOs[task.second->tk_name];
