@@ -675,9 +675,9 @@ void BaseReqBatcher::batchRequestsProfiling() {
                 msvc_resizeInterpolType
         );
 
-        data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
+        // data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
 
-        data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
+        // data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
         spdlog::get("container_agent")->trace("{0:s} finished resizing a frame", msvc_name);
         data.shape = RequestDataShapeType(
