@@ -832,7 +832,8 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
     finishGrpc(rpc, reply, status, device->cq);
-    container->gpuHandle->removeContainer(container);
+    if (container->gpuHandle != nullptr)
+        container->gpuHandle->removeContainer(container);
     if (!forced) { //not forced means the container is stopped during scheduling and should be removed
         containers.list.erase(container->name);
         container->device_agent->containers.erase(container->name);
