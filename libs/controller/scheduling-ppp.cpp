@@ -569,7 +569,9 @@ TaskHandle* Controller::mergePipelines(const std::string& taskName) {
             std::string oldDnstreamModelName = splitString(oldDownstream.first->name, "_").back();
             for (auto &newDownstream : mergedPipeline->tk_pipelineModels) {
                 std::string newDownstreamModelName = splitString(newDownstream->name, "_").back();
-                if (oldDnstreamModelName == newDownstreamModelName && oldDownstream.first->device == newDownstream->device) {
+                if (oldDnstreamModelName == newDownstreamModelName && 
+                    oldDownstream.first->device == newDownstream->device &&
+                    oldDownstream.first != newDownstream) {
                     model->downstreams.emplace_back(std::make_pair(newDownstream, oldDownstream.second));
                     newDownstream->upstreams.emplace_back(std::make_pair(model, oldDownstream.second));
                     break;
