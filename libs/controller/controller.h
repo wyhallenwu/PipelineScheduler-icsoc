@@ -52,6 +52,7 @@ struct GPULane {
 struct GPUPortion {
     std::uint64_t start = 0;
     std::uint64_t end = 9999999999999999;
+    ContainerHandle *container = nullptr;
     GPULane * lane = nullptr;
     GPUPortion* next = nullptr;
     GPUPortion* prev = nullptr;
@@ -219,7 +220,7 @@ struct ContainerHandle {
     // GPU Handle
     GPUHandle *gpuHandle = nullptr;
     //
-    GPUPortion *executionLane = nullptr;
+    GPUPortion *executionPortion = nullptr;
     // points to the pipeline model that this container is part of
     PipelineModel *pipelineModel = nullptr;
 
@@ -301,7 +302,7 @@ struct ContainerHandle {
         localDutyCycle = other.localDutyCycle;
         batchingDeadline = other.batchingDeadline;
         gpuHandle = other.gpuHandle;
-        executionLane = other.executionLane;
+        executionPortion = other.executionPortion;
         pipelineModel = other.pipelineModel;
         timeBudgetLeft = other.timeBudgetLeft;
     }
@@ -343,7 +344,7 @@ struct ContainerHandle {
             localDutyCycle = other.localDutyCycle;
             batchingDeadline = other.batchingDeadline;
             gpuHandle = other.gpuHandle;
-            executionLane = other.executionLane;
+            executionPortion = other.executionPortion;
             pipelineModel = other.pipelineModel;
             timeBudgetLeft = other.timeBudgetLeft;
         }

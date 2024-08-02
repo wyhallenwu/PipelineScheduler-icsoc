@@ -346,6 +346,7 @@ bool Controller::containerTemporalScheduling(ContainerHandle *container) {
         spdlog::get("container_agent")->error("No free portion found for container {0:s}", container->name);
         return false;
     }
+    container->executionPortion = portion;
     auto newPortions = insertUsedGPUPortion(devices.list["server"]->freeGPUPortions, container, portion);
 
 
