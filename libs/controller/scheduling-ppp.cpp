@@ -23,6 +23,7 @@ void Controller::initiateGPULanes(NodeHandle &node) {
         node.gpuLanes.push_back(new GPULane{});
         node.gpuLanes.back()->laneNum = i;
         node.gpuLanes.back()->dutyCycle = 0;
+        node.gpuLanes.back()->gpuHandle = node.gpuHandles[i / NUM_LANES_PER_GPU];
         // Initially the number of portions is the number of lanes
         node.freeGPUPortions.list.push_back(new GPUPortion{});
         node.freeGPUPortions.list.back()->lane = node.gpuLanes.back();

@@ -42,9 +42,10 @@ struct ContainerHandle;
 struct PipelineModel;
 
 struct GPUPortion;
+struct GPUHandle;
 
 struct GPULane {
-    std::uint16_t gpuNum;
+    GPUHandle *gpuHandle;
     std::uint16_t laneNum;
     std::uint64_t dutyCycle = 0;
 };
