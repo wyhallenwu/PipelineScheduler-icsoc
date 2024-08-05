@@ -280,6 +280,9 @@ std::pair<GPUPortion *, GPUPortion *> Controller::insertUsedGPUPortion(GPUPortio
     uint64_t newStart = toBeDividedFreePortion->start;
     uint64_t newEnd = container->startTime;
 
+    auto gpuLane = toBeDividedFreePortion->lane;
+    auto gpu = gpuLane->gpuHandle;
+
     GPUPortion* leftPortion = nullptr;
     GPUPortion* rightPortion = nullptr;
     // Create a new portion on the left only if it is large enough
@@ -287,12 +290,13 @@ std::pair<GPUPortion *, GPUPortion *> Controller::insertUsedGPUPortion(GPUPortio
         leftPortion = new GPUPortion{};
         leftPortion->start = newStart;
         leftPortion->end = newEnd;
-        leftPortion->lane = toBeDividedFreePortion->lane;
+        leftPortion->lane = gpuLane;
+        gpu->freeGPUPortions.push_back(leftPortion);
     }
 
     // new portion on the right
     newStart = container->endTime;
-    auto laneDutyCycle = toBeDividedFreePortion->lane->dutyCycle;
+    auto laneDutyCycle = gpuLane->dutyCycle;
     if (laneDutyCycle == 0) {
         if (container->pipelineModel->localDutyCycle == 0) {
             throw std::runtime_error("Duty cycle of the container 0");
@@ -311,12 +315,18 @@ std::pair<GPUPortion *, GPUPortion *> Controller::insertUsedGPUPortion(GPUPortio
         rightPortion = new GPUPortion{};
         rightPortion->start = newStart;
         rightPortion->end = newEnd;
-        rightPortion->lane = toBeDividedFreePortion->lane;
+        rightPortion->lane = gpuLane;
+        gpu->freeGPUPortions.push_back(rightPortion);
     }
 
-    toBeDividedFreePortion->lane->dutyCycle = laneDutyCycle;
+    gpuLane->dutyCycle = laneDutyCycle;
+
     auto it = std::find(portionList.list.begin(), portionList.list.end(), toBeDividedFreePortion);
     portionList.list.erase(it);
+    it = std::find(gpu->freeGPUPortions.begin(), gpu->freeGPUPortions.end(), toBeDividedFreePortion);
+    gpu->freeGPUPortions.erase(it);
+
+
 
     // Delete the old portion as it has been divided into two new free portions and an occupied portion
     if (toBeDividedFreePortion->prev != nullptr) {

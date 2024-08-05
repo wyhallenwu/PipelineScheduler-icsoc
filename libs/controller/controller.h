@@ -68,6 +68,7 @@ struct GPUHandle {
     std::uint16_t numLanes;
 
     std::map<std::string, ContainerHandle *> containers = {};
+    std::vector<GPUPortion *> freeGPUPortions;
 
     GPUHandle() = default;
 
