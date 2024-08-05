@@ -8,11 +8,6 @@ ABSL_FLAG(uint16_t, dev_loggingMode, 0, "Logging mode of the Device Agent. 0:std
 ABSL_FLAG(std::string, dev_logPath, "../logs", "Path to the log dir for the Device Agent.");
 ABSL_FLAG(uint16_t, dev_port_offset, 0, "port offset for starting the control communication");
 
-const int CONTAINER_BASE_PORT = 50001;
-const int CONTROLLER_BASE_PORT = 60001;
-const int DEVICE_CONTROL_PORT = 60002;
-const int INDEVICE_CONTROL_PORT = 60003;
-
 std::string getHostIP() {
     struct ifaddrs *ifAddrStruct = nullptr;
     struct ifaddrs *ifa = nullptr;
@@ -39,44 +34,65 @@ std::string getHostIP() {
     return "";
 }
 
-DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type) {
-    dev_name = n;
-    containers = std::map<std::string, DevContainerHandle>();
-
+DeviceAgent::DeviceAgent() {
+    dev_name = absl::GetFlag(FLAGS_name);
+    std::string type = absl::GetFlag(FLAGS_device_type);
+    SystemDeviceType deviceType;
+    if (type == "server") {
+        dev_type = SystemDeviceType::Server;
+    } else if (type == "nxavier") {
+        dev_type = SystemDeviceType::NXXavier;
+    } else if (type == "agxavier") {
+        dev_type = SystemDeviceType::AGXXavier;
+    } else if (type == "orinano") {
+        dev_type = SystemDeviceType::OrinNano;
+    }
+    else {
+        std::cerr << "Invalid device type, use [server, nxavier, agxavier, orinano]" << std::endl;
+        exit(1);
+    }
     dev_port_offset = absl::GetFlag(FLAGS_dev_port_offset);
     dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
     dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
     dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
     deploy_mode = absl::GetFlag(FLAGS_deploy_mode);
-    dev_type = type;
+
+    containers = std::map<std::string, DevContainerHandle>();
+    dev_containerLib = getContainerLib(SystemDeviceTypeList[dev_type]);
+
+
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
     dev_metricsServerConfigs.password = "agent";
     dev_metricsServerConn = connectToMetricsServer(dev_metricsServerConfigs, "Device_agent");
 
-    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", INDEVICE_CONTROL_PORT + dev_port_offset);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+
+    std::string server_address = absl::StrFormat( "%s:%d", "0.0.0.0", DEVICE_CONTROL_PORT + dev_port_offset);
+    ServerBuilder controller_builder;
+    controller_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    controller_builder.RegisterService(&controller_service);
+    controller_cq = controller_builder.AddCompletionQueue();
+    controller_server = controller_builder.BuildAndStart();
+}
+
+DeviceAgent::DeviceAgent(const std::string &controller_url) : DeviceAgent() {
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", INDEVICE_CONTROL_PORT + dev_port_offset);
     ServerBuilder device_builder;
     device_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     device_builder.RegisterService(&device_service);
     device_cq = device_builder.AddCompletionQueue();
     device_server = device_builder.BuildAndStart();
 
-    server_address = absl::StrFormat("%s:%d", "0.0.0.0", DEVICE_CONTROL_PORT + dev_port_offset);
-    ServerBuilder controller_builder;
-    controller_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-    controller_builder.RegisterService(&controller_service);
-    controller_cq = controller_builder.AddCompletionQueue();
-    controller_server = controller_builder.BuildAndStart();
-    std::string target_str = absl::StrFormat("%s:%d", controller_url, CONTROLLER_BASE_PORT + dev_port_offset);
+    server_address = absl::StrFormat("%s:%d", controller_url, CONTROLLER_BASE_PORT + dev_port_offset);
     controller_stub = ControlCommunication::NewStub(
-            grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
+            grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
     controller_sending_cq = new CompletionQueue();
 
     dev_profiler = new Profiler({});
-    Ready(getHostIP(), type);
+    Ready(getHostIP(), dev_type);
 
     dev_logPath += "/" + dev_experiment_name;
     std::filesystem::create_directories(
@@ -97,7 +113,7 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             dev_logger
     );
 
-    dev_containerLib = getContainerLib(SystemDeviceTypeList[type]);
+    dev_containerLib = getContainerLib(SystemDeviceTypeList[dev_type]);
     dev_metricsServerConfigs.schema = abbreviate(dev_experiment_name + "_" + dev_system_name);
     dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_hw";
     dev_networkTableName = dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_netw";
@@ -299,8 +315,8 @@ bool DeviceAgent::CreateContainer(ContainerConfig &c) {
         std::string executable = dev_containerLib[modelName].runCommand;
         json start_config;
         if (model == ModelType::Sink) {
-            start_config["experimentName"] = dev_experiment_name;
-            start_config["systemName"] = dev_system_name;
+            start_config["experimentName"] = c.experiment_name();
+            start_config["systemName"] = c.system_name();
             start_config["pipelineName"] = c.pipeline_name();
             uint16_t port = std::stoi(c.upstream().at(0).ip().at(0).substr(c.upstream().at(0).ip().at(0).find(':') + 1));
             runDocker(executable, cont_name, to_string(start_config), c.device(), port);
@@ -325,11 +341,11 @@ bool DeviceAgent::CreateContainer(ContainerConfig &c) {
         }
         start_config["container"]["cont_pipelineSLO"] = c.total_slo();
         start_config["container"]["cont_SLO"] = c.cont_slo();
-        start_config["container"]["cont_timeBudgetLeft"] = c.timebudget();
-        start_config["container"]["cont_startTime"] = c.starttime();
-        start_config["container"]["cont_endTime"] = c.endtime();
-        start_config["container"]["cont_localDutyCycle"] = c.localdutycycle();
-        start_config["container"]["cont_cycleStartTime"] = c.cyclestarttime();
+        start_config["container"]["cont_timeBudgetLeft"] = c.time_budget();
+        start_config["container"]["cont_startTime"] = c.start_time();
+        start_config["container"]["cont_endTime"] = c.end_time();
+        start_config["container"]["cont_localDutyCycle"] = c.local_duty_cycle();
+        start_config["container"]["cont_cycleStartTime"] = c.cycle_start_time();
 
         json base_config = start_config["container"]["cont_pipeline"];
 
@@ -712,11 +728,11 @@ void DeviceAgent::UpdateTimeKeepingRequestHandler::Proceed() {
         indevicecommunication::TimeKeeping tk;
         tk.set_slo(request.slo());
         tk.set_cont_slo(request.cont_slo());
-        tk.set_timebudget(request.timebudget());
-        tk.set_starttime(request.starttime());
-        tk.set_endtime(request.endtime());
-        tk.set_localdutycycle(request.localdutycycle());
-        tk.set_cyclestarttime(request.cyclestarttime());
+        tk.set_time_budget(request.time_budget());
+        tk.set_start_time(request.start_time());
+        tk.set_end_time(request.end_time());
+        tk.set_local_duty_cycle(request.local_duty_cycle());
+        tk.set_cycle_start_time(request.cycle_start_time());
 
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 device_agent->containers[request.name()].stub->AsyncUpdateTimeKeeping(&context, tk,

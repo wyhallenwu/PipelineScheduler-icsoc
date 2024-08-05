@@ -81,6 +81,7 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_runtime = j["runtime"];
     ctrl_port_offset = j["port_offset"];
     ctrl_systemFPS = j["system_fps"];
+    ctrl_sinkNodeIP = absl::StrFormat("%s:%d", j["sink_ip"].get<std::string>(), DEVICE_CONTROL_PORT + ctrl_port_offset);
     initialTasks = j["initial_pipelines"];
 }
 
@@ -205,6 +206,14 @@ Controller::Controller(int argc, char **argv) {
     cq = builder.AddCompletionQueue();
     server = builder.BuildAndStart();
 
+    // append one device for sink of type server
+    NodeHandle *sink_node = new NodeHandle("sink", ctrl_sinkNodeIP,
+                      ControlCommunication::NewStub(
+                              grpc::CreateChannel(ctrl_sinkNodeIP, grpc::InsecureChannelCredentials())),
+                      new CompletionQueue(), SystemDeviceType::Server,
+                      DATA_BASE_PORT + ctrl_port_offset, {});
+    devices.addDevice("sink", sink_node);
+
     ctrl_nextSchedulingTime = std::chrono::system_clock::now();
 }
 
@@ -241,7 +250,7 @@ Controller::~Controller() {
 // ============================================================================================================================================= //
 
 MemUsageType ContainerHandle::getExpectedTotalMemUsage() const {
-    if (device_agent->name == "server") {
+    if (device_agent->type == SystemDeviceType::Server) {
         return pipelineModel->processProfiles.at("server").batchInfer[pipelineModel->batchSize].gpuMemUsage;
     }
     std::string deviceTypeName = getDeviceTypeName(device_agent->type);
@@ -284,7 +293,7 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 }
 
 void Controller::initialiseGPU(NodeHandle *node, int numGPUs, std::vector<int> memLimits) {
-    if (node->name == "server") {
+    if (node->type == SystemDeviceType::Server) {
         for (uint8_t gpuIndex = 0; gpuIndex < numGPUs; gpuIndex++) {
             std::string gpuName = "gpu" + std::to_string(gpuIndex);
             GPUHandle *gpuNode = new GPUHandle{"3090", "server", gpuIndex, memLimits[gpuIndex] - 2000, NUM_LANES_PER_GPU};
@@ -598,9 +607,9 @@ void Controller::AdjustTiming(ContainerHandle *container) {
     container->timeBudgetLeft = container->pipelineModel->timeBudgetLeft;
     // container->batchingDeadline for lazy dynamic batching
     container->batchingDeadline = container->pipelineModel->batchingDeadline;
-    // container->startTime
+    // container->start_time
     container->startTime = container->pipelineModel->startTime;
-    // container->endTime
+    // container->end_time
     container->endTime = container->pipelineModel->endTime;
     // container SLO
     container->localDutyCycle = container->pipelineModel->localDutyCycle;
@@ -614,11 +623,11 @@ void Controller::AdjustTiming(ContainerHandle *container) {
     request.set_name(container->name);
     request.set_slo(container->inference_deadline);
     request.set_cont_slo(container->batchingDeadline);
-    request.set_timebudget(container->timeBudgetLeft);
-    request.set_starttime(container->startTime);
-    request.set_endtime(container->endTime);
-    request.set_localdutycycle(container->localDutyCycle);
-    request.set_cyclestarttime(std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count());
+    request.set_time_budget(container->timeBudgetLeft);
+    request.set_start_time(container->startTime);
+    request.set_end_time(container->endTime);
+    request.set_local_duty_cycle(container->localDutyCycle);
+    request.set_cycle_start_time(std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count());
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container->device_agent->stub->AsyncUpdateTimeKeeping(&context, request,
                                                                container->device_agent->cq));
@@ -648,14 +657,14 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         request.set_device(container->gpuHandle->number);
     }
     request.set_slo(container->inference_deadline);
-    request.set_timebudget(container->timeBudgetLeft);
+    request.set_time_budget(container->timeBudgetLeft);
     request.set_total_slo(container->task->tk_slo);
     request.set_fps(ctrl_systemFPS);
     request.set_cont_slo(container->batchingDeadline);
-    request.set_starttime(container->startTime);
-    request.set_endtime(container->endTime);
-    request.set_localdutycycle(container->localDutyCycle);
-    request.set_cyclestarttime(std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count());
+    request.set_start_time(container->startTime);
+    request.set_end_time(container->endTime);
+    request.set_local_duty_cycle(container->localDutyCycle);
+    request.set_cycle_start_time(std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count());
     for (auto dim: container->dimensions) {
         request.add_input_dimensions(dim);
     }
@@ -965,7 +974,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
         controller->queryInDeviceNetworkEntries(controller->devices.list.at(deviceName));
 
-        if (deviceName != "server") {
+        if (node->type != SystemDeviceType::Server) {
             std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.list[deviceName])), 1000, 1200000, 30);
             networkCheck.detach();
         }
@@ -995,7 +1004,7 @@ void Controller::DummyDataRequestHandler::Proceed() {
 }
 
 std::string DeviceNameToType(std::string name) {
-    if (name == "server") {
+    if (name == "server" || name == "sink") {
         return "server";
     } else {
         return name.substr(0, name.size() - 1);
@@ -1194,7 +1203,7 @@ void Controller::checkNetworkConditions() {
             uint64_t timeSinceLastCheck = std::chrono::duration_cast<TimePrecisionType>(
                     std::chrono::system_clock::now() - nodeHandle->lastNetworkCheckTime).count() / 1000000;
             lock.unlock();
-            if (deviceName == "server" || (initialNetworkCheck && timeSinceLastCheck < 60)) {
+            if (nodeHandle->type == SystemDeviceType::Server || (initialNetworkCheck && timeSinceLastCheck < 60)) {
                 spdlog::get("container_agent")->info("Skipping network check for device {}.", deviceName);
                 continue;
             }
@@ -1333,7 +1342,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}, {carbrand, -1}, {platedet, -1}}
             };
-            sink->possibleDevices = {"server"};
+            sink->possibleDevices = {"sink"};
             arcface->downstreams.push_back({sink, -1});
             carbrand->downstreams.push_back({sink, -1});
             platedet->downstreams.push_back({sink, -1});
@@ -1426,7 +1435,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{gender, -1}, {age, -1}, {movenet, -1}}
             };
-            sink->possibleDevices = {"server"};
+            sink->possibleDevices = {"sink"};
             gender->downstreams.push_back({sink, -1});
             age->downstreams.push_back({sink, -1});
             movenet->downstreams.push_back({sink, -1});
@@ -1519,7 +1528,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{emotionnet, -1}, {age, -1}, {gender, -1}, {arcface, -1}}
             };
-            sink->possibleDevices = {"server"};
+            sink->possibleDevices = {"sink"};
             emotionnet->downstreams.push_back({sink, -1});
             age->downstreams.push_back({sink, -1});
             gender->downstreams.push_back({sink, -1});
