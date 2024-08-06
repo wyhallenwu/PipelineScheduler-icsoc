@@ -22,6 +22,7 @@ SinkAgent::SinkAgent(const std::string &controller_url) {
             dev_loggerSinks,
             dev_logger
     );
+    dev_containerLib = getContainerLib(SystemDeviceTypeList[dev_type]);
 
     running = true;
     threads = std::vector<std::thread>();

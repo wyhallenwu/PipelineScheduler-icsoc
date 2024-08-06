@@ -58,9 +58,6 @@ DeviceAgent::DeviceAgent() {
     deploy_mode = absl::GetFlag(FLAGS_deploy_mode);
 
     containers = std::map<std::string, DevContainerHandle>();
-    dev_containerLib = getContainerLib(SystemDeviceTypeList[dev_type]);
-
-
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
