@@ -81,7 +81,7 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_runtime = j["runtime"];
     ctrl_port_offset = j["port_offset"];
     ctrl_systemFPS = j["system_fps"];
-    ctrl_sinkNodeIP = absl::StrFormat("%s:%d", j["sink_ip"].get<std::string>(), DEVICE_CONTROL_PORT + ctrl_port_offset);
+    ctrl_sinkNodeIP = j["sink_ip"];
     initialTasks = j["initial_pipelines"];
 }
 
