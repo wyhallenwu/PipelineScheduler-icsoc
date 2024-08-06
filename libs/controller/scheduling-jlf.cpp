@@ -358,9 +358,9 @@ void Controller::Scheduling()
                 std::cout << "model name: " << model->name << std::endl;
                 if (model->name.find("datasource") == std::string::npos)
                 {
-                    model->device = "server";
+                    model->device = model->possibleDevices[0];
                     model->deviceTypeName = "server";
-                    model->deviceAgent = deviceList["server"];
+                    model->deviceAgent = deviceList[model->possibleDevices[0]];
                 }
                 else
                 {
@@ -926,7 +926,12 @@ TaskHandle Controller::mergePipelines(const std::string &taskName)
         {
             mergedPipelineModels->at(i)->manifestations.emplace_back(new ContainerHandle{});
             mergedPipelineModels->at(i)->manifestations.back()->task = &mergedPipeline;
-            mergedPipelineModels->at(i)->manifestations.back()->device_agent = deviceList.at(mergedPipelineModels->at(i)->device);
+            if (mergedPipelineModels->at(i)->manifestations.back()->model == ModelType::Sink) {
+                mergedPipelineModels->at(i)->manifestations.back()->device_agent = deviceList.at("sink");
+            } else {
+                mergedPipelineModels->at(i)->manifestations.back()->device_agent = deviceList.at(
+                        mergedPipelineModels->at(i)->device);
+            }
         }
     }
 }

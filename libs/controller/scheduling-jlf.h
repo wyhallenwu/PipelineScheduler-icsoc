@@ -158,7 +158,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{arcface, -1}, {carbrand, -1}, {platedet, -1}}
             };
-            sink->possibleDevices = {"server"};
+            sink->possibleDevices = {"sink"};
             arcface->downstreams.push_back({sink, -1});
             carbrand->downstreams.push_back({sink, -1});
             platedet->downstreams.push_back({sink, -1});
@@ -320,7 +320,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{gender, -1}, {age, -1}, {movenet, -1}}
             };
-            sink->possibleDevices = {"server"};
+            sink->possibleDevices = {"sink"};
             gender->downstreams.push_back({sink, -1});
             age->downstreams.push_back({sink, -1});
             movenet->downstreams.push_back({sink, -1});
@@ -414,7 +414,7 @@ PipelineModelListType Controller::getModelsByPipelineTypeTest(PipelineType type,
                     {},
                     {{emotionnet, -1}, {age, -1}, {gender, -1}, {arcface, -1}}
             };
-            sink->possibleDevices = {"server"};
+            sink->possibleDevices = {"sink"};
             emotionnet->downstreams.push_back({sink, -1});
             age->downstreams.push_back({sink, -1});
             gender->downstreams.push_back({sink, -1});
