@@ -4,6 +4,7 @@
     "systemName": "jlf",
     "runtime": 60,
     "port_offset": 2000,
+    "sink_ip": "localhost",
     "initial_pipelines": [
         {
             "pipeline_name": "people1",

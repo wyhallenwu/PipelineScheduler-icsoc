@@ -4,6 +4,7 @@
     "systemName": "rim",
     "runtime": 1,
     "port_offset": 4000,
+    "sink_ip": "localhost",
     "initial_pipelines": [
         {
             "pipeline_name": "traffic1",
