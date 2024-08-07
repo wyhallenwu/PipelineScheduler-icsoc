@@ -783,7 +783,7 @@ bool BaseReqBatcher::checkReqEligibility(std::vector<ClockType> &currReq_time) {
         return true;
     }
     auto now = std::chrono::high_resolution_clock::now();
-    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - currReq_time[0]).count();
+    auto diff = std::chrono::duration_cast<std::chrono::microseconds>(now - currReq_time[0]).count();
     if (diff > msvc_pipelineSLO - msvc_timeBudgetLeft && msvc_DROP_MODE == DROP_MODE::LAZY) {
         this->droppedReqCount++;
         spdlog::get("container_agent")->trace("{0:s} dropped the {1:d}th request.", msvc_name, this->droppedReqCount);
