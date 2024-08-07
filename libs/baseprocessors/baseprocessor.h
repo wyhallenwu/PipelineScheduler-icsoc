@@ -125,29 +125,7 @@ public:
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
-    virtual ArrivalRecordType getArrivalRecords() override {
-        return msvc_arrivalRecords.getRecords();
-    }
-
-    /**
-     * @brief Get the size of the arrival package which is recorded in the travel path
-     * 
-     * @param path 
-     * @return RequestSizeType 
-     */
-    RequestMemSizeType getArrivalPkgSize(const std::string& path) {
-        // Path looks like this
-        // [hostDeviceName|microserviceID|inReqNumber|totalNumberOfOutputs|NumberInOutputs|outPackageSize (in byte)]
-        // [edge|YOLOv5_01|05|05][server|retinaface_02|09|09]
-        std::string temp = splitString(path, "[").back();
-        temp = splitString(temp, "]").front();
-        return std::stoul(splitString(temp, "|").back());
-    }
-
 protected:
-    // Record
-    ArrivalReqRecords msvc_arrivalRecords;
-
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
     inline bool isTimeToBatch() override;
@@ -241,6 +219,7 @@ public:
             Microservice::loadConfigs(jsonConfigs, isConstructing);
         }
         msvc_processRecords.setKeepLength((uint64_t)jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
+        msvc_arrivalRecords.setKeepLength((uint64_t) jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
     };
     virtual ProcessRecordType getProcessRecords() override {
         return msvc_processRecords.getRecords();
@@ -250,11 +229,33 @@ public:
         return msvc_processRecords.getBatchInferRecords();
     }
 
+    virtual ArrivalRecordType getArrivalRecords() override {
+        return msvc_arrivalRecords.getRecords();
+    }
+
     virtual void addToPath(RequestPathType &path, uint64_t reqNum) {
         
     }
+
+    /**
+     * @brief Get the size of the arrival package which is recorded in the travel path
+     * 
+     * @param path 
+     * @return RequestSizeType 
+     */
+    RequestMemSizeType getArrivalPkgSize(const std::string& path) {
+        // Path looks like this
+        // [hostDeviceName|microserviceID|inReqNumber|totalNumberOfOutputs|NumberInOutputs|outPackageSize (in byte)]
+        // [edge|YOLOv5_01|05|05][server|retinaface_02|09|09]
+        std::string temp = splitString(path, "[").back();
+        temp = splitString(temp, "]").front();
+        return std::stoul(splitString(temp, "|").back());
+    }
+
 protected:
     ProcessReqRecords msvc_processRecords;
+    // Record
+    ArrivalReqRecords msvc_arrivalRecords;
 
     struct PerQueueOutRequest {
         bool used = false;

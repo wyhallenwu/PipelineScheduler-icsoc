@@ -254,7 +254,6 @@ void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_imgNormScale = configs.msvc_imgNormScale;
     msvc_subVals = configs.msvc_subVals;
     msvc_divVals = configs.msvc_divVals;
-    msvc_arrivalRecords.setKeepLength((uint64_t) jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
 
     if (msvc_BATCH_MODE == BATCH_MODE::OURS) {
         updateCycleTiming();
@@ -395,17 +394,17 @@ void BaseReqBatcher::batchRequests() {
 
         // Keeping record of the arrival requests
         // TODO: Add rpc batch size instead of hardcoding
-        if (warmupCompleted()) {
-            msvc_arrivalRecords.addRecord(
-                    currReq.req_origGenTime[0],
-                    10,
-                    getArrivalPkgSize(currReq.req_travelPath[0]),
-                    requestSize,
-                    msvc_inReqCount,
-                    getOriginStream(currReq.req_travelPath[0]),
-                    getSenderHost(currReq.req_travelPath[0])
-            );
-        }
+        // if (warmupCompleted()) {
+        //     msvc_arrivalRecords.addRecord(
+        //             currReq.req_origGenTime[0],
+        //             10,
+        //             getArrivalPkgSize(currReq.req_travelPath[0]),
+        //             requestSize,
+        //             msvc_inReqCount,
+        //             getOriginStream(currReq.req_travelPath[0]),
+        //             getSenderHost(currReq.req_travelPath[0])
+        //     );
+        // }
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
@@ -416,7 +415,8 @@ void BaseReqBatcher::batchRequests() {
 
         // After the communication-related timestamps have been kept in the arrival record, all except the very first one (genTime) are removed.
         // The first timestamp will be carried till the end of the pipeline to determine the total latency and if the request is late, along the way.
-        outReq_genTime = {currReq_genTime, std::chrono::high_resolution_clock::now()};
+        // outReq_genTime = {currReq_genTime, std::chrono::high_resolution_clock::now()};
+        currReq.req_origGenTime[0].emplace_back(std::chrono::high_resolution_clock::now());
 
         currReq_batchSize = currReq.req_batchSize;
 
@@ -478,8 +478,9 @@ void BaseReqBatcher::batchRequests() {
         timeNow = std::chrono::high_resolution_clock::now();
 
         // Add the whole time vector of currReq to outReq
-        outReq_genTime.emplace_back(timeNow);
-        outBatch_genTime.emplace_back(outReq_genTime);
+        // outReq_genTime.emplace_back(timeNow);
+        currReq.req_origGenTime[0].emplace_back(timeNow);
+        outBatch_genTime.emplace_back(currReq.req_origGenTime[0]);
 
         /**
          * @brief ONLY IN PROFILING MODE
