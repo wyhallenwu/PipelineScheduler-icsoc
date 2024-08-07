@@ -566,7 +566,8 @@ private:
 
 enum class BATCH_MODE {
     FIXED,
-    DYNAMIC // Lazy batching
+    DYNAMIC, // Lazy batching
+    OURS
 };
 
 enum class DROP_MODE {
@@ -723,6 +724,8 @@ public:
         return {};
     }
 
+    virtual void updateCycleTiming() {};
+
     bool RELOADING = true;
 
     std::ofstream msvc_logFile;
@@ -777,6 +780,8 @@ protected:
     uint64_t msvc_localDutyCycle;
     //
     ClockType msvc_cycleStartTime;
+    //
+    ClockType msvc_nextBatchTime;
     
     //
     MsvcSLOType msvc_interReqTime = 1;

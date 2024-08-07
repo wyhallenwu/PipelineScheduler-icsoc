@@ -103,9 +103,11 @@ public:
 
     virtual void batchRequests();
     virtual void batchRequestsProfiling();
-    void executeBatch(ClockType time, BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
+    void executeBatch(BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
                       std::vector<RequestData<LocalGPUReqDataType>> &buffer,
                       std::vector<RequestData<LocalGPUReqDataType>> &prev);
+    
+    virtual void updateCycleTiming();
 
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
@@ -148,7 +150,7 @@ protected:
 
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
-    bool isTimeToBatch() override;
+    inline bool isTimeToBatch() override;
     template <typename T>
     bool validateRequest(Request<T> &req);
     bool checkReqEligibility(std::vector<ClockType> &currReq_time) override;
@@ -158,7 +160,7 @@ protected:
     std::vector<float> msvc_subVals, msvc_divVals;
     BatchInferProfileListType msvc_batchInferProfileList;
     ClockType oldestReqTime;
-    int timeout = 100;
+    uint64_t timeout = 100000; //microseconds
 };
 
 
