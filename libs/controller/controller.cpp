@@ -183,6 +183,9 @@ Controller::Controller(int argc, char **argv) {
     if (res.empty()) {
         std::string sql = "CREATE SCHEMA IF NOT EXISTS " + ctrl_metricsServerConfigs.schema + ";";
         pushSQL(*ctrl_metricsServerConn, sql);
+        sql = "ALTER DEFAULT PRIVILEGES IN SCHEMA " + ctrl_metricsServerConfigs.schema + 
+              " GRANT ALL PRIVILEGES ON TABLES TO controller;";
+        pushSQL(*ctrl_metricsServerConn, sql);
         sql = "GRANT USAGE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
         pushSQL(*ctrl_metricsServerConn, sql);
         sql = "GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
