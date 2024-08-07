@@ -388,9 +388,9 @@ void BaseReqBatcher::batchRequests() {
 
         msvc_inReqCount++;
 
-        uint32_t requestSize =
-                currReq.req_data[0].data.channels() * currReq.req_data[0].data.rows * currReq.req_data[0].data.cols *
-                CV_ELEM_SIZE1(currReq.req_data[0].data.type());
+        // uint32_t requestSize =
+        //         currReq.req_data[0].data.channels() * currReq.req_data[0].data.rows * currReq.req_data[0].data.cols *
+        //         CV_ELEM_SIZE1(currReq.req_data[0].data.type());
 
         // Keeping record of the arrival requests
         // TODO: Add rpc batch size instead of hardcoding
@@ -408,10 +408,10 @@ void BaseReqBatcher::batchRequests() {
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
-        currReq_genTime = currReq.req_origGenTime[0][0];
-        if (msvc_inReqCount > 1) {
-            updateReqRate(currReq_genTime);
-        }
+        // currReq_genTime = currReq.req_origGenTime[0][0];
+        // if (msvc_inReqCount > 1) {
+        //     updateReqRate(currReq_genTime);
+        // }
 
         // After the communication-related timestamps have been kept in the arrival record, all except the very first one (genTime) are removed.
         // The first timestamp will be carried till the end of the pipeline to determine the total latency and if the request is late, along the way.
@@ -505,7 +505,7 @@ void BaseReqBatcher::batchRequests() {
     msvc_logFile.close();
 }
 
-void BaseReqBatcher::executeBatch(BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
+inline void BaseReqBatcher::executeBatch(BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
                                   std::vector<RequestData<LocalGPUReqDataType>> &bufferData,
                                   std::vector<RequestData<LocalGPUReqDataType>> &prevData) {
     // if (time < oldestReqTime) {
@@ -781,7 +781,6 @@ inline bool BaseReqBatcher::isTimeToBatch() {
     if ((msvc_RUNMODE == RUNMODE::PROFILING || 
          msvc_BATCH_MODE == BATCH_MODE::FIXED) && 
         msvc_onBufferBatchSize == msvc_idealBatchSize) {
-        timeout = 100;
         return true;
     }
 

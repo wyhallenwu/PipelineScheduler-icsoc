@@ -103,7 +103,7 @@ public:
 
     virtual void batchRequests();
     virtual void batchRequestsProfiling();
-    void executeBatch(BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
+    inline void executeBatch(BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
                       std::vector<RequestData<LocalGPUReqDataType>> &buffer,
                       std::vector<RequestData<LocalGPUReqDataType>> &prev);
     

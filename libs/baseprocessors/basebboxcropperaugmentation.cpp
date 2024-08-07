@@ -285,9 +285,9 @@ void BaseBBoxCropperAugmentation::cropping() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (msvc_inReqCount > 1) {
-            updateReqRate(currReq_genTime);
-        }
+        // if (msvc_inReqCount > 1) {
+        //     updateReqRate(currReq_genTime);
+        // }
         currReq_batchSize = currReq.req_batchSize;
         spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
 
