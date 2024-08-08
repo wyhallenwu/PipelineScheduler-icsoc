@@ -110,7 +110,6 @@ DeviceAgent::DeviceAgent(const std::string &controller_url) : DeviceAgent() {
             dev_logger
     );
 
-    dev_containerLib = getContainerLib(SystemDeviceTypeList[dev_type]);
     dev_metricsServerConfigs.schema = abbreviate(dev_experiment_name + "_" + dev_system_name);
     dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_hw";
     dev_networkTableName = dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_netw";
@@ -300,124 +299,12 @@ void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
 }
 
 bool DeviceAgent::CreateContainer(ContainerConfig &c) {
-    ModelType model = static_cast<ModelType>(c.model());
-    std::string modelName = getContainerName(dev_type, model);
-    std::vector<int> input_dims;
-    for (auto &dim: c.input_dimensions()) {
-        input_dims.push_back(dim);
-    }
     try {
-        std::string cont_name = c.name();
-        std::cout << "Creating container: " << cont_name << std::endl;
-        std::string executable = dev_containerLib[modelName].runCommand;
-        json start_config;
-        if (model == ModelType::Sink) {
-            start_config["experimentName"] = c.experiment_name();
-            start_config["systemName"] = c.system_name();
-            start_config["pipelineName"] = c.pipeline_name();
-            uint16_t port = std::stoi(c.upstream().at(0).ip().at(0).substr(c.upstream().at(0).ip().at(0).find(':') + 1));
-            runDocker(executable, cont_name, to_string(start_config), c.device(), port);
-            return true;
-        }
-
-        start_config = dev_containerLib[modelName].templateConfig;
-
-        // adjust container configs
-        start_config["container"]["cont_experimentName"] = dev_experiment_name;
-        start_config["container"]["cont_systemName"] = dev_system_name;
-        start_config["container"]["cont_pipeName"] = c.pipeline_name();
-        start_config["container"]["cont_hostDevice"] = dev_name;
-        start_config["container"]["cont_hostDeviceType"] = dev_deviceInfo[dev_type];
-        start_config["container"]["cont_name"] = cont_name;
-        start_config["container"]["cont_allocationMode"] = c.allocation_mode() ? 1 : 0;
-        if (dev_system_name == "ppp") {
-            start_config["container"]["cont_batchMode"] = 1;
-        }
-        if (dev_system_name == "ppp" || dev_system_name == "jlf") {
-            start_config["container"]["cont_dropMode"] = 1;
-        }
-        start_config["container"]["cont_pipelineSLO"] = c.total_slo();
-        start_config["container"]["cont_SLO"] = c.cont_slo();
-        start_config["container"]["cont_timeBudgetLeft"] = c.time_budget();
-        start_config["container"]["cont_startTime"] = c.start_time();
-        start_config["container"]["cont_endTime"] = c.end_time();
-        start_config["container"]["cont_localDutyCycle"] = c.local_duty_cycle();
-        start_config["container"]["cont_cycleStartTime"] = c.cycle_start_time();
-
-        json base_config = start_config["container"]["cont_pipeline"];
-
-        // adjust pipeline configs
-        for (auto &j: base_config) {
-            j["msvc_idealBatchSize"] = c.batch_size();
-            j["msvc_svcLevelObjLatency"] = c.slo();
-        }
-        if (model == ModelType::DataSource) {
-            base_config[0]["msvc_dataShape"] = {input_dims};
-            base_config[0]["msvc_idealBatchSize"] = c.fps();
-        } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
-            base_config[0]["msvc_dataShape"] = {input_dims};
-            base_config[0]["msvc_type"] = 500;
-            base_config[0]["msvc_idealBatchSize"] = c.fps();
-        } else {
-            base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
-            base_config[2]["path"] = c.model_file();
-        }
-
-
-        // adjust receiver upstreams
-        base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = c.upstream().at(0).name();
-        base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {};
-        if (model == ModelType::DataSource || model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
-            std::string dataDir = "../data/";
-            base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {dataDir + c.upstream().at(0).ip().at(0)};
-        } else {
-            for (auto ip: c.upstream().at(0).ip()) {
-                base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"].push_back(ip);
-            }
-        }
-        if (c.upstream().at(0).gpu_connection()) {
-            base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
-        } else {
-            base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
-        }
-
-        // adjust sender downstreams
-        json sender = base_config.back();
-        uint16_t postprocessorIndex = base_config.size() - 2;
-        json post_down = base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"][0];
-        base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"] = json::array();
-        base_config.erase(base_config.size() - 1);
-        int i = 1;
-        for (auto &d: c.downstream()) {
-            json *postprocessor = &base_config[postprocessorIndex];
-            sender["msvc_name"] = sender["msvc_name"].get<std::string>() + std::to_string(i);
-            sender["msvc_dnstreamMicroservices"][0]["nb_name"] = d.name();
-            sender["msvc_dnstreamMicroservices"][0]["nb_link"] = {};
-            for (auto ip: d.ip()) {
-                sender["msvc_dnstreamMicroservices"][0]["nb_link"].push_back(ip);
-            }
-            post_down["nb_name"] = sender["msvc_name"];
-            if (d.gpu_connection()) {
-                post_down["nb_commMethod"] = CommMethod::localGPU;
-                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
-            } else {
-                post_down["nb_commMethod"] = CommMethod::localCPU;
-                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
-            }
-            post_down["nb_classOfInterest"] = d.class_of_interest();
-
-            postprocessor->at("msvc_dnstreamMicroservices").push_back(post_down);
-            base_config.push_back(sender);
-        }
-
-        // start container
-        start_config["container"]["cont_pipeline"] = base_config;
-        unsigned int control_port = CONTAINER_BASE_PORT + dev_port_offset + containers.size();
-        runDocker(executable, cont_name, to_string(start_config), c.device(), control_port);
-        std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
-        containers[cont_name] = {InDeviceCommunication::NewStub(
+        runDocker(c.executable(), c.name(), c.json_config(), c.device(), c.control_port());
+        std::string target = absl::StrFormat("%s:%d", "localhost", c.control_port());
+        containers[c.name()] = {InDeviceCommunication::NewStub(
                 grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
-                                 new CompletionQueue(), control_port, 0, {}};
+                                 new CompletionQueue(), static_cast<unsigned int>(c.control_port()), 0, {}};
         return true;
     } catch (std::exception &e) {
         spdlog::get("container_agent")->error("Error creating container: {}", e.what());
