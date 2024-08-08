@@ -674,6 +674,7 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     //         downstreamContainer->upstreams.push_back(container);
     //     }
     // }
+    model->manifestations.push_back(container);
     return container;
 }
 
