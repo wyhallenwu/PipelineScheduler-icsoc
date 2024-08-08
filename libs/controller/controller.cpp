@@ -708,7 +708,11 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = "video_source";
             base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"].push_back(container->pipelineModel->datasourceName);
         } else {
-            base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = container->pipelineModel->upstreams[0].first->name;
+            if (!container->pipelineModel->upstreams.empty()) {
+                base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = container->pipelineModel->upstreams[0].first->name;
+            } else {
+                base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = "empty";
+            }
             base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"].push_back(absl::StrFormat("0.0.0.0:%d", container->recv_port));
         }
 //        if ((container->device_agent == container->upstreams[0]->device_agent) && (container->gpuHandle == container->upstreams[0]->gpuHandle)) {
