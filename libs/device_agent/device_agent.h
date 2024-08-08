@@ -104,14 +104,12 @@ protected:
                         cont_name, executable, start_string, device, port, dev_port_offset) +
                 " --log_dir ../logs";
 
-        spdlog::get("container_agent")->info("Running command: {}", command);
         if (!deploy_mode) {
             command += " --verbose 0 --logging_mode 2";
         } else {
             command += " --logging_mode 1";
         }
-        std::cout << command << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        spdlog::get("container_agent")->info("Running command: {}", command);
         return system(command.c_str());
     };
 

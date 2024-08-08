@@ -32,36 +32,12 @@ message SystemInfo {
   string experiment = 2;
 }
 
-message Neighbor {
-  string name = 1;
-  repeated string ip = 2;
-  int32 class_of_interest = 3;
-  bool gpu_connection = 4;
-}
-
 message ContainerConfig {
   string name = 1;
-  string pipeline_name = 2;
-  int32 model = 3;
-  string model_file = 4;
-  int32 batch_size = 5;
-  int32 replica_id = 6;
-  int32 device = 7;
-  int32 slo = 8;
-  repeated uint32 input_dimensions = 9;
-  repeated Neighbor upstream = 10;
-  repeated Neighbor downstream = 11; 
-  int32 fps = 12;
-  uint64 time_budget = 13;
-  int32 total_slo = 14;
-  int32 cont_slo = 15;
-  uint64 start_time = 16;
-  uint64 end_time = 17;
-  uint64 local_duty_cycle = 18;
-  uint64 cycle_start_time = 19;
-  bool allocation_mode = 20;
-  string experiment_name = 21;
-  string system_name = 22;
+  string json_config = 2;
+  string executable = 3;
+  int32 device = 4;
+  int32 control_port = 5;
 }
 
 message TimeKeeping {

@@ -21,7 +21,6 @@ using grpc::ServerCompletionQueue;
 using controlcommunication::ControlCommunication;
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::SystemInfo;
-using controlcommunication::Neighbor;
 using controlcommunication::LoopRange;
 using controlcommunication::DummyMessage;
 using controlcommunication::ContainerConfig;

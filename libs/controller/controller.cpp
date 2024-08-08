@@ -647,76 +647,126 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     ClientContext context;
     EmptyMessage reply;
     Status status;
+    json start_config;
+    unsigned int control_port;
     std::string pipelineName = splitString(container->name, "_")[2];
+    ModelType model = static_cast<ModelType>(container->model);
+    std::string modelName = getContainerName(container->device_agent->type, model);
+    std::cout << "Creating container: " << container->name << std::endl;
+    if (model == ModelType::Sink) {
+        start_config["experimentName"] = ctrl_experimentName;
+        start_config["systemName"] = ctrl_systemName;
+        start_config["pipelineName"] = pipelineName;
+        control_port = container->recv_port;
+    } else {
+        start_config = ctrl_containerLib[modelName].templateConfig;
+
+        // adjust container configs
+        start_config["container"]["cont_experimentName"] = ctrl_experimentName;
+        start_config["container"]["cont_systemName"] = ctrl_systemName;
+        start_config["container"]["cont_pipeName"] = pipelineName;
+        start_config["container"]["cont_hostDevice"] = container->device_agent->name;
+        start_config["container"]["cont_hostDeviceType"] = ctrl_sysDeviceInfo[container->device_agent->type];
+        start_config["container"]["cont_name"] = container->name;
+        start_config["container"]["cont_allocationMode"] = easy_allocation ? 1 : 0;
+        if (ctrl_systemName == "ppp") {
+            start_config["container"]["cont_batchMode"] = 1;
+        }
+        if (ctrl_systemName == "ppp" || ctrl_systemName == "jlf") {
+            start_config["container"]["cont_dropMode"] = 1;
+        }
+        start_config["container"]["cont_pipelineSLO"] = container->task->tk_slo;
+        start_config["container"]["cont_SLO"] = container->batchingDeadline;
+        start_config["container"]["cont_timeBudgetLeft"] = container->timeBudgetLeft;
+        start_config["container"]["cont_startTime"] = container->startTime;
+        start_config["container"]["cont_endTime"] = container->endTime;
+        start_config["container"]["cont_localDutyCycle"] = container->localDutyCycle;
+        start_config["container"]["cont_cycleStartTime"] = std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count();
+
+        json base_config = start_config["container"]["cont_pipeline"];
+
+        // adjust pipeline configs
+        for (auto &j: base_config) {
+            j["msvc_idealBatchSize"] = container->batch_size;
+            j["msvc_svcLevelObjLatency"] = container->inference_deadline;
+        }
+        if (model == ModelType::DataSource) {
+            base_config[0]["msvc_dataShape"] = {container->dimensions};
+            base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
+        } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
+            base_config[0]["msvc_dataShape"] = {container->dimensions};
+            base_config[0]["msvc_type"] = 500;
+            base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
+        } else {
+            base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {container->dimensions};
+            base_config[2]["path"] = container->model_file;
+        }
+
+        // adjust receiver upstreams
+        base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {};
+        if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinafaceDsrc) {
+            base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = "video_source";
+            base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"].push_back(container->pipelineModel->datasourceName);
+        } else {
+            base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = container->pipelineModel->upstreams[0].first->name;
+            base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"].push_back(absl::StrFormat("0.0.0.0:%d", container->recv_port));
+        }
+//        if ((container->device_agent == container->upstreams[0]->device_agent) && (container->gpuHandle == container->upstreams[0]->gpuHandle)) {
+//            base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
+//        } else {
+//            base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
+//        }
+        //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
+        base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
+
+        // adjust sender downstreams
+        json sender = base_config.back();
+        uint16_t postprocessorIndex = base_config.size() - 2;
+        json post_down = base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"][0];
+        base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"] = json::array();
+        base_config.erase(base_config.size() - 1);
+        int i = 1;
+        for (auto [dwnstr, coi]: container->pipelineModel->downstreams) {
+            json *postprocessor = &base_config[postprocessorIndex];
+            sender["msvc_name"] = "sender" + std::to_string(i++);
+            sender["msvc_dnstreamMicroservices"][0]["nb_name"] = dwnstr->name;
+            sender["msvc_dnstreamMicroservices"][0]["nb_link"] = {};
+            for (auto *replica: dwnstr->manifestations) {
+                sender["msvc_dnstreamMicroservices"][0]["nb_link"].push_back(
+                        absl::StrFormat("%s:%d", replica->device_agent->ip, replica->recv_port));
+            }
+            post_down["nb_name"] = sender["msvc_name"];
+//            if ((container->device_agent == dwnstr->device_agent) && (container->gpuHandle == dwnstr->gpuHandle)) {
+//                post_down["nb_commMethod"] = CommMethod::localGPU;
+//                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
+//            } else {
+//                post_down["nb_commMethod"] = CommMethod::localCPU;
+//                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
+//            }
+            //TODO: REMOVE AND FIX THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
+            post_down["nb_commMethod"] = CommMethod::localCPU;
+            sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
+            post_down["nb_classOfInterest"] = coi;
+
+            postprocessor->at("msvc_dnstreamMicroservices").push_back(post_down);
+            base_config.push_back(sender);
+        }
+
+        start_config["container"]["cont_pipeline"] = base_config;
+        control_port = container->recv_port - 5000;
+    }
+
     request.set_name(container->name);
-    request.set_pipeline_name(pipelineName);
-    request.set_model(container->model);
-    request.set_model_file(container->model_file);
-    request.set_batch_size(container->batch_size);
-    request.set_allocation_mode(easy_allocation);
+    request.set_json_config(start_config.dump());
+    request.set_executable(ctrl_containerLib[modelName].runCommand);
     if (container->model == DataSource || container->model == Sink) {
         request.set_device(-1);
     } else {
         request.set_device(container->gpuHandle->number);
     }
-    request.set_slo(container->inference_deadline);
-    request.set_time_budget(container->timeBudgetLeft);
-    request.set_total_slo(container->task->tk_slo);
-    request.set_fps(ctrl_systemFPS);
-    request.set_cont_slo(container->batchingDeadline);
-    request.set_start_time(container->startTime);
-    request.set_end_time(container->endTime);
-    request.set_local_duty_cycle(container->localDutyCycle);
-    request.set_cycle_start_time(std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count());
-    for (auto dim: container->dimensions) {
-        request.add_input_dimensions(dim);
-    }
-    for (auto dwnstr: container->downstreams) {
-        Neighbor *dwn = request.add_downstream();
-        dwn->set_name(dwnstr->name);
-        dwn->add_ip(absl::StrFormat("%s:%d", dwnstr->device_agent->ip, dwnstr->recv_port));
-        dwn->set_class_of_interest(dwnstr->class_of_interest);
-        if (dwnstr->model == Sink) {
-            dwn->set_gpu_connection(false);
-        } else {
-            dwn->set_gpu_connection((container->device_agent == dwnstr->device_agent) &&
-                                    (container->gpuHandle == dwnstr->gpuHandle));
-            dwn->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
-            //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
-        }
-    }
-    if (request.downstream_size() == 0) {
-        Neighbor *dwn = request.add_downstream();
-        dwn->set_name("video_sink");
-        dwn->add_ip("./out.log"); //output log file
-        dwn->set_class_of_interest(-1);
-        dwn->set_gpu_connection(false);
-    }
-    if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinafaceDsrc) {
-        Neighbor *up = request.add_upstream();
-        up->set_name("video_source");
-        up->add_ip(container->pipelineModel->datasourceName);
-        up->set_class_of_interest(-1);
-        up->set_gpu_connection(false);
-    } else {
-        for (auto upstr: container->upstreams) {
-            Neighbor *up = request.add_upstream();
-            up->set_name(upstr->name);
-            up->add_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
-            up->set_class_of_interest(-2);
-            up->set_gpu_connection((container->device_agent == upstr->device_agent) &&
-                                   (container->gpuHandle == upstr->gpuHandle));
-            up->set_gpu_connection(false); // Overriding the above line, setting communication to CPU
-            //TODO: REMOVE THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
-        }
-    }
-    if (request.upstream_size() == 0) {
-        Neighbor *up = request.add_upstream();
-        up->set_name("dummy");
-        up->add_ip(absl::StrFormat("0.0.0.0:%d", container->recv_port));
-        up->set_class_of_interest(-2);
-        up->set_gpu_connection(false);
-    }
+    request.set_control_port(control_port);
+
+
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container->device_agent->stub->AsyncStartContainer(&context, request,
                                                                       container->device_agent->cq));
