@@ -2,7 +2,7 @@
 
 SinkAgent::SinkAgent(const std::string &controller_url) {
 
-    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", INDEVICE_CONTROL_PORT + dev_port_offset);
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", DEVICE_CONTROL_PORT + dev_port_offset);
     ServerBuilder device_builder;
     device_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     device_builder.RegisterService(&device_service);
