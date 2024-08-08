@@ -58,9 +58,6 @@ DeviceAgent::DeviceAgent() {
     deploy_mode = absl::GetFlag(FLAGS_deploy_mode);
 
     containers = std::map<std::string, DevContainerHandle>();
-    dev_containerLib = getContainerLib(SystemDeviceTypeList[dev_type]);
-
-
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
@@ -113,7 +110,6 @@ DeviceAgent::DeviceAgent(const std::string &controller_url) : DeviceAgent() {
             dev_logger
     );
 
-    dev_containerLib = getContainerLib(SystemDeviceTypeList[dev_type]);
     dev_metricsServerConfigs.schema = abbreviate(dev_experiment_name + "_" + dev_system_name);
     dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_hw";
     dev_networkTableName = dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_netw";

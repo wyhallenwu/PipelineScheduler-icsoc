@@ -307,7 +307,6 @@ protected:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
-    ContainerLibType dev_containerLib;
     SystemDeviceType dev_type;
     DeviceInfoType dev_deviceInfo;
     std::atomic<bool> deploy_mode = false;
