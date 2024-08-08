@@ -3,7 +3,8 @@
     "system_fps": 15,
     "systemName": "ppp",
     "runtime": 30,
-    "port_offset": 4000,
+    "port_offset": 0,
+    "sink_ip": "143.248.55.76",
     "initial_pipelines": [
         {
             "pipeline_name": "people1",

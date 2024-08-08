@@ -16,12 +16,18 @@
 
 using trt::TRTConfigs;
 
+const int CONTAINER_BASE_PORT = 50001;
+const int CONTROLLER_BASE_PORT = 60001;
+const int DEVICE_CONTROL_PORT = 60002;
+const int INDEVICE_CONTROL_PORT = 60003;
+
 ABSL_DECLARE_FLAG(std::string, name);
 ABSL_DECLARE_FLAG(std::string, device_type);
 ABSL_DECLARE_FLAG(std::string, controller_url);
 ABSL_DECLARE_FLAG(std::string, dev_configPath);
 ABSL_DECLARE_FLAG(uint16_t, dev_verbose);
 ABSL_DECLARE_FLAG(uint16_t, dev_loggingMode);
+ABSL_DECLARE_FLAG(std::string, dev_logPath);
 ABSL_DECLARE_FLAG(uint16_t, dev_port_offset);
 
 typedef std::tuple<
@@ -44,19 +50,31 @@ struct DevContainerHandle {
 
 class DeviceAgent {
 public:
-    DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type);
+    DeviceAgent();
+    DeviceAgent(const std::string &controller_url);
 
-    ~DeviceAgent() {
+    virtual ~DeviceAgent() {
         running = false;
         for (const auto &c: containers) {
             StopContainer(c.second);
         }
-        controller_server->Shutdown();
-        controller_cq->Shutdown();
-        device_server->Shutdown();
-        device_cq->Shutdown();
+
+        if (controller_server) {
+            controller_server->Shutdown();
+        }
+        if (device_server) {
+            device_server->Shutdown();
+        }
+
         for (std::thread &t: threads) {
             t.join();
+        }
+
+        if (controller_cq) {
+            controller_cq->Shutdown();
+        }
+        if (device_cq) {
+            device_cq->Shutdown();
         }
     };
 
@@ -68,7 +86,7 @@ public:
 
     void limitBandwidth(const std::string& scriptPath, const std::string& jsonFilePath);
 
-private:
+protected:
     void testNetwork(float min_size, float max_size, int num_loops);
 
     bool CreateContainer(ContainerConfig &c);
@@ -85,14 +103,12 @@ private:
                         cont_name, executable, start_string, device, port, dev_port_offset) +
                 " --log_dir ../logs";
 
-        spdlog::get("container_agent")->info("Running command: {}", command);
         if (!deploy_mode) {
             command += " --verbose 0 --logging_mode 2";
         } else {
             command += " --logging_mode 1";
         }
-        std::cout << command << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        spdlog::get("container_agent")->info("Running command: {}", command);
         return system(command.c_str());
     };
 
@@ -107,7 +123,7 @@ private:
 
     void HandleDeviceRecvRpcs();
 
-    void HandleControlRecvRpcs();
+    virtual void HandleControlRecvRpcs();
 
     class RequestHandler {
     public:
@@ -290,7 +306,6 @@ private:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
-    ContainerLibType dev_containerLib;
     SystemDeviceType dev_type;
     DeviceInfoType dev_deviceInfo;
     std::atomic<bool> deploy_mode = false;
