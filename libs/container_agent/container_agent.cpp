@@ -458,6 +458,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
         /**
          * @brief Table for network metrics, which will be used to estimate network latency
+         * This will almost always be created by the device agent
          *
          */
         if (!tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, cont_networkTableName)) {
@@ -476,6 +477,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
             pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "CREATE INDEX ON " + cont_networkTableName + " (sender_host);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "GRANT ALL PRIVILEGES ON " + cont_networkTableName + " TO " + "controller, device_agent" + ";";
             pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
@@ -516,6 +520,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
             pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (model_name);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "GRANT ALL PRIVILEGES ON " + cont_arrivalTableName + " TO " + "controller, device_agent" + ";";
             pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
@@ -584,6 +591,8 @@ ContainerAgent::ContainerAgent(const json &configs) {
             sql_statement = "CREATE INDEX ON " + cont_processTableName + " (infer_batch_size);";
             pushSQL(*cont_metricsServerConn, sql_statement);
 
+            sql_statement = "GRANT ALL PRIVILEGES ON " + cont_processTableName + " TO " + "controller, device_agent" + ";";
+            pushSQL(*cont_metricsServerConn, sql_statement); 
         
         }
 
@@ -611,6 +620,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
             sql_statement = "CREATE INDEX ON " + cont_batchInferTableName + " (infer_batch_size);";
             pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "GRANT ALL PRIVILEGES ON " + cont_batchInferTableName + " TO " + "controller, device_agent" + ";";
+            pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
         if (cont_RUNMODE == RUNMODE::PROFILING) {
@@ -635,6 +647,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
                 pushSQL(*cont_metricsServerConn, sql_statement);
 
                 sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
+                pushSQL(*cont_metricsServerConn, sql_statement);
+
+                sql_statement = "GRANT ALL PRIVILEGES ON " + cont_hwMetricsTableName + " TO " + "controller, device_agent" + ";";
                 pushSQL(*cont_metricsServerConn, sql_statement);
             }
         }
