@@ -21,7 +21,6 @@ using grpc::ServerCompletionQueue;
 using controlcommunication::ControlCommunication;
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::SystemInfo;
-using controlcommunication::Neighbor;
 using controlcommunication::LoopRange;
 using controlcommunication::DummyMessage;
 using controlcommunication::ContainerConfig;
@@ -779,7 +778,7 @@ private:
     bool modelTemporalScheduling(PipelineModel *pipelineModel);
     void temporalScheduling();
 
-    void basicGPUScheduling();
+    void basicGPUScheduling(std::vector<ContainerHandle *> new_containers);
 
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "", const std::string &streamName = "");
 
@@ -1052,6 +1051,7 @@ private:
 
     std::unique_ptr<pqxx::connection> ctrl_metricsServerConn = nullptr;
     MetricsServerConfigs ctrl_metricsServerConfigs;
+    std::string ctrl_sinkNodeIP;
 
     std::vector<spdlog::sink_ptr> ctrl_loggerSinks = {};
     std::shared_ptr<spdlog::logger> ctrl_logger;
