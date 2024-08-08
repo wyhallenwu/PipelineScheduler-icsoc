@@ -123,6 +123,9 @@ DeviceAgent::DeviceAgent(const std::string &controller_url) : DeviceAgent() {
 
         pushSQL(*dev_metricsServerConn, sql);
 
+        sql = "GRANT ALL PRIVILEGES ON " + dev_networkTableName + " TO " + "controller, container_agent" + ";";
+        pushSQL(*dev_metricsServerConn, sql);
+
         sql = "SELECT create_hypertable('" + dev_networkTableName + "', 'timestamps', if_not_exists => TRUE);";
         pushSQL(*dev_metricsServerConn, sql);
 
@@ -144,6 +147,9 @@ DeviceAgent::DeviceAgent(const std::string &controller_url) : DeviceAgent() {
         };
         sql += "   PRIMARY KEY (timestamps)"
                                                                                     ");";
+        pushSQL(*dev_metricsServerConn, sql);
+
+        sql = "GRANT ALL PRIVILEGES ON " + dev_hwMetricsTableName + " TO " + "controller, container_agent" + ";";
         pushSQL(*dev_metricsServerConn, sql);
 
         sql = "SELECT create_hypertable('" + dev_hwMetricsTableName + "', 'timestamps', if_not_exists => TRUE);";
