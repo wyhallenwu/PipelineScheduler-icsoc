@@ -212,7 +212,8 @@ Controller::Controller(int argc, char **argv) {
     // append one device for sink of type server
     NodeHandle *sink_node = new NodeHandle("sink", ctrl_sinkNodeIP,
                       ControlCommunication::NewStub(
-                              grpc::CreateChannel(ctrl_sinkNodeIP, grpc::InsecureChannelCredentials())),
+                              grpc::CreateChannel(
+                                      absl::StrFormat("%s:%d", ctrl_sinkNodeIP, DEVICE_CONTROL_PORT + ctrl_port_offset), grpc::InsecureChannelCredentials())),
                       new CompletionQueue(), SystemDeviceType::Server,
                       DATA_BASE_PORT + ctrl_port_offset, {});
     devices.addDevice("sink", sink_node);
