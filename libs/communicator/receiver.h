@@ -62,6 +62,28 @@ private:
         ThreadSafeFixSizedDoubleQueue *OutQueue;
         CallStatus status;
         Receiver *receiverInstance;
+
+        /**
+         * @brief Check if this request is still valid or its too old and should be discarded
+         * 
+         * @param timestamps 
+         * @return true 
+         * @return false 
+         */
+        inline bool validateReq(ClockType &originalGenTime) {
+            auto now = std::chrono::high_resolution_clock::now();
+            auto diff = std::chrono::duration_cast<TimePrecisionType>(now - originalGenTime).count();
+            if (receiverInstance->msvc_RUNMODE == RUNMODE::PROFILING) {
+                return true;
+            }
+            if (diff > receiverInstance->msvc_pipelineSLO - receiverInstance->msvc_timeBudgetLeft && 
+                receiverInstance->msvc_DROP_MODE == DROP_MODE::LAZY) {
+                receiverInstance->droppedReqCount++;
+                spdlog::get("container_agent")->trace("{0:s} dropped the {1:d}th request.", receiverInstance->msvc_name, receiverInstance->droppedReqCount);
+                return false;
+            }
+            return true;
+        }
     };
 
     class GpuPointerRequestHandler : public RequestHandler {
