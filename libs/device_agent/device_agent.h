@@ -16,7 +16,6 @@
 
 using trt::TRTConfigs;
 
-const int CONTAINER_BASE_PORT = 50001;
 const int CONTROLLER_BASE_PORT = 60001;
 const int DEVICE_CONTROL_PORT = 60002;
 const int INDEVICE_CONTROL_PORT = 60003;
