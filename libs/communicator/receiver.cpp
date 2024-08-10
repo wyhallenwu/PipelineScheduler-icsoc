@@ -88,6 +88,15 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
 
         std::vector<RequestData<LocalGPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
+            auto timestamps = std::vector<ClockType>();
+            for (auto ts: el.timestamp()) {
+                timestamps.push_back(std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(ts)));
+            }
+            if (validateReq(timestamps[0])) {
+                continue;
+            }
+            timestamps.push_back(std::chrono::system_clock::now());
+
             if (receiverInstance->checkProfileEnd(el.path())) {
                 receiverInstance->STOP_THREADS = true;
                 break;
@@ -106,12 +115,6 @@ void Receiver::GpuPointerRequestHandler::Proceed() {
             cudaIpcCloseMemHandle(data);
 
             if (elements.empty()) continue;
-
-            auto timestamps = std::vector<ClockType>();
-            for (auto ts: el.timestamp()) {
-                timestamps.push_back(std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(ts)));
-            }
-            timestamps.push_back(std::chrono::system_clock::now());
 
             Request<LocalGPUReqDataType> req = {
                     {timestamps},
@@ -153,6 +156,14 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
 
         std::vector<RequestData<LocalCPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
+            auto timestamps = std::vector<ClockType>();
+            for (auto ts: el.timestamp()) {
+                timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(ts)));
+            }
+            if (validateReq(timestamps[0])) {
+                continue;
+            }
+            timestamps.push_back(std::chrono::system_clock::now());
             if (receiverInstance->checkProfileEnd(el.path())) {
                 receiverInstance->STOP_THREADS = true;
                 break;
@@ -164,12 +175,6 @@ void Receiver::SharedMemoryRequestHandler::Proceed() {
             elements = {{{image->channels(), el.height(), el.width()}, *image}};
 
             boost::interprocess::shared_memory_object::remove(name);
-
-            auto timestamps = std::vector<ClockType>();
-            for (auto ts: el.timestamp()) {
-                timestamps.emplace_back(std::chrono::time_point<std::chrono::system_clock>(TimePrecisionType(ts)));
-            }
-            timestamps.push_back(std::chrono::system_clock::now());
 
             Request<LocalCPUReqDataType> req = {
                     {timestamps},
@@ -211,6 +216,14 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 
         std::vector<RequestData<LocalCPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
+            auto timestamps = std::vector<ClockType>();
+            for (auto ts: el.timestamp()) {
+                timestamps.emplace_back(TimePrecisionType(ts));
+            }
+            if (validateReq(timestamps[0])) {
+                continue;
+            }
+            timestamps.push_back(std::chrono::system_clock::now());
             if (receiverInstance->checkProfileEnd(el.path())) {
                 receiverInstance->STOP_THREADS = true;
                 break;
@@ -222,12 +235,6 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             cv::Mat image = cv::Mat(el.height(), el.width(), CV_8UC3,
                                     const_cast<char *>(el.data().c_str())).clone();
             elements = {{{image.channels(), el.height(), el.width()}, image}};
-
-            auto timestamps = std::vector<ClockType>();
-            for (auto ts: el.timestamp()) {
-                timestamps.emplace_back(TimePrecisionType(ts));
-            }
-            timestamps.push_back(std::chrono::system_clock::now());
 
             Request<LocalCPUReqDataType> req = {
                     {timestamps},

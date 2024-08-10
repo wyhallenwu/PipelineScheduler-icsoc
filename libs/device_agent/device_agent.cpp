@@ -37,7 +37,6 @@ std::string getHostIP() {
 DeviceAgent::DeviceAgent() {
     dev_name = absl::GetFlag(FLAGS_name);
     std::string type = absl::GetFlag(FLAGS_device_type);
-    SystemDeviceType deviceType;
     if (type == "server") {
         dev_type = SystemDeviceType::Server;
     } else if (type == "nxavier") {
@@ -308,6 +307,7 @@ void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
 }
 
 bool DeviceAgent::CreateContainer(ContainerConfig &c) {
+    spdlog::get("container_agent")->info("Creating container: {}", c.name());
     try {
         runDocker(c.executable(), c.name(), c.json_config(), c.device(), c.control_port());
         std::string target = absl::StrFormat("%s:%d", "localhost", c.control_port());
@@ -659,28 +659,33 @@ void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::strin
 
     auto start = std::chrono::system_clock::now();
 
-    for (size_t i = 0; i < bandwidth_limits.size(); ++i) {
-        if (!isRunning()) break;
+    uint64_t bwThresholdIndex = 0;
 
-        int time_spot = bandwidth_limits[i]["time"];
-        int mbps = bandwidth_limits[i]["mbps"];
-
-        // Calculate the time to wait until the next bandwidth limit should be applied
-        auto nextTimePoint = start + std::chrono::seconds(time_spot);
-        auto now = std::chrono::system_clock::now();
-        if (now < nextTimePoint) {
-            std::this_thread::sleep_until(nextTimePoint);
+    while (isRunning()) {
+        if (bwThresholdIndex >= bandwidth_limits.size()) {
+            break;
         }
+        if (std::chrono::system_clock::now() >= nextThresholdSetTime) {
+            Stopwatch stopwatch;
 
-        if (!isRunning()) break;
+            auto limit = bandwidth_limits[bwThresholdIndex];
+            int mbps = limit["mbps"];
 
-        // Apply the bandwidth limit
-        std::string command = "sudo bash " + scriptPath + " " + interface + " " + std::to_string(mbps);
-        spdlog::get("container_agent")->info("{0:s} Setting BW limit to {1:d} Mbps", dev_name, mbps);
-        int result = system(command.c_str());
-        spdlog::get("container_agent")->info("Command executed with result: {0:d}", result);
+            // Build and execute the command
+            std::string command = "sudo bash " + scriptPath + " " + interface + " " + std::to_string(mbps);
+            spdlog::get("container_agent")->info("{0:s} Setting BW limit to {1:d}", dev_name, mbps);
+            int result = system(command.c_str());
+            spdlog::get("container_agent")->info("Command executed with result: {0:d}", result);
+
+            if (bwThresholdIndex == bandwidth_limits.size() - 1) {
+                break;
+            }
+            // TODO: resolve unsequenced modification and access to 'bwThresholdIndex'
+            auto distanceToNext = bandwidth_limits[++bwThresholdIndex]["time"].get<int>() - bandwidth_limits[bwThresholdIndex - 1]["time"].get<int>();
+            nextThresholdSetTime += std::chrono::seconds(distanceToNext);
+
+        }
     }
-
     // After the last limit, wait for 1 second before resetting the qdisc
     std::this_thread::sleep_for(std::chrono::seconds(3));
 
