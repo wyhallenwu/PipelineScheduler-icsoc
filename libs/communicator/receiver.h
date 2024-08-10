@@ -72,7 +72,7 @@ private:
          */
         inline bool validateReq(ClockType &originalGenTime) {
             auto now = std::chrono::high_resolution_clock::now();
-            auto diff = std::chrono::duration_cast<TimePrecisionType>(now - originalGenTime).count();
+            MsvcSLOType diff = std::chrono::duration_cast<TimePrecisionType>(now - originalGenTime).count();
             if (receiverInstance->msvc_RUNMODE == RUNMODE::PROFILING) {
                 return true;
             }

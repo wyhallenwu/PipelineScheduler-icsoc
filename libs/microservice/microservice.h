@@ -706,6 +706,7 @@ public:
         } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
             return msvc_batchCount >= msvc_numWarmupBatches;
         }
+        return false;
     }
 
     virtual void dispatchThread() {};

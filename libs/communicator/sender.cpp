@@ -157,7 +157,7 @@ void GPUSender::Process() {
 }
 
 std::string GPUSender::SendData(std::vector<RequestData<LocalGPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                                std::vector<std::string> &path, std::vector<uint32_t> &slo) {
+                                std::vector<std::string> &path, RequestSLOType &slo) {
     CompletionQueue cq;
 
     ImageDataPayload request;
@@ -207,7 +207,7 @@ LocalCPUSender::LocalCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
 }
 
 std::string LocalCPUSender::SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                                     std::vector<std::string> &path, std::vector<uint32_t> &slo) {
+                                     std::vector<std::string> &path, RequestSLOType &slo) {
     CompletionQueue cq;
     ImageDataPayload request;
     char *name;
@@ -249,7 +249,7 @@ RemoteCPUSender::RemoteCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) 
 }
 
 std::string RemoteCPUSender::SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                                     std::vector<std::string> &path, std::vector<uint32_t> &slo) {
+                                     std::vector<std::string> &path, RequestSLOType &slo) {
     CompletionQueue cq;
     ImageDataPayload request;
     for (unsigned int i = 0; i < elements.size(); i++) {

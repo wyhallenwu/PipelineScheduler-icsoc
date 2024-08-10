@@ -170,7 +170,7 @@ void BaseBBoxCropperAugmentation::cropping() {
     cudaStream_t postProcStream;
 
     // Height and width of the image used for inference
-    int orig_h, orig_w, infer_h, infer_w;
+    int orig_h, orig_w, infer_h = 0, infer_w = 0;
 
     /**
      * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
@@ -183,12 +183,12 @@ void BaseBBoxCropperAugmentation::cropping() {
      * We need to bring these buffers to CPU in order to process them.
      */
 
-    uint16_t maxNumDets;
+    uint16_t maxNumDets = 0;
     
-    int32_t *num_detections;
-    float *nmsed_boxes;
-    float *nmsed_scores;
-    float *nmsed_classes;
+    int32_t *num_detections = nullptr;
+    float *nmsed_boxes = nullptr;
+    float *nmsed_scores = nullptr;
+    float *nmsed_classes = nullptr;
 
     std::vector<float *> ptrList;
 
@@ -201,8 +201,6 @@ void BaseBBoxCropperAugmentation::cropping() {
 
     // To whole the shape of data sent from the inferencer
     RequestDataShapeType shape;
-
-    auto timeNow = std::chrono::high_resolution_clock::now();
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -236,16 +234,11 @@ void BaseBBoxCropperAugmentation::cropping() {
                 maxNumDets = msvc_dataShape[2][0];
 
                 delete num_detections;
-                delete nmsed_boxes;
-                delete nmsed_scores;
-                delete nmsed_classes;
+                if (nmsed_boxes) delete nmsed_boxes;
+                if (nmsed_scores) delete nmsed_scores;
+                if (nmsed_classes) delete nmsed_classes;
 
-                BatchSizeType batchSize;
-                if (msvc_allocationMode == AllocationMode::Conservative) {
-                    batchSize = msvc_idealBatchSize;
-                } else if (msvc_allocationMode == AllocationMode::Aggressive) {
-                    batchSize = msvc_maxBatchSize;
-                }
+                BatchSizeType batchSize = (msvc_allocationMode == AllocationMode::Conservative) ? msvc_idealBatchSize : msvc_maxBatchSize;
                 num_detections = new int32_t[batchSize];
                 nmsed_boxes = new float[batchSize * maxNumDets * 4];
                 nmsed_scores = new float[batchSize * maxNumDets];
@@ -605,7 +598,7 @@ void BaseBBoxCropperAugmentation::cropProfiling() {
 
 
     // Height and width of the image used for inference
-    int orig_h, orig_w, infer_h, infer_w;
+    int orig_h, orig_w, infer_h = 0, infer_w = 0;
 
     /**
      * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
@@ -620,10 +613,10 @@ void BaseBBoxCropperAugmentation::cropProfiling() {
 
     uint16_t maxNumDets;
     
-    int32_t *num_detections;
-    float *nmsed_boxes;
-    float *nmsed_scores;
-    float *nmsed_classes;
+    int32_t *num_detections = nullptr;
+    float *nmsed_boxes = nullptr;
+    float *nmsed_scores = nullptr;
+    float *nmsed_classes = nullptr;
 
     std::vector<float *> ptrList;
 
@@ -641,7 +634,7 @@ void BaseBBoxCropperAugmentation::cropProfiling() {
     float *nmsed_randomBoxes;
 
     // To hold the inference time for each individual request
-    uint64_t *inferenceTime;
+    uint64_t *inferenceTime = nullptr;
 
     auto time_now = std::chrono::high_resolution_clock::now();
 
@@ -677,9 +670,9 @@ void BaseBBoxCropperAugmentation::cropProfiling() {
                 maxNumDets = msvc_dataShape[2][0];
 
                 delete num_detections;
-                delete nmsed_boxes;
-                delete nmsed_scores;
-                delete nmsed_classes;
+                if (nmsed_boxes) delete nmsed_boxes;
+                if (nmsed_scores) delete nmsed_scores;
+                if (nmsed_classes) delete nmsed_classes;
 
                 num_detections = new int32_t[msvc_idealBatchSize];
                 nmsed_boxes = new float[msvc_idealBatchSize * maxNumDets * 4];
@@ -754,9 +747,6 @@ void BaseBBoxCropperAugmentation::cropProfiling() {
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
 
-        uint8_t numTimeStampPerReq = (uint8_t)(currReq.req_origGenTime.size() / currReq_batchSize);
-        uint16_t insertPos = numTimeStampPerReq;
-
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
 
@@ -779,12 +769,10 @@ void BaseBBoxCropperAugmentation::cropProfiling() {
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {
                 bboxClass = -1;
-                queueIndex = -1;
                 // in the constructor of each microservice, we map the class number to the corresponding queue index in 
                 // `classToDntreamMap`.
                 for (size_t k = 0; k < this->classToDnstreamMap.size(); ++k) {
                     if ((classToDnstreamMap.at(k).first == bboxClass) || (classToDnstreamMap.at(k).first == -1)) {
-                        queueIndex = this->classToDnstreamMap.at(k).second; 
                         // Breaking is only appropriate if case we assume the downstream only wants to take one class
                         // TODO: More than class-of-interests for 1 queue
                         break;
@@ -794,9 +782,6 @@ void BaseBBoxCropperAugmentation::cropProfiling() {
                 // if (queueIndex == -1) {
                 //     continue;
                 // }
-
-                // Make sure we always have output to stress test
-                queueIndex = 0;
 
                 // Putting the bounding box into an `outReq` to be sent out
                 bboxShape = {singleImageBBoxList[j].channels(), singleImageBBoxList[j].rows, singleImageBBoxList[j].cols};

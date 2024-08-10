@@ -47,16 +47,13 @@ void BaseClassifier::classify() {
 
     cudaStream_t postProcStream;
 
-    NumQueuesType queueIndex;
+    NumQueuesType queueIndex = 0;
 
     size_t bufferSize;
     RequestDataShapeType shape;
 
-    float *predictedProbs;
-    // TODO: remove potentially unused variables
-    uint16_t *predictedClass;
-
-    auto timeNow = std::chrono::high_resolution_clock::now();
+    float *predictedProbs = nullptr;
+    uint16_t *predictedClass = nullptr;
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -80,12 +77,7 @@ void BaseClassifier::classify() {
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
                 
-                BatchSizeType batchSize;
-                if (msvc_allocationMode == AllocationMode::Conservative) {
-                    batchSize = msvc_idealBatchSize;
-                } else if (msvc_allocationMode == AllocationMode::Aggressive) {
-                    batchSize = msvc_maxBatchSize;
-                }
+                BatchSizeType batchSize = msvc_allocationMode == AllocationMode::Conservative ? msvc_idealBatchSize : msvc_maxBatchSize;
                 predictedProbs = new float[batchSize * msvc_numClasses];
                 predictedClass = new uint16_t[batchSize];
                 spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
@@ -255,9 +247,8 @@ void BaseClassifier::classifyProfiling() {
     size_t bufferSize;
     RequestDataShapeType shape;
 
-    float *predictedProbs;
-    // TODO: remove potentially unused variables
-    uint16_t *predictedClass;
+    float *predictedProbs = nullptr;
+    uint16_t *predictedClass = nullptr;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
 
@@ -329,7 +320,7 @@ void BaseClassifier::classifyProfiling() {
 
         cudaStreamSynchronize(postProcStream);
 
-        for (uint8_t i = 0; i < inferTimeReport_batchSize; ++i) {
+        for (BatchSizeType i = 0; i < inferTimeReport_batchSize; ++i) {
             predictedClass[i] = maxIndex(predictedProbs + i * msvc_numClasses, msvc_numClasses);
             timeNow = std::chrono::high_resolution_clock::now();
             inferTimeReportReq.req_origGenTime[i].emplace_back(timeNow);

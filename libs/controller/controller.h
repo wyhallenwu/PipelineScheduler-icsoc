@@ -457,8 +457,8 @@ struct PipelineModel {
           deviceTypeName(deviceTypeName),
           merged(merged),
           toBeRun(toBeRun),
-          timeBudgetLeft(timeBudgetLeft),
-          possibleDevices(possibleDevices) {}
+          possibleDevices(possibleDevices),
+          timeBudgetLeft(timeBudgetLeft) {}
 
     // Copy constructor
     PipelineModel(const PipelineModel& other) {

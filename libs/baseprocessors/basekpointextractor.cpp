@@ -62,16 +62,13 @@ void BaseKPointExtractor::extractor() {
 
     cudaStream_t postProcStream;
 
-    NumQueuesType queueIndex;
+    NumQueuesType queueIndex = 0;
 
     size_t bufferSize;
     RequestDataShapeType shape;
 
 
-    float *keyPoints;
-    // uint16_t predictedClass[msvc_idealBatchSize];
-
-    auto timeNow = std::chrono::high_resolution_clock::now();
+    float *keyPoints = nullptr;
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -95,12 +92,7 @@ void BaseKPointExtractor::extractor() {
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
 
-                BatchSizeType batchSize;
-                if (msvc_allocationMode == AllocationMode::Conservative) {
-                    batchSize = msvc_idealBatchSize;
-                } else if (msvc_allocationMode == AllocationMode::Aggressive) {
-                    batchSize = msvc_maxBatchSize;
-                }
+                BatchSizeType batchSize = msvc_allocationMode == AllocationMode::Conservative ? msvc_idealBatchSize : msvc_maxBatchSize;
                 keyPoints = new float[batchSize * msvc_dataShape[0][0] * msvc_dataShape[0][1] * msvc_dataShape[0][2]];
 
                 spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
@@ -281,14 +273,11 @@ void BaseKPointExtractor::extractorProfiling() {
 
     cudaStream_t postProcStream;
 
-    NumQueuesType queueIndex;
-
     size_t bufferSize;
     RequestDataShapeType shape;
 
 
-    float *keyPoints;
-    // uint16_t predictedClass[msvc_idealBatchSize];
+    float *keyPoints = nullptr;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
 

@@ -50,16 +50,13 @@ void BaseSoftmaxClassifier::classify() {
 
     cudaStream_t postProcStream;
 
-    NumQueuesType queueIndex;
+    NumQueuesType queueIndex = 0;
 
     size_t bufferSize;
     RequestDataShapeType shape;
 
-    float *predictedProbs, *predictedLogits;
-    // TODO: remove potentially unused variables
-    uint16_t *predictedClass;
-
-    auto timeNow = std::chrono::high_resolution_clock::now();
+    float *predictedProbs = nullptr, *predictedLogits = nullptr;
+    uint16_t *predictedClass = nullptr;
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -82,13 +79,8 @@ void BaseSoftmaxClassifier::classify() {
 
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
-                
-                BatchSizeType batchSize;
-                if (msvc_allocationMode == AllocationMode::Conservative) {
-                    batchSize = msvc_idealBatchSize;
-                } else if (msvc_allocationMode == AllocationMode::Aggressive) {
-                    batchSize = msvc_maxBatchSize;
-                }
+
+                BatchSizeType batchSize = msvc_allocationMode == AllocationMode::Conservative ? msvc_idealBatchSize : msvc_maxBatchSize;
                 predictedProbs = new float[batchSize * msvc_numClasses];
                 predictedLogits = new float[batchSize * msvc_numClasses];
                 predictedClass = new uint16_t[batchSize];
@@ -261,9 +253,8 @@ void BaseSoftmaxClassifier::classifyProfiling() {
     size_t bufferSize;
     RequestDataShapeType shape;
 
-    float *predictedProbs, *predictedLogits;
-    // TODO: remove potentially unused variables
-    uint16_t *predictedClass;
+    float *predictedProbs = nullptr;
+    uint16_t *predictedClass = nullptr;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
 
@@ -289,7 +280,6 @@ void BaseSoftmaxClassifier::classifyProfiling() {
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
                 
-                predictedLogits = new float[msvc_idealBatchSize * msvc_numClasses];
                 predictedProbs = new float[msvc_idealBatchSize * msvc_numClasses];
                 predictedClass = new uint16_t[msvc_idealBatchSize];
                 spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);

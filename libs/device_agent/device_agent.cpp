@@ -37,7 +37,6 @@ std::string getHostIP() {
 DeviceAgent::DeviceAgent() {
     dev_name = absl::GetFlag(FLAGS_name);
     std::string type = absl::GetFlag(FLAGS_device_type);
-    SystemDeviceType deviceType;
     if (type == "server") {
         dev_type = SystemDeviceType::Server;
     } else if (type == "nxavier") {
@@ -658,7 +657,7 @@ void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::strin
 
     auto start = std::chrono::system_clock::now();
 
-    int bwThresholdIndex = 0;
+    uint64_t bwThresholdIndex = 0;
 
     ClockType nextThresholdSetTime = start + std::chrono::seconds(bandwidth_limits[bwThresholdIndex]["time"]); 
     while (isRunning()) {
@@ -669,7 +668,6 @@ void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::strin
             Stopwatch stopwatch;
 
             auto limit = bandwidth_limits[bwThresholdIndex];
-            int time_spot = limit["time"];
             int mbps = limit["mbps"];
 
             // Build and execute the command
@@ -681,6 +679,7 @@ void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::strin
             if (bwThresholdIndex == bandwidth_limits.size() - 1) {
                 break;
             }
+            // TODO: resolve unsequenced modification and access to 'bwThresholdIndex'
             auto distanceToNext = bandwidth_limits[++bwThresholdIndex]["time"].get<int>() - bandwidth_limits[bwThresholdIndex - 1]["time"].get<int>();
             nextThresholdSetTime += std::chrono::seconds(distanceToNext);
 

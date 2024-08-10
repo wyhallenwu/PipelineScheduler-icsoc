@@ -183,12 +183,12 @@ void BaseBBoxCropper::cropping() {
      * We need to bring these buffers to CPU in order to process them.
      */
 
-    uint16_t maxNumDets;
+    uint16_t maxNumDets = 0;
     
-    int32_t *num_detections;
-    float *nmsed_boxes;
-    float *nmsed_scores;
-    float *nmsed_classes;
+    int32_t *num_detections = nullptr;
+    float *nmsed_boxes = nullptr;
+    float *nmsed_scores = nullptr;
+    float *nmsed_classes = nullptr;
 
     std::vector<float *> ptrList;
 
@@ -201,8 +201,6 @@ void BaseBBoxCropper::cropping() {
 
     // To whole the shape of data sent from the inferencer
     RequestDataShapeType shape;
-
-    auto timeNow = std::chrono::high_resolution_clock::now();
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -236,9 +234,9 @@ void BaseBBoxCropper::cropping() {
                 maxNumDets = msvc_dataShape[2][0];
 
                 delete num_detections;
-                delete nmsed_boxes;
-                delete nmsed_scores;
-                delete nmsed_classes;
+                if (nmsed_boxes) delete nmsed_boxes;
+                if (nmsed_scores) delete nmsed_scores;
+                if (nmsed_classes) delete nmsed_classes;
 
                 BatchSizeType batchSize;
                 if (msvc_allocationMode == AllocationMode::Conservative) {
@@ -593,7 +591,7 @@ void BaseBBoxCropper::cropProfiling() {
 
 
     // Height and width of the image used for inference
-    int orig_h, orig_w, infer_h, infer_w;
+    int orig_h, orig_w, infer_h = 0, infer_w = 0;
 
     /**
      * @brief Each request to the cropping microservice of YOLOv5 contains the buffers which are results of TRT inference 
@@ -608,10 +606,10 @@ void BaseBBoxCropper::cropProfiling() {
 
     uint16_t maxNumDets;
     
-    int32_t *num_detections;
-    float *nmsed_boxes;
-    float *nmsed_scores;
-    float *nmsed_classes;
+    int32_t *num_detections = nullptr;
+    float *nmsed_boxes = nullptr;
+    float *nmsed_scores = nullptr;
+    float *nmsed_classes = nullptr;
 
     std::vector<float *> ptrList;
 
@@ -629,7 +627,7 @@ void BaseBBoxCropper::cropProfiling() {
     float *nmsed_randomBoxes;
 
     // To hold the inference time for each individual request
-    uint64_t *inferenceTime;
+    uint64_t *inferenceTime = nullptr;
 
     auto time_now = std::chrono::high_resolution_clock::now();
 
@@ -665,9 +663,9 @@ void BaseBBoxCropper::cropProfiling() {
                 maxNumDets = msvc_dataShape[2][0];
 
                 delete num_detections;
-                delete nmsed_boxes;
-                delete nmsed_scores;
-                delete nmsed_classes;
+                if (nmsed_boxes) delete nmsed_boxes;
+                if (nmsed_scores) delete nmsed_scores;
+                if (nmsed_classes) delete nmsed_classes;
 
                 num_detections = new int32_t[msvc_idealBatchSize];
                 nmsed_boxes = new float[msvc_idealBatchSize * maxNumDets * 4];
@@ -741,9 +739,6 @@ void BaseBBoxCropper::cropProfiling() {
 
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data; 
-
-        uint8_t numTimeStampPerReq = (uint8_t)(currReq.req_origGenTime.size() / currReq_batchSize);
-        uint16_t insertPos = numTimeStampPerReq;
 
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {

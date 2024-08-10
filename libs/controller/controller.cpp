@@ -445,7 +445,7 @@ void Controller::ApplyScheduling() {
                 }
             } else if (candidate_size > model->numReplicas) {
                 // remove the extra containers
-                for (unsigned int i = model->numReplicas; i < candidate_size; i++) {
+                for (int i = model->numReplicas; i < candidate_size; i++) {
                     StopContainer(candidates[i], candidates[i]->device_agent);
                     model->task->tk_subTasks[model->name].erase(
                             std::remove(model->task->tk_subTasks[model->name].begin(),
@@ -487,7 +487,7 @@ void Controller::ApplyScheduling() {
 
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
-            int i = 0;
+            //int i = 0;
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
             for (auto *candidate: candidates) {
                 if (std::find(new_containers.begin(), new_containers.end(), candidate) != new_containers.end() || candidate->model == Sink) {
@@ -810,36 +810,36 @@ void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
     container->recv_port = device->next_free_port++;
     device->containers.insert({container->name, container});
     container->gpuHandle = container->gpuHandle;
-    // StartContainer(container, !(start_dsrc || merge_dsrc));
-    // for (auto upstr: container->upstreams) {
-    //     if (start_dsrc) {
-    //         StartContainer(upstr, false);
-    //         SyncDatasource(container, upstr);
-    //     } else if (merge_dsrc) {
-    //         SyncDatasource(upstr, container);
-    //         StopContainer(upstr, old_device);
-    //     } else {
-    //         AdjustUpstream(container->recv_port, upstr, device, container->name);
-    //     }
-    // }
-    // StopContainer(container, old_device);
+    StartContainer(container, !(start_dsrc || merge_dsrc));
+    for (auto upstr: container->upstreams) {
+        if (start_dsrc) {
+            StartContainer(upstr, false);
+            SyncDatasource(container, upstr);
+        } else if (merge_dsrc) {
+            SyncDatasource(upstr, container);
+            StopContainer(upstr, old_device);
+        } else {
+            AdjustUpstream(container->recv_port, upstr, device, container->name);
+        }
+    }
+    StopContainer(container, old_device);
     spdlog::get("container_agent")->info("Container {0:s} moved to device {1:s}", container->name, device->name);
     old_device->containers.erase(container->name);
 }
 
 void Controller::AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *new_device,
                                 const std::string &dwnstr) {
-    // ContainerLink request;
-    // ClientContext context;
-    // EmptyMessage reply;
-    // Status status;
-    // request.set_name(upstr->name);
-    // request.set_downstream_name(dwnstr);
-    // request.set_ip(new_device->ip);
-    // request.set_port(port);
-    // std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-    //         upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
-    // finishGrpc(rpc, reply, status, upstr->device_agent->cq);
+    ContainerLink request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(upstr->name);
+    request.set_downstream_name(dwnstr);
+    request.set_ip(new_device->ip);
+    request.set_port(port);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
+    finishGrpc(rpc, reply, status, upstr->device_agent->cq);
     spdlog::get("container_agent")->info("Upstream of {0:s} adjusted to container {1:s}", dwnstr, upstr->name);
 }
 
@@ -857,15 +857,15 @@ void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
 
 void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs) {
     msvc->batch_size = new_bs;
-    // ContainerInts request;
-    // ClientContext context;
-    // EmptyMessage reply;
-    // Status status;
-    // request.set_name(msvc->name);
-    // request.add_value(new_bs);
-    // std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-    //         msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
-    // finishGrpc(rpc, reply, status, msvc->device_agent->cq);
+    ContainerInts request;
+    ClientContext context;
+    EmptyMessage reply;
+    Status status;
+    request.set_name(msvc->name);
+    request.add_value(new_bs);
+    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+            msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
+    finishGrpc(rpc, reply, status, msvc->device_agent->cq);
     spdlog::get("container_agent")->info("Batch size of {0:s} adjusted to {1:d}", msvc->name, new_bs);
 }
 

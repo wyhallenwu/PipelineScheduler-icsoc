@@ -85,12 +85,10 @@ void BaseBBoxCropperVerifier::cropping() {
     // class of the bounding box cropped from one the images in the image list
     int16_t bboxClass;
     // The index of the queue we are going to put data on based on the value of `bboxClass`
-    NumQueuesType queueIndex;
+    NumQueuesType queueIndex = 0;
 
     // To whole the shape of data sent from the inferencer
     RequestDataShapeType shape;
-
-    auto timeNow = std::chrono::high_resolution_clock::now();
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -123,12 +121,7 @@ void BaseBBoxCropperVerifier::cropping() {
                 delete nmsed_scores;
                 delete nmsed_classes;
 
-                BatchSizeType batchSize;
-                if (msvc_allocationMode == AllocationMode::Conservative) {
-                    batchSize = msvc_idealBatchSize;
-                } else if (msvc_allocationMode == AllocationMode::Aggressive) {
-                    batchSize = msvc_maxBatchSize;
-                }
+                BatchSizeType batchSize = msvc_allocationMode == AllocationMode::Conservative ? msvc_idealBatchSize : msvc_maxBatchSize;
                 num_detections = new int32_t[batchSize];
                 nmsed_boxes = new float[batchSize * maxNumDets * 4];
                 nmsed_scores = new float[batchSize * maxNumDets];
@@ -217,9 +210,6 @@ void BaseBBoxCropperVerifier::cropping() {
             currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
 
             currReq_path = currReq.req_travelPath[i] + "|1|1";
-
-            // If there is no object in frame, we don't have to do nothing.
-            int numDetsInFrame = (int)num_detections[i];
 
             // Otherwise, we need to do some cropping.
             orig_h = imageList[i].shape[1];
@@ -389,7 +379,6 @@ void BaseBBoxCropperVerifier::cropProfiling() {
 
     //
     auto time_now = std::chrono::high_resolution_clock::now();
-    uint64_t *inferenceTime;
 
     // Containing the current timestamps to be sent back to receiver to calculate the end-to-end latency.
     std::vector<RequestData<LocalCPUReqDataType>> inferTimeReportData;
@@ -431,8 +420,6 @@ void BaseBBoxCropperVerifier::cropProfiling() {
                 nmsed_classes = new float[msvc_idealBatchSize * maxNumDets];
 
                 ptrList = {nmsed_boxes, nmsed_scores, nmsed_classes};
-
-                inferenceTime = new uint64_t[msvc_idealBatchSize];
 
                 outReqData.clear();
                 singleImageBBoxList.clear();
@@ -495,9 +482,6 @@ void BaseBBoxCropperVerifier::cropProfiling() {
 
         // List of images to be cropped from
         imageList = inferTimeReportReq.upstreamReq_data; 
-
-        uint8_t numTimeStampPerReq = (uint8_t)(inferTimeReportReq.req_origGenTime.size() / currReq_batchSize);
-        uint16_t insertPos = numTimeStampPerReq;
 
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
