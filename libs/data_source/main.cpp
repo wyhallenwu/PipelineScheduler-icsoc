@@ -7,7 +7,7 @@ int main(int argc, char **argv) {
 
     std::vector<Microservice *> msvcsList;
     msvcsList.push_back(new DataReader(pipeConfigs[0]));
-    for (int i = 1; i < pipeConfigs.size(); i++) {
+    for (uint64_t i = 1; i < pipeConfigs.size(); i++) {
         msvcsList.push_back(new RemoteCPUSender(pipeConfigs[i]));
         msvcsList[i]->SetInQueue({msvcsList[0]->GetOutQueue(i-1)});
     }

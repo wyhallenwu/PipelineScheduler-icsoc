@@ -27,7 +27,7 @@ using grpc::ClientAsyncResponseReader;
 typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
 typedef uint64_t MsvcSLOType;
-typedef std::vector<uint32_t> RequestSLOType;
+typedef std::vector<MsvcSLOType> RequestSLOType;
 typedef std::vector<std::string> RequestPathType;
 typedef uint16_t NumMscvType;
 typedef std::chrono::high_resolution_clock::time_point ClockType;
