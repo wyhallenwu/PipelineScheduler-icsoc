@@ -368,7 +368,7 @@ namespace msvcconfigs {
         MicroserviceType msvc_type;
         // Application level configs
         std::string msvc_appLvlConfigs = "";
-        // The acceptable latency for each individual request processed by this microservice, in `ms`
+        // The acceptable latency for each individual request processed by this microservice, in `microsecond`
         MsvcSLOType msvc_svcLevelObjLatency;
         // 
         QueueLengthType msvc_maxQueueSize;
@@ -511,17 +511,17 @@ public:
         std::string reqOrigin = "stream"
     ) {
         std::unique_lock<std::mutex> lock(mutex);
-        processRecords[{reqOrigin, inferBatchSize}].prepDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
-        processRecords[{reqOrigin, inferBatchSize}].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count());
-        processRecords[{reqOrigin, inferBatchSize}].inferQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
-        processRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[5] - timestamps[4]).count());
-        processRecords[{reqOrigin, inferBatchSize}].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[7] - timestamps[6]).count());
+        processRecords[{reqOrigin, inferBatchSize}].prepDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[6] - timestamps[5]).count());
+        processRecords[{reqOrigin, inferBatchSize}].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[7] - timestamps[6]).count());
+        processRecords[{reqOrigin, inferBatchSize}].inferQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[8] - timestamps[7]).count());
+        processRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[9] - timestamps[8]).count());
+        processRecords[{reqOrigin, inferBatchSize}].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[11] - timestamps[10]).count());
         processRecords[{reqOrigin, inferBatchSize}].inferBatchSize.emplace_back(inferBatchSize);
-        processRecords[{reqOrigin, inferBatchSize}].postEndTime.emplace_back(timestamps[7]);
+        processRecords[{reqOrigin, inferBatchSize}].postEndTime.emplace_back(timestamps[11]);
         processRecords[{reqOrigin, inferBatchSize}].inputSize.emplace_back(inputSize);
         processRecords[{reqOrigin, inferBatchSize}].outputSize.emplace_back(outputSize);
 
-        batchInferRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[5] - timestamps[4]).count());
+        batchInferRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[9] - timestamps[8]).count());
 
         currNumEntries++;
         totalNumEntries++;
@@ -566,7 +566,8 @@ private:
 
 enum class BATCH_MODE {
     FIXED,
-    DYNAMIC // Lazy batching
+    DYNAMIC, // Lazy batching
+    OURS
 };
 
 enum class DROP_MODE {
@@ -707,6 +708,7 @@ public:
         } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
             return msvc_batchCount >= msvc_numWarmupBatches;
         }
+        return false;
     }
 
     virtual void dispatchThread() {};
@@ -724,6 +726,8 @@ public:
     virtual BatchInferRecordType getBatchInferRecords() {
         return {};
     }
+
+    virtual void updateCycleTiming() {};
 
     bool RELOADING = true;
 
@@ -767,7 +771,7 @@ protected:
     //type
     MicroserviceType msvc_type;
 
-    //
+    // in microseconds
     MsvcSLOType msvc_pipelineSLO;
     // in microseconds
     MsvcSLOType msvc_contSLO;
@@ -779,6 +783,8 @@ protected:
     uint64_t msvc_localDutyCycle;
     //
     ClockType msvc_cycleStartTime;
+    //
+    ClockType msvc_nextBatchTime;
     
     //
     MsvcSLOType msvc_interReqTime = 1;
