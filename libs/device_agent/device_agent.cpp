@@ -661,6 +661,7 @@ void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::strin
 
     uint64_t bwThresholdIndex = 0;
 
+    ClockType nextThresholdSetTime = start + std::chrono::seconds(bandwidth_limits[bwThresholdIndex]["time"]);
     while (isRunning()) {
         if (bwThresholdIndex >= bandwidth_limits.size()) {
             break;
@@ -684,13 +685,12 @@ void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::strin
             auto distanceToNext = bandwidth_limits[++bwThresholdIndex]["time"].get<int>() - bandwidth_limits[bwThresholdIndex - 1]["time"].get<int>();
             nextThresholdSetTime += std::chrono::seconds(distanceToNext);
 
+            auto sleepTime = nextThresholdSetTime - std::chrono::system_clock::now();
+            std::this_thread::sleep_for(sleepTime + std::chrono::nanoseconds(10000000));
+
         }
     }
-    // After the last limit, wait for 1 second before resetting the qdisc
-    std::this_thread::sleep_for(std::chrono::seconds(3));
 
-    // Reset the bandwidth limit by removing qdisc
-    std::string command = "sudo tc qdisc del dev " + interface + " root";
-    system(command.c_str());
-    std::cout << "Finished bandwidth limiting and reset qdisc." << std::endl;
+    // QUANG: Remove the bandwidth limit
+    std::cout << "Finished bandwidth limiting." << std::endl;
 }
