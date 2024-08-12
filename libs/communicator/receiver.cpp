@@ -220,7 +220,8 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             for (auto ts: el.timestamp()) {
                 timestamps.emplace_back(TimePrecisionType(ts));
             }
-            if (validateReq(timestamps[0])) {
+            if (!validateReq(timestamps[0])) {
+                spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} drops a request.", __func__);
                 continue;
             }
             timestamps.push_back(std::chrono::system_clock::now());
