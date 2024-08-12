@@ -1213,6 +1213,8 @@ private:
     // ModelProfilesJF model_profiles_jf;
 
     std::atomic<bool> isPipelineInitialised = false;
+
+    void estimateTimeBudgetLeft(PipelineModel *currModel);
 };
 
 
