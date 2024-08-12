@@ -221,6 +221,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
                 timestamps.emplace_back(TimePrecisionType(ts));
             }
             if (validateReq(timestamps[0])) {
+                spdlog::get("container_agent")->error("SerializedDataRequestHandler::{0:s} request is invalid", __func__);
                 continue;
             }
             timestamps.push_back(std::chrono::system_clock::now());
@@ -231,6 +232,8 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             uint length = el.data().length();
             if (length != el.datalen()) {
                 responder.Finish(reply, Status(grpc::INVALID_ARGUMENT, "Data length does not match"), this);
+                spdlog::get("container_agent")->error("SerializedDataRequestHandler::{0:s} data length does not match", __func__);
+                continue;
             }
             cv::Mat image = cv::Mat(el.height(), el.width(), CV_8UC3,
                                     const_cast<char *>(el.data().c_str())).clone();
