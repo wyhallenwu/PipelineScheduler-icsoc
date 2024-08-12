@@ -12,14 +12,30 @@ void Controller::queryingProfiles(TaskHandle *task)
 
     auto pipelineModels = &task->tk_pipelineModels;
 
-    for (auto model : *pipelineModels)
+    std::vector<std::string> dsrcDeviceList;
+    for (auto &model : *pipelineModels) {
+        if (model->name.find("datasource") == std::string::npos) {
+            continue;
+        }
+        dsrcDeviceList.push_back(model->device);
+    }
+
+    for (auto &model : *pipelineModels)
     {
         if (model->name.find("datasource") != std::string::npos || model->name.find("sink") != std::string::npos)
         {
             continue;
         }
         model->deviceTypeName = getDeviceTypeName(deviceList.at(model->device)->type);
-        std::vector<std::string> upstreamPossibleDeviceList = model->upstreams.front().first->possibleDevices;
+        std::vector<std::string> upstreamPossibleDeviceList;
+        if (model->name.find("yolo") != std::string::npos)
+        {
+            upstreamPossibleDeviceList = dsrcDeviceList;
+        }
+        else
+        {
+            upstreamPossibleDeviceList = model->upstreams.front().first->possibleDevices;
+        }
         std::vector<std::string> thisPossibleDeviceList = model->possibleDevices;
         std::vector<std::pair<std::string, std::string>> possibleDevicePairList;
         for (const auto &deviceName : upstreamPossibleDeviceList)
@@ -147,8 +163,22 @@ void Controller::estimateModelNetworkLatency(PipelineModel *currModel)
         currModel->expectedTransferLatency = 0;
         return;
     }
+    currModel->expectedTransferLatency = 0;
+    if (currModel->name.find("yolo") != std::string::npos)
+    {
+        uint8_t numUpstreams = 0;
+        for (PipelineModel *&datasource : currModel->task->tk_pipelineModels) {
+            if (datasource->name.find("datasource") == std::string::npos) {
+                continue;
+            }
+            currModel->expectedTransferLatency += currModel->arrivalProfiles.d2dNetworkProfile[std::make_pair(datasource->device, currModel->device)].p95TransferDuration;
+            numUpstreams++;
+        }
+        currModel->expectedTransferLatency /= numUpstreams;
+        return;
+    }
 
-    currModel->expectedTransferLatency = currModel->arrivalProfiles.d2dNetworkProfile[std::make_pair(currModel->device, currModel->upstreams[0].first->device)].p95TransferDuration;
+    currModel->expectedTransferLatency = currModel->arrivalProfiles.d2dNetworkProfile[std::make_pair(currModel->upstreams[0].first->device, currModel->device)].p95TransferDuration;
 }
 
 /**
