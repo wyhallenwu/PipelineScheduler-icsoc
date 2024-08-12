@@ -210,7 +210,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
         service->RequestSerializedDataTransfer(&ctx, &request, &responder, cq, cq,
                                                this);
     } else if (status == PROCESS) {
-        spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} is processing request...", __func__);
+        spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} is processing request {1:s}...", __func__, request.mutable_elements()->at(0).path());
         if (OutQueue->getActiveQueueIndex() != 1) OutQueue->setActiveQueueIndex(1);
         new SerializedDataRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
@@ -221,7 +221,6 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
                 timestamps.emplace_back(TimePrecisionType(ts));
             }
             if (!validateReq(timestamps[0])) {
-                spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} drops a request.", __func__);
                 continue;
             }
             timestamps.push_back(std::chrono::system_clock::now());

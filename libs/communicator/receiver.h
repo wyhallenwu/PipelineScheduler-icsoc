@@ -79,7 +79,7 @@ private:
             if (diff > receiverInstance->msvc_pipelineSLO - receiverInstance->msvc_timeBudgetLeft && 
                 receiverInstance->msvc_DROP_MODE == DROP_MODE::LAZY) {
                 receiverInstance->droppedReqCount++;
-                spdlog::get("container_agent")->trace("{0:s} invalidates a request.", receiverInstance->msvc_name, receiverInstance->droppedReqCount);
+                spdlog::get("container_agent")->trace("{0:s} invalidates a request with time {1:d}", containerName, diff);
                 return false;
             } else if (receiverInstance->msvc_DROP_MODE == DROP_MODE::NO_DROP) {
                 return true;
