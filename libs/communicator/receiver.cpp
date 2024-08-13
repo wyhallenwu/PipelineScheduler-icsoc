@@ -236,8 +236,8 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             }
             cv::Mat image;
             if (el.is_encoded()){
-                std::vector<uchar> buf(length);
-                memcpy(buf.data(), el.data().c_str(), length);
+                std::vector<uchar> buf(el.data().c_str(), el.data().c_str() + length);
+                // memcpy(buf.data(), el.data().c_str(), length);
                 image = cv::imdecode(buf, cv::IMREAD_COLOR);
             } else {
                 image = cv::Mat(el.height(), el.width(), CV_8UC3,const_cast<char *>(el.data().c_str())).clone();
