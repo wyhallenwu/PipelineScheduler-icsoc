@@ -49,14 +49,7 @@ cv::Mat encodeImage(const cv::Mat &image) {
     cv::imencode(".jpg", image, buf, {cv::IMWRITE_JPEG_QUALITY, 100});
     RequestMemSizeType encodedMemSize = buf.size();
     cv::Mat encoded(1, encodedMemSize, CV_8UC1, buf.data());
-    return encoded;
-}
-
-cv::Mat decodeImage(const cv::Mat &encoded) {
-    std::vector<uchar> buf(encoded.cols);
-    memcpy(buf.data(), encoded.data, encoded.cols);
-    cv::Mat decoded = cv::imdecode(buf, cv::IMREAD_COLOR);
-    return decoded;
+    return encoded.clone();
 }
 
 void DataReader::Process() {
@@ -96,9 +89,6 @@ void DataReader::Process() {
             for (auto q: msvc_OutQueue) {
                 Request<LocalCPUReqDataType> req;
                 if (!q->getEncoded()) {
-                    // cv::Mat encoded = encodeImage(frame);
-                    // frame = decodeImage(encoded);
-                    // frame = cv::imdecode(encoded, cv::IMREAD_COLOR);
                     ClockType time = std::chrono::system_clock::now();
                     req = {{{time, time}}, {msvc_contSLO},
                            {"[" + msvc_hostDevice + "|" + link + "|" + std::to_string(readFrames) +
@@ -114,7 +104,7 @@ void DataReader::Process() {
                 req = {{{time, time}}, {msvc_contSLO},
                        {"[" + msvc_hostDevice + "|" + link + "|" + std::to_string(readFrames) +
                         "|1|1|" + std::to_string(frameMemSize) + "|" + std::to_string(encodedMemSize) + "]"}, 1,
-                       {RequestData<LocalCPUReqDataType>{{encoded.dims, encoded.rows, encoded.cols},
+                       {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols},
                                                          encoded}}};
                 q->emplace(req);
             }
