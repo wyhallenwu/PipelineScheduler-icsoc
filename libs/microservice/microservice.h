@@ -140,6 +140,7 @@ private:
     QueueLengthType q_MaxSize = 100;
     std::int16_t class_of_interest;
     bool isEmpty;
+    bool isEncoded = false;
 
 public:
     ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi, std::string name) :  q_name(name), q_MaxSize(size), class_of_interest(coi) {}
@@ -269,6 +270,16 @@ public:
     int16_t getClassOfInterest() {
         std::unique_lock<std::mutex> lock(q_mutex);
         return class_of_interest;
+    }
+
+    void setEncoded(bool isEncoded) {
+        std::unique_lock<std::mutex> lock(q_mutex);
+        this->isEncoded = isEncoded;
+    }
+
+    bool getEncoded() {
+        std::unique_lock<std::mutex> lock(q_mutex);
+        return isEncoded;
     }
 };
 
