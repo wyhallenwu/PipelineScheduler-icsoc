@@ -6,7 +6,7 @@
 #include "microservice.h"
 
 class DataReader : public Microservice {
-friend class DataSourceAgent;
+    friend class DataSourceAgent;
 public:
     //msvc_idealBatchSize is used for the wait time, where 33 equals ~30.3 fps
     //the link to the upstream microservice is used to specify the file location
