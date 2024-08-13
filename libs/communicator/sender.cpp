@@ -256,7 +256,8 @@ std::string RemoteCPUSender::SendData(std::vector<RequestData<LocalCPUReqDataTyp
     ImageDataPayload request;
     for (unsigned int i = 0; i < elements.size(); i++) {
         auto ref = request.add_elements();
-        //TODO: set is_encoded to true if the data is encoded
+        //TODO: set is_encoded to true if the data is encoded based on flag in the queue
+        //ref->set_is_encoded(msvc_InQueue.front()->is_encoded);
         ref->set_is_encoded(false);
         ref->set_data(elements[i].data.data, elements[i].data.total() * elements[i].data.elemSize());
 

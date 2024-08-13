@@ -116,18 +116,24 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
             msvc_outReqShape.emplace_back(it->expectedShape); // This is a dummy value for now
             if (it->commMethod == CommMethod::localGPU) {
                 msvc_activeOutQueueIndex.emplace_back(2);
-            } else {//if (it->commMethod == CommMethod::localCPU) {
+            } else {
                 msvc_activeOutQueueIndex.emplace_back(1);
+                if (it->commMethod == CommMethod::encodedCPU) {
+                    //TODO: set flag for encoded queue
+                }
             }
         }
 
         for (auto it = configs.msvc_upstreamMicroservices.begin(); it != configs.msvc_upstreamMicroservices.end(); ++it) {
             NeighborMicroservice upStreamMsvc = NeighborMicroservice(*it, nummsvc_upstreamMicroservices++);
             upstreamMicroserviceList.emplace_back(upStreamMsvc);
-            if (it->commMethod == CommMethod::localCPU) {
-                msvc_activeInQueueIndex.emplace_back(1);
-            } else if (it->commMethod == CommMethod::localGPU) {
+            if (it->commMethod == CommMethod::localGPU) {
                 msvc_activeInQueueIndex.emplace_back(2);
+            } else {
+                msvc_activeInQueueIndex.emplace_back(1);
+                if (it->commMethod == CommMethod::encodedCPU) {
+                    //TODO: set flag for encoded queue
+                }
             }
         }
     }
