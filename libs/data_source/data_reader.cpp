@@ -48,14 +48,17 @@ cv::Mat encodeImage(const cv::Mat &image) {
     std::vector<uchar> buf;
     cv::imencode(".jpg", image, buf, {cv::IMWRITE_JPEG_QUALITY, 100});
     RequestMemSizeType encodedMemSize = buf.size();
-    cv::Mat encoded(1, encodedMemSize, CV_8UC1, buf.data());
-    return encoded;
+    cv::Mat encoded(buf);
+    return encoded.clone();
 }
 
-cv::Mat decodeImage(const cv::Mat &encoded) {
-    std::vector<uchar> buf(encoded.cols);
-    memcpy(buf.data(), encoded.data, encoded.cols);
+cv::Mat decodeImage(const cv::Mat &encoded, uint16_t readFrames) {
+    std::vector<uchar> buf(encoded.begin<uchar>(), encoded.end<uchar>());
     cv::Mat decoded = cv::imdecode(buf, cv::IMREAD_COLOR);
+    while (decoded.empty()) {
+        spdlog::get("container_agent")->error("Decoded image {0:d} is empty.", readFrames);
+        cv::Mat decoded = cv::imdecode(buf, cv::IMREAD_COLOR);
+    }
     return decoded;
 }
 
@@ -96,15 +99,15 @@ void DataReader::Process() {
             for (auto q: msvc_OutQueue) {
                 Request<LocalCPUReqDataType> req;
                 if (!q->getEncoded()) {
-                    // cv::Mat encoded = encodeImage(frame);
-                    // frame = decodeImage(encoded);
-                    // frame = cv::imdecode(encoded, cv::IMREAD_COLOR);
+                    cv::Mat encoded = encodeImage(frame);
+                    cv::Mat decodedFrame = decodeImage(encoded, readFrames);
+                    cv::imwrite("testcv/frame" + std::to_string(readFrames) + ".jpg", decodedFrame);
                     ClockType time = std::chrono::system_clock::now();
                     req = {{{time, time}}, {msvc_contSLO},
                            {"[" + msvc_hostDevice + "|" + link + "|" + std::to_string(readFrames) +
                             "|1|1|" + std::to_string(frameMemSize) + "|" + std::to_string(frameMemSize) + "]"}, 1,
                            {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols}, frame}}}; 
-                    q->emplace(req);
+                    // q->emplace(req);
                     continue;
                 }
 
