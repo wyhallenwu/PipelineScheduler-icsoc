@@ -288,11 +288,12 @@ public:
  * 
  */
 enum class CommMethod {
-    sharedMemory,
-    localGPU,
-    serialized,
-    encodedCPU,
-    localCPU
+    sharedMemory = 0,
+    GpuAddress = 1,
+    serialized = 2,
+    localGPU = 3,
+    localCPU = 4,
+    encodedCPU = 5
 };
 
 enum class NeighborType {

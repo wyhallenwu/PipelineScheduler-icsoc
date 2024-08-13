@@ -114,22 +114,20 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
             std::pair<int16_t, uint16_t> map = {dnStreamMsvc.classOfInterest, nummsvc_dnstreamMicroservices++};
             classToDnstreamMap.emplace_back(map);
             msvc_outReqShape.emplace_back(it->expectedShape); // This is a dummy value for now
-            if (it->commMethod == CommMethod::localGPU) {
-                msvc_activeOutQueueIndex.emplace_back(2);
-            } else {
+            if (it->commMethod == CommMethod::localCPU || it->commMethod == CommMethod::encodedCPU) {
                 msvc_activeOutQueueIndex.emplace_back(1);
-                if (it->commMethod == CommMethod::encodedCPU) {
-                    //TODO: set flag for encoded queue
-                }
+            } else if (it->commMethod == CommMethod::localGPU) {
+                msvc_activeOutQueueIndex.emplace_back(2);
+            }
+            if (it->commMethod == CommMethod::encodedCPU) {
+                msvc_OutQueue.back()->setEncoded(true);
             }
         }
 
         for (auto it = configs.msvc_upstreamMicroservices.begin(); it != configs.msvc_upstreamMicroservices.end(); ++it) {
             NeighborMicroservice upStreamMsvc = NeighborMicroservice(*it, nummsvc_upstreamMicroservices++);
             upstreamMicroserviceList.emplace_back(upStreamMsvc);
-            if (it->commMethod == CommMethod::localGPU) {
-                msvc_activeInQueueIndex.emplace_back(2);
-            } else {
+            if (it->commMethod == CommMethod::localCPU || it->commMethod == CommMethod::encodedCPU) {
                 msvc_activeInQueueIndex.emplace_back(1);
                 if (it->commMethod == CommMethod::encodedCPU) {
                     //TODO: set flag for encoded queue

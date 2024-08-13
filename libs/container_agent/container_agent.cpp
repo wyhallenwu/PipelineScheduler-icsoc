@@ -105,6 +105,13 @@ json loadRunArgs(int argc, char **argv) {
         }
     }
 
+    std::map<std::string, json *> senderList;
+    for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
+        std::string msvc_name = containerConfigs["cont_pipeline"][i]["msvc_name"];
+        if (msvc_name.find("sender") != std::string::npos) {
+            senderList.insert({containerConfigs["cont_pipeline"][i]["msvc_name"], &containerConfigs["cont_pipeline"][i]});
+        }
+    }
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
         containerConfigs.at("cont_pipeline")[i]["msvc_contSLO"] = containerConfigs["cont_SLO"];
         containerConfigs.at("cont_pipeline")[i]["msvc_contStartTime"] = containerConfigs["cont_startTime"];
@@ -130,6 +137,19 @@ json loadRunArgs(int argc, char **argv) {
         if (containerConfigs["cont_taskName"] != "dsrc") {
             containerConfigs.at("cont_pipeline")[i]["msvc_maxBatchSize"] = containerConfigs.at("cont_maxBatchSize");
             containerConfigs.at("cont_pipeline")[i]["msvc_allocationMode"] = containerConfigs.at("cont_allocationMode");
+        }
+
+        std::string msvc_name = containerConfigs.at("cont_pipeline")[i]["msvc_name"];
+        if (msvc_name.find("postprocessor") != std::string::npos || msvc_name.find("data_reader") != std::string::npos) {
+            for (uint8_t j = 0; j < containerConfigs["cont_pipeline"][i]["msvc_dnstreamMicroservices"].size(); j++) {
+                json * correspondingSender = senderList[containerConfigs["cont_pipeline"][i]["msvc_dnstreamMicroservices"][j]["nb_name"]];
+                std::string corrSenderLink = correspondingSender->at("msvc_dnstreamMicroservices")[0]["nb_link"][0];
+                // if the corresponding sender is supposed to send data to a different host
+                // then we add a flag to let the postprocessor know that it should encode the data
+                if (corrSenderLink.find("localhost") == std::string::npos) {
+                    containerConfigs["cont_pipeline"][i]["msvc_dnstreamMicroservices"][j]["nb_commMethod"] = 5;
+                }
+            }
         }
 
         /**
@@ -161,6 +181,8 @@ json loadRunArgs(int argc, char **argv) {
     if (containerConfigs["cont_taskName"] != "dsrc") {
         checkCudaErrorCode(cudaSetDevice(device), __func__);
     }
+
+    std::cout << finalConfigs.dump(4) << std::endl;
 
     return finalConfigs;
 };
