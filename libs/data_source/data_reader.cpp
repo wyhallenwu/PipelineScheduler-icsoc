@@ -46,7 +46,7 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 
 cv::Mat encodeImage(const cv::Mat &image) {
     std::vector<uchar> buf;
-    cv::imencode(".jpg", image, buf, {cv::IMWRITE_JPEG_QUALITY, 100});
+    cv::imencode(".jpg", image, buf, {cv::IMWRITE_JPEG_QUALITY, 95});
     RequestMemSizeType encodedMemSize = buf.size();
     cv::Mat encoded(1, encodedMemSize, CV_8UC1, buf.data());
     return encoded.clone();
@@ -95,7 +95,7 @@ void DataReader::Process() {
                            {"[" + msvc_hostDevice + "|" + link + "|" + std::to_string(readFrames) +
                             "|1|1|" + std::to_string(frameMemSize) + "|" + std::to_string(frameMemSize) + "]"}, 1,
                            {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols}, frame}}}; 
-                    // q->emplace(req);
+                    q->emplace(req);
                     continue;
                 }
 
