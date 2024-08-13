@@ -234,8 +234,12 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
                 spdlog::get("container_agent")->error("SerializedDataRequestHandler::{0:s} data length does not match", __func__);
                 continue;
             }
-            cv::Mat image = cv::Mat(el.height(), el.width(), CV_8UC3,
-                                    const_cast<char *>(el.data().c_str())).clone();
+            cv::Mat image;
+            if (el.is_encoded()){
+                image = cv::imdecode(cv::Mat(1, length, CV_8UC1, const_cast<char *>(el.data().c_str())), cv::IMREAD_ANYCOLOR);
+            } else {
+                image = cv::Mat(el.height(), el.width(), CV_8UC3,const_cast<char *>(el.data().c_str())).clone();
+            }
             elements = {{{image.channels(), el.height(), el.width()}, image}};
 
             Request<LocalCPUReqDataType> req = {
