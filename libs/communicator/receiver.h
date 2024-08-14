@@ -72,14 +72,14 @@ private:
          */
         inline bool validateReq(ClockType &originalGenTime) {
             auto now = std::chrono::high_resolution_clock::now();
-            MsvcSLOType diff = std::chrono::duration_cast<TimePrecisionType>(now - originalGenTime).count();
+            auto diff = std::chrono::duration_cast<TimePrecisionType>(now - originalGenTime).count();
             if (receiverInstance->msvc_RUNMODE == RUNMODE::PROFILING) {
                 return true;
             }
             if (diff > receiverInstance->msvc_pipelineSLO - receiverInstance->msvc_timeBudgetLeft && 
                 receiverInstance->msvc_DROP_MODE == DROP_MODE::LAZY) {
                 receiverInstance->droppedReqCount++;
-                spdlog::get("container_agent")->trace("{0:s} invalidates a request with time {1:d}", containerName, diff);
+                spdlog::get("container_agent")->trace("{0:s} drops a request with time {1:d}", containerName, diff);
                 return false;
             } else if (receiverInstance->msvc_DROP_MODE == DROP_MODE::NO_DROP) {
                 return true;
