@@ -742,16 +742,19 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
                         absl::StrFormat("%s:%d", replica->device_agent->ip, replica->recv_port));
             }
             post_down["nb_name"] = sender["msvc_name"];
-//            if ((container->device_agent == dwnstr->device_agent) && (container->gpuHandle == dwnstr->gpuHandle)) {
-//                post_down["nb_commMethod"] = CommMethod::localGPU;
-//                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
-//            } else {
-//                post_down["nb_commMethod"] = CommMethod::localCPU;
-//                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
-//            }
-            //TODO: REMOVE AND FIX THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
-            post_down["nb_commMethod"] = CommMethod::localCPU;
-            sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
+            if (container->device_agent != dwnstr->deviceAgent) {
+                post_down["nb_commMethod"] = CommMethod::encodedCPU;
+                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
+            } else {
+                //TODO: REMOVE AND FIX THIS IF WE EVER DECIDE TO USE GPU COMM AGAIN
+//                if ((container->gpuHandle == dwnstr->gpuHandle)) {
+//                    post_down["nb_commMethod"] = CommMethod::localGPU;
+//                    sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
+//                } else {
+                post_down["nb_commMethod"] = CommMethod::localCPU;
+                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
+//                }
+            }
             post_down["nb_classOfInterest"] = coi;
 
             postprocessor->at("msvc_dnstreamMicroservices").push_back(post_down);
@@ -1223,9 +1226,14 @@ NetworkEntryType Controller::initNetworkCheck(NodeHandle &node, uint32_t minPack
     request.set_min(minPacketSize);
     request.set_max(maxPacketSize);
     request.set_repetitions(numLoops);
-    std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            node.stub->AsyncExecuteNetworkTest(&context, request, node.cq));
-    finishGrpc(rpc, reply, status, node.cq);
+    try {
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+                node.stub->AsyncExecuteNetworkTest(&context, request, node.cq));
+        finishGrpc(rpc, reply, status, node.cq);
+        spdlog::get("container_agent")->info("Successfully started network check for device {}.", node.name);
+    } catch (const std::exception &e) {
+        spdlog::get("container_agent")->error("Error while starting network check for device {}.", node.name);
+    }
 
     while (network_check_buffer[node.name].size() < numLoops) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
