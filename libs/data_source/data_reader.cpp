@@ -46,7 +46,7 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 
 cv::Mat encodeImage(const cv::Mat &image) {
     std::vector<uchar> buf;
-    cv::imencode(".jpg", image, buf, {cv::IMWRITE_JPEG_QUALITY, 100});
+    cv::imencode(".jpg", image, buf, {cv::IMWRITE_JPEG_QUALITY, 95});
     RequestMemSizeType encodedMemSize = buf.size();
     cv::Mat encoded(1, encodedMemSize, CV_8UC1, buf.data());
     return encoded.clone();
@@ -56,6 +56,7 @@ void DataReader::Process() {
     int frameCount = 0;
     uint16_t readFrames = 0;
     while (true) {
+        ClockType start = std::chrono::system_clock::now();
         if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
@@ -108,8 +109,10 @@ void DataReader::Process() {
                                                          encoded}}};
                 q->emplace(req);
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
+            // remove processing time from wait time
+            ClockType end = std::chrono::system_clock::now();
+            std::chrono::duration<double> elapsed_seconds = end - start;
+            std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms) - elapsed_seconds);
         }
         frameCount++;
     }
