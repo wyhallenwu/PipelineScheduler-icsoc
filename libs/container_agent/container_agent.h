@@ -250,6 +250,8 @@ protected:
 
     virtual void HandleRecvRpcs();
 
+    bool readModelProfile(const json &profile);
+
     std::string cont_experimentName;
     std::string cont_systemName;
     std::string cont_name;

@@ -757,6 +757,19 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         start_config["container"]["cont_localDutyCycle"] = container->localDutyCycle;
         start_config["container"]["cont_cycleStartTime"] = std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count();
 
+        std::vector<uint32_t> modelProfile;
+        for (auto &[batchSize, profile]: container->pipelineModel->processProfiles.at(container->device_agent->name).batchInfer) {
+            modelProfile.push_back(batchSize);
+            modelProfile.push_back(profile.p95prepLat);
+            modelProfile.push_back(profile.p95inferLat);
+            modelProfile.push_back(profile.p95postLat);
+        }
+
+        if (modelProfile.empty()) {
+            spdlog::get("container_agent")->warn("Model profile not found for container: {0:s}", container->name);
+        }
+        start_config["container"]["cont_modelProfile"] = modelProfile;
+
         json base_config = start_config["container"]["cont_pipeline"];
 
         // adjust pipeline configs
