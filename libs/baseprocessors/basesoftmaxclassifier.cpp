@@ -49,6 +49,7 @@ void BaseSoftmaxClassifier::classify() {
 
 
     cudaStream_t postProcStream;
+    cv::cuda::Stream postProcCVStream;
 
     NumQueuesType queueIndex = 0;
 
@@ -79,6 +80,7 @@ void BaseSoftmaxClassifier::classify() {
 
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+                postProcCVStream = cv::cuda::StreamAccessor::wrapStream(postProcStream);
 
                 BatchSizeType batchSize = msvc_allocationMode == AllocationMode::Conservative ? msvc_idealBatchSize : msvc_maxBatchSize;
                 predictedProbs = new float[batchSize * msvc_numClasses];
@@ -145,21 +147,20 @@ void BaseSoftmaxClassifier::classify() {
             currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
 
             uint32_t totalInMem = currReq.upstreamReq_data[i].data.rows * currReq.upstreamReq_data[i].data.cols * currReq.upstreamReq_data[i].data.channels() * CV_ELEM_SIZE1(currReq.upstreamReq_data[i].data.type());
-            currReq.req_travelPath[i] += "|1|1|" + std::to_string(totalInMem) + "]";
+            uint32_t totalEncodedOutMem = 0;
 
             softmax(predictedLogits + i * msvc_numClasses, predictedProbs + i * msvc_numClasses, msvc_numClasses);
             predictedClass[i] = maxIndex(predictedProbs + i * msvc_numClasses, msvc_numClasses);
 
             if (msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
-                cv::Mat out(currReq.upstreamReq_data[i].data.size(), currReq.upstreamReq_data[i].data.type());
-                checkCudaErrorCode(cudaMemcpyAsync(
-                    out.ptr(),
-                    currReq.upstreamReq_data[i].data.cudaPtr(),
-                    currReq.upstreamReq_data[i].data.rows * currReq.upstreamReq_data[i].data.cols * currReq.upstreamReq_data[i].data.channels() * CV_ELEM_SIZE1(currReq.upstreamReq_data[i].data.type()),
-                    cudaMemcpyDeviceToHost,
-                    postProcStream
-                ), __func__);
-                checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
+                cv::Mat out;
+                currReq.upstreamReq_data[i].data.download(out, postProcCVStream);
+                postProcCVStream.waitForCompletion();
+                if (msvc_OutQueue.at(queueIndex)->getEncoded()) {
+                    out = encodeResults(out);
+                    totalEncodedOutMem = out.channels() * out.rows * out.cols * CV_ELEM_SIZE1(out.type());
+                }
+                currReq.req_travelPath[i] += "|1|1|" + std::to_string(totalEncodedOutMem) + "|" + std::to_string(totalInMem) + "]";
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalCPUReqDataType>{
                         {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
@@ -173,6 +174,7 @@ void BaseSoftmaxClassifier::classify() {
                 );
                 spdlog::get("container_agent")->trace("{0:s} emplaced an image to CPU queue.", msvc_name);
             } else {
+                currReq.req_travelPath[i] += "|1|1|0|" + std::to_string(totalInMem) + "]";
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalGPUReqDataType>{
                         {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},

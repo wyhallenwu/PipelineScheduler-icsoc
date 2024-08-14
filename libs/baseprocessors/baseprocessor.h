@@ -8,6 +8,7 @@
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
 #include <opencv2/cudaimgproc.hpp>
+#include <opencv2/core/cuda_stream_accessor.hpp>
 #include <thread>
 #include <misc.h>
 #include <trtengine.h>
@@ -252,6 +253,14 @@ public:
         return std::stoul(splitString(temp, "|").back());
     }
 
+    inline cv::Mat encodeResults(const cv::Mat &image) {
+        std::vector<uchar> buf;
+        cv::imencode(".jpg", image, buf, {cv::IMWRITE_JPEG_QUALITY, 80});
+        RequestMemSizeType encodedMemSize = buf.size();
+        cv::Mat encoded(1, encodedMemSize, CV_8UC1, buf.data());
+        return encoded.clone();
+    }
+
 protected:
     ProcessReqRecords msvc_processRecords;
     // Record
@@ -260,6 +269,7 @@ protected:
     struct PerQueueOutRequest {
         bool used = false;
         uint32_t totalSize = 0;
+        uint32_t totalEncodedSize = 0;
         Request<LocalCPUReqDataType> cpuReq;
         Request<LocalGPUReqDataType> gpuReq;
     };

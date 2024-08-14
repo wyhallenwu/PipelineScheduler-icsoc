@@ -56,6 +56,7 @@ void BaseBBoxCropperVerifier::cropping() {
 
 
     cudaStream_t postProcStream;
+    cv::cuda::Stream postProcCVStream;
 
     // Height and width of the image used for inference
     int orig_h, orig_w;
@@ -113,6 +114,7 @@ void BaseBBoxCropperVerifier::cropping() {
 
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+                postProcCVStream = cv::cuda::StreamAccessor::wrapStream(postProcStream);
                 
                 maxNumDets = msvc_dataShape[2][0];
 
@@ -219,20 +221,19 @@ void BaseBBoxCropperVerifier::cropping() {
             // spdlog::get("container_agent")->trace("{0:s} cropped {1:d} bboxes in image {2:d}", msvc_name, numDetsInFrame, i);
 
             uint32_t totalInMem = imageList[i].data.channels() * imageList[i].data.rows * imageList[i].data.cols * CV_ELEM_SIZE1(imageList[i].data.type());
-            uint32_t totalOutMem = 0;
-
-            currReq_path += "|" + std::to_string(totalInMem) + "]";
+            uint32_t totalOutMem = totalInMem, totalEncodedOutMem = 0;
 
             if (msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
-                cv::Mat out(orig_h, orig_w, imageList[i].data.type());
-                checkCudaErrorCode(cudaMemcpyAsync(
-                    out.ptr(),
-                    imageList[i].data.cudaPtr(),
-                    orig_h * orig_w * imageList[i].data.channels() * CV_ELEM_SIZE1(imageList[i].data.type()),
-                    cudaMemcpyDeviceToHost,
-                    postProcStream
-                ), __func__);
-                checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
+                cv::Mat out;
+                imageList[i].data.download(out, postProcCVStream);
+                postProcCVStream.waitForCompletion();
+                if (msvc_OutQueue.at(queueIndex)->getEncoded()) {
+                    out = encodeResults(out);
+                    totalEncodedOutMem = out.channels() * out.rows * out.cols * CV_ELEM_SIZE1(out.type());
+                }
+
+                currReq_path += "|" + std::to_string(totalEncodedOutMem) + "|" + std::to_string(totalInMem) + "]";
+
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalCPUReqDataType>{
                         {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
@@ -246,6 +247,7 @@ void BaseBBoxCropperVerifier::cropping() {
                 );
                 spdlog::get("container_agent")->trace("{0:s} emplaced an image to CPU queue {2:d}.", msvc_name, bboxClass, queueIndex);
             } else {
+                currReq_path += "|0|" + std::to_string(totalInMem) + "]";
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalGPUReqDataType>{
                         {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
