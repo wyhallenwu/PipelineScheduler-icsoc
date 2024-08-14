@@ -234,6 +234,8 @@ struct ModelProfile {
     int p95InputSize = 1; // bytes
     // Average total size of outgoing queries
     int p95OutputSize = 1; // bytes
+    //
+    uint32_t p95EncodedOutputSize = 1; // bytes
     // Max possible batch size for the model on this device
     BatchSizeType maxBatchSize = 1;
 };
