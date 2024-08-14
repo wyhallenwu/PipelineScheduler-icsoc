@@ -121,6 +121,7 @@ struct PercentilesProcessRecord {
     uint64_t postDuration;
     uint32_t inputSize;
     uint32_t outputSize;
+    uint32_t encodedOutputSize;
 };
 
 /**
@@ -136,6 +137,7 @@ struct ProcessRecord : public Record {
     std::vector<uint64_t> postDuration;
     std::vector<uint32_t> inputSize;
     std::vector<uint32_t> outputSize;
+    std::vector<uint32_t> encodedOutputSize;
     std::vector<ClockType> postEndTime;
     std::vector<BatchSizeType> inferBatchSize;
 
@@ -149,7 +151,8 @@ struct ProcessRecord : public Record {
                 findPercentile<uint64_t>(inferDuration, percent),
                 findPercentile<uint64_t>(postDuration, percent),
                 findPercentile<uint32_t>(inputSize, percent),
-                findPercentile<uint32_t>(outputSize, percent)
+                findPercentile<uint32_t>(outputSize, percent),
+                findPercentile<uint32_t>(encodedOutputSize, percent)
             };
         }
         return results;
