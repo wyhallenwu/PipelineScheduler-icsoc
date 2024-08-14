@@ -91,6 +91,7 @@ void BaseSink::sink() {
              *
              */
         } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
+            spdlog::get("container_agent")->trace("{0:s} is processing request {1:s}...", msvc_name, inferTimeReport.req_travelPath[0]);
             msvc_logFile << inferTimeReport.req_travelPath[0] << "|";
             for (unsigned int j = 0; j < inferTimeReport.req_origGenTime[0].size() - 1; j++) {
                 msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[0].at(j)) << ",";

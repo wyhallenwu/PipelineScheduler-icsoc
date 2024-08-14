@@ -210,7 +210,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
         service->RequestSerializedDataTransfer(&ctx, &request, &responder, cq, cq,
                                                this);
     } else if (status == PROCESS) {
-        spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} is processing request...", __func__);
+        spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} is processing request {1:s}...", __func__, request.mutable_elements()->at(0).path());
         if (OutQueue->getActiveQueueIndex() != 1) OutQueue->setActiveQueueIndex(1);
         new SerializedDataRequestHandler(service, cq, OutQueue, msvc_inReqCount, receiverInstance);
 
@@ -220,7 +220,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             for (auto ts: el.timestamp()) {
                 timestamps.emplace_back(TimePrecisionType(ts));
             }
-            if (validateReq(timestamps[0])) {
+            if (!validateReq(timestamps[0])) {
                 continue;
             }
             timestamps.push_back(std::chrono::system_clock::now());
@@ -231,9 +231,17 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             uint length = el.data().length();
             if (length != el.datalen()) {
                 responder.Finish(reply, Status(grpc::INVALID_ARGUMENT, "Data length does not match"), this);
+                spdlog::get("container_agent")->error("SerializedDataRequestHandler::{0:s} data length does not match", __func__);
+                continue;
             }
-            cv::Mat image = cv::Mat(el.height(), el.width(), CV_8UC3,
-                                    const_cast<char *>(el.data().c_str())).clone();
+            cv::Mat image;
+            if (el.is_encoded()){
+                std::vector<uchar> buf(el.data().c_str(), el.data().c_str() + length);
+                // memcpy(buf.data(), el.data().c_str(), length);
+                image = cv::imdecode(buf, cv::IMREAD_COLOR);
+            } else {
+                image = cv::Mat(el.height(), el.width(), CV_8UC3,const_cast<char *>(el.data().c_str())).clone();
+            }
             elements = {{{image.channels(), el.height(), el.width()}, image}};
 
             Request<LocalCPUReqDataType> req = {
