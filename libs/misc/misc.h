@@ -42,6 +42,8 @@ typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
 typedef uint32_t RequestMemSizeType;
 
+const NumQueuesType MAX_NUM_QUEUES = std::numeric_limits<NumQueuesType>::max();
+
 // Hw Metrics
 typedef int CpuUtilType;
 typedef unsigned int GpuUtilType;

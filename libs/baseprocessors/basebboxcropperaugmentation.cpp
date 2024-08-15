@@ -361,18 +361,49 @@ void BaseBBoxCropperAugmentation::cropping() {
             }
 
             uint32_t totalInMem = imageList[i].data.channels() * imageList[i].data.rows * imageList[i].data.cols * CV_ELEM_SIZE1(imageList[i].data.type());
-            uint32_t totalOutMem = 0;
+            uint32_t totalOutMem = 0, totalEncodedOutMem = 0;
 
             std::vector<PerQueueOutRequest> outReqList(msvc_OutQueue.size());
-
             // After cropping, we need to find the right queues to put the bounding boxes in
             for (int j = 0; j < numDetsInFrame; ++j) {
                 bboxClass = (int16_t)nmsed_classes[i * maxNumDets + j];
+
+                cv::Mat cpuBox;
+                cv::Mat encodedBox;
+                uint32_t boxEncodedMemSize = 0;
                 // in the constructor of each microservice, we map the class number to the corresponding queue index in 
                 // `classToDntreamMap`.
                 for (size_t k = 0; k < this->classToDnstreamMap.size(); ++k) {
+                    NumQueuesType qIndex = MAX_NUM_QUEUES;
                     if ((classToDnstreamMap.at(k).first == bboxClass) || (classToDnstreamMap.at(k).first == -1)) {
-                        queueIndex.emplace_back(this->classToDnstreamMap.at(k).second);
+                        qIndex = this->classToDnstreamMap.at(k).second;
+                        queueIndex.emplace_back(qIndex);
+                    }
+                    if (qIndex == MAX_NUM_QUEUES) {
+                        continue;
+                    }
+                    if (msvc_activeInQueueIndex.at(qIndex) == 1) { //If CPU serialized data
+                        continue;
+                    }
+                    if (cpuBox.empty()) {
+                        // cv::Mat box(singleImageBBoxList[j].size(), CV_8UC3);
+                        // checkCudaErrorCode(cudaMemcpyAsync(
+                        //     box.data,
+                        //     singleImageBBoxList[j].cudaPtr(),
+                        //     singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type()),
+                        //     cudaMemcpyDeviceToHost,
+                        //     postProcStream
+                        // ), __func__);
+                        // std::cout << singleImageBBoxList[j].type() << std::endl;
+                        // // Synchronize the cuda stream right away to avoid any race condition
+                        // checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
+                        cv::cuda::Stream cvStream = cv::cuda::StreamAccessor::wrapStream(postProcStream);
+                        singleImageBBoxList[j].download(cpuBox, cvStream);
+                        cvStream.waitForCompletion();
+                    }
+                    if (msvc_OutQueue.at(qIndex)->getEncoded() && encodedBox.empty() && !cpuBox.empty()) {
+                        encodedBox = encodeResults(cpuBox);
+                        boxEncodedMemSize = encodedBox.cols * encodedBox.rows * encodedBox.channels() * CV_ELEM_SIZE1(encodedBox.type());
                     }
                 }
                 // If this class number is not needed anywhere downstream
@@ -393,21 +424,17 @@ void BaseBBoxCropperAugmentation::cropping() {
                     path += "|" + std::to_string(numDetsInFrame) + "|" + std::to_string(j);
                     // Put the correct type of outreq for the downstream, a sender, which expects either LocalGPU or localCPU
                     if (msvc_activeOutQueueIndex.at(qIndex) == 1) { //Local CPU
-                        cv::Mat out(singleImageBBoxList[j].size(), singleImageBBoxList[j].type());
-                        checkCudaErrorCode(cudaMemcpyAsync(
-                            out.ptr(),
-                            singleImageBBoxList[j].cudaPtr(),
-                            singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type()),
-                            cudaMemcpyDeviceToHost,
-                            postProcStream
-                        ), __func__);
-                        // Synchronize the cuda stream right away to avoid any race condition
-                        checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
-                        // singleImageBBoxList[j].download(out);
-                        reqDataCPU = {
-                            bboxShape,
-                            out
-                        };
+                        if (msvc_OutQueue.at(qIndex)->getEncoded()) {
+                            reqDataCPU = {
+                                bboxShape,
+                                encodedBox.clone()
+                            };
+                        } else {
+                            reqDataCPU = {
+                                bboxShape,
+                                cpuBox.clone()
+                            };
+                        }
 
                         outReqList.at(qIndex).cpuReq.req_origGenTime.emplace_back(RequestTimeType{currReq.req_origGenTime[i].front()});
                         outReqList.at(qIndex).cpuReq.req_e2eSLOLatency.emplace_back(currReq.req_e2eSLOLatency[i]);
@@ -441,7 +468,9 @@ void BaseBBoxCropperAugmentation::cropping() {
                     }
                     uint32_t imageMemSize = singleImageBBoxList[j].cols * singleImageBBoxList[j].rows * singleImageBBoxList[j].channels() * CV_ELEM_SIZE1(singleImageBBoxList[j].type());
                     outReqList.at(qIndex).totalSize += imageMemSize;
+                    outReqList.at(qIndex).totalEncodedSize += boxEncodedMemSize;
                     totalOutMem += imageMemSize;
+                    totalEncodedOutMem += boxEncodedMemSize;
                 }
                 queueIndex.clear();
             }
@@ -453,7 +482,7 @@ void BaseBBoxCropperAugmentation::cropping() {
                         // Add the total size of bounding boxes heading to this queue
                         auto completeTime = std::chrono::high_resolution_clock::now();
                         for (auto &path : outReq.cpuReq.req_travelPath) {
-                            path += "|" + std::to_string(outReq.totalSize) + "]";
+                            path += "|" + std::to_string(outReq.totalEncodedSize) + "|" + std::to_string(outReq.totalSize) + "]";
                         }
                         // Make sure the time is uniform across all the bounding boxes
                         for (auto &time : outReq.cpuReq.req_origGenTime) {
@@ -463,7 +492,7 @@ void BaseBBoxCropperAugmentation::cropping() {
                     } else { //Local GPU Queue
                         // Add the total size of bounding boxes heading to this queue
                         for (auto &path : outReq.gpuReq.req_travelPath) {
-                            path += "|" + std::to_string(outReq.totalSize) + "]";
+                            path += "|" + std::to_string(outReq.totalEncodedSize) + "|" + std::to_string(outReq.totalSize) + "]";
                         }
                         // Make sure the time is uniform across all the bounding boxes
                         auto completeTime = std::chrono::high_resolution_clock::now();
