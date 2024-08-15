@@ -686,7 +686,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         start_config["container"]["cont_cycleStartTime"] = std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count();
 
         std::vector<uint32_t> modelProfile;
-        for (auto &[batchSize, profile]: container->pipelineModel->processProfiles.at(container->device_agent->name).batchInfer) {
+        for (auto &[batchSize, profile]: container->pipelineModel->processProfiles.at(ctrl_sysDeviceInfo[container->device_agent->type]).batchInfer) {
             modelProfile.push_back(batchSize);
             modelProfile.push_back(profile.p95prepLat);
             modelProfile.push_back(profile.p95inferLat);
