@@ -22,7 +22,6 @@ using grpc::ServerCompletionQueue;
 using controlcommunication::ControlCommunication;
 using controlcommunication::ConnectionConfigs;
 using controlcommunication::SystemInfo;
-using controlcommunication::Neighbor;
 using controlcommunication::LoopRange;
 using controlcommunication::DummyMessage;
 using controlcommunication::ContainerConfig;
@@ -459,8 +458,8 @@ struct PipelineModel {
           deviceTypeName(deviceTypeName),
           merged(merged),
           toBeRun(toBeRun),
-          timeBudgetLeft(timeBudgetLeft),
-          possibleDevices(possibleDevices) {}
+          possibleDevices(possibleDevices),
+          timeBudgetLeft(timeBudgetLeft) {}
 
     // Copy constructor
     PipelineModel(const PipelineModel& other) {
@@ -1053,6 +1052,7 @@ private:
 
     std::unique_ptr<pqxx::connection> ctrl_metricsServerConn = nullptr;
     MetricsServerConfigs ctrl_metricsServerConfigs;
+    std::string ctrl_sinkNodeIP;
 
     std::vector<spdlog::sink_ptr> ctrl_loggerSinks = {};
     std::shared_ptr<spdlog::logger> ctrl_logger;

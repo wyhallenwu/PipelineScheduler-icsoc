@@ -4,6 +4,7 @@
     "systemName": "ppp",
     "runtime": 1,
     "port_offset": 0,
+    "sink_ip": "localhost",
     "initial_pipelines": [
         {
             "pipeline_name": "traffic",

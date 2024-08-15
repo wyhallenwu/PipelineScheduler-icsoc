@@ -157,7 +157,7 @@ void GPUSender::Process() {
 }
 
 std::string GPUSender::SendData(std::vector<RequestData<LocalGPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                                std::vector<std::string> &path, std::vector<uint32_t> &slo) {
+                                std::vector<std::string> &path, RequestSLOType &slo) {
     CompletionQueue cq;
 
     ImageDataPayload request;
@@ -172,6 +172,7 @@ std::string GPUSender::SendData(std::vector<RequestData<LocalGPUReqDataType>> &e
         memcpy(&serializedData, &ipcHandle, sizeof(cudaIpcMemHandle_t));
 
         ImageData* ref = request.add_elements();
+        ref->set_is_encoded(false);
         ref->set_data(serializedData, sizeof(cudaIpcMemHandle_t));
         ref->set_height(elements[i].shape[1]);
         ref->set_width(elements[i].shape[2]);
@@ -207,18 +208,19 @@ LocalCPUSender::LocalCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
 }
 
 std::string LocalCPUSender::SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                                     std::vector<std::string> &path, std::vector<uint32_t> &slo) {
+                                     std::vector<std::string> &path, RequestSLOType &slo) {
     CompletionQueue cq;
     ImageDataPayload request;
     char *name;
     for (unsigned int i = 0; i < elements.size(); i++) {
-        auto ref = request.add_elements();
         sprintf(name, "shared %d", rand_int(0, 1000));
         boost::interprocess::shared_memory_object shm{create_only, name, read_write};
         shm.truncate(elements[i].data.total() * elements[i].data.elemSize());
         boost::interprocess::mapped_region region{shm, read_write};
         std::memcpy(region.get_address(), elements[i].data.data, elements[i].data.total() * elements[i].data.elemSize());
 
+        auto ref = request.add_elements();
+        ref->set_is_encoded(false);
         ref->set_data(name);
         ref->set_height(elements[i].shape[1]);
         ref->set_width(elements[i].shape[2]);
@@ -249,11 +251,12 @@ RemoteCPUSender::RemoteCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) 
 }
 
 std::string RemoteCPUSender::SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                                     std::vector<std::string> &path, std::vector<uint32_t> &slo) {
+                                     std::vector<std::string> &path, RequestSLOType &slo) {
     CompletionQueue cq;
     ImageDataPayload request;
     for (unsigned int i = 0; i < elements.size(); i++) {
         auto ref = request.add_elements();
+        ref->set_is_encoded(msvc_InQueue.front()->getEncoded());
         ref->set_data(elements[i].data.data, elements[i].data.total() * elements[i].data.elemSize());
 
         //Metadata meta;

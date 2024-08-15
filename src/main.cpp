@@ -38,6 +38,11 @@ int main(int argc, char **argv) {
             logger
     );
 
+    std::string common_end = "\", \"msvc_maxBatchSize\": 64, \"msvc_allocationMode\": 1, \"msvc_numWarmUpBatches\": 0, "
+                             "\"msvc_batchMode\": 0, \"msvc_dropMode\": 0, \"msvc_timeBudgetLeft\": 9999999, "
+                             "\"msvc_contSLO\": 30000, \"msvc_pipelineSLO\": 9999999, \"msvc_contStartTime\": 0, "
+                             "\"msvc_contEndTime\": 30000, \"msvc_localDutyCycle\": 50000, \"msvc_cycleStartTime\": 0}";
+
     json receiver_json = json::parse(std::string("{\"msvc_contName\": \"dataSink\", \"msvc_deviceIndex\": 0, "
                                                  "\"msvc_RUNMODE\": 0, \"msvc_name\": \"receiver\", \"msvc_type\": 0, "
                                                  "\"msvc_appLvlConfigs\":\"\", \"msvc_svcLevelObjLatency\": 1, "
@@ -51,10 +56,7 @@ int main(int argc, char **argv) {
                                      std::to_string(absl::GetFlag(FLAGS_port)) +
                                      std::string("\"], \"nb_classOfInterest\": -2, "
                                                  "\"nb_maxQueueSize\": 10, \"nb_expectedShape\": [[-1, -1]]}],"
-                                                 "\"msvc_containerLogPath\": \".\", \"msvc_maxBatchSize\": 64, "
-                                                 "\"msvc_allocationMode\": 1, \"msvc_numWarmUpBatches\": 0, "
-                                                 "\"msvc_batchMode\": 0, \"msvc_dropMode\": 0, "
-                                                 "\"msvc_timeBudgetLeft\": 9999999, \"msvc_pipelineSLO\": 9999999}"));
+                                                 "\"msvc_containerLogPath\": \".") + common_end);
     receiver_json["msvc_experimentName"] = j["experimentName"];
     receiver_json["msvc_pipelineName"] = j["pipelineName"];
     receiver_json["msvc_taskName"] = "sink";
@@ -70,11 +72,7 @@ int main(int argc, char **argv) {
                                              "\"nb_commMethod\": 2, \"nb_link\": [\"\"], \"nb_classOfInterest\": -2, "
                                              "\"nb_maxQueueSize\": 10, \"nb_expectedShape\": [[-1, -1]]}],"
                                              "\"msvc_containerLogPath\": \"") +
-                                 logPath +
-                                 std::string("\", \"msvc_maxBatchSize\": 64, "
-                                             "\"msvc_allocationMode\": 1, \"msvc_numWarmUpBatches\": 0, "
-                                             "\"msvc_batchMode\": 0, \"msvc_dropMode\": 0, "
-                                             "\"msvc_timeBudgetLeft\": 9999999, \"msvc_pipelineSLO\": 9999999}"));
+                                 logPath + common_end);
     sink_json["msvc_experimentName"] = j["experimentName"];
     sink_json["msvc_pipelineName"] = j["pipelineName"];
     sink_json["msvc_taskName"] = "sink";
