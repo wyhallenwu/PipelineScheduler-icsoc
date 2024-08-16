@@ -1435,7 +1435,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             yolov5n->downstreams.push_back({platedet, 2});
 
             auto *sink = new PipelineModel{
-                    "server",
+                    "sink",
                     "sink",
                     {},
                     false,
@@ -1528,7 +1528,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             retina1face->downstreams.push_back({age, -1});
 
             auto *sink = new PipelineModel{
-                    "server",
+                    "sink",
                     "sink",
                     {},
                     false,
@@ -1621,7 +1621,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             retina1face->downstreams.push_back({arcface, -1});
 
             auto *sink = new PipelineModel{
-                    "server",
+                    "sink",
                     "sink",
                     {},
                     false,
