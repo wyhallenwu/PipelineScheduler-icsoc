@@ -1051,7 +1051,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         controller->queryInDeviceNetworkEntries(controller->devices.list.at(deviceName));
 
         if (node->type != SystemDeviceType::Server) {
-            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.list[deviceName])), 1000, 1200000, 30);
+            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.list[deviceName])), 1000, 300000, 30);
             networkCheck.detach();
         }
     } else {
