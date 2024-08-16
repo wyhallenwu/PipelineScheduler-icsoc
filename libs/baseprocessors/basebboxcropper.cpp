@@ -379,7 +379,7 @@ void BaseBBoxCropper::cropping() {
                     if (qIndex == MAX_NUM_QUEUES) {
                         continue;
                     }
-                    if (msvc_activeOutQueueIndex.at(qIndex) == 1) { //If CPU serialized data
+                    if (msvc_activeOutQueueIndex.at(qIndex) != 1) { //If CPU serialized data
                         continue;
                     }
                     if (cpuBox.empty()) {
