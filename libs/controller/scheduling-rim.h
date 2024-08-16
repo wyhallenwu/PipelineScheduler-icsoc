@@ -407,7 +407,7 @@ void Controller::rim_action(TaskHandle *task)
     PipelineModel *sink = task->tk_pipelineModels[task->tk_pipelineModels.size() - 1];
     {
         std::lock_guard<std::mutex> sink_lock(sink->pipelineModelMutex);
-        sink->deviceAgent = servers.at("server");
+        sink->deviceAgent = devices.list[sink->possibleDevices[0]];
         sink->deviceTypeName = device_type_str(sink->deviceAgent);
     }
 }
