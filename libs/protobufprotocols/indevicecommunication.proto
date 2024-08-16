@@ -30,11 +30,11 @@ message Connection {
 message TimeKeeping {
   int32 slo = 1;
   int32 cont_slo = 2;
-  uint64 timeBudget = 3;
-  uint64 startTime = 4;
-  uint64 endTime = 5;
-  uint64 localDutyCycle = 6;
-  uint64 cycleStartTime = 7;
+  uint64 time_budget = 3;
+  uint64 start_time = 4;
+  uint64 end_time = 5;
+  uint64 local_duty_cycle = 6;
+  uint64 cycle_start_time = 7;
 }
 
 message Dimensions {

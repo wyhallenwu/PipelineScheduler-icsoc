@@ -122,12 +122,16 @@ if (ON_HOST STREQUAL "ON")
     add_subdirectory(libs/communicator)
     add_subdirectory(libs/container_agent)
     add_subdirectory(libs/device_agent)
+    add_subdirectory(libs/sink_agent)
 
     add_executable(Communicator libs/communicator/main.cpp)
     target_link_libraries(Communicator communicator)
 
     add_executable(DeviceAgent libs/device_agent/main.cpp)
     target_link_libraries(DeviceAgent device_agent)
+
+    add_executable(SinkAgent libs/sink_agent/main.cpp)
+    target_link_libraries(SinkAgent sink_agent)
 else()
     # Specify the path to TensorRT root dir
     if (NOT TensorRT_DIR)
@@ -142,7 +146,7 @@ else()
 
     # Find LightGBM library
     # find_library(LIGHTGBM_LIBRARY
-    # NAMES lib_lightgbm.so
+    # NAMES lib_lightgbm.sols /T
     # PATHS "/usr/lib"
     # NO_DEFAULT_PATH)
 
@@ -217,6 +221,7 @@ else()
     add_subdirectory(libs/age)
     add_subdirectory(libs/carbrand)
     add_subdirectory(libs/device_agent)
+    add_subdirectory(libs/sink_agent)
 
     add_library(PipePlusPlusSink
         src/main.cpp)
@@ -249,6 +254,9 @@ else()
 
     add_executable(DeviceAgent libs/device_agent/main.cpp)
     target_link_libraries(DeviceAgent device_agent)
+
+    add_executable(SinkAgent libs/sink_agent/main.cpp)
+    target_link_libraries(SinkAgent sink_agent)
 
     add_executable(Controller libs/controller/main.cpp)
     target_link_libraries(Controller controller)

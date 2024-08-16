@@ -8,11 +8,6 @@ ABSL_FLAG(uint16_t, dev_loggingMode, 0, "Logging mode of the Device Agent. 0:std
 ABSL_FLAG(std::string, dev_logPath, "../logs", "Path to the log dir for the Device Agent.");
 ABSL_FLAG(uint16_t, dev_port_offset, 0, "port offset for starting the control communication");
 
-const int CONTAINER_BASE_PORT = 50001;
-const int CONTROLLER_BASE_PORT = 60001;
-const int DEVICE_CONTROL_PORT = 60002;
-const int INDEVICE_CONTROL_PORT = 60003;
-
 std::string getHostIP() {
     struct ifaddrs *ifAddrStruct = nullptr;
     struct ifaddrs *ifa = nullptr;
@@ -39,44 +34,61 @@ std::string getHostIP() {
     return "";
 }
 
-DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type) {
-    dev_name = n;
-    containers = std::map<std::string, DevContainerHandle>();
-
+DeviceAgent::DeviceAgent() {
+    dev_name = absl::GetFlag(FLAGS_name);
+    std::string type = absl::GetFlag(FLAGS_device_type);
+    if (type == "server") {
+        dev_type = SystemDeviceType::Server;
+    } else if (type == "nxavier") {
+        dev_type = SystemDeviceType::NXXavier;
+    } else if (type == "agxavier") {
+        dev_type = SystemDeviceType::AGXXavier;
+    } else if (type == "orinano") {
+        dev_type = SystemDeviceType::OrinNano;
+    }
+    else {
+        std::cerr << "Invalid device type, use [server, nxavier, agxavier, orinano]" << std::endl;
+        exit(1);
+    }
     dev_port_offset = absl::GetFlag(FLAGS_dev_port_offset);
     dev_loggingMode = absl::GetFlag(FLAGS_dev_loggingMode);
     dev_verbose = absl::GetFlag(FLAGS_dev_verbose);
     dev_logPath = absl::GetFlag(FLAGS_dev_logPath);
     deploy_mode = absl::GetFlag(FLAGS_deploy_mode);
-    dev_type = type;
+
+    containers = std::map<std::string, DevContainerHandle>();
 
     dev_metricsServerConfigs.from_json(json::parse(std::ifstream("../jsons/metricsserver.json")));
     dev_metricsServerConfigs.user = "device_agent";
     dev_metricsServerConfigs.password = "agent";
     dev_metricsServerConn = connectToMetricsServer(dev_metricsServerConfigs, "Device_agent");
 
-    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", INDEVICE_CONTROL_PORT + dev_port_offset);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+
+    std::string server_address = absl::StrFormat( "%s:%d", "0.0.0.0", DEVICE_CONTROL_PORT + dev_port_offset);
+    ServerBuilder controller_builder;
+    controller_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    controller_builder.RegisterService(&controller_service);
+    controller_cq = controller_builder.AddCompletionQueue();
+    controller_server = controller_builder.BuildAndStart();
+}
+
+DeviceAgent::DeviceAgent(const std::string &controller_url) : DeviceAgent() {
+    std::string server_address = absl::StrFormat("%s:%d", "0.0.0.0", INDEVICE_CONTROL_PORT + dev_port_offset);
     ServerBuilder device_builder;
     device_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     device_builder.RegisterService(&device_service);
     device_cq = device_builder.AddCompletionQueue();
     device_server = device_builder.BuildAndStart();
 
-    server_address = absl::StrFormat("%s:%d", "0.0.0.0", DEVICE_CONTROL_PORT + dev_port_offset);
-    ServerBuilder controller_builder;
-    controller_builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-    controller_builder.RegisterService(&controller_service);
-    controller_cq = controller_builder.AddCompletionQueue();
-    controller_server = controller_builder.BuildAndStart();
-    std::string target_str = absl::StrFormat("%s:%d", controller_url, CONTROLLER_BASE_PORT + dev_port_offset);
+    server_address = absl::StrFormat("%s:%d", controller_url, CONTROLLER_BASE_PORT + dev_port_offset);
     controller_stub = ControlCommunication::NewStub(
-            grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
+            grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials()));
     controller_sending_cq = new CompletionQueue();
 
     dev_profiler = new Profiler({});
-    Ready(getHostIP(), type);
+    Ready(getHostIP(), dev_type);
 
     dev_logPath += "/" + dev_experiment_name;
     std::filesystem::create_directories(
@@ -97,7 +109,6 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
             dev_logger
     );
 
-    dev_containerLib = getContainerLib(SystemDeviceTypeList[type]);
     dev_metricsServerConfigs.schema = abbreviate(dev_experiment_name + "_" + dev_system_name);
     dev_hwMetricsTableName =  dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_hw";
     dev_networkTableName = dev_metricsServerConfigs.schema + "." + abbreviate(dev_experiment_name + "_" + dev_name) + "_netw";
@@ -109,6 +120,9 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
                                                                                     "p95_transfer_duration_us BIGINT NOT NULL, "
                                                                                     "p95_total_package_size_b INTEGER NOT NULL)";
 
+        pushSQL(*dev_metricsServerConn, sql);
+
+        sql = "GRANT ALL PRIVILEGES ON " + dev_networkTableName + " TO " + "controller, container_agent" + ";";
         pushSQL(*dev_metricsServerConn, sql);
 
         sql = "SELECT create_hypertable('" + dev_networkTableName + "', 'timestamps', if_not_exists => TRUE);";
@@ -132,6 +146,9 @@ DeviceAgent::DeviceAgent(const std::string &controller_url, const std::string n,
         };
         sql += "   PRIMARY KEY (timestamps)"
                                                                                     ");";
+        pushSQL(*dev_metricsServerConn, sql);
+
+        sql = "GRANT ALL PRIVILEGES ON " + dev_hwMetricsTableName + " TO " + "controller, container_agent" + ";";
         pushSQL(*dev_metricsServerConn, sql);
 
         sql = "SELECT create_hypertable('" + dev_hwMetricsTableName + "', 'timestamps', if_not_exists => TRUE);";
@@ -287,124 +304,13 @@ void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
 }
 
 bool DeviceAgent::CreateContainer(ContainerConfig &c) {
-    ModelType model = static_cast<ModelType>(c.model());
-    std::string modelName = getContainerName(dev_type, model);
-    std::vector<int> input_dims;
-    for (auto &dim: c.input_dimensions()) {
-        input_dims.push_back(dim);
-    }
+    spdlog::get("container_agent")->info("Creating container: {}", c.name());
     try {
-        std::string cont_name = c.name();
-        std::cout << "Creating container: " << cont_name << std::endl;
-        std::string executable = dev_containerLib[modelName].runCommand;
-        json start_config;
-        if (model == ModelType::Sink) {
-            start_config["experimentName"] = dev_experiment_name;
-            start_config["systemName"] = dev_system_name;
-            start_config["pipelineName"] = c.pipeline_name();
-            uint16_t port = std::stoi(c.upstream().at(0).ip().at(0).substr(c.upstream().at(0).ip().at(0).find(':') + 1));
-            runDocker(executable, cont_name, to_string(start_config), c.device(), port);
-            return true;
-        }
-
-        start_config = dev_containerLib[modelName].templateConfig;
-
-        // adjust container configs
-        start_config["container"]["cont_experimentName"] = dev_experiment_name;
-        start_config["container"]["cont_systemName"] = dev_system_name;
-        start_config["container"]["cont_pipeName"] = c.pipeline_name();
-        start_config["container"]["cont_hostDevice"] = dev_name;
-        start_config["container"]["cont_hostDeviceType"] = dev_deviceInfo[dev_type];
-        start_config["container"]["cont_name"] = cont_name;
-        start_config["container"]["cont_allocationMode"] = c.allocation_mode() ? 1 : 0;
-        if (dev_system_name == "ppp") {
-            start_config["container"]["cont_batchMode"] = 1;
-        }
-        if (dev_system_name == "ppp" || dev_system_name == "jlf") {
-            start_config["container"]["cont_dropMode"] = 1;
-        }
-        start_config["container"]["cont_pipelineSLO"] = c.total_slo();
-        start_config["container"]["cont_SLO"] = c.cont_slo();
-        start_config["container"]["cont_timeBudgetLeft"] = c.timebudget();
-        start_config["container"]["cont_startTime"] = c.starttime();
-        start_config["container"]["cont_endTime"] = c.endtime();
-        start_config["container"]["cont_localDutyCycle"] = c.localdutycycle();
-        start_config["container"]["cont_cycleStartTime"] = c.cyclestarttime();
-
-        json base_config = start_config["container"]["cont_pipeline"];
-
-        // adjust pipeline configs
-        for (auto &j: base_config) {
-            j["msvc_idealBatchSize"] = c.batch_size();
-            j["msvc_svcLevelObjLatency"] = c.slo();
-        }
-        if (model == ModelType::DataSource) {
-            base_config[0]["msvc_dataShape"] = {input_dims};
-            base_config[0]["msvc_idealBatchSize"] = c.fps();
-        } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
-            base_config[0]["msvc_dataShape"] = {input_dims};
-            base_config[0]["msvc_type"] = 500;
-            base_config[0]["msvc_idealBatchSize"] = c.fps();
-        } else {
-            base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {input_dims};
-            base_config[2]["path"] = c.model_file();
-        }
-
-
-        // adjust receiver upstreams
-        base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = c.upstream().at(0).name();
-        base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {};
-        if (model == ModelType::DataSource || model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
-            std::string dataDir = "../data/";
-            base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {dataDir + c.upstream().at(0).ip().at(0)};
-        } else {
-            for (auto ip: c.upstream().at(0).ip()) {
-                base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"].push_back(ip);
-            }
-        }
-        if (c.upstream().at(0).gpu_connection()) {
-            base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
-        } else {
-            base_config[0]["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
-        }
-
-        // adjust sender downstreams
-        json sender = base_config.back();
-        uint16_t postprocessorIndex = base_config.size() - 2;
-        json post_down = base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"][0];
-        base_config[base_config.size() - 2]["msvc_dnstreamMicroservices"] = json::array();
-        base_config.erase(base_config.size() - 1);
-        int i = 1;
-        for (auto &d: c.downstream()) {
-            json *postprocessor = &base_config[postprocessorIndex];
-            sender["msvc_name"] = sender["msvc_name"].get<std::string>() + std::to_string(i);
-            sender["msvc_dnstreamMicroservices"][0]["nb_name"] = d.name();
-            sender["msvc_dnstreamMicroservices"][0]["nb_link"] = {};
-            for (auto ip: d.ip()) {
-                sender["msvc_dnstreamMicroservices"][0]["nb_link"].push_back(ip);
-            }
-            post_down["nb_name"] = sender["msvc_name"];
-            if (d.gpu_connection()) {
-                post_down["nb_commMethod"] = CommMethod::localGPU;
-                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::localGPU;
-            } else {
-                post_down["nb_commMethod"] = CommMethod::localCPU;
-                sender["msvc_dnstreamMicroservices"][0]["nb_commMethod"] = CommMethod::serialized;
-            }
-            post_down["nb_classOfInterest"] = d.class_of_interest();
-
-            postprocessor->at("msvc_dnstreamMicroservices").push_back(post_down);
-            base_config.push_back(sender);
-        }
-
-        // start container
-        start_config["container"]["cont_pipeline"] = base_config;
-        unsigned int control_port = CONTAINER_BASE_PORT + dev_port_offset + containers.size();
-        runDocker(executable, cont_name, to_string(start_config), c.device(), control_port);
-        std::string target = absl::StrFormat("%s:%d", "localhost", control_port);
-        containers[cont_name] = {InDeviceCommunication::NewStub(
+        runDocker(c.executable(), c.name(), c.json_config(), c.device(), c.control_port());
+        std::string target = absl::StrFormat("%s:%d", "localhost", c.control_port());
+        containers[c.name()] = {InDeviceCommunication::NewStub(
                 grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
-                                 new CompletionQueue(), control_port, 0, {}};
+                                 new CompletionQueue(), static_cast<unsigned int>(c.control_port()), 0, {}};
         return true;
     } catch (std::exception &e) {
         spdlog::get("container_agent")->error("Error creating container: {}", e.what());
@@ -712,11 +618,11 @@ void DeviceAgent::UpdateTimeKeepingRequestHandler::Proceed() {
         indevicecommunication::TimeKeeping tk;
         tk.set_slo(request.slo());
         tk.set_cont_slo(request.cont_slo());
-        tk.set_timebudget(request.timebudget());
-        tk.set_starttime(request.starttime());
-        tk.set_endtime(request.endtime());
-        tk.set_localdutycycle(request.localdutycycle());
-        tk.set_cyclestarttime(request.cyclestarttime());
+        tk.set_time_budget(request.time_budget());
+        tk.set_start_time(request.start_time());
+        tk.set_end_time(request.end_time());
+        tk.set_local_duty_cycle(request.local_duty_cycle());
+        tk.set_cycle_start_time(request.cycle_start_time());
 
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 device_agent->containers[request.name()].stub->AsyncUpdateTimeKeeping(&context, tk,
@@ -751,7 +657,7 @@ void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::strin
 
     auto start = std::chrono::system_clock::now();
 
-    int bwThresholdIndex = 0;
+    uint64_t bwThresholdIndex = 0;
 
     ClockType nextThresholdSetTime = start + std::chrono::seconds(bandwidth_limits[bwThresholdIndex]["time"]); 
     while (isRunning()) {
@@ -762,7 +668,6 @@ void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::strin
             Stopwatch stopwatch;
 
             auto limit = bandwidth_limits[bwThresholdIndex];
-            int time_spot = limit["time"];
             int mbps = limit["mbps"];
 
             // Build and execute the command
@@ -774,6 +679,7 @@ void DeviceAgent::limitBandwidth(const std::string& scriptPath, const std::strin
             if (bwThresholdIndex == bandwidth_limits.size() - 1) {
                 break;
             }
+            // TODO: resolve unsequenced modification and access to 'bwThresholdIndex'
             auto distanceToNext = bandwidth_limits[++bwThresholdIndex]["time"].get<int>() - bandwidth_limits[bwThresholdIndex - 1]["time"].get<int>();
             nextThresholdSetTime += std::chrono::seconds(distanceToNext);
 

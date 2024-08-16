@@ -15,7 +15,7 @@
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
-                        "nb_commMethod": 4,
+                        "nb_commMethod": 5,
                         "nb_link": [
                             ""
                         ],
@@ -122,7 +122,8 @@
         "cont_startTime": 0,
         "cont_endTime": 30000,
         "cont_localDutyCycle": 50000,
-        "cont_cycleStartTime": 0
+        "cont_cycleStartTime": 0,
+        "cont_modelProfile": [1, 23423, 234234, 234234]
     },
     "profiling": {
         "profile_minBatch": 0,
