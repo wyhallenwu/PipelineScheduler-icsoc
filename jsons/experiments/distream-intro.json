@@ -4,6 +4,7 @@
     "systemName": "dis",
     "runtime": 1,
     "port_offset": 1000,
+    "sink_ip": "localhost",
     "initial_pipelines": [
         {
             "pipeline_name": "traffic",

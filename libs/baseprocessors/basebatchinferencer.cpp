@@ -148,9 +148,9 @@ void BaseBatchInferencer::inference() {
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (msvc_inReqCount > 1) {
-            updateReqRate(currReq_genTime);
-        }
+        // if (msvc_inReqCount > 1) {
+        //     updateReqRate(currReq_genTime);
+        // }
         for (auto& req_genTime : currReq.req_origGenTime) {
             req_genTime.emplace_back(currReq_recvTime); //FIFTH_TIMESTAMP
         }

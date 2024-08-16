@@ -27,7 +27,7 @@ public:
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
     virtual std::string SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                         std::vector<std::string> &path, std::vector<uint32_t> &slo) = 0;
+                         std::vector<std::string> &path, RequestSLOType &slo) = 0;
 
 protected:
     static inline std::mt19937 &generator() {
@@ -66,10 +66,10 @@ public:
     }
 
     std::string SendData(std::vector<RequestData<LocalGPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                         std::vector<std::string> &path, std::vector<uint32_t> &slo);
+                         std::vector<std::string> &path, RequestSLOType &slo);
 
     std::string SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                         std::vector<std::string> &path, std::vector<uint32_t> &slo) final {return "";};
+                         std::vector<std::string> &path, RequestSLOType &slo) final {return "";};
 
 private:
 
@@ -88,7 +88,7 @@ public:
     }
 
     std::string SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                         std::vector<std::string> &path, std::vector<uint32_t> &slo) final;
+                         std::vector<std::string> &path, RequestSLOType &slo) final;
 };
 
 class RemoteCPUSender : public Sender {
@@ -101,7 +101,7 @@ public:
     }
 
     std::string SendData(std::vector<RequestData<LocalCPUReqDataType>> &elements, std::vector<RequestTimeType> &timestamp,
-                         std::vector<std::string> &path, std::vector<uint32_t> &slo) final;
+                         std::vector<std::string> &path, RequestSLOType &slo) final;
 };
 
 #endif //PIPEPLUSPLUS_SENDER_H

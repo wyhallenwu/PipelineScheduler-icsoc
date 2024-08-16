@@ -8,6 +8,7 @@
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
 #include <opencv2/cudaimgproc.hpp>
+#include <opencv2/core/cuda_stream_accessor.hpp>
 #include <thread>
 #include <misc.h>
 #include <trtengine.h>
@@ -103,9 +104,11 @@ public:
 
     virtual void batchRequests();
     virtual void batchRequestsProfiling();
-    void executeBatch(ClockType time, BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
+    inline void executeBatch(BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
                       std::vector<RequestData<LocalGPUReqDataType>> &buffer,
                       std::vector<RequestData<LocalGPUReqDataType>> &prev);
+    
+    virtual void updateCycleTiming();
 
     void dispatchThread() override {
         if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
@@ -123,32 +126,10 @@ public:
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
-    virtual ArrivalRecordType getArrivalRecords() override {
-        return msvc_arrivalRecords.getRecords();
-    }
-
-    /**
-     * @brief Get the size of the arrival package which is recorded in the travel path
-     * 
-     * @param path 
-     * @return RequestSizeType 
-     */
-    RequestMemSizeType getArrivalPkgSize(const std::string& path) {
-        // Path looks like this
-        // [hostDeviceName|microserviceID|inReqNumber|totalNumberOfOutputs|NumberInOutputs|outPackageSize (in byte)]
-        // [edge|YOLOv5_01|05|05][server|retinaface_02|09|09]
-        std::string temp = splitString(path, "[").back();
-        temp = splitString(temp, "]").front();
-        return std::stoul(splitString(temp, "|").back());
-    }
-
 protected:
-    // Record
-    ArrivalReqRecords msvc_arrivalRecords;
-
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
-    bool isTimeToBatch() override;
+    inline bool isTimeToBatch() override;
     template <typename T>
     bool validateRequest(Request<T> &req);
     bool checkReqEligibility(std::vector<ClockType> &currReq_time) override;
@@ -158,7 +139,7 @@ protected:
     std::vector<float> msvc_subVals, msvc_divVals;
     BatchInferProfileListType msvc_batchInferProfileList;
     ClockType oldestReqTime;
-    int timeout = 100;
+    uint64_t timeout = 100000; //microseconds
 };
 
 
@@ -239,6 +220,7 @@ public:
             Microservice::loadConfigs(jsonConfigs, isConstructing);
         }
         msvc_processRecords.setKeepLength((uint64_t)jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
+        msvc_arrivalRecords.setKeepLength((uint64_t) jsonConfigs.at("cont_metricsScrapeIntervalMillisec") * 2);
     };
     virtual ProcessRecordType getProcessRecords() override {
         return msvc_processRecords.getRecords();
@@ -248,15 +230,46 @@ public:
         return msvc_processRecords.getBatchInferRecords();
     }
 
+    virtual ArrivalRecordType getArrivalRecords() override {
+        return msvc_arrivalRecords.getRecords();
+    }
+
     virtual void addToPath(RequestPathType &path, uint64_t reqNum) {
         
     }
+
+    /**
+     * @brief Get the size of the arrival package which is recorded in the travel path
+     * 
+     * @param path 
+     * @return RequestSizeType 
+     */
+    RequestMemSizeType getArrivalPkgSize(const std::string& path) {
+        // Path looks like this
+        // [hostDeviceName|microserviceID|inReqNumber|totalNumberOfOutputs|NumberInOutputs|outPackageSize (in byte)]
+        // [edge|YOLOv5_01|05|05][server|retinaface_02|09|09]
+        std::string temp = splitString(path, "[").back();
+        temp = splitString(temp, "]").front();
+        return std::stoul(splitString(temp, "|").back());
+    }
+
+    inline cv::Mat encodeResults(const cv::Mat &image) {
+        std::vector<uchar> buf;
+        cv::imencode(".jpg", image, buf, {cv::IMWRITE_JPEG_QUALITY, 80});
+        RequestMemSizeType encodedMemSize = buf.size();
+        cv::Mat encoded(1, encodedMemSize, CV_8UC1, buf.data());
+        return encoded.clone();
+    }
+
 protected:
     ProcessReqRecords msvc_processRecords;
+    // Record
+    ArrivalReqRecords msvc_arrivalRecords;
 
     struct PerQueueOutRequest {
         bool used = false;
         uint32_t totalSize = 0;
+        uint32_t totalEncodedSize = 0;
         Request<LocalCPUReqDataType> cpuReq;
         Request<LocalGPUReqDataType> gpuReq;
     };
