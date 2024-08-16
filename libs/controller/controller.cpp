@@ -387,7 +387,7 @@ void Controller::ApplyScheduling() {
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
             if (ctrl_systemName != "ppp") {
-                model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
+                model->cudaDevices.emplace_back(0);
                 model->numReplicas = 1;
             }
             bool upstreamIsDatasource = (std::find_if(model->upstreams.begin(), model->upstreams.end(),
@@ -708,11 +708,12 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         if (model == ModelType::DataSource) {
             base_config[0]["msvc_dataShape"] = {container->dimensions};
             base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
-        } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
-            base_config[0]["msvc_dataShape"] = {container->dimensions};
-            base_config[0]["msvc_type"] = 500;
-            base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
         } else {
+            if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
+                base_config[0]["msvc_dataShape"] = {container->dimensions};
+                base_config[0]["msvc_type"] = 500;
+                base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
+            }
             base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {container->dimensions};
             base_config[2]["path"] = container->model_file;
         }
@@ -1287,7 +1288,7 @@ void Controller::checkNetworkConditions() {
                 spdlog::get("container_agent")->info("Skipping network check for device {}.", deviceName);
                 continue;
             }
-            initNetworkCheck(*nodeHandle, 1000, 1200000, 30);
+            initNetworkCheck(*nodeHandle, 1000, 300000, 30);
         }
         // std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
         // std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
