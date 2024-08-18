@@ -387,7 +387,7 @@ void Controller::ApplyScheduling() {
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
         for (auto &model: pipe->tk_pipelineModels) {
             if (ctrl_systemName != "ppp") {
-                model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
+                model->cudaDevices.emplace_back(0);
                 model->numReplicas = 1;
             }
             bool upstreamIsDatasource = (std::find_if(model->upstreams.begin(), model->upstreams.end(),
@@ -685,6 +685,19 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         start_config["container"]["cont_localDutyCycle"] = container->localDutyCycle;
         start_config["container"]["cont_cycleStartTime"] = std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count();
 
+        std::vector<uint32_t> modelProfile;
+        for (auto &[batchSize, profile]: container->pipelineModel->processProfiles.at(ctrl_sysDeviceInfo[container->device_agent->type]).batchInfer) {
+            modelProfile.push_back(batchSize);
+            modelProfile.push_back(profile.p95prepLat);
+            modelProfile.push_back(profile.p95inferLat);
+            modelProfile.push_back(profile.p95postLat);
+        }
+
+        if (modelProfile.empty()) {
+            spdlog::get("container_agent")->warn("Model profile not found for container: {0:s}", container->name);
+        }
+        start_config["container"]["cont_modelProfile"] = modelProfile;
+
         json base_config = start_config["container"]["cont_pipeline"];
 
         // adjust pipeline configs
@@ -695,11 +708,12 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         if (model == ModelType::DataSource) {
             base_config[0]["msvc_dataShape"] = {container->dimensions};
             base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
-        } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
-            base_config[0]["msvc_dataShape"] = {container->dimensions};
-            base_config[0]["msvc_type"] = 500;
-            base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
         } else {
+            if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
+                base_config[0]["msvc_dataShape"] = {container->dimensions};
+                base_config[0]["msvc_type"] = 500;
+                base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
+            }
             base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {container->dimensions};
             base_config[2]["path"] = container->model_file;
         }
@@ -1037,7 +1051,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         controller->queryInDeviceNetworkEntries(controller->devices.list.at(deviceName));
 
         if (node->type != SystemDeviceType::Server) {
-            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.list[deviceName])), 1000, 1200000, 30);
+            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.list[deviceName])), 1000, 300000, 30);
             networkCheck.detach();
         }
     } else {
@@ -1274,7 +1288,7 @@ void Controller::checkNetworkConditions() {
                 spdlog::get("container_agent")->info("Skipping network check for device {}.", deviceName);
                 continue;
             }
-            initNetworkCheck(*nodeHandle, 1000, 1200000, 30);
+            initNetworkCheck(*nodeHandle, 1000, 300000, 30);
         }
         // std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
         // std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
@@ -1400,7 +1414,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             yolov5n->downstreams.push_back({platedet, 2});
 
             auto *sink = new PipelineModel{
-                    "server",
+                    "sink",
                     "sink",
                     {},
                     false,
@@ -1493,7 +1507,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             retina1face->downstreams.push_back({age, -1});
 
             auto *sink = new PipelineModel{
-                    "server",
+                    "sink",
                     "sink",
                     {},
                     false,
@@ -1586,7 +1600,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             retina1face->downstreams.push_back({arcface, -1});
 
             auto *sink = new PipelineModel{
-                    "server",
+                    "sink",
                     "sink",
                     {},
                     false,
