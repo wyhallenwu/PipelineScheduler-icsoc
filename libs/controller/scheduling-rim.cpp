@@ -125,8 +125,7 @@ void Controller::Scheduling() {
 
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto localTaskList = ctrl_unscheduledPipelines.getMap();
-        if (localTaskList.empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (!isPipelineInitialised) {
             continue;
         }
 
@@ -172,9 +171,24 @@ void Controller::Scheduling() {
         //     }
         // }
 
+        for (auto &[task_name, task] : localTaskList) {
+            for (auto &model : task->tk_pipelineModels) {
+                if (model->name == "datasource" || model->name == "sink") {
+                    continue;
+                }
+                if (model->name.find("yolov5") != std::string::npos) {
+                    model->batchSize = ctrl_initialBatchSizes["yolov5"];
+                } else if (model->device == "server") {
+                    model->batchSize = ctrl_initialBatchSizes["server"];
+                } else {
+                    model->batchSize = ctrl_initialBatchSizes["edge"];
+                }
+            }
+        }
+
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
         ApplyScheduling();
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        std::this_thread::sleep_for(std::chrono::seconds(ctrl_schedulingIntervalSec));
         // break;
     }
 }
