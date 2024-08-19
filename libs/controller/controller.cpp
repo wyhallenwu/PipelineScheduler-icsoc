@@ -82,6 +82,9 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_port_offset = j["port_offset"];
     ctrl_systemFPS = j["system_fps"];
     ctrl_sinkNodeIP = j["sink_ip"];
+    ctrl_initialBatchSizes["yolov5"] = j["yolov5_batch_size"];
+    ctrl_initialBatchSizes["edge"] = j["edge_batch_size"];
+    ctrl_initialBatchSizes["server"] = j["server_batch_size"];
     initialTasks = j["initial_pipelines"];
 }
 
