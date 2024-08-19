@@ -1086,6 +1086,7 @@ private:
     std::pair<GPUPortion *, GPUPortion *> insertUsedGPUPortion(GPUPortionList &portionList, ContainerHandle *container, GPUPortion *toBeDividedFreePortion);
     GPUPortion* findFreePortionForInsertion(GPUPortionList &portionList, ContainerHandle *container);
     void estimatePipelineTiming();
+    void estimateTimeBudgetLeft(PipelineModel *currModel);
 
     Tasks ctrl_mergedPipelines;
 };

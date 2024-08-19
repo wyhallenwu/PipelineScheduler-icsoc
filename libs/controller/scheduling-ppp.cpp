@@ -900,6 +900,26 @@ void Controller::estimatePipelineLatency(PipelineModel *currModel, const uint64_
     }
 }
 
+void Controller::estimateTimeBudgetLeft(PipelineModel *currModel)
+{
+    if (currModel->name.find("sink") != std::string::npos)
+    {
+        currModel->timeBudgetLeft = 0;
+        return;
+    } else if (currModel->name.find("datasource") != std::string::npos) {
+        currModel->timeBudgetLeft = currModel->task->tk_slo;
+    }
+    
+    uint64_t dnstreamBudget = 0;
+    for (const auto &d : currModel->downstreams)
+    {
+        estimateTimeBudgetLeft(d.first);
+        dnstreamBudget = std::max(dnstreamBudget, d.first->timeBudgetLeft);
+    }
+    currModel->timeBudgetLeft = dnstreamBudget * 1.2 +
+                                (currModel->expectedQueueingLatency + currModel->expectedMaxProcessLatency) * 1.2;
+}
+
 void Controller::estimateModelTiming(PipelineModel *currModel) {
 
     if (currModel->name.find("datasource") != std::string::npos || 
@@ -962,6 +982,14 @@ void Controller::estimatePipelineTiming() {
                 continue;
             }
             model->localDutyCycle = localDutyCycle;
+        }
+        for (auto &model: task->tk_pipelineModels) {
+            if (model->name.find("datasource") == std::string::npos &&
+                model->name.find("dsrc") == std::string::npos) {
+                
+                continue;
+            }
+            estimateTimeBudgetLeft(model);
         }
     }
 }
