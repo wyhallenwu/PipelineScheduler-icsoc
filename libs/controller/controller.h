@@ -1073,6 +1073,8 @@ private:
 
     std::atomic<bool> isPipelineInitialised = false;
 
+    void estimateTimeBudgetLeft(PipelineModel *currModel);
+
     void setRandomMemUtilization(Controller::Devices& devices);
     void rim_action(TaskHandle *task);
 };
