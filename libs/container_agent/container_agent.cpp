@@ -1261,11 +1261,11 @@ void ContainerAgent::UpdateTimeKeepingRequestHandler::Proceed() {
         new UpdateTimeKeepingRequestHandler(service, cq, container_agent);
         container_agent->cont_msvcsList[1]->msvc_contSLO = request.cont_slo();
         container_agent->cont_msvcsList[1]->msvc_pipelineSLO = request.slo();
-        container_agent->cont_msvcsList[1]->msvc_timeBudgetLeft = request.timebudget();
-        container_agent->cont_msvcsList[1]->msvc_contStartTime = request.starttime();
-        container_agent->cont_msvcsList[1]->msvc_contEndTime = request.endtime();
-        container_agent->cont_msvcsList[1]->msvc_localDutyCycle = request.localdutycycle();
-        container_agent->cont_msvcsList[1]->msvc_cycleStartTime = ClockType(TimePrecisionType(request.cyclestarttime()));
+        container_agent->cont_msvcsList[1]->msvc_timeBudgetLeft = request.time_budget();
+        container_agent->cont_msvcsList[1]->msvc_contStartTime = request.start_time();
+        container_agent->cont_msvcsList[1]->msvc_contEndTime = request.end_time();
+        container_agent->cont_msvcsList[1]->msvc_localDutyCycle = request.local_duty_cycle();
+        container_agent->cont_msvcsList[1]->msvc_cycleStartTime = ClockType(TimePrecisionType(request.cycle_start_time()));
         container_agent->cont_msvcsList[1]->updateCycleTiming();
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
