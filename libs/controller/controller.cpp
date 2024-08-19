@@ -82,6 +82,9 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_port_offset = j["port_offset"];
     ctrl_systemFPS = j["system_fps"];
     ctrl_sinkNodeIP = j["sink_ip"];
+    ctrl_initialBatchSizes["yolov5"] = j["yolov5_batch_size"];
+    ctrl_initialBatchSizes["edge"] = j["edge_batch_size"];
+    ctrl_initialBatchSizes["server"] = j["server_batch_size"];
     initialTasks = j["initial_pipelines"];
 }
 
@@ -687,18 +690,21 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         start_config["container"]["cont_localDutyCycle"] = container->localDutyCycle;
         start_config["container"]["cont_cycleStartTime"] = std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count();
 
-        std::vector<uint32_t> modelProfile;
-        for (auto &[batchSize, profile]: container->pipelineModel->processProfiles.at(ctrl_sysDeviceInfo[container->device_agent->type]).batchInfer) {
-            modelProfile.push_back(batchSize);
-            modelProfile.push_back(profile.p95prepLat);
-            modelProfile.push_back(profile.p95inferLat);
-            modelProfile.push_back(profile.p95postLat);
-        }
+        if (container->model != DataSource &&
+            container->model != Sink) {
+            std::vector<uint32_t> modelProfile;
+            for (auto &[batchSize, profile]: container->pipelineModel->processProfiles.at(ctrl_sysDeviceInfo[container->device_agent->type]).batchInfer) {
+                modelProfile.push_back(batchSize);
+                modelProfile.push_back(profile.p95prepLat);
+                modelProfile.push_back(profile.p95inferLat);
+                modelProfile.push_back(profile.p95postLat);
+            }
 
-        if (modelProfile.empty()) {
-            spdlog::get("container_agent")->warn("Model profile not found for container: {0:s}", container->name);
+            if (modelProfile.empty()) {
+                spdlog::get("container_agent")->warn("Model profile not found for container: {0:s}", container->name);
+            }
+            start_config["container"]["cont_modelProfile"] = modelProfile;
         }
-        start_config["container"]["cont_modelProfile"] = modelProfile;
 
         json base_config = start_config["container"]["cont_pipeline"];
 
@@ -783,6 +789,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
 
     request.set_name(container->name);
     request.set_json_config(start_config.dump());
+    std::cout << start_config.dump() << std::endl;
     request.set_executable(ctrl_containerLib[modelName].runCommand);
     if (container->model == DataSource || container->model == Sink) {
         request.set_device(-1);
