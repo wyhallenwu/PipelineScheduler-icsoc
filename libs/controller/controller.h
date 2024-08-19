@@ -1068,6 +1068,9 @@ private:
 
     uint16_t ctrl_systemFPS;
 
+    // Fixed batch sizes for SOTAs that don't provide dynamic batching
+    std::map<std::string, BatchSizeType> ctrl_initialBatchSizes; 
+
     std::atomic<bool> isPipelineInitialised = false;
 
     void setRandomMemUtilization(Controller::Devices& devices);
