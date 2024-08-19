@@ -27,6 +27,7 @@ void Controller::initiateGPULanes(NodeHandle &node) {
         // Initially the number of portions is the number of lanes
         node.freeGPUPortions.list.push_back(new GPUPortion{});
         node.freeGPUPortions.list.back()->lane = node.gpuLanes.back();
+        node.gpuLanes.back()->gpuHandle->freeGPUPortions.push_back(node.freeGPUPortions.list.back());
 
         if (i == 0) {
             node.freeGPUPortions.head = node.freeGPUPortions.list.back();
@@ -158,10 +159,7 @@ void Controller::Scheduling() {
         }
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto taskList = ctrl_unscheduledPipelines.getMap();
-        if (taskList.size() < 4) { // TODO: Remove this
-            continue;
-        }
-        if (taskList.empty()) {
+        if (!isPipelineInitialised) {
             continue;
         }
 
@@ -187,6 +185,7 @@ void Controller::Scheduling() {
                 }
             }
         }
+
         estimatePipelineTiming();
         ctrl_scheduledPipelines = ctrl_mergedPipelines;
         ApplyScheduling();
@@ -337,7 +336,7 @@ std::pair<GPUPortion *, GPUPortion *> Controller::insertUsedGPUPortion(GPUPortio
     if (toBeDividedFreePortion->next != nullptr) {
         toBeDividedFreePortion->next->prev = toBeDividedFreePortion->prev;
     }
-    delete toBeDividedFreePortion;
+    // delete toBeDividedFreePortion;
 
     if (leftPortion != nullptr) {
         insertFreeGPUPortion(portionList, leftPortion);
@@ -358,6 +357,7 @@ bool Controller::containerTemporalScheduling(ContainerHandle *container) {
         return false;
     }
     container->executionPortion = portion;
+    container->gpuHandle = portion->lane->gpuHandle;
     auto newPortions = insertUsedGPUPortion(devices.list["server"]->freeGPUPortions, container, portion);
 
 
@@ -366,7 +366,8 @@ bool Controller::containerTemporalScheduling(ContainerHandle *container) {
 bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel) {
     if (pipelineModel->name.find("datasource") == std::string::npos &&
         pipelineModel->name.find("dsrc") == std::string::npos &&
-        pipelineModel->name.find("sink") == std::string::npos) {
+        pipelineModel->name.find("sink") == std::string::npos &&
+        !pipelineModel->gpuScheduled) {
         for (auto &container : pipelineModel->task->tk_subTasks[pipelineModel->name]) {
             container->startTime = pipelineModel->startTime;
             container->endTime = pipelineModel->endTime;
@@ -546,7 +547,7 @@ TaskHandle* Controller::mergePipelines(const std::string& taskName) {
                 continue;
             }
             // Cannot merge if model is they do not belong to the same task group
-            if (task.first == taskName) {
+            if (task.first.find(taskName) == std::string::npos) {
                 continue;
             }
             // If model is not scheduled to be run on the server, we should not merge it.
@@ -697,17 +698,17 @@ void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel
             estimateModelLatency(downstream.first);
         }
         currModel->batchSize = 1;
-        while (currModel->batchSize <= currModel->processProfiles[deviceTypeName].maxBatchSize) {
+        if (currModel->batchSize <= currModel->processProfiles[deviceTypeName].maxBatchSize) {
             estimateModelLatency(currModel);
             estimatePipelineLatency(currModel, currModel->expectedStart2HereLatency);
             uint64_t expectedE2ELatency = pipeline.back()->expectedStart2HereLatency;
             if (expectedE2ELatency > slo) {
                 *currModel = oldModel;
-                break;
+                // break;
             }
             oldModel = *currModel;
             shifted = true;
-            currModel->batchSize *= 2;
+            // currModel->batchSize *= 2;
         }
         // if after shifting the model to the edge device, the pipeline still meets the SLO, we should keep it
 
@@ -942,6 +943,7 @@ void Controller::estimateModelTiming(PipelineModel *currModel) {
         if (upstream.first->device != currModel->device) {
             continue;
         }
+        // TODO: Add in-device transfer latency
         maxStartTime = std::max(maxStartTime, upstream.first->endTime);
     }
     currModel->startTime = maxStartTime;
