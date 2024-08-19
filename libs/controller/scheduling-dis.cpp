@@ -182,16 +182,16 @@ void Controller::Scheduling()
                 }
                 if (model->device == "server" && model->name.find("yolov5") != std::string::npos)
                 {
-                    model->batchSize = 16;
+                    model->batchSize = ctrl_initialBatchSizes["yolov5"];
                 }
                 else if (model->device != "server")
                 {
                     edgePointer = devices.list[model->device];
-                    model->batchSize = 8;
+                    model->batchSize = ctrl_initialBatchSizes["edge"];
                 }
                 else
                 {
-                    model->batchSize = 32;
+                    model->batchSize = ctrl_initialBatchSizes["server"];
                 }
             }
         }
