@@ -106,6 +106,11 @@ json loadRunArgs(int argc, char **argv) {
     }
 
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
+        containerConfigs.at("cont_pipeline")[i]["msvc_contSLO"] = containerConfigs["cont_SLO"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_contStartTime"] = containerConfigs["cont_startTime"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_contEndTime"] = containerConfigs["cont_endTime"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_localDutyCycle"] = containerConfigs["cont_localDutyCycle"];
+        containerConfigs.at("cont_pipeline")[i]["msvc_cycleStartTime"] = containerConfigs["cont_cycleStartTime"];
         containerConfigs.at("cont_pipeline")[i]["msvc_batchMode"] = containerConfigs["cont_batchMode"];
         containerConfigs.at("cont_pipeline")[i]["msvc_dropMode"] = containerConfigs["cont_dropMode"];
         containerConfigs.at("cont_pipeline")[i]["msvc_timeBudgetLeft"] = containerConfigs["cont_timeBudgetLeft"];
@@ -302,7 +307,37 @@ void ContainerAgent::profiling(const json &pipeConfigs, const json &profileConfi
     }
 }
 
-ContainerAgent::ContainerAgent(const json &configs) {
+bool ContainerAgent::readModelProfile(const json &profile) {
+    const uint16_t NUM_NUMBERS_PER_BATCH = 4;
+    if (profile == nullptr) {
+        return false;
+    }
+    if (profile.size() < NUM_NUMBERS_PER_BATCH) {
+        return false;
+    }
+    if (profile.size() % NUM_NUMBERS_PER_BATCH != 0) {
+        spdlog::get("container_agent")->warn("{0:s} profile size is not a multiple of {1:d}.", __func__, NUM_NUMBERS_PER_BATCH);
+    }
+    uint16_t i = 0;
+    do {
+        uint16_t numElementsLeft = profile.size() - i;
+        if (numElementsLeft / NUM_NUMBERS_PER_BATCH <= 0) {
+            if (numElementsLeft % NUM_NUMBERS_PER_BATCH != 0) {
+                spdlog::get("container_agent")->warn("{0:s} skips the rest as they do not constitue an expected batch profile {1:d}.", __func__, NUM_NUMBERS_PER_BATCH);
+            }
+            break;
+        }
+        BatchSizeType batch = profile[i].get<BatchSizeType>();
+        cont_batchInferProfileList[batch].p95prepLat = profile[i + 1].get<BatchSizeType>();
+        cont_batchInferProfileList[batch].p95inferLat = profile[i + 2].get<BatchSizeType>();
+        cont_batchInferProfileList[batch].p95inferLat = profile[i + 3].get<BatchSizeType>();
+
+        i += NUM_NUMBERS_PER_BATCH;
+    } while (true);
+    return true;
+}
+
+ContainerAgent::ContainerAgent(const json& configs) {
 
     json containerConfigs = configs["container"];
     //std::cout << containerConfigs.dump(4) << std::endl;
@@ -329,6 +364,13 @@ ContainerAgent::ContainerAgent(const json &configs) {
         cont_loggerSinks,
         cont_logger
     );
+
+    bool readProfile = readModelProfile(containerConfigs["cont_modelProfile"]);
+
+    if (!readProfile && cont_RUNMODE == RUNMODE::DEPLOYMENT && cont_taskName != "dsrc" && cont_taskName != "datasource") {
+        spdlog::get("container_agent")->error("{0:s} No model profile found.", __func__);
+        exit(1);
+    }
 
     // if (cont_RUNMODE == RUNMODE::EMPTY_PROFILING) {
     //     // Create the logDir for this container
@@ -364,16 +406,16 @@ ContainerAgent::ContainerAgent(const json &configs) {
         std::string cont_hostDeviceTypeAbbr = abbreviate(cont_hostDeviceType);
 
         if (cont_RUNMODE == RUNMODE::DEPLOYMENT) {
-            cont_batchInferProfileList = queryBatchInferLatency(
-                *cont_metricsServerConn,
-                cont_experimentName,
-                cont_systemName,
-                cont_pipeName,
-                "stream",
-                cont_inferModel,
-                cont_hostDeviceType,
-                cont_inferModel
-            );
+            // cont_batchInferProfileList = queryBatchInferLatency(
+            //     *cont_metricsServerConn,
+            //     cont_experimentName,
+            //     cont_systemName,
+            //     cont_pipeName,
+            //     "stream",
+            //     cont_inferModel,
+            //     cont_hostDeviceType,
+            //     cont_inferModel
+            // );
             
             cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "_" + cont_taskNameAbbr + "_arr";
             cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_proc";
@@ -453,6 +495,7 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
         /**
          * @brief Table for network metrics, which will be used to estimate network latency
+         * This will almost always be created by the device agent
          *
          */
         if (!tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, cont_networkTableName)) {
@@ -471,6 +514,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
             pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "CREATE INDEX ON " + cont_networkTableName + " (sender_host);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "GRANT ALL PRIVILEGES ON " + cont_networkTableName + " TO " + "controller, device_agent" + ";";
             pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
@@ -511,6 +557,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
             pushSQL(*cont_metricsServerConn, sql_statement);
 
             sql_statement = "CREATE INDEX ON " + cont_arrivalTableName + " (model_name);";
+            pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "GRANT ALL PRIVILEGES ON " + cont_arrivalTableName + " TO " + "controller, device_agent" + ";";
             pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
@@ -579,6 +628,8 @@ ContainerAgent::ContainerAgent(const json &configs) {
             sql_statement = "CREATE INDEX ON " + cont_processTableName + " (infer_batch_size);";
             pushSQL(*cont_metricsServerConn, sql_statement);
 
+            sql_statement = "GRANT ALL PRIVILEGES ON " + cont_processTableName + " TO " + "controller, device_agent" + ";";
+            pushSQL(*cont_metricsServerConn, sql_statement); 
         
         }
 
@@ -606,6 +657,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
 
             sql_statement = "CREATE INDEX ON " + cont_batchInferTableName + " (infer_batch_size);";
             pushSQL(*cont_metricsServerConn, sql_statement);
+
+            sql_statement = "GRANT ALL PRIVILEGES ON " + cont_batchInferTableName + " TO " + "controller, device_agent" + ";";
+            pushSQL(*cont_metricsServerConn, sql_statement);
         }
 
         if (cont_RUNMODE == RUNMODE::PROFILING) {
@@ -630,6 +684,9 @@ ContainerAgent::ContainerAgent(const json &configs) {
                 pushSQL(*cont_metricsServerConn, sql_statement);
 
                 sql_statement += "CREATE INDEX ON " + cont_hwMetricsTableName + " (batch_size);";
+                pushSQL(*cont_metricsServerConn, sql_statement);
+
+                sql_statement = "GRANT ALL PRIVILEGES ON " + cont_hwMetricsTableName + " TO " + "controller, device_agent" + ";";
                 pushSQL(*cont_metricsServerConn, sql_statement);
             }
         }
@@ -1068,6 +1125,7 @@ void ContainerAgent::HandleRecvRpcs() {
     new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateResolutionRequestHandler(&service, server_cq.get(), this);
+    new UpdateTimeKeepingRequestHandler(&service, server_cq.get(), this);
     new SyncDatasourcesRequestHandler(&service, server_cq.get(), this);
     void *tag;
     bool ok;
@@ -1157,6 +1215,10 @@ void ContainerAgent::UpdateBatchSizeRequestHandler::Proceed() {
     } else if (status == PROCESS) {
         new UpdateBatchSizeRequestHandler(service, cq, msvcs);
         for (auto msvc : *msvcs) {
+            // The batch size of the data reader (aka FPS) should be updated by `UpdateBatchSizeRequestHandler`
+            if (msvc->msvc_type == msvcconfigs::MicroserviceType::DataReader) {
+                continue;
+            }
             msvc->msvc_idealBatchSize = request.value();
         }
         status = FINISH;
@@ -1183,6 +1245,27 @@ void ContainerAgent::UpdateResolutionRequestHandler::Proceed() {
             container_agent->cont_msvcsList[1]->dnstreamMicroserviceList[0].expectedShape = {resolution};
         }
 
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+    }
+}
+
+void ContainerAgent::UpdateTimeKeepingRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestUpdateTimeKeeping(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new UpdateTimeKeepingRequestHandler(service, cq, container_agent);
+        container_agent->cont_msvcsList[1]->msvc_contSLO = request.cont_slo();
+        container_agent->cont_msvcsList[1]->msvc_pipelineSLO = request.slo();
+        container_agent->cont_msvcsList[1]->msvc_timeBudgetLeft = request.time_budget();
+        container_agent->cont_msvcsList[1]->msvc_contStartTime = request.start_time();
+        container_agent->cont_msvcsList[1]->msvc_contEndTime = request.end_time();
+        container_agent->cont_msvcsList[1]->msvc_localDutyCycle = request.local_duty_cycle();
+        container_agent->cont_msvcsList[1]->msvc_cycleStartTime = ClockType(TimePrecisionType(request.cycle_start_time()));
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

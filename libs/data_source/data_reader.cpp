@@ -26,6 +26,8 @@ inline cv::Mat resizePadRightBottom(
 
 DataReader::DataReader(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
+    msvc_toReloadConfigs = false;
+    spdlog::get("container_agent")->info("{0:s} is created.", __func__);
 };
 
 void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
@@ -42,10 +44,19 @@ void DataReader::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_OutQueue[0]->setActiveQueueIndex(msvc_activeOutQueueIndex[0]);
 };
 
+cv::Mat encodeImage(const cv::Mat &image) {
+    std::vector<uchar> buf;
+    cv::imencode(".jpg", image, buf, {cv::IMWRITE_JPEG_QUALITY, 95});
+    RequestMemSizeType encodedMemSize = buf.size();
+    cv::Mat encoded(1, encodedMemSize, CV_8UC1, buf.data());
+    return encoded.clone();
+}
+
 void DataReader::Process() {
     int frameCount = 0;
     uint16_t readFrames = 0;
     while (true) {
+        ClockType start = std::chrono::system_clock::now();
         if (STOP_THREADS) {
             spdlog::get("container_agent")->info("{0:s} STOPS.", msvc_name);
             break;
@@ -57,7 +68,6 @@ void DataReader::Process() {
             source.set(cv::CAP_PROP_POS_FRAMES, msvc_currFrameID);
             continue;
         }
-        ClockType time = std::chrono::system_clock::now();
         cv::Mat frame;
         if (!source.read(frame)) {
             if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
@@ -77,17 +87,32 @@ void DataReader::Process() {
             frame = resizePadRightBottom(frame, msvc_dataShape[0][1], msvc_dataShape[0][2],
                                          {128, 128, 128}, cv::INTER_AREA);
             RequestMemSizeType frameMemSize = frame.channels() * frame.rows * frame.cols * CV_ELEM_SIZE1(frame.type());
-            Request<LocalCPUReqDataType> req = {{{time, time}}, {msvc_SLO},
-                                                {"[" + msvc_hostDevice + "|" + link + "|" +
-                                                 std::to_string(readFrames) +
-                                                 "|1|1|" + std::to_string(frameMemSize)  + "]"}, 1,
-                                                {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols},
-                                                                                  frame}}};
             for (auto q: msvc_OutQueue) {
+                Request<LocalCPUReqDataType> req;
+                if (!q->getEncoded()) {
+                    ClockType time = std::chrono::system_clock::now();
+                    req = {{{time, time}}, {msvc_contSLO},
+                           {"[" + msvc_hostDevice + "|" + link + "|" + std::to_string(readFrames) +
+                            "|1|1|" + std::to_string(frameMemSize) + "|" + std::to_string(frameMemSize) + "]"}, 1,
+                           {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols}, frame}}}; 
+                    q->emplace(req);
+                    continue;
+                }
+
+                cv::Mat encoded = encodeImage(frame);
+                RequestMemSizeType encodedMemSize = encoded.channels() * encoded.rows * encoded.cols * CV_ELEM_SIZE1(encoded.type());
+                ClockType time = std::chrono::system_clock::now();
+                req = {{{time, time}}, {msvc_contSLO},
+                       {"[" + msvc_hostDevice + "|" + link + "|" + std::to_string(readFrames) +
+                        "|1|1|" + std::to_string(frameMemSize) + "|" + std::to_string(encodedMemSize) + "]"}, 1,
+                       {RequestData<LocalCPUReqDataType>{{frame.dims, frame.rows, frame.cols},
+                                                         encoded}}};
                 q->emplace(req);
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
+            // remove processing time from wait time
+            ClockType end = std::chrono::system_clock::now();
+            std::chrono::duration<double> elapsed_seconds = end - start;
+            std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms) - elapsed_seconds);
         }
         frameCount++;
     }

@@ -197,29 +197,29 @@ void Controller::Scheduling()
         }
 
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
-        int test = 0;
-        /**
-         * @brief Testing loop, removed in production
-         * 
-         */
-        while (true) {
-            for (auto &taskPair : ctrl_scheduledPipelines.list)
-            {
-                std::vector<std::string> testDevices = {"server", taskPair.second->tk_pipelineModels.at(0)->device};
-                // Aritificialy change position of yolo model to test
-                taskPair.second->tk_pipelineModels.at(2)->device = testDevices.at(test % 2);
-            }
-            test++;
-            ApplyScheduling();
-            // Wait for 1 minute for the last scheduling to take effect
-            std::this_thread::sleep_for(std::chrono::milliseconds(60000));
-        }
-        // End of testing loop
-        // ApplyScheduling();
+//        int test = 0;
+//        /**
+//         * @brief Testing loop, removed in production
+//         *
+//         */
+//        while (true) {
+//            for (auto &taskPair : ctrl_scheduledPipelines.list)
+//            {
+//                std::vector<std::string> testDevices = {"server", taskPair.second->tk_pipelineModels.at(0)->device};
+//                // Aritificialy change position of yolo model to test
+//                taskPair.second->tk_pipelineModels.at(2)->device = testDevices.at(test % 2);
+//            }
+//            test++;
+//            ApplyScheduling();
+//            // Wait for 1 minute for the last scheduling to take effect
+//            std::this_thread::sleep_for(std::chrono::milliseconds(60000));
+//        }
+
+        ApplyScheduling();
         std::cout << "end_scheduleBaseParPoint " << partitioner.BaseParPoint << std::endl;
         std::cout << "end_FineGrainedParPoint " << partitioner.FineGrainedOffset << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(
-            5000)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
+        std::this_thread::sleep_for(std::chrono::seconds(
+                ctrl_schedulingIntervalSec)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
     }
 }
 

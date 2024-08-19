@@ -246,7 +246,6 @@ bool Engine::build() {
 
         builderConfig->setFlag((BuilderFlag::kINT8));
 
-        const auto input = network->getInput(0);
         const auto calibrationFileName = m_engineName + ".calibration";
     }
 

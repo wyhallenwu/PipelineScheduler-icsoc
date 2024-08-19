@@ -62,11 +62,15 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     msvc_DROP_MODE = jsonConfigs.at("msvc_dropMode");
     msvc_timeBudgetLeft = jsonConfigs.at("msvc_timeBudgetLeft");
     msvc_pipelineSLO = jsonConfigs.at("msvc_pipelineSLO");
+    msvc_contSLO = jsonConfigs.at("msvc_contSLO");
+    msvc_contStartTime = jsonConfigs.at("msvc_contStartTime");
+    msvc_contEndTime = jsonConfigs.at("msvc_contEndTime");
+    msvc_localDutyCycle = jsonConfigs.at("msvc_localDutyCycle");
+    msvc_cycleStartTime = ClockType(TimePrecisionType(jsonConfigs.at("msvc_cycleStartTime")));
     msvc_idealBatchSize = configs.msvc_idealBatchSize;
 
     // Configurations
     msvc_dataShape = configs.msvc_dataShape;
-    msvc_SLO = configs.msvc_svcLevelObjLatency;
     msvc_type = configs.msvc_type;
     PAUSE_THREADS = true;
     msvc_appLvlConfigs = configs.msvc_appLvlConfigs;
@@ -112,18 +116,21 @@ void Microservice::loadConfigs(const json &jsonConfigs, bool isConstructing) {
             msvc_outReqShape.emplace_back(it->expectedShape); // This is a dummy value for now
             if (it->commMethod == CommMethod::localGPU) {
                 msvc_activeOutQueueIndex.emplace_back(2);
-            } else {//if (it->commMethod == CommMethod::localCPU) {
+            } else {
                 msvc_activeOutQueueIndex.emplace_back(1);
+                if (it->commMethod == CommMethod::encodedCPU) {
+                    msvc_OutQueue.back()->setEncoded(true);
+                }
             }
         }
 
         for (auto it = configs.msvc_upstreamMicroservices.begin(); it != configs.msvc_upstreamMicroservices.end(); ++it) {
             NeighborMicroservice upStreamMsvc = NeighborMicroservice(*it, nummsvc_upstreamMicroservices++);
             upstreamMicroserviceList.emplace_back(upStreamMsvc);
-            if (it->commMethod == CommMethod::localCPU) {
-                msvc_activeInQueueIndex.emplace_back(1);
-            } else if (it->commMethod == CommMethod::localGPU) {
+            if (it->commMethod == CommMethod::localGPU) {
                 msvc_activeInQueueIndex.emplace_back(2);
+            } else {
+                msvc_activeInQueueIndex.emplace_back(1);
             }
         }
     }

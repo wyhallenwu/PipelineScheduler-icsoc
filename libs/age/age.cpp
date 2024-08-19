@@ -41,7 +41,8 @@ int main(int argc, char **argv) {
             } else if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::sharedMemory) {
                 spdlog::get("container_agent")->info("Local CPU Sender");
                 msvcsList.push_back(new LocalCPUSender(pipeConfigs[i]));
-            } else if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::serialized) {
+            } else if (pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::serialized ||
+                       pipeConfigs[i].at("msvc_dnstreamMicroservices")[0].at("nb_commMethod") == CommMethod::encodedCPU) {
                 spdlog::get("container_agent")->info("Remote CPU Sender");
                 msvcsList.push_back(new RemoteCPUSender(pipeConfigs[i]));
             }

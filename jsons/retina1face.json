@@ -315,8 +315,14 @@
         "cont_allocationMode": 1,
         "cont_batchMode": 0,
         "cont_dropMode": 0,
-        "cont_timeBudgetLeft": 9999999,
-        "cont_pipelineSLO": 9999999
+        "cont_pipelineSLO": 100000,
+        "cont_SLO": 30000,
+        "cont_timeBudgetLeft": 70000,
+        "cont_startTime": 0,
+        "cont_endTime": 30000,
+        "cont_localDutyCycle": 50000,
+        "cont_cycleStartTime": 0,
+        "cont_modelProfile": [1, 23423, 234234, 234234]
     },
     "profiling": {
         "profile_minBatch": 1,

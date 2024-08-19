@@ -18,6 +18,7 @@ void BaseKPointExtractor::loadConfigs(const json &jsonConfigs, bool isConstructi
 
 BaseKPointExtractor::BaseKPointExtractor(const json &jsonConfigs) : BasePostprocessor(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
+    msvc_toReloadConfigs = false;
     spdlog::get("container_agent")->info("{0:s} is created.", msvc_name); 
 }
 
@@ -60,17 +61,15 @@ void BaseKPointExtractor::extractor() {
 
 
     cudaStream_t postProcStream;
+    cv::cuda::Stream postProcCVStream;
 
-    NumQueuesType queueIndex;
+    NumQueuesType queueIndex = 0;
 
     size_t bufferSize;
     RequestDataShapeType shape;
 
 
-    float *keyPoints;
-    // uint16_t predictedClass[msvc_idealBatchSize];
-
-    auto timeNow = std::chrono::high_resolution_clock::now();
+    float *keyPoints = nullptr;
 
     while (true) {
         // Allowing this thread to naturally come to an end
@@ -93,13 +92,9 @@ void BaseKPointExtractor::extractor() {
 
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
+                postProcCVStream = cv::cuda::StreamAccessor::wrapStream(postProcStream);
 
-                BatchSizeType batchSize;
-                if (msvc_allocationMode == AllocationMode::Conservative) {
-                    batchSize = msvc_idealBatchSize;
-                } else if (msvc_allocationMode == AllocationMode::Aggressive) {
-                    batchSize = msvc_maxBatchSize;
-                }
+                BatchSizeType batchSize = msvc_allocationMode == AllocationMode::Conservative ? msvc_idealBatchSize : msvc_maxBatchSize;
                 keyPoints = new float[batchSize * msvc_dataShape[0][0] * msvc_dataShape[0][1] * msvc_dataShape[0][2]];
 
                 spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
@@ -129,14 +124,13 @@ void BaseKPointExtractor::extractor() {
             msvc_OutQueue[0]->emplace(currReq);
             continue;
         }
-        msvc_inReqCount++;
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (msvc_inReqCount > 1) {
-            updateReqRate(currReq_genTime);
-        }
+        // if (msvc_inReqCount > 1) {
+        //     updateReqRate(currReq_genTime);
+        // }
 
         currReq_batchSize = currReq.req_batchSize;
         spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}", msvc_name, currReq_batchSize);
@@ -159,22 +153,23 @@ void BaseKPointExtractor::extractor() {
         cudaStreamSynchronize(postProcStream);
 
         for (BatchSizeType i = 0; i < currReq.req_batchSize; i++) {
+            msvc_inReqCount++;
             // We consider this when the request was received by the postprocessor
             currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
 
             uint32_t totalInMem = currReq.upstreamReq_data[i].data.rows * currReq.upstreamReq_data[i].data.cols * currReq.upstreamReq_data[i].data.channels() * CV_ELEM_SIZE1(currReq.upstreamReq_data[i].data.type());
+            uint32_t totalEncodedOutMem = 0;
             currReq.req_travelPath[i] += "|1|1|" + std::to_string(totalInMem) + "]";
 
             if (msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
-                cv::Mat out(currReq.upstreamReq_data[i].data.size(), currReq.upstreamReq_data[i].data.type());
-                checkCudaErrorCode(cudaMemcpyAsync(
-                    out.ptr(),
-                    currReq.upstreamReq_data[i].data.cudaPtr(),
-                    currReq.upstreamReq_data[i].data.rows * currReq.upstreamReq_data[i].data.cols * currReq.upstreamReq_data[i].data.channels() * CV_ELEM_SIZE1(currReq.upstreamReq_data[i].data.type()),
-                    cudaMemcpyDeviceToHost,
-                    postProcStream
-                ), __func__);
-                checkCudaErrorCode(cudaStreamSynchronize(postProcStream), __func__);
+                cv::Mat out;
+                currReq.upstreamReq_data[i].data.download(out, postProcCVStream);
+                postProcCVStream.waitForCompletion();
+                if (msvc_OutQueue.at(queueIndex)->getEncoded()) {
+                    out = encodeResults(out);
+                    totalEncodedOutMem = out.channels() * out.rows * out.cols * CV_ELEM_SIZE1(out.type());
+                }
+                currReq.req_travelPath[i] += "|1|1|" + std::to_string(totalEncodedOutMem) + "|" + std::to_string(totalInMem) + "]";
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalCPUReqDataType>{
                         {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
@@ -188,6 +183,7 @@ void BaseKPointExtractor::extractor() {
                 );
                 spdlog::get("container_agent")->trace("{0:s} emplaced an image to CPU queue.", msvc_name);
             } else {
+                currReq.req_travelPath[i] += "|1|1|0|" + std::to_string(totalInMem) + "]";
                 msvc_OutQueue.at(0)->emplace(
                     Request<LocalGPUReqDataType>{
                         {{currReq.req_origGenTime[i].front(), std::chrono::high_resolution_clock::now()}},
@@ -218,8 +214,18 @@ void BaseKPointExtractor::extractor() {
             // If the number of warmup batches has been passed, we start to record the latency
             if (warmupCompleted()) {
                 currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
+                std::string originStream = getOriginStream(currReq.req_travelPath[i]);
                 // TODO: Add the request number
-                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0, getOriginStream(currReq.req_travelPath[i]));
+                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0, originStream);
+                msvc_arrivalRecords.addRecord(
+                        currReq.req_origGenTime[i],
+                        10,
+                        getArrivalPkgSize(currReq.req_travelPath[i]),
+                        totalInMem,
+                        msvc_inReqCount,
+                        originStream,
+                        getSenderHost(currReq.req_travelPath[i])
+                );
             }
         }
 
@@ -270,14 +276,11 @@ void BaseKPointExtractor::extractorProfiling() {
 
     cudaStream_t postProcStream;
 
-    NumQueuesType queueIndex;
-
     size_t bufferSize;
     RequestDataShapeType shape;
 
 
-    float *keyPoints;
-    // uint16_t predictedClass[msvc_idealBatchSize];
+    float *keyPoints = nullptr;
 
     auto timeNow = std::chrono::high_resolution_clock::now();
 

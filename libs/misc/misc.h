@@ -26,8 +26,8 @@ using grpc::ClientAsyncResponseReader;
 
 typedef uint16_t NumQueuesType;
 typedef uint16_t QueueLengthType;
-typedef uint32_t MsvcSLOType;
-typedef std::vector<uint32_t> RequestSLOType;
+typedef uint64_t MsvcSLOType;
+typedef std::vector<MsvcSLOType> RequestSLOType;
 typedef std::vector<std::string> RequestPathType;
 typedef uint16_t NumMscvType;
 typedef std::chrono::high_resolution_clock::time_point ClockType;
@@ -41,6 +41,8 @@ typedef cv::cuda::GpuMat LocalGPUReqDataType;
 typedef cv::Mat LocalCPUReqDataType;
 typedef uint16_t BatchSizeType;
 typedef uint32_t RequestMemSizeType;
+
+const NumQueuesType MAX_NUM_QUEUES = std::numeric_limits<NumQueuesType>::max();
 
 // Hw Metrics
 typedef int CpuUtilType;

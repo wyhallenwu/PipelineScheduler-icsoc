@@ -6,6 +6,9 @@ void DataSourceAgent::runService(const json &pipeConfigs, const json &configs) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000 / pipeConfigs[0]["msvc_idealBatchSize"].get<int>()));
         }
     } else {
+        if (configs["container"]["cont_RUNMODE"] == 0) {
+            std::this_thread::sleep_for(std::chrono::seconds(30));
+        }
         cont_msvcsList[0]->setReady();
     }
     this->dispatchMicroservices();

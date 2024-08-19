@@ -16,12 +16,17 @@
 
 using trt::TRTConfigs;
 
+const int CONTROLLER_BASE_PORT = 60001;
+const int DEVICE_CONTROL_PORT = 60002;
+const int INDEVICE_CONTROL_PORT = 60003;
+
 ABSL_DECLARE_FLAG(std::string, name);
 ABSL_DECLARE_FLAG(std::string, device_type);
 ABSL_DECLARE_FLAG(std::string, controller_url);
 ABSL_DECLARE_FLAG(std::string, dev_configPath);
 ABSL_DECLARE_FLAG(uint16_t, dev_verbose);
 ABSL_DECLARE_FLAG(uint16_t, dev_loggingMode);
+ABSL_DECLARE_FLAG(std::string, dev_logPath);
 ABSL_DECLARE_FLAG(uint16_t, dev_port_offset);
 
 typedef std::tuple<
@@ -44,19 +49,31 @@ struct DevContainerHandle {
 
 class DeviceAgent {
 public:
-    DeviceAgent(const std::string &controller_url, const std::string n, SystemDeviceType type);
+    DeviceAgent();
+    DeviceAgent(const std::string &controller_url);
 
-    ~DeviceAgent() {
+    virtual ~DeviceAgent() {
         running = false;
         for (const auto &c: containers) {
             StopContainer(c.second);
         }
-        controller_server->Shutdown();
-        controller_cq->Shutdown();
-        device_server->Shutdown();
-        device_cq->Shutdown();
+
+        if (controller_server) {
+            controller_server->Shutdown();
+        }
+        if (device_server) {
+            device_server->Shutdown();
+        }
+
         for (std::thread &t: threads) {
             t.join();
+        }
+
+        if (controller_cq) {
+            controller_cq->Shutdown();
+        }
+        if (device_cq) {
+            device_cq->Shutdown();
         }
     };
 
@@ -68,25 +85,10 @@ public:
 
     void limitBandwidth(const std::string& scriptPath, const std::string& jsonFilePath);
 
-private:
+protected:
     void testNetwork(float min_size, float max_size, int num_loops);
 
-    bool CreateContainer(
-            ModelType model,
-            std::string model_file,
-            std::string pipe_name,
-            BatchSizeType batch_size,
-            BatchSizeType fps,
-            std::vector<int> input_dims,
-            int replica_id,
-            int allocation_mode,
-            int device,
-            const MsvcSLOType &slo,
-            const MsvcSLOType &total_slo,
-            uint64_t timeBudget,
-            const google::protobuf::RepeatedPtrField<Neighbor> &upstreams,
-            const google::protobuf::RepeatedPtrField<Neighbor> &downstreams
-    );
+    bool CreateContainer(ContainerConfig &c);
 
     int runDocker(const std::string &executable, const std::string &cont_name, const std::string &start_string,
                          const int &device, const int &port) {
@@ -100,13 +102,13 @@ private:
                         R"(%s pipeline-base-container %s --json '%s' --device %i --port %i --port_offset %i)",
                         cont_name, executable, start_string, device, port, dev_port_offset) +
                 " --log_dir ../logs";
+
         if (!deploy_mode) {
             command += " --verbose 0 --logging_mode 2";
         } else {
             command += " --logging_mode 1";
         }
-        std::cout << command << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        spdlog::get("container_agent")->info("Running command: {}", command);
         return system(command.c_str());
     };
 
@@ -121,7 +123,7 @@ private:
 
     void HandleDeviceRecvRpcs();
 
-    void HandleControlRecvRpcs();
+    virtual void HandleControlRecvRpcs();
 
     class RequestHandler {
     public:
@@ -288,7 +290,22 @@ private:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
-    ContainerLibType dev_containerLib;
+    class UpdateTimeKeepingRequestHandler : public ControlRequestHandler {
+    public:
+        UpdateTimeKeepingRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+                                      DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        TimeKeeping request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+    };
+
     SystemDeviceType dev_type;
     DeviceInfoType dev_deviceInfo;
     std::atomic<bool> deploy_mode = false;

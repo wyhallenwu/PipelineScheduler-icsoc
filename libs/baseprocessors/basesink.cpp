@@ -13,6 +13,7 @@ void BaseSink::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 BaseSink::BaseSink(const json &jsonConfigs) : Microservice(jsonConfigs) {
     loadConfigs(jsonConfigs, true);
     msvc_name = "sink";
+    msvc_toReloadConfigs = false;
     spdlog::get("container_agent")->info("{0:s} is created.", __func__);
 }
 
@@ -82,6 +83,7 @@ void BaseSink::sink() {
          * 
          */
         } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT || msvc_RUNMODE == RUNMODE::PROFILING) {
+            spdlog::get("container_agent")->trace("{0:s} is processing request {1:s}...", msvc_name, inferTimeReport.req_travelPath[0]);
             msvc_logFile << inferTimeReport.req_travelPath[0] << "|";
             for (unsigned int j = 0; j < inferTimeReport.req_origGenTime[0].size() - 1; j++) {
                 msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[0].at(j)) << ",";
