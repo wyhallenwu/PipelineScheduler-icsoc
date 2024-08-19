@@ -1077,6 +1077,8 @@ private:
 
     std::atomic<bool> isPipelineInitialised = false;
 
+    void estimateTimeBudgetLeft(PipelineModel *currModel);
+
 //////////////////////////////////////////////////distream_add//////////////////////////////////////////////////////
     std::mutex nodeHandleMutex;
     struct Partitioner
