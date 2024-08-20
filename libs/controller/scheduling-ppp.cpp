@@ -360,7 +360,7 @@ bool Controller::containerTemporalScheduling(ContainerHandle *container) {
     container->gpuHandle = portion->lane->gpuHandle;
     auto newPortions = insertUsedGPUPortion(devices.list["server"]->freeGPUPortions, container, portion);
 
-
+    return true;
 }
 
 bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel) {
@@ -502,6 +502,7 @@ bool Controller::mergeModels(PipelineModel *mergedModel, PipelineModel* toBeMerg
     mergeArrivalProfiles(mergedModel->arrivalProfiles, toBeMergedModel->arrivalProfiles, device, toBeMergedModel->upstreams.front().first->device);
     mergeProcessProfiles(mergedModel->processProfiles, rate1, toBeMergedModel->processProfiles, rate2, device);
 
+    return true;
 }
 
 TaskHandle* Controller::mergePipelines(const std::string& taskName) {

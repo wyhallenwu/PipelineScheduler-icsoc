@@ -792,8 +792,10 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     request.set_executable(ctrl_containerLib[modelName].runCommand);
     if (container->model == DataSource || container->model == Sink) {
         request.set_device(-1);
-    } else {
+    } else if (container->device_agent->name == "server") {
         request.set_device(container->gpuHandle->number);
+    } else {
+        request.set_device(0);
     }
     request.set_control_port(control_port);
 
