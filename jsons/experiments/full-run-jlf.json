@@ -5,7 +5,7 @@
     "runtime": 30,
     "port_offset": 2000,
     "sink_ip": "143.248.55.76",
-    "edge_yolov5_batch_size": 2,
+    "yolov5_batch_size": 2,
     "edge_batch_size": 4,
     "server_batch_size": 8,
     "initial_pipelines": [
