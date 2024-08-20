@@ -217,7 +217,7 @@ NetworkProfile queryNetworkProfile(
      * 
      */
     std::string query = "WITH recent_data AS ("
-                        "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
+                        "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b, p95_total_package_size_b "
                         "   FROM %s "
                         "   WHERE stream = '%s' AND sender_host = '%s' AND receiver_host = '%s' AND timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
                         "   LIMIT 100"
@@ -368,7 +368,7 @@ ModelArrivalProfile queryModelArrivalProfile(
          * 
          */
         query = "WITH recent_data AS ("
-                "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
+                "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b, p95_total_package_size_b "
                 "   FROM %s "
                 "   WHERE stream = '%s' AND sender_host = '%s' AND receiver_host = '%s' AND timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
                 "   LIMIT 100"
@@ -452,7 +452,7 @@ void queryPrePostLatency(
     std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelNameAbbr + "__" + deviceName + "_proc");
     std::string query = absl::StrFormat(
         "WITH recent_data AS ("
-        "    SELECT infer_batch_size, p95_prep_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
+        "    SELECT infer_batch_size, p95_prep_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b, p95_encoded_size_b "
         "    FROM %s "
         "    WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
         ") "
@@ -463,7 +463,7 @@ void queryPrePostLatency(
         "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_infer_duration_us) AS p95_infer_duration_us_all, "
         "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_post_duration_us) AS p95_post_duration_us_all, "
         "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_input_size_b) AS p95_input_size_b_all, "
-        "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_output_size_b) AS p95_output_size_b_all "
+        "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_output_size_b) AS p95_output_size_b_all, "
         "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_encoded_size_b) AS p95_encoded_size_b_all "
         "FROM recent_data "
         "GROUP BY infer_batch_size;", 
@@ -489,7 +489,7 @@ void queryPrePostLatency(
     // If most current historical data is not available for some batch sizes not specified in retrievedBatchSizes, we query profiled data
     std::string profileTableName = abbreviate("pf" + std::to_string(systemFPS) + "__" + modelNameAbbr +  "__" + deviceTypeName + "_proc");
     query = absl::StrFormat("WITH recent_data AS ("
-                            "SELECT infer_batch_size, p95_prep_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b "
+                            "SELECT infer_batch_size, p95_prep_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b, p95_encoded_size_b "
                             "FROM %s "
                             ") "
                             "SELECT "
@@ -498,7 +498,7 @@ void queryPrePostLatency(
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_infer_duration_us) AS p95_infer_duration_us_all, "
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_post_duration_us) AS p95_post_duration_us_all, "
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_input_size_b) AS p95_input_size_b_all, "
-                            "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_output_size_b) AS p95_output_size_b_all "
+                            "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_output_size_b) AS p95_output_size_b_all, "
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_encoded_size_b) AS p95_encoded_size_b_all "
                             "FROM recent_data "
                             "GROUP BY infer_batch_size;", profileTableName);
