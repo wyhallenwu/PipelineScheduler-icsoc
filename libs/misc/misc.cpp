@@ -464,6 +464,7 @@ void queryPrePostLatency(
         "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_post_duration_us) AS p95_post_duration_us_all, "
         "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_input_size_b) AS p95_input_size_b_all, "
         "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_output_size_b) AS p95_output_size_b_all "
+        "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_encoded_size_b) AS p95_encoded_size_b_all "
         "FROM recent_data "
         "GROUP BY infer_batch_size;", 
         tableName, streamName
@@ -482,6 +483,7 @@ void queryPrePostLatency(
         profile.batchInfer[batchSize].p95postLat = (uint64_t) row["p95_post_duration_us_all"].as<double>();
         profile.p95InputSize = (uint32_t) row["p95_input_size_b_all"].as<float>();
         profile.p95OutputSize = (uint32_t) row["p95_output_size_b_all"].as<float>();
+        profile.p95EncodedOutputSize = (uint32_t) row["p95_encoded_size_b_all"].as<float>();
     }
 
     // If most current historical data is not available for some batch sizes not specified in retrievedBatchSizes, we query profiled data
@@ -497,6 +499,7 @@ void queryPrePostLatency(
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_post_duration_us) AS p95_post_duration_us_all, "
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_input_size_b) AS p95_input_size_b_all, "
                             "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_output_size_b) AS p95_output_size_b_all "
+                            "    percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_encoded_size_b) AS p95_encoded_size_b_all "
                             "FROM recent_data "
                             "GROUP BY infer_batch_size;", profileTableName);
     res = pullSQL(metricsConn, query);
@@ -510,6 +513,7 @@ void queryPrePostLatency(
         profile.batchInfer[batchSize].p95postLat = (uint64_t) row["p95_post_duration_us_all"].as<double>();
         profile.p95InputSize = (uint32_t) row["p95_input_size_b_all"].as<float>();
         profile.p95OutputSize = (uint32_t) row["p95_output_size_b_all"].as<float>();
+        profile.p95EncodedOutputSize = (uint32_t) row["p95_encoded_size_b_all"].as<float>();
     }
 }
 
