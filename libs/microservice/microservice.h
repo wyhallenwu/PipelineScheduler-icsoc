@@ -519,6 +519,7 @@ public:
         BatchSizeType inferBatchSize,
         uint32_t inputSize,
         uint32_t outputSize,
+        uint32_t encodedOutputSize,
         uint32_t reqNumber,
         std::string reqOrigin = "stream"
     ) {
@@ -532,6 +533,7 @@ public:
         processRecords[{reqOrigin, inferBatchSize}].postEndTime.emplace_back(timestamps[11]);
         processRecords[{reqOrigin, inferBatchSize}].inputSize.emplace_back(inputSize);
         processRecords[{reqOrigin, inferBatchSize}].outputSize.emplace_back(outputSize);
+        processRecords[{reqOrigin, inferBatchSize}].encodedOutputSize.emplace_back(encodedOutputSize);
 
         batchInferRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[9] - timestamps[8]).count());
 

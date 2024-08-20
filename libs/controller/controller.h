@@ -1078,6 +1078,9 @@ private:
 
     uint16_t ctrl_systemFPS;
 
+    // Fixed batch sizes for SOTAs that don't provide dynamic batching
+    std::map<std::string, BatchSizeType> ctrl_initialBatchSizes; 
+
     std::atomic<bool> isPipelineInitialised = false;
 
     uint16_t ctrl_numGPULanes = NUM_LANES_PER_GPU * NUM_GPUS, ctrl_numGPUPortions;
