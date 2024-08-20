@@ -217,7 +217,7 @@ NetworkProfile queryNetworkProfile(
      * 
      */
     std::string query = "WITH recent_data AS ("
-                        "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b, p95_total_package_size_b "
+                        "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
                         "   FROM %s "
                         "   WHERE stream = '%s' AND sender_host = '%s' AND receiver_host = '%s' AND timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
                         "   LIMIT 100"
@@ -368,7 +368,7 @@ ModelArrivalProfile queryModelArrivalProfile(
          * 
          */
         query = "WITH recent_data AS ("
-                "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b, p95_total_package_size_b "
+                "   SELECT p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b "
                 "   FROM %s "
                 "   WHERE stream = '%s' AND sender_host = '%s' AND receiver_host = '%s' AND timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
                 "   LIMIT 100"
