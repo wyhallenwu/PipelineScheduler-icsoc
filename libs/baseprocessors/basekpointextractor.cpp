@@ -216,7 +216,7 @@ void BaseKPointExtractor::extractor() {
                 currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
                 std::string originStream = getOriginStream(currReq.req_travelPath[i]);
                 // TODO: Add the request number
-                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0, originStream);
+                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, totalEncodedOutMem, 0, originStream);
                 msvc_arrivalRecords.addRecord(
                         currReq.req_origGenTime[i],
                         10,
