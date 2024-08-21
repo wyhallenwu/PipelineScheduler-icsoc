@@ -200,7 +200,7 @@ void Controller::Scheduling()
                 {
                     continue;
                 }
-                if (model->device == "server" && model->name.find("yolov5") != std::string::npos)
+                if (model->name.find("yolov5") != std::string::npos)
                 {
                     model->batchSize = ctrl_initialBatchSizes["yolov5"];
                 }
