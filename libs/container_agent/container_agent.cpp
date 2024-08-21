@@ -612,7 +612,8 @@ ContainerAgent::ContainerAgent(const json& configs) {
                               "p95_infer_duration_us INTEGER NOT NULL, "
                               "p95_post_duration_us INTEGER NOT NULL, "
                               "p95_input_size_b INTEGER NOT NULL, "
-                              "p95_output_size_b INTEGER NOT NULL)";
+                              "p95_output_size_b INTEGER NOT NULL, "
+                              "p95_encoded_size_b INTEGER NOT NULL)";
 
             pushSQL(*cont_metricsServerConn, sql_statement);
 
@@ -878,7 +879,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 }
             }
 
-            arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
+            arrivalRecords = cont_msvcsList[3]->getArrivalRecords();
             // Keys value here is std::pair<std::string, std::string> for stream and sender_host
             NetworkRecordType networkRecords;
             for (auto &[keys, records]: arrivalRecords) {
@@ -962,7 +963,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                     sql += ", thrput_" + std::to_string(period / 1000) + "s";
                 }
 
-                sql += ", p95_prep_duration_us, p95_batch_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b) VALUES (";
+                sql += ", p95_prep_duration_us, p95_batch_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b, p95_encoded_size_b) VALUES (";
                 sql += timePointToEpochString(std::chrono::high_resolution_clock::now()) + ", '" + reqOriginStream + "'," + std::to_string(inferBatchSize);
 
                 // Calculate the throughput rates for the configured periods
@@ -980,6 +981,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 sql += ", " + std::to_string(percentilesRecord[95].postDuration);
                 sql += ", " + std::to_string(percentilesRecord[95].inputSize);
                 sql += ", " + std::to_string(percentilesRecord[95].outputSize);
+                sql += ", " + std::to_string(percentilesRecord[95].encodedOutputSize);
                 sql += ")";
 
                 // Push the SQL statement
