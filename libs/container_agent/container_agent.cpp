@@ -878,7 +878,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 }
             }
 
-            arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
+            arrivalRecords = cont_msvcsList[3]->getArrivalRecords();
             // Keys value here is std::pair<std::string, std::string> for stream and sender_host
             NetworkRecordType networkRecords;
             for (auto &[keys, records]: arrivalRecords) {
