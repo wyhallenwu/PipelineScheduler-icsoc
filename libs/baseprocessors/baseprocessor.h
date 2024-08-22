@@ -126,6 +126,8 @@ public:
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
+    bool readModelProfile(const json &profile);
+
 protected:
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
