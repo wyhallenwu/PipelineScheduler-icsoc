@@ -152,6 +152,10 @@ json loadRunArgs(int argc, char **argv) {
                                                                                       std::to_string(minBatch));
             }
         }
+
+        if (i == 1) {
+            containerConfigs.at("cont_pipeline")[i]["msvc_modelProfile"] = containerConfigs.at("cont_modelProfile");
+        }
     }
 
     json finalConfigs;
@@ -365,12 +369,12 @@ ContainerAgent::ContainerAgent(const json& configs) {
         cont_logger
     );
 
-    bool readProfile = readModelProfile(containerConfigs["cont_modelProfile"]);
+    // bool readProfile = readModelProfile(containerConfigs["cont_modelProfile"]);
 
-    if (!readProfile && cont_RUNMODE == RUNMODE::DEPLOYMENT && cont_taskName != "dsrc" && cont_taskName != "datasource") {
-        spdlog::get("container_agent")->error("{0:s} No model profile found.", __func__);
-        exit(1);
-    }
+    // if (!readProfile && cont_RUNMODE == RUNMODE::DEPLOYMENT && cont_taskName != "dsrc" && cont_taskName != "datasource") {
+    //     spdlog::get("container_agent")->error("{0:s} No model profile found.", __func__);
+    //     exit(1);
+    // }
 
     // if (cont_RUNMODE == RUNMODE::EMPTY_PROFILING) {
     //     // Create the logDir for this container
@@ -879,7 +883,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 }
             }
 
-            arrivalRecords = cont_msvcsList[1]->getArrivalRecords();
+            arrivalRecords = cont_msvcsList[3]->getArrivalRecords();
             // Keys value here is std::pair<std::string, std::string> for stream and sender_host
             NetworkRecordType networkRecords;
             for (auto &[keys, records]: arrivalRecords) {

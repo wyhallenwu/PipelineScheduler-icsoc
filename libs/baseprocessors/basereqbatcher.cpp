@@ -232,6 +232,36 @@ void BaseReqBatcher::updateCycleTiming() {
                          );
 }
 
+bool BaseReqBatcher::readModelProfile(const json &profile) {
+    const uint16_t NUM_NUMBERS_PER_BATCH = 4;
+    if (profile == nullptr) {
+        return false;
+    }
+    if (profile.size() < NUM_NUMBERS_PER_BATCH) {
+        return false;
+    }
+    if (profile.size() % NUM_NUMBERS_PER_BATCH != 0) {
+        spdlog::get("container_agent")->warn("{0:s} profile size is not a multiple of {1:d}.", __func__, NUM_NUMBERS_PER_BATCH);
+    }
+    uint16_t i = 0;
+    do {
+        uint16_t numElementsLeft = profile.size() - i;
+        if (numElementsLeft / NUM_NUMBERS_PER_BATCH <= 0) {
+            if (numElementsLeft % NUM_NUMBERS_PER_BATCH != 0) {
+                spdlog::get("container_agent")->warn("{0:s} skips the rest as they do not constitue an expected batch profile {1:d}.", __func__, NUM_NUMBERS_PER_BATCH);
+            }
+            break;
+        }
+        BatchSizeType batch = profile[i].get<BatchSizeType>();
+        msvc_batchInferProfileList[batch].p95prepLat = profile[i + 1].get<BatchSizeType>();
+        msvc_batchInferProfileList[batch].p95inferLat = profile[i + 2].get<BatchSizeType>();
+        msvc_batchInferProfileList[batch].p95inferLat = profile[i + 3].get<BatchSizeType>();
+
+        i += NUM_NUMBERS_PER_BATCH;
+    } while (true);
+    return true;
+}
+
 /**
  * @brief Load the configurations from the json file
  * 
@@ -247,6 +277,13 @@ void BaseReqBatcher::loadConfigs(const json &jsonConfigs, bool isConstructing) {
     }
 
     BaseReqBatcherConfigs configs = loadConfigsFromJson(jsonConfigs);
+
+    bool readProfile = readModelProfile(jsonConfigs["msvc_modelProfile"]);
+
+    if (!readProfile && msvc_RUNMODE == RUNMODE::DEPLOYMENT && msvc_taskName != "dsrc" && msvc_taskName != "datasource") {
+        spdlog::get("container_agent")->error("{0:s} No model profile found.", __func__);
+        exit(1);
+    }
 
     msvc_imgType = configs.msvc_imgType;
     msvc_colorCvtType = configs.msvc_colorCvtType;

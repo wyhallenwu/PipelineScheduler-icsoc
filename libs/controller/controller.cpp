@@ -676,7 +676,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         start_config["container"]["cont_name"] = container->name;
         start_config["container"]["cont_allocationMode"] = easy_allocation ? 1 : 0;
         if (ctrl_systemName == "ppp") {
-            start_config["container"]["cont_batchMode"] = 1;
+            start_config["container"]["cont_batchMode"] = 2;
         }
         if (ctrl_systemName == "ppp" || ctrl_systemName == "jlf") {
             start_config["container"]["cont_dropMode"] = 1;
