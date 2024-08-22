@@ -255,7 +255,7 @@ bool BaseReqBatcher::readModelProfile(const json &profile) {
         BatchSizeType batch = profile[i].get<BatchSizeType>();
         msvc_batchInferProfileList[batch].p95prepLat = profile[i + 1].get<BatchSizeType>();
         msvc_batchInferProfileList[batch].p95inferLat = profile[i + 2].get<BatchSizeType>();
-        msvc_batchInferProfileList[batch].p95inferLat = profile[i + 3].get<BatchSizeType>();
+        msvc_batchInferProfileList[batch].p95postLat = profile[i + 3].get<BatchSizeType>();
 
         i += NUM_NUMBERS_PER_BATCH;
     } while (true);
