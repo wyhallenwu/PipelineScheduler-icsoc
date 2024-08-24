@@ -189,6 +189,9 @@ void Controller::Scheduling() {
                     // model->manifestations.push_back(TranslateToContainer(model, devices.list[model->device], 0));
                     // model->manifestations.back()->task = taskHandle;
                 }
+                if (model->name.find("sink") != std::string::npos) {
+                    model->device = "sink";
+                }
             }
         }
 
