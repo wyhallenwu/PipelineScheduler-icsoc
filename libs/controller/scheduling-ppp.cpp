@@ -379,6 +379,9 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel) {
          pipelineModel->name.find("yolov5ndsrc") != std::string::npos) &&
         pipelineModel->name.find("sink") == std::string::npos &&
         !pipelineModel->gpuScheduled) {
+        // @Lucas: We can number the replicas for each `PipelineModel`
+        // and schedule accordingly. Instead of scheduling all containers for a model at one go,
+        // we all containers that have the same replica number for all models, then move to the next replica number.
         for (auto &container : pipelineModel->task->tk_subTasks[pipelineModel->name]) {
             container->startTime = pipelineModel->startTime;
             container->endTime = pipelineModel->endTime;
@@ -390,6 +393,7 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel) {
     for (auto downstream : pipelineModel->downstreams) {
         modelTemporalScheduling(downstream.first);
     }
+    // @Lucas: This needs to be reset every scheduling iteration as well.
     pipelineModel->gpuScheduled = true;
     return true;
 }
