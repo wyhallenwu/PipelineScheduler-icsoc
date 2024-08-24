@@ -175,6 +175,7 @@ void Controller::Scheduling() {
             for (auto &model: taskHandle->tk_pipelineModels) {
                 model->name = taskName + "_" + model->name;
             }
+            estimateModelTiming(taskHandle->tk_pipelineModels.front(), 0);
             taskHandle->tk_newlyAdded = false;
         }
 
@@ -355,7 +356,8 @@ std::pair<GPUPortion *, GPUPortion *> Controller::insertUsedGPUPortion(GPUPortio
 }
 
 bool Controller::containerTemporalScheduling(ContainerHandle *container) {
-    auto portion = findFreePortionForInsertion(devices.list["server"]->freeGPUPortions, container);
+    std::string deviceName = container->device_agent->name;
+    auto portion = findFreePortionForInsertion(devices.list[deviceName]->freeGPUPortions, container);
 
     if (portion == nullptr) {
         spdlog::get("container_agent")->error("No free portion found for container {0:s}", container->name);
@@ -363,14 +365,15 @@ bool Controller::containerTemporalScheduling(ContainerHandle *container) {
     }
     container->executionPortion = portion;
     container->gpuHandle = portion->lane->gpuHandle;
-    auto newPortions = insertUsedGPUPortion(devices.list["server"]->freeGPUPortions, container, portion);
+    auto newPortions = insertUsedGPUPortion(devices.list[deviceName]->freeGPUPortions, container, portion);
 
     return true;
 }
 
 bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel) {
     if (pipelineModel->name.find("datasource") == std::string::npos &&
-        pipelineModel->name.find("dsrc") == std::string::npos &&
+        (pipelineModel->name.find("dsrc") == std::string::npos ||
+         pipelineModel->name.find("yolov5ndsrc") != std::string::npos) &&
         pipelineModel->name.find("sink") == std::string::npos &&
         !pipelineModel->gpuScheduled) {
         for (auto &container : pipelineModel->task->tk_subTasks[pipelineModel->name]) {
@@ -927,70 +930,76 @@ void Controller::estimateTimeBudgetLeft(PipelineModel *currModel)
                                 (currModel->expectedQueueingLatency + currModel->expectedMaxProcessLatency) * 1.2;
 }
 
-void Controller::estimateModelTiming(PipelineModel *currModel) {
+void Controller::estimateModelTiming(PipelineModel *currModel, const uint64_t start2HereLatency) {
 
-    if (currModel->name.find("datasource") != std::string::npos || 
-        currModel->name.find("sink") != std::string::npos) {
+    if (currModel->name.find("datasource") != std::string::npos) {
         currModel->batchingDeadline = 0;
         currModel->startTime = 0;
         currModel->endTime = 0;
-        if (currModel->name.find("sink") != std::string::npos) {
-            for (auto &upstream : currModel->upstreams) {
-                currModel->localDutyCycle = std::max(currModel->localDutyCycle, upstream.first->endTime);
-            }
+        // if (currModel->name.find("sink") != std::string::npos) {
+        
+    }
+    else if (currModel->name.find("sink") != std::string::npos) {
+        currModel->batchingDeadline = 0;
+        currModel->startTime = 0;
+        currModel->endTime = 0;
+        for (auto &upstream : currModel->upstreams) {
+            currModel->localDutyCycle = std::max(currModel->localDutyCycle, upstream.first->endTime);
         }
         return;
-    }
-    auto batchSize = currModel->batchSize;
-    auto profile = currModel->processProfiles.at(currModel->deviceTypeName);
+    } else {
+        auto batchSize = currModel->batchSize;
+        auto profile = currModel->processProfiles.at(currModel->deviceTypeName);
 
-    uint64_t maxStartTime = currModel->startTime;
-    for (auto &upstream : currModel->upstreams) {
-        if (upstream.first->device != currModel->device) {
+        uint64_t maxStartTime = std::max(currModel->startTime, start2HereLatency);
+        for (auto &upstream : currModel->upstreams) {
+            if (upstream.first->device != currModel->device) {
+                continue;
+            }
+            // TODO: Add in-device transfer latency
+            maxStartTime = std::max(maxStartTime, upstream.first->endTime);
+        }
+        currModel->startTime = maxStartTime;
+        currModel->endTime = currModel->startTime + currModel->expectedMaxProcessLatency;
+        currModel->batchingDeadline = currModel->endTime -
+                                    profile.batchInfer.at(batchSize).p95inferLat * batchSize * 1.05 -
+                                    profile.batchInfer.at(batchSize).p95postLat;
+    }
+    
+    uint64_t maxDnstreamDutyCycle = currModel->localDutyCycle;
+    for (auto &downstream : currModel->downstreams) {
+        if (downstream.first->device != currModel->device &&
+            downstream.first->name.find("sink") == std::string::npos) {
+            estimateModelTiming(downstream.first, 0);
+            maxDnstreamDutyCycle = std::max(maxDnstreamDutyCycle, start2HereLatency + currModel->expectedMaxProcessLatency);
             continue;
         }
-        // TODO: Add in-device transfer latency
-        maxStartTime = std::max(maxStartTime, upstream.first->endTime);
+        estimateModelTiming(downstream.first, start2HereLatency + currModel->expectedMaxProcessLatency);
+        maxDnstreamDutyCycle = std::max(maxDnstreamDutyCycle, downstream.first->localDutyCycle);
     }
-    currModel->startTime = maxStartTime;
-    currModel->endTime = currModel->startTime + currModel->expectedMaxProcessLatency;
-    currModel->batchingDeadline = currModel->endTime -
-                                  profile.batchInfer.at(batchSize).p95inferLat * batchSize * 1.05 -
-                                  profile.batchInfer.at(batchSize).p95postLat;
-    
-    for (auto &downstream : currModel->downstreams) {
-        estimateModelTiming(downstream.first);
-    }
+    currModel->localDutyCycle = maxDnstreamDutyCycle;
 }
 
 void Controller::estimatePipelineTiming() {
     auto tasks = ctrl_mergedPipelines.getMap();
     for (auto &[taskName, task]: tasks) {
         for (auto &model: task->tk_pipelineModels) {
-            if (model->device != "server") {
-                continue;
-            }
             // If the model has already been estimated, we should not estimate it again
             if (model->endTime != 0 && model->startTime != 0) {
                 continue;
             }
-            estimateModelTiming(model);
+            // TODO
+            estimateModelTiming(model, 0);
         }
         uint64_t localDutyCycle;
-        for (auto &model: task->tk_pipelineModels) {
-            if (model->device != "server") {
-                continue;
-            }
-            if (model->name.find("sink") != std::string::npos) {
-                localDutyCycle = model->localDutyCycle;
-            }
-        }
-        for (auto &model: task->tk_pipelineModels) {
-            if (model->device != "server") {
-                continue;
-            }
-            model->localDutyCycle = localDutyCycle;
-        }
+        // for (auto &model: task->tk_pipelineModels) {
+        //     if (model->name.find("sink") != std::string::npos) {
+        //         localDutyCycle = model->localDutyCycle;
+        //     }
+        // }
+        // for (auto &model: task->tk_pipelineModels) {
+        //     model->localDutyCycle = localDutyCycle;
+        // }
         for (auto &model: task->tk_pipelineModels) {
             if (model->name.find("datasource") == std::string::npos &&
                 model->name.find("dsrc") == std::string::npos) {

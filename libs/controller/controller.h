@@ -768,7 +768,7 @@ private:
     void estimateModelNetworkLatency(PipelineModel *currModel);
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
-    void estimateModelTiming(PipelineModel *model);
+    void estimateModelTiming(PipelineModel *currModel, const uint64_t start2HereDutyCycle);
 
     void getInitialBatchSizes(TaskHandle *task, uint64_t slo);
     void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
