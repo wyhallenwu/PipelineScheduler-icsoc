@@ -7,7 +7,7 @@
 
 void Controller::initiateGPULanes(NodeHandle &node) {
     // Currently only support powerful GPUs capable of running multiple models in parallel
-    if (node.name != "server") {
+    if (node.name == "sink") {
         return;
     }
     auto deviceList = devices.list;
@@ -17,7 +17,12 @@ void Controller::initiateGPULanes(NodeHandle &node) {
         return;
     }
 
-    node.numGPULanes = NUM_LANES_PER_GPU * NUM_GPUS;
+    if (node.type == SystemDeviceType::Server) {
+        node.numGPULanes = NUM_LANES_PER_GPU * NUM_GPUS;
+    } else {
+        node.numGPULanes = 1;
+    }
+    
 
     for (auto i = 0; i < node.numGPULanes; i++) {
         node.gpuLanes.push_back(new GPULane{});
