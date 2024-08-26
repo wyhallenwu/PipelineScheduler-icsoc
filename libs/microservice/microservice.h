@@ -797,8 +797,6 @@ protected:
     uint64_t msvc_localDutyCycle;
     //
     ClockType msvc_cycleStartTime;
-    //
-    ClockType msvc_nextBatchTime;
     
     //
     MsvcSLOType msvc_interReqTime = 1;

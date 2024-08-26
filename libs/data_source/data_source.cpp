@@ -1,6 +1,7 @@
 #include "data_source.h"
 
 void DataSourceAgent::runService(const json &pipeConfigs, const json &configs) {
+    this->dispatchMicroservices();
     if (configs["container"]["cont_allocationMode"] == 0) {
         while (!cont_msvcsList[0]->checkReady()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000 / pipeConfigs[0]["msvc_idealBatchSize"].get<int>()));
@@ -11,7 +12,6 @@ void DataSourceAgent::runService(const json &pipeConfigs, const json &configs) {
         }
         cont_msvcsList[0]->setReady();
     }
-    this->dispatchMicroservices();
 
     this->waitReady();
     this->START();
