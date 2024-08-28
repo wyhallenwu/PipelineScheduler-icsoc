@@ -915,8 +915,8 @@ bool BaseReqBatcher::checkReqEligibility(std::vector<ClockType> &currReq_time) {
     auto now = std::chrono::high_resolution_clock::now();
     MsvcSLOType diff = std::chrono::duration_cast<std::chrono::microseconds>(now - currReq_time[0]).count();
     if (diff > msvc_pipelineSLO - msvc_timeBudgetLeft && msvc_DROP_MODE == DROP_MODE::LAZY) {
-        this->droppedReqCount++;
-        spdlog::get("container_agent")->trace("{0:s} dropped the {1:d}th request.", msvc_name, this->droppedReqCount);
+        this->msvc_droppedReqCount++;
+        spdlog::get("container_agent")->trace("{0:s} dropped the {1:d}th request.", msvc_name, this->msvc_droppedReqCount);
         return false;
     }
     // `currReq_recvTime` will also be used to measured how much for the req to sit in queue and
