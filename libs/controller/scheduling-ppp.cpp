@@ -22,6 +22,8 @@ void Controller::initiateGPULanes(NodeHandle &node) {
     } else {
         node.numGPULanes = 1;
     }
+    node.gpuHandles.clear();
+    node.freeGPUPortions.list.clear();
     
 
     for (auto i = 0; i < node.numGPULanes; i++) {
@@ -373,42 +375,48 @@ bool Controller::containerTemporalScheduling(ContainerHandle *container) {
     return true;
 }
 
-bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel) {
+bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned int replica_id) {
+    if (pipelineModel->gpuScheduled) { return true; }
     if (pipelineModel->name.find("datasource") == std::string::npos &&
         (pipelineModel->name.find("dsrc") == std::string::npos ||
          pipelineModel->name.find("yolov5ndsrc") != std::string::npos) &&
-        pipelineModel->name.find("sink") == std::string::npos &&
-        !pipelineModel->gpuScheduled) {
-        // @Lucas: We can number the replicas for each `PipelineModel`
-        // and schedule accordingly. Instead of scheduling all containers for a model at one go,
-        // we all containers that have the same replica number for all models, then move to the next replica number.
+        pipelineModel->name.find("sink") == std::string::npos) {
         for (auto &container : pipelineModel->task->tk_subTasks[pipelineModel->name]) {
-            container->startTime = pipelineModel->startTime;
-            container->endTime = pipelineModel->endTime;
-            container->batchingDeadline = pipelineModel->batchingDeadline;
-            containerTemporalScheduling(container);
-        }    
+            if (container->replica_id == replica_id) {
+                container->startTime = pipelineModel->startTime;
+                container->endTime = pipelineModel->endTime;
+                container->batchingDeadline = pipelineModel->batchingDeadline;
+                containerTemporalScheduling(container);
+            }
+        }
     }
-    
+    bool allScheduled = true;
     for (auto downstream : pipelineModel->downstreams) {
-        modelTemporalScheduling(downstream.first);
+        if (!modelTemporalScheduling(downstream.first, replica_id)) allScheduled = false;
     }
-    // @Lucas: This needs to be reset every scheduling iteration as well.
-    pipelineModel->gpuScheduled = true;
-    return true;
+    if (!allScheduled) return false;
+    if (replica_id == pipelineModel->numReplicas - 1) {
+        pipelineModel->gpuScheduled = true;
+        return true;
+    }
+    return false;
 }
 
 void Controller::temporalScheduling() {
     for (auto &[deviceName, deviceHandle]: devices.list) {
         initiateGPULanes(*deviceHandle);
     }
-    for (auto &[taskName, taskHandle]: ctrl_scheduledPipelines.list) {
-        for (auto &model: taskHandle->tk_pipelineModels) {
-            if (model->gpuScheduled) {
-                continue;
+    bool process_flag = true;
+    unsigned int replica_id = 0;
+    while (process_flag) {
+        process_flag = false;
+        for (auto &[taskName, taskHandle]: ctrl_scheduledPipelines.list) {
+            auto front_model = taskHandle->tk_pipelineModels.front();
+            if (!front_model->gpuScheduled) {
+                process_flag = process_flag || !modelTemporalScheduling(front_model, replica_id);
             }
-            modelTemporalScheduling(model);
         }
+        replica_id++;
     }
 }
 

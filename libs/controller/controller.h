@@ -164,6 +164,7 @@ struct NodeHandle {
 
 struct ContainerHandle {
     std::string name;
+    unsigned int replica_id;
     int class_of_interest;
     ModelType model;
     bool mergable;
@@ -232,6 +233,7 @@ struct ContainerHandle {
 
         // Constructor
     ContainerHandle(const std::string& name,
+                unsigned int replica_id,
                 int class_of_interest,
                 ModelType model,
                 bool mergable,
@@ -249,6 +251,7 @@ struct ContainerHandle {
                 const std::vector<QueueLengthType>& queueSizes = {},
                 uint64_t timeBudgetLeft = 9999999999)
     : name(name),
+      replica_id(replica_id),
       class_of_interest(class_of_interest),
       model(model),
       mergable(mergable),
@@ -273,6 +276,7 @@ struct ContainerHandle {
         std::lock_guard<std::mutex> lock2(other.containerHandleMutex, std::adopt_lock);
 
         name = other.name;
+        replica_id = other.replica_id;
         class_of_interest = other.class_of_interest;
         model = other.model;
         mergable = other.mergable;
@@ -315,6 +319,7 @@ struct ContainerHandle {
             std::lock_guard<std::mutex> lock1(containerHandleMutex, std::adopt_lock);
             std::lock_guard<std::mutex> lock2(other.containerHandleMutex, std::adopt_lock);
             name = other.name;
+            replica_id = other.replica_id;
             class_of_interest = other.class_of_interest;
             model = other.model;
             mergable = other.mergable;
@@ -786,7 +791,7 @@ private:
     void mergePipelines();
 
     bool containerTemporalScheduling(ContainerHandle *container);
-    bool modelTemporalScheduling(PipelineModel *pipelineModel);
+    bool modelTemporalScheduling(PipelineModel *pipelineModel, unsigned int replica_id);
     void temporalScheduling();
 
     void basicGPUScheduling(std::vector<ContainerHandle *> new_containers);

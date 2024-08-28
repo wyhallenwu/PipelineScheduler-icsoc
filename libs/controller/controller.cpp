@@ -557,7 +557,7 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     // the name of the container type to look it up in the container library
     std::string containerTypeName = modelName + "_" + getDeviceTypeName(device->type);
     
-    auto *container = new ContainerHandle{containerName,
+    auto *container = new ContainerHandle{containerName, i,
                                           class_of_interest,
                                           ModelTypeReverseList[modelName],
                                           CheckMergable(modelName),
