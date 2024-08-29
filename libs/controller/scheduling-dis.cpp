@@ -110,23 +110,6 @@ void Controller::Scheduling()
 {
     while (running)
     {
-        nodes.clear();
-
-        auto pointers = devices.getList();
-
-        {
-            std::vector<NodeHandle> localNodes;
-            for (const auto &ptr : pointers)
-            {
-                if (ptr != nullptr)
-                {
-                    localNodes.push_back(*ptr);
-                }
-            }
-
-            nodes.swap(localNodes);
-        }
-
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto taskList = ctrl_unscheduledPipelines.getMap();
 
@@ -154,6 +137,7 @@ void Controller::Scheduling()
 
         partitioner.BaseParPoint = ratio;
 
+        auto nodes = devices.getList();
         scheduleBaseParPointLoop(&model, &partitioner, nodes);
         scheduleFineGrainedParPointLoop(&partitioner, nodes);
         DecideAndMoveContainer(&model, nodes, &partitioner, 2);
@@ -264,7 +248,7 @@ uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const fl
 
 ///////////////////////////////////////////////////////////////////////distream add//////////////////////////////////////////////////////////////////////////////////////
 
-double Controller::calculateTotalprocessedRate(const PipelineModel *model, const std::vector<NodeHandle> &nodes, bool is_edge)
+double Controller::calculateTotalprocessedRate(const PipelineModel *model, const std::vector<NodeHandle *> &nodes, bool is_edge)
 {
     double totalRequestRate = 0.0;
     std::map<std::string, NodeHandle *> deviceList = devices.getMap();
@@ -313,7 +297,7 @@ double Controller::calculateTotalprocessedRate(const PipelineModel *model, const
 }
 
 // calculate the queue based on arrival rate
-int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool is_edge)
+int Controller::calculateTotalQueue(const std::vector<NodeHandle *> &nodes, bool is_edge)
 {
     // init the info
     double totalQueue = 0.0;
@@ -362,7 +346,7 @@ int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool i
 }
 
 // calculate the BaseParPoint based on the TP
-void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitioner *partitioner, std::vector<NodeHandle> nodes)
+void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitioner *partitioner, std::vector<NodeHandle *> &nodes)
 {
     // init the data
     float TPedgesAvg = 0.0f;
@@ -427,7 +411,7 @@ void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitione
 }
 
 // fine grained the parpoint based on the queue
-void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle> &nodes)
+void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle *> &nodes)
 {
     float w;
     float tmp;
@@ -456,7 +440,7 @@ void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const
     }
 }
 
-void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<NodeHandle> &nodes, Partitioner *partitioner, int cuda_device)
+void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<NodeHandle *> &nodes, Partitioner *partitioner, int cuda_device)
 {
     // Calculate the decision point by adding the base and fine grained partition
     float decisionPoint = partitioner->BaseParPoint + partitioner->FineGrainedOffset*0.2;
@@ -468,7 +452,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
 
     if (calculateTotalQueue(nodes, false) != 0)
     {                                                  
-        ratio = calculateTotalQueue(nodes, true) /calculateTotalQueue(nodes, false);
+        ratio = calculateTotalQueue(nodes, true) / calculateTotalQueue(nodes, false);
         ratio = std::max(0.0f, std::min(1.0f, ratio)); 
     }
 

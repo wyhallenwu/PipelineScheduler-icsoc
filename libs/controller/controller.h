@@ -999,10 +999,6 @@ private:
     };
     Tasks ctrl_unscheduledPipelines, ctrl_savedUnscheduledPipelines, ctrl_scheduledPipelines, ctrl_pastScheduledPipelines;
 
-    void deepCopyTasks(Tasks& source, Tasks& destination); //add by distream
-
-
-
     struct Containers {
     public:
         void addContainer(const std::string &name, ContainerHandle *container) {
@@ -1075,8 +1071,7 @@ private:
 
     void estimateTimeBudgetLeft(PipelineModel *currModel);
 
-//////////////////////////////////////////////////distream_add//////////////////////////////////////////////////////
-    std::mutex nodeHandleMutex;
+    /// DISTREAM CODE
     struct Partitioner
     {
         // NodeHandle& edge;
@@ -1085,18 +1080,12 @@ private:
         float BaseParPoint;
         float FineGrainedOffset;
     };
+    double calculateTotalprocessedRate(const PipelineModel *model, const std::vector<NodeHandle *> &nodes, bool is_edge);
+    int calculateTotalQueue(const std::vector<NodeHandle*> &nodes, bool is_edge);
+    void scheduleBaseParPointLoop(const PipelineModel *model, Partitioner *partitioner, std::vector<NodeHandle *> &nodes);
+    void scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle *> &nodes);
+    void DecideAndMoveContainer(const PipelineModel *model, std::vector<NodeHandle *> &nodes, Partitioner *partitioner, int cuda_device);
 
-    struct Partitioner;
-    std::vector<NodeHandle> nodes;
-    std::pair<std::vector<NodeHandle>, std::vector<NodeHandle>> categorizeNodes(const std::vector<NodeHandle> &nodes);
-    double calculateTotalprocessedRate(const PipelineModel *model, const std::vector<NodeHandle> &nodes, bool is_edge);
-    int calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool is_edge);
-    double getMaxTP(const PipelineModel *model, std::vector<NodeHandle> nodes, bool is_edge);
-    void scheduleBaseParPointLoop(const PipelineModel *model, Partitioner *partitioner, std::vector<NodeHandle> nodes);
-    float ComputeAveragedNormalizedWorkload(const std::vector<NodeHandle> &nodes, bool is_edge);
-    void scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle> &nodes);
-    void DecideAndMoveContainer(const PipelineModel *model, std::vector<NodeHandle> &nodes, Partitioner *partitioner, int cuda_device);
-    float calculateRatio(const std::vector<NodeHandle> &nodes);
 };
 
 
