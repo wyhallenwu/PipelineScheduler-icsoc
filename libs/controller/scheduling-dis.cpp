@@ -1,10 +1,4 @@
 #include "scheduling-dis.h"
-// #include "controller.h"
-
-// ==================================================================Scheduling==================================================================
-// ==============================================================================================================================================
-// ==============================================================================================================================================
-// ==============================================================================================================================================
 
 void Controller::queryingProfiles(TaskHandle *task)
 {
@@ -53,8 +47,8 @@ void Controller::queryingProfiles(TaskHandle *task)
             std::string senderDeviceType = getDeviceTypeName(deviceList.at(pair.first)->type);
             std::string receiverDeviceType = getDeviceTypeName(deviceList.at(pair.second)->type);
             containerName = model->name + "_" + receiverDeviceType;
-            std::unique_lock lock(devices.list[pair.first]->nodeHandleMutex);
-            NetworkEntryType entry = devices.list[pair.first]->latestNetworkEntries[receiverDeviceType];
+            std::unique_lock lock(devices.getDevice(pair.first)->nodeHandleMutex);
+            NetworkEntryType entry = devices.getDevice(pair.first)->latestNetworkEntries[receiverDeviceType];
             lock.unlock();
             NetworkProfile test = queryNetworkProfile(
                 *ctrl_metricsServerConn,
@@ -89,19 +83,6 @@ void Controller::queryingProfiles(TaskHandle *task)
                 ctrl_systemFPS);
             model->processProfiles[deviceTypeName] = profile;
         }
-
-        // ModelArrivalProfile profile = queryModelArrivalProfile(
-        //     *ctrl_metricsServerConn,
-        //     ctrl_experimentName,
-        //     ctrl_systemName,
-        //     t.name,
-        //     t.source,
-        //     ctrl_containerLib[containerName].taskName,
-        //     ctrl_containerLib[containerName].modelName,
-        //     possibleDeviceList,
-        //     possibleNetworkEntryPairs
-        // );
-        // std::cout << "sdfsdfasdf" << std::endl;
     }
 }
 
@@ -136,14 +117,6 @@ void Controller::Scheduling()
         NodeHandle *edgePointer = nullptr;
         NodeHandle *serverPointer = nullptr;
         unsigned long totalEdgeMemory = 0, totalServerMemory = 0;
-        // std::vector<std::unique_ptr<NodeHandle>> nodes;
-        // int cuda_device = 2; // need to be add
-        // std::unique_lock<std::mutex> lock(nodeHandleMutex);
-        // std::unique_lock<std::mutex> lock(devices.devicesMutex);
-        // for (const auto &devicePair : devices.list)
-        // {
-        //     nodes.push_back(devicePair.second);
-        // }
         nodes.clear();
 
         auto pointers = devices.getList();
@@ -206,7 +179,7 @@ void Controller::Scheduling()
                 }
                 else if (model->device != "server")
                 {
-                    edgePointer = devices.list[model->device];
+                    edgePointer = devices.getDevice(model->device);
                     model->batchSize = ctrl_initialBatchSizes["edge"];
                 }
                 else
@@ -228,57 +201,12 @@ void Controller::Scheduling()
         }
 
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
-//        int test = 0;
-//        /**
-//         * @brief Testing loop, removed in production
-//         *
-//         */
-//        while (true) {
-//            for (auto &taskPair : ctrl_scheduledPipelines.list)
-//            {
-//                std::vector<std::string> testDevices = {"server", taskPair.second->tk_pipelineModels.at(0)->device};
-//                // Aritificialy change position of yolo model to test
-//                taskPair.second->tk_pipelineModels.at(2)->device = testDevices.at(test % 2);
-//            }
-//            test++;
-//            ApplyScheduling();
-//            // Wait for 1 minute for the last scheduling to take effect
-//            std::this_thread::sleep_for(std::chrono::milliseconds(60000));
-//        }
 
         ApplyScheduling();
         std::cout << "end_scheduleBaseParPoint " << partitioner.BaseParPoint << std::endl;
         std::cout << "end_FineGrainedParPoint " << partitioner.FineGrainedOffset << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(
                 ctrl_schedulingIntervalSec)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
-    }
-}
-
-bool Controller::containerTemporalScheduling(ContainerHandle *container)
-{
-}
-
-bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel)
-{
-    if (pipelineModel->name == "datasource" || pipelineModel->name == "sink")
-    {
-        return true;
-    }
-    for (auto container : pipelineModel->manifestations)
-    {
-        containerTemporalScheduling(container);
-    }
-    for (auto downstream : pipelineModel->downstreams)
-    {
-        modelTemporalScheduling(downstream.first);
-    }
-    return true;
-}
-
-void Controller::temporalScheduling()
-{
-    for (auto &[taskName, taskHandle] : ctrl_scheduledPipelines.list)
-    {
     }
 }
 
@@ -394,8 +322,7 @@ void Controller::mergePipelines()
     for (const auto &taskName : toMerge)
     {
         mergedPipeline = mergePipelines(taskName);
-        std::lock_guard lock(ctrl_scheduledPipelines.tasksMutex);
-        ctrl_scheduledPipelines.list.insert({mergedPipeline.tk_name, &mergedPipeline});
+        ctrl_scheduledPipelines.addTask(mergedPipeline.tk_name, &mergedPipeline);
     }
 }
 
@@ -434,7 +361,7 @@ void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel
         return;
     }
 
-    std::string deviceTypeName = getDeviceTypeName(devices.list[edgeDevice]->type);
+    std::string deviceTypeName = getDeviceTypeName(devices.getDevice(edgeDevice)->type);
 
     uint32_t inputSize = currModel->processProfiles.at(deviceTypeName).p95InputSize;
     uint32_t outputSize = currModel->processProfiles.at(deviceTypeName).p95OutputSize;
@@ -711,7 +638,7 @@ double Controller::calculateTotalprocessedRate(const PipelineModel *model, const
     std::map<std::string, NodeHandle *> deviceList = devices.getMap();
 
     // Iterate over all unscheduled pipeline tasks
-    for (const auto &taskPair : ctrl_unscheduledPipelines.list)
+    for (const auto &taskPair : ctrl_unscheduledPipelines.getMap())
     {
         const auto &task = taskPair.second;
         // Iterate over all models in the task's pipeline
@@ -761,7 +688,7 @@ int Controller::calculateTotalQueue(const std::vector<NodeHandle> &nodes, bool i
     std::map<std::string, NodeHandle *> deviceList = devices.getMap();
 
     // for loop every model in the system
-    for (const auto &taskPair : ctrl_unscheduledPipelines.list)
+    for (const auto &taskPair : ctrl_unscheduledPipelines.getMap())
     {
         const auto &task = taskPair.second;
         for (auto &model : task->tk_pipelineModels)
@@ -923,7 +850,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
     {
         std::cout << "Move Container from server to edge based on model priority: " << std::endl;
         // for loop every model to find out the current splitpoint.
-        for (const auto &taskPair : ctrl_unscheduledPipelines.list)
+        for (const auto &taskPair : ctrl_unscheduledPipelines.getMap())
         {
             const auto &task = taskPair.second;
 
@@ -947,7 +874,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
     if (decisionPoint < ratio - tolerance)
     {
         std::cout << "Move Container from edge to server based on model priority: " << std::endl;
-        for (const auto &taskPair : ctrl_unscheduledPipelines.list)
+        for (const auto &taskPair : ctrl_unscheduledPipelines.getMap())
         {
             const auto &task = taskPair.second;
 
@@ -984,8 +911,3 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
         }
     }
 }
-
-// ============================================================================================================================================
-// ============================================================================================================================================
-// ============================================================================================================================================
-// ============================================================================================================================================
