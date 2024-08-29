@@ -98,6 +98,7 @@ if (ON_HOST STREQUAL "ON")
     # Find gRPC installation
     # Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
     set(gRPC_DIR /grpc/lib/cmake/grpc)
+    message(${gRPC_DIR})
     find_package(gRPC CONFIG REQUIRED)
     message(STATUS "Using gRPC ${gRPC_VERSION}")
 
@@ -141,7 +142,6 @@ else()
     endif ()
     # Use the correct version of CUDA
     set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
-# set(CUDA_INCLUDE_DIRS "/usr/local/cuda/include")
 
     # Set LightGBM include directories
     # set(LIGHTGBM_INCLUDE_DIR "/usr/include/LightGBM")
@@ -186,9 +186,6 @@ else()
     find_package(Boost REQUIRED)
     include_directories(${Boost_INCLUDE_DIR})
 
-
-    # Set the path to the gRPC installation
-    # set(CMAKE_PREFIX_PATH "/grpc" ${CMAKE_PREFIX_PATH})
     # Find gRPC installation
     # Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
     find_package(gRPC CONFIG REQUIRED)

@@ -839,22 +839,22 @@ void ContainerAgent::collectRuntimeMetrics() {
             if (timePointCastMillisecond(startTime) >= timePointCastMillisecond(cont_metricsServerConfigs.nextHwMetricsScrapeTime) && pid > 0) {
                 Profiler::sysStats stats = profiler->reportAtRuntime(pid);
                 cont_hwMetrics = {stats.cpuUsage, stats.processMemoryUsage, stats.processMemoryUsage, stats.gpuUtilization,
-                                  stats.gpuMemoryUsage};
+                                             stats.gpuMemoryUsage};
 
                 metricsStopwatch.stop();
                 scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
                 hwMetricsScraped = true;
                 cont_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() +
-                                                                    std::chrono::milliseconds(cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec - scrapeLatencyMillisec);
+                    std::chrono::milliseconds(cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec - scrapeLatencyMillisec);
                 spdlog::get("container_agent")->trace("{0:s} SCRAPE hardware metrics. Latency {1:d}ms.",
-                                                      cont_name,
-                                                      scrapeLatencyMillisec);
+                                                     cont_name,
+                                                     scrapeLatencyMillisec);
                 metricsStopwatch.start();
             }
         }
 
         startTime = std::chrono::high_resolution_clock::now();
-        if (timePointCastMillisecond(startTime) >= 
+        if (timePointCastMillisecond(startTime) >=
                 timePointCastMillisecond(cont_metricsServerConfigs.nextMetricsReportTime)) {
             Stopwatch pushMetricsStopWatch;
             pushMetricsStopWatch.start();
