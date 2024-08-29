@@ -469,7 +469,7 @@ void Controller::estimatePipelineLatency(PipelineModel *currModel, const uint64_
         estimatePipelineLatency(d.first, currModel->expectedStart2HereLatency);
     }
 
-    if (currModel->downstreams.size() == 0) {
+    if (currModel->downstreams.empty()) {
         return;
     }
 }
