@@ -85,6 +85,7 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_initialBatchSizes["yolov5"] = j["yolov5_batch_size"];
     ctrl_initialBatchSizes["edge"] = j["edge_batch_size"];
     ctrl_initialBatchSizes["server"] = j["server_batch_size"];
+    ctrl_schedulingIntervalSec = j["scheduling_interval_sec"];
     initialTasks = j["initial_pipelines"];
 }
 

@@ -1055,9 +1055,8 @@ private:
     std::shared_ptr<spdlog::logger> ctrl_logger;
 
     std::map<std::string, NetworkEntryType> ctrl_inDeviceNetworkEntries;
-
-    // TODO: Read from config file
-    std::uint64_t ctrl_schedulingIntervalSec = 10;//600;
+    
+    std::uint64_t ctrl_schedulingIntervalSec;
     ClockType ctrl_nextSchedulingTime = std::chrono::system_clock::now();
     ClockType ctrl_currSchedulingTime = std::chrono::system_clock::now();
 
