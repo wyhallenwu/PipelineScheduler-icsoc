@@ -374,8 +374,7 @@ void Controller::rim_action(TaskHandle *task)
     std::map<std::string, NodeHandle *> servers;
 
     {
-        std::lock_guard<std::mutex> devices_lock(devices.devicesMutex);
-        for (const auto &pair : devices.list)
+        for (const auto &pair : devices.getMap())
         {
             if (pair.second->name == "server")
             {
@@ -408,7 +407,7 @@ void Controller::rim_action(TaskHandle *task)
     {
         std::lock_guard<std::mutex> sink_lock(sink->pipelineModelMutex);
         sink->device = sink->possibleDevices[0];
-        sink->deviceAgent = devices.list[sink->device];
+        sink->deviceAgent = devices.getDevice(sink->device);
         sink->deviceTypeName = device_type_str(sink->deviceAgent);
     }
 }
