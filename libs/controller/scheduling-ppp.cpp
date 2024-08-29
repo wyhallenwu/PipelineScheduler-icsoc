@@ -45,8 +45,8 @@ void Controller::queryingProfiles(TaskHandle *task) {
             std::string senderDeviceType = getDeviceTypeName(deviceList.at(pair.first)->type);
             std::string receiverDeviceType = getDeviceTypeName(deviceList.at(pair.second)->type);
             containerName = model->name + "_" + receiverDeviceType;
-            std::unique_lock lock(devices.list[pair.first]->nodeHandleMutex);
-            NetworkEntryType entry = devices.list[pair.first]->latestNetworkEntries[receiverDeviceType];
+            std::unique_lock lock(devices.getDevice(pair.first)->nodeHandleMutex);
+            NetworkEntryType entry = devices.getDevice(pair.first)->latestNetworkEntries[receiverDeviceType];
             lock.unlock();
             NetworkProfile test = queryNetworkProfile(
                 *ctrl_metricsServerConn,
@@ -154,7 +154,7 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel) {
 }
 
 void Controller::temporalScheduling() {
-    for (auto &[taskName, taskHandle]: ctrl_scheduledPipelines.list) {
+    for (auto &[taskName, taskHandle]: ctrl_scheduledPipelines.getMap()) {
         
     }
 }
@@ -259,8 +259,7 @@ void Controller::mergePipelines() {
 
     for (const auto &taskName : toMerge) {
         mergedPipeline = mergePipelines(taskName);
-        std::lock_guard lock(ctrl_scheduledPipelines.tasksMutex);
-        ctrl_scheduledPipelines.list.insert({mergedPipeline.tk_name, &mergedPipeline});
+        ctrl_scheduledPipelines.addTask(mergedPipeline.tk_name, &mergedPipeline);
     }
 }
 
@@ -292,7 +291,7 @@ void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel
         return;
     }
 
-    std::string deviceTypeName = getDeviceTypeName(devices.list[edgeDevice]->type);
+    std::string deviceTypeName = getDeviceTypeName(devices.getDevice(edgeDevice)->type);
 
     uint32_t inputSize = currModel->processProfiles.at(deviceTypeName).p95InputSize;
     uint32_t outputSize = currModel->processProfiles.at(deviceTypeName).p95OutputSize;
@@ -469,7 +468,7 @@ void Controller::estimatePipelineLatency(PipelineModel *currModel, const uint64_
         estimatePipelineLatency(d.first, currModel->expectedStart2HereLatency);
     }
 
-    if (currModel->downstreams.size() == 0) {
+    if (currModel->downstreams.empty()) {
         return;
     }
 }

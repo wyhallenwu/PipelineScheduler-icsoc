@@ -85,6 +85,7 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_initialBatchSizes["yolov5"] = j["yolov5_batch_size"];
     ctrl_initialBatchSizes["edge"] = j["edge_batch_size"];
     ctrl_initialBatchSizes["server"] = j["server_batch_size"];
+    ctrl_schedulingIntervalSec = j["scheduling_interval_sec"];
     initialTasks = j["initial_pipelines"];
 }
 
@@ -225,17 +226,15 @@ Controller::Controller(int argc, char **argv) {
 }
 
 Controller::~Controller() {
-    std::unique_lock<std::mutex> lock(containers.containersMutex);
-    for (auto &msvc: containers.list) {
-        StopContainer(msvc.second, msvc.second->device_agent, true);
+    for (auto msvc: containers.getList()) {
+        StopContainer(msvc, msvc->device_agent, true);
     }
 
-    std::unique_lock<std::mutex> lock2(devices.devicesMutex);
-    for (auto &device: devices.list) {
-        device.second->cq->Shutdown();
+    for (auto &device: devices.getList()) {
+        device->cq->Shutdown();
         void *got_tag;
         bool ok = false;
-        while (device.second->cq->Next(&got_tag, &ok));
+        while (device->cq->Next(&got_tag, &ok));
     }
     server->Shutdown();
     cq->Shutdown();
@@ -289,13 +288,9 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
         model->task = task;
         
     }
-    std::unique_lock<std::mutex> lock2(ctrl_unscheduledPipelines.tasksMutex);
-    std::unique_lock<std::mutex> lock3(ctrl_savedUnscheduledPipelines.tasksMutex);
-    ctrl_unscheduledPipelines.list.insert({task->tk_name, task});
-    ctrl_savedUnscheduledPipelines.list.insert({task->tk_name, task});
 
-    lock2.unlock();
-    lock3.unlock();
+    ctrl_unscheduledPipelines.addTask(task->tk_name, task);
+    ctrl_savedUnscheduledPipelines.addTask(task->tk_name, task);
     return true;
 }
 
@@ -315,7 +310,7 @@ void Controller::initialiseGPU(NodeHandle *node, int numGPUs, std::vector<int> m
 
 void Controller::basicGPUScheduling(std::vector<ContainerHandle *> new_containers) {
     std::map<std::string, std::vector<ContainerHandle *>> scheduledContainers;
-    for (auto device: devices.list) {
+    for (auto device: devices.getMap()) {
         for (auto &container: new_containers) {
             if (container->device_agent->name != device.first) {
                 continue;
@@ -333,7 +328,7 @@ void Controller::basicGPUScheduling(std::vector<ContainerHandle *> new_container
                     return aMemUsage > bMemUsage;
                 });
     }
-    for (auto device: devices.list) {
+    for (auto device: devices.getMap()) {
         std::vector<GPUHandle *> gpus = device.second->gpuHandles;
         for (auto &container: scheduledContainers[device.first]) {
             MemUsageType containerMemUsage = container->getExpectedTotalMemUsage();
@@ -364,19 +359,12 @@ void Controller::basicGPUScheduling(std::vector<ContainerHandle *> new_container
  *
  */
 void Controller::ApplyScheduling() {
-//    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
-    // collect all running containers by device and model name
-//    while (true) { // TODO: REMOVE. ONLY FOR TESTING
     std::vector<ContainerHandle *> new_containers;
-    std::unique_lock lock_devices(devices.devicesMutex);
-    std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
-    std::unique_lock lock_pastPipelines(ctrl_pastScheduledPipelines.tasksMutex);
-    std::unique_lock lock_containers(containers.containersMutex);
 
     // designate all current models no longer valid to run
     // after scheduling some of them will be designated as valid
     // All the invalid will be stopped and removed.
-    for (auto &[deviceName, device]: devices.list) {
+    for (auto device: devices.getList()) {
         std::unique_lock lock_device(device->nodeHandleMutex);
         for (auto &[modelName, model] : device->modelList) {
             model->toBeRun = false;
@@ -387,7 +375,7 @@ void Controller::ApplyScheduling() {
      * @brief // Turn schedule tasks/pipelines into containers
      * Containers that are already running may be kept running if they are still valid
      */
-    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.getMap()) {
         for (auto &model: pipe->tk_pipelineModels) {
             if (ctrl_systemName != "ppp") {
                 model->cudaDevices.emplace_back(0);
@@ -414,15 +402,16 @@ void Controller::ApplyScheduling() {
 
             // check if the pipeline already been scheduled once before
             PipelineModel* pastModel = nullptr;
-            if (ctrl_pastScheduledPipelines.list.find(pipeName) != ctrl_pastScheduledPipelines.list.end()) {
+            std::map<std::string, TaskHandle*> pastScheduledPipelines = ctrl_pastScheduledPipelines.getMap();
+            if (pastScheduledPipelines.find(pipeName) != pastScheduledPipelines.end()) {
 
-                auto it = std::find_if(ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.begin(),
-                                              ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.end(),
+                auto it = std::find_if(pastScheduledPipelines[pipeName]->tk_pipelineModels.begin(),
+                                       pastScheduledPipelines[pipeName]->tk_pipelineModels.end(),
                                               [&modelFullName](PipelineModel *m) {
                                                   return m->name == modelFullName;
                                               });
                 // if the model is found in the past scheduled pipelines, its containers can be reused
-                if (it != ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.end()) {
+                if (it != pastScheduledPipelines[pipeName]->tk_pipelineModels.end()) {
                     pastModel = *it;
                     std::vector<ContainerHandle*> pastModelContainers = pastModel->task->tk_subTasks[model->name];
                     for (auto container: pastModelContainers) {
@@ -439,7 +428,7 @@ void Controller::ApplyScheduling() {
             if (candidate_size < model->numReplicas) {
                 // start additional containers
                 for (unsigned int i = candidate_size; i < model->numReplicas; i++) {
-                    ContainerHandle *container = TranslateToContainer(model, devices.list[model->device], i);
+                    ContainerHandle *container = TranslateToContainer(model, devices.getDevice(model->device), i);
                     if (container == nullptr) {
                         continue;
                     }
@@ -460,7 +449,7 @@ void Controller::ApplyScheduling() {
         }
     }
     // Rearranging the upstreams and downstreams for containers;
-    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+    for (auto pipe: ctrl_scheduledPipelines.getList()) {
         for (auto &model: pipe->tk_pipelineModels) {
             // If its a datasource, we dont have to do it now
             // datasource doesnt have upstreams
@@ -488,7 +477,7 @@ void Controller::ApplyScheduling() {
     }
 
 
-    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+    for (auto pipe: ctrl_scheduledPipelines.getList()) {
         for (auto &model: pipe->tk_pipelineModels) {
             //int i = 0;
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
@@ -499,7 +488,7 @@ void Controller::ApplyScheduling() {
                 if (candidate->device_agent->name != model->device) {
                     candidate->batch_size = model->batchSize;
                     //candidate->cuda_device = model->cudaDevices[i++];
-                    MoveContainer(candidate, devices.list[model->device]);
+                    MoveContainer(candidate, devices.getDevice(model->device));
                     continue;
                 }
                 if (candidate->batch_size != model->batchSize)
@@ -513,18 +502,12 @@ void Controller::ApplyScheduling() {
 
     for (auto container: new_containers) {
         StartContainer(container);
-        containers.list.insert({container->name, container});
+        containers.addContainer(container->name, container);
     }
-
-    lock_containers.unlock();
-    lock_devices.unlock();
-    lock_pipelines.unlock();
-    lock_pastPipelines.unlock();
 
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-//    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
@@ -675,7 +658,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         start_config["container"]["cont_name"] = container->name;
         start_config["container"]["cont_allocationMode"] = easy_allocation ? 1 : 0;
         if (ctrl_systemName == "ppp") {
-            start_config["container"]["cont_batchMode"] = 1;
+            start_config["container"]["cont_batchMode"] = 2;
         }
         if (ctrl_systemName == "ppp" || ctrl_systemName == "jlf") {
             start_config["container"]["cont_dropMode"] = 1;
@@ -922,12 +905,12 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     request.set_name(container->name);
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
+            device->stub->AsyncStopContainer(&context, request, containers.getContainer(container->name)->device_agent->cq));
     finishGrpc(rpc, reply, status, device->cq);
     if (container->gpuHandle != nullptr)
         container->gpuHandle->removeContainer(container);
     if (!forced) { //not forced means the container is stopped during scheduling and should be removed
-        containers.list.erase(container->name);
+        containers.removeContainer(container->name);
         container->device_agent->containers.erase(container->name);
     }
     for (auto upstr: container->upstreams) {
@@ -1055,10 +1038,10 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         controller->initialiseGPU(node, request.processors(), std::vector<int>(request.memory().begin(), request.memory().end()));
         controller->devices.addDevice(deviceName, node);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
-        controller->queryInDeviceNetworkEntries(controller->devices.list.at(deviceName));
+        controller->queryInDeviceNetworkEntries(controller->devices.getDevice(deviceName));
 
         if (node->type != SystemDeviceType::Server) {
-            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.list[deviceName])), 1000, 300000, 30);
+            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.getDevice(deviceName))), 1000, 300000, 30);
             networkCheck.detach();
         }
     } else {
@@ -1297,38 +1280,6 @@ void Controller::checkNetworkConditions() {
             }
             initNetworkCheck(*nodeHandle, 1000, 300000, 30);
         }
-        // std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
-        // std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
-        //                     "FROM %s ", tableName);
-
-        // pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
-        // //Getting the latest network entries into the networkEntries map
-        // for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
-        //     std::string sender_host = row["sender_host"].as<std::string>();
-        //     if (sender_host == "server" || sender_host == "serv") {
-        //         continue;
-        //     }
-        //     std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
-        //     networkEntries[sender_host].emplace_back(entry);
-        // }
-
-        // // Updating NodeHandle object with the latest network entries
-        // for (auto &[deviceName, entries] : networkEntries) {
-        //     // If entry belongs to a device that is not in the list of devices, ignore it
-        //     if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
-        //         continue;
-        //     }
-        //     std::lock_guard<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
-        //     devices.list[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
-        // }
-
-        // // If no network entries exist for a device, send a request to the device to perform network testing
-        // for (auto &[deviceName, nodeHandle] : devices.list) {
-        //     if (nodeHandle.latestNetworkEntries.size() == 0) {
-        //         // TODO: Send a request to the device to perform network testing
-
-        //     }
-        // }
 
         stopwatch.stop();
         uint64_t sleepTimeUs = 60 * 1000000 - stopwatch.elapsed_microseconds();

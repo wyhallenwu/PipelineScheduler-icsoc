@@ -152,6 +152,10 @@ json loadRunArgs(int argc, char **argv) {
                                                                                       std::to_string(minBatch));
             }
         }
+
+        if (i == 1) {
+            containerConfigs.at("cont_pipeline")[i]["msvc_modelProfile"] = containerConfigs.at("cont_modelProfile");
+        }
     }
 
     json finalConfigs;
@@ -365,12 +369,12 @@ ContainerAgent::ContainerAgent(const json& configs) {
         cont_logger
     );
 
-    bool readProfile = readModelProfile(containerConfigs["cont_modelProfile"]);
+    // bool readProfile = readModelProfile(containerConfigs["cont_modelProfile"]);
 
-    if (!readProfile && cont_RUNMODE == RUNMODE::DEPLOYMENT && cont_taskName != "dsrc" && cont_taskName != "datasource") {
-        spdlog::get("container_agent")->error("{0:s} No model profile found.", __func__);
-        exit(1);
-    }
+    // if (!readProfile && cont_RUNMODE == RUNMODE::DEPLOYMENT && cont_taskName != "dsrc" && cont_taskName != "datasource") {
+    //     spdlog::get("container_agent")->error("{0:s} No model profile found.", __func__);
+    //     exit(1);
+    // }
 
     // if (cont_RUNMODE == RUNMODE::EMPTY_PROFILING) {
     //     // Create the logDir for this container
@@ -792,7 +796,7 @@ std::vector<float> getRatesInPeriods(const std::vector<ClockType> &timestamps, c
 
 
 void ContainerAgent::collectRuntimeMetrics() {
-    int lateCount;
+    unsigned int lateCount, totalRequests;
     ArrivalRecordType arrivalRecords;
     ProcessRecordType processRecords;
     BatchInferRecordType batchInferRecords;
@@ -854,7 +858,10 @@ void ContainerAgent::collectRuntimeMetrics() {
                 timePointCastMillisecond(cont_metricsServerConfigs.nextMetricsReportTime)) {
             Stopwatch pushMetricsStopWatch;
             pushMetricsStopWatch.start();
-            lateCount = cont_msvcsList[1]->GetDroppedReqCount();
+            lateCount = cont_msvcsList[0]->GetDroppedReqCount();
+            lateCount += cont_msvcsList[1]->GetDroppedReqCount();
+            spdlog::get("container_agent")->info("{0:s} had {1:d} late requests.", cont_name, lateCount);
+            totalRequests = cont_msvcsList[0]->GetTotalReqCount();
 
             std::string modelName = cont_msvcsList[2]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
