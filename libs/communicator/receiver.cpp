@@ -216,6 +216,7 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 
         std::vector<RequestData<LocalCPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
+            receiverInstance->msvc_totalReqCount++;
             auto timestamps = std::vector<ClockType>();
             for (auto ts: el.timestamp()) {
                 timestamps.emplace_back(TimePrecisionType(ts));
@@ -237,7 +238,6 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
             cv::Mat image;
             if (el.is_encoded()){
                 std::vector<uchar> buf(el.data().c_str(), el.data().c_str() + length);
-                // memcpy(buf.data(), el.data().c_str(), length);
                 image = cv::imdecode(buf, cv::IMREAD_COLOR);
             } else {
                 image = cv::Mat(el.height(), el.width(), CV_8UC3,const_cast<char *>(el.data().c_str())).clone();
@@ -251,6 +251,10 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
                     1,
                     elements
             };
+
+            OutQueue->emplace(req);
+            spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} emplaced request with path: {1:s}", __func__, el.path());
+
             /**
              * @brief Request now should carry 4 timestamps
              * 1. The very moment request is originally generated at the beggining of the pipeline.
@@ -259,12 +263,6 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
              * 4. The moment request is received by the receiver.
              * 
              */
-            OutQueue->emplace(req);
-            spdlog::get("container_agent")->trace("SerializedDataRequestHandler::{0:s} emplaced request with path: {1:s}", __func__, el.path());
-            if (receiverInstance->checkProfileEnd(el.path())) {
-                receiverInstance->STOP_THREADS = true;
-                break;
-            };
         }
 
         status = FINISH;

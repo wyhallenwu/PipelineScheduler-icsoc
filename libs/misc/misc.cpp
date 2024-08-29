@@ -960,14 +960,6 @@ std::string abbreviate(const std::string &keyphrase, const std::string delimiter
     std::vector<std::string> words = splitString(keyphrase, delimiter);
     std::string abbr = "";
     for (const auto &word : words) {
-        // TODO: inspect potentially dead code in if statement
-        if (word.find("-") != std::string::npos) {
-            abbr += abbreviate(word, "-");
-            if (word != words.back()) {
-                abbr += delimiter;
-            }
-            continue;
-        }
         try {
             abbr += keywordAbbrs.at(word);
         } catch (const std::out_of_range &e) {
