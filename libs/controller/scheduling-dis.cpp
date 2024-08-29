@@ -110,13 +110,6 @@ void Controller::Scheduling()
 {
     while (running)
     {
-        // use list of devices, tasks and containers to schedule depending on your algorithm
-        // put helper functions as a private member function of the controller and write them at the bottom of this file.
-        // std::vector<NodeHandle*> nodes;
-
-        NodeHandle *edgePointer = nullptr;
-        NodeHandle *serverPointer = nullptr;
-        unsigned long totalEdgeMemory = 0, totalServerMemory = 0;
         nodes.clear();
 
         auto pointers = devices.getList();
@@ -179,7 +172,6 @@ void Controller::Scheduling()
                 }
                 else if (model->device != "server")
                 {
-                    edgePointer = devices.getDevice(model->device);
                     model->batchSize = ctrl_initialBatchSizes["edge"];
                 }
                 else
@@ -207,274 +199,6 @@ void Controller::Scheduling()
         std::cout << "end_FineGrainedParPoint " << partitioner.FineGrainedOffset << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(
                 ctrl_schedulingIntervalSec)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
-    }
-}
-
-bool Controller::mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile)
-{
-    mergedProfile.arrivalRates += toBeMergedProfile.arrivalRates;
-    auto mergedD2DProfile = &mergedProfile.d2dNetworkProfile;
-    auto toBeMergedD2DProfile = &toBeMergedProfile.d2dNetworkProfile;
-    for (const auto &[pair, profile] : toBeMergedProfile.d2dNetworkProfile)
-    {
-        mergedD2DProfile->at(pair).p95TransferDuration = std::max(mergedD2DProfile->at(pair).p95TransferDuration,
-                                                                  toBeMergedD2DProfile->at(pair).p95TransferDuration);
-        mergedD2DProfile->at(pair).p95PackageSize = std::max(mergedD2DProfile->at(pair).p95PackageSize,
-                                                             toBeMergedD2DProfile->at(pair).p95PackageSize);
-    }
-    return true;
-}
-
-bool Controller::mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, const PerDeviceModelProfileType &toBeMergedProfile)
-{
-    for (const auto &[deviceName, profile] : toBeMergedProfile)
-    {
-        auto mergedProfileDevice = &mergedProfile[deviceName];
-        auto toBeMergedProfileDevice = &toBeMergedProfile.at(deviceName);
-
-        BatchSizeType batchSize =
-
-            mergedProfileDevice->p95InputSize = std::max(mergedProfileDevice->p95InputSize, toBeMergedProfileDevice->p95InputSize);
-        mergedProfileDevice->p95OutputSize = std::max(mergedProfileDevice->p95OutputSize, toBeMergedProfileDevice->p95OutputSize);
-        // mergedProfileDevice->p95prepLat = std::max(mergedProfileDevice->p95prepLat, toBeMergedProfileDevice->p95prepLat);
-        // mergedProfileDevice->p95postLat = std::max(mergedProfileDevice->p95postLat, toBeMergedProfileDevice->p95postLat);
-
-        auto mergedBatchInfer = &mergedProfileDevice->batchInfer;
-        // auto toBeMergedBatchInfer = &toBeMergedProfileDevice->batchInfer;
-
-        for (const auto &[batchSize, p] : toBeMergedProfileDevice->batchInfer)
-        {
-            mergedBatchInfer->at(batchSize).p95inferLat = std::max(mergedBatchInfer->at(batchSize).p95inferLat, p.p95inferLat);
-            mergedBatchInfer->at(batchSize).p95prepLat = std::max(mergedBatchInfer->at(batchSize).p95prepLat, p.p95prepLat);
-            mergedBatchInfer->at(batchSize).p95postLat = std::max(mergedBatchInfer->at(batchSize).p95postLat, p.p95postLat);
-            mergedBatchInfer->at(batchSize).cpuUtil = std::max(mergedBatchInfer->at(batchSize).cpuUtil, p.cpuUtil);
-            mergedBatchInfer->at(batchSize).gpuUtil = std::max(mergedBatchInfer->at(batchSize).gpuUtil, p.gpuUtil);
-            mergedBatchInfer->at(batchSize).memUsage = std::max(mergedBatchInfer->at(batchSize).memUsage, p.memUsage);
-            mergedBatchInfer->at(batchSize).rssMemUsage = std::max(mergedBatchInfer->at(batchSize).rssMemUsage, p.rssMemUsage);
-            mergedBatchInfer->at(batchSize).gpuMemUsage = std::max(mergedBatchInfer->at(batchSize).gpuMemUsage, p.gpuMemUsage);
-        }
-    }
-    return true;
-}
-
-bool Controller::mergeModels(PipelineModel *mergedModel, PipelineModel *toBeMergedModel)
-{
-    // If the merged model is empty, we should just copy the model to be merged
-    if (mergedModel->numReplicas == 0)
-    {
-        *mergedModel = *toBeMergedModel;
-        return true;
-    }
-    // If the devices are different, we should not merge the models
-    if (mergedModel->device != toBeMergedModel->device || toBeMergedModel->merged)
-    {
-        return false;
-    }
-
-    mergeArrivalProfiles(mergedModel->arrivalProfiles, toBeMergedModel->arrivalProfiles);
-    mergeProcessProfiles(mergedModel->processProfiles, toBeMergedModel->processProfiles);
-
-    bool merged = false;
-    toBeMergedModel->merged = true;
-}
-
-TaskHandle Controller::mergePipelines(const std::string &taskName)
-{
-    TaskHandle mergedPipeline;
-    auto mergedPipelineModels = &(mergedPipeline.tk_pipelineModels);
-
-    auto unscheduledTasks = ctrl_unscheduledPipelines.getMap();
-
-    *mergedPipelineModels = getModelsByPipelineType(unscheduledTasks.at(taskName)->tk_type, "server");
-    uint16_t numModels = mergedPipeline.tk_pipelineModels.size();
-
-    for (uint16_t i = 0; i < numModels; i++)
-    {
-        if (mergedPipelineModels->at(i)->name == "datasource")
-        {
-            continue;
-        }
-        for (const auto &task : unscheduledTasks)
-        {
-            if (task.first == taskName)
-            {
-                continue;
-            }
-            mergeModels(mergedPipelineModels->at(i), task.second->tk_pipelineModels.at(i));
-        }
-        auto numIncReps = incNumReplicas(mergedPipelineModels->at(i));
-        mergedPipelineModels->at(i)->numReplicas += numIncReps;
-        auto deviceList = devices.getMap();
-        for (auto j = 0; j < mergedPipelineModels->at(i)->numReplicas; j++)
-        {
-            mergedPipelineModels->at(i)->manifestations.emplace_back(new ContainerHandle{});
-            mergedPipelineModels->at(i)->manifestations.back()->task = &mergedPipeline;
-            mergedPipelineModels->at(i)->manifestations.back()->device_agent = deviceList.at(mergedPipelineModels->at(i)->device);
-        }
-    }
-}
-
-void Controller::mergePipelines()
-{
-    std::vector<std::string> toMerge = {"traffic", "people"};
-    TaskHandle mergedPipeline;
-
-    for (const auto &taskName : toMerge)
-    {
-        mergedPipeline = mergePipelines(taskName);
-        ctrl_scheduledPipelines.addTask(mergedPipeline.tk_name, &mergedPipeline);
-    }
-}
-
-/**
- * @brief Recursively traverse the model tree and try shifting models to edge devices
- *
- * @param models
- * @param slo
- */
-void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string &edgeDevice)
-{
-    if (currModel->name == "sink")
-    {
-        return;
-    }
-    if (currModel->name == "datasource")
-    {
-        if (currModel->device != edgeDevice)
-        {
-            spdlog::get("container_agent")->warn("Edge device {0:s} is not identical to the datasource device {1:s}", edgeDevice, currModel->device);
-        }
-        return;
-    }
-
-    if (currModel->device == edgeDevice)
-    {
-        for (auto &d : currModel->downstreams)
-        {
-            shiftModelToEdge(pipeline, d.first, slo, edgeDevice);
-        }
-    }
-
-    // If the edge device is not in the list of possible devices, we should not consider it
-    if (std::find(currModel->possibleDevices.begin(), currModel->possibleDevices.end(), edgeDevice) == currModel->possibleDevices.end())
-    {
-        return;
-    }
-
-    std::string deviceTypeName = getDeviceTypeName(devices.getDevice(edgeDevice)->type);
-
-    uint32_t inputSize = currModel->processProfiles.at(deviceTypeName).p95InputSize;
-    uint32_t outputSize = currModel->processProfiles.at(deviceTypeName).p95OutputSize;
-
-    if (inputSize * 0.3 < outputSize)
-    {
-        currModel->device = edgeDevice;
-        estimateModelLatency(currModel);
-        for (auto &downstream : currModel->downstreams)
-        {
-            estimateModelLatency(downstream.first);
-        }
-        estimatePipelineLatency(currModel, currModel->expectedStart2HereLatency);
-        uint64_t expectedE2ELatency = pipeline.back()->expectedStart2HereLatency;
-        // if after shifting the model to the edge device, the pipeline still meets the SLO, we should keep it
-
-        // However, if the pipeline does not meet the SLO, we should shift reverse the model back to the server
-        if (expectedE2ELatency > slo)
-        {
-            currModel->device = "server";
-            estimateModelLatency(currModel);
-            for (auto &downstream : currModel->downstreams)
-            {
-                estimateModelLatency(downstream.first);
-            }
-            estimatePipelineLatency(currModel, currModel->expectedStart2HereLatency);
-        }
-    }
-    // Shift downstream models to the edge device
-    for (auto &d : currModel->downstreams)
-    {
-        shiftModelToEdge(pipeline, d.first, slo, edgeDevice);
-    }
-}
-
-/**
- * @brief
- *
- * @param models
- * @param slo
- * @param nObjects
- * @return std::map<ModelType, int>
- */
-void Controller::getInitialBatchSizes(TaskHandle *task, uint64_t slo)
-{
-
-    PipelineModelListType *models = &(task->tk_pipelineModels);
-
-    for (auto m : *models)
-    {
-        m->batchSize = 1;
-        m->numReplicas = 1;
-
-        estimateModelLatency(m);
-    }
-
-    // DFS-style recursively estimate the latency of a pipeline from source to sink
-    // The first model should be the datasource
-    estimatePipelineLatency(models->front(), 0);
-
-    uint64_t expectedE2ELatency = models->back()->expectedStart2HereLatency;
-
-    if (slo < expectedE2ELatency)
-    {
-        spdlog::info("SLO is too low for the pipeline to meet. Expected E2E latency: {0:d}, SLO: {1:d}", expectedE2ELatency, slo);
-    }
-
-    // Increase number of replicas to avoid bottlenecks
-    for (auto m : *models)
-    {
-        auto numIncReplicas = incNumReplicas(m);
-        m->numReplicas += numIncReplicas;
-    }
-
-    // Find near-optimal batch sizes
-    auto foundBest = true;
-    while (foundBest)
-    {
-        foundBest = false;
-        uint64_t bestCost = models->back()->estimatedStart2HereCost;
-        for (auto m : *models)
-        {
-            BatchSizeType oldBatchsize = m->batchSize;
-            m->batchSize *= 2;
-            estimateModelLatency(m);
-            estimatePipelineLatency(models->front(), 0);
-            expectedE2ELatency = models->back()->expectedStart2HereLatency;
-            if (expectedE2ELatency < slo)
-            {
-                // If increasing the batch size of model `m` creates a pipeline that meets the SLO, we should keep it
-                uint64_t estimatedE2Ecost = models->back()->estimatedStart2HereCost;
-                // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
-                if (estimatedE2Ecost < bestCost)
-                {
-                    bestCost = estimatedE2Ecost;
-                    foundBest = true;
-                }
-                if (!foundBest)
-                {
-                    m->batchSize = oldBatchsize;
-                    estimateModelLatency(m);
-                    continue;
-                }
-                // If increasing the batch size meets the SLO, we can try decreasing the number of replicas
-                auto numDecReplicas = decNumReplicas(m);
-                m->numReplicas -= numDecReplicas;
-            }
-            else
-            {
-                m->batchSize = oldBatchsize;
-                estimateModelLatency(m);
-            }
-        }
     }
 }
 
@@ -524,97 +248,6 @@ void Controller::estimateModelNetworkLatency(PipelineModel *currModel) {
 }
 
 /**
- * @brief DFS-style recursively estimate the latency of a pipeline from source to sink
- *
- * @param pipeline provides all information about the pipeline needed for scheduling
- * @param currModel
- */
-void Controller::estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency)
-{
-    // estimateModelLatency(currModel, currModel->device);
-
-    // Update the expected latency to reach the current model
-    // In case a model has multiple upstreams, the expected latency to reach the model is the maximum of the expected latency
-    // to reach from each upstream.
-    if (currModel->name == "datasource")
-    {
-        currModel->expectedStart2HereLatency = start2HereLatency;
-    }
-    else
-    {
-        currModel->expectedStart2HereLatency = std::max(
-            currModel->expectedStart2HereLatency,
-            start2HereLatency + currModel->expectedMaxProcessLatency + currModel->expectedTransferLatency +
-                currModel->expectedQueueingLatency);
-    }
-
-    // Cost of the pipeline until the current model
-    currModel->estimatedStart2HereCost += currModel->estimatedPerQueryCost;
-
-    std::vector<std::pair<PipelineModel *, int>> downstreams = currModel->downstreams;
-    for (const auto &d : downstreams)
-    {
-        estimatePipelineLatency(d.first, currModel->expectedStart2HereLatency);
-    }
-
-    if (currModel->downstreams.size() == 0)
-    {
-        return;
-    }
-}
-
-/**
- * @brief Attempts to increase the number of replicas to meet the arrival rate
- *
- * @param model the model to be scaled
- * @param deviceName
- * @return uint8_t The number of replicas to be added
- */
-uint8_t Controller::incNumReplicas(const PipelineModel *model)
-{
-    uint8_t numReplicas = model->numReplicas;
-    std::string deviceTypeName = model->deviceTypeName;
-    ModelProfile profile = model->processProfiles.at(deviceTypeName);
-    uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat + profile.batchInfer.at(model->batchSize).p95postLat);
-    float processRate = indiProcessRate * numReplicas;
-    while (processRate < model->arrivalProfiles.arrivalRates)
-    {
-        numReplicas++;
-        processRate = indiProcessRate * numReplicas;
-    }
-    return numReplicas - model->numReplicas;
-}
-
-/**
- * @brief Decrease the number of replicas as long as it is possible to meet the arrival rate
- *
- * @param model
- * @return uint8_t The number of replicas to be removed
- */
-uint8_t Controller::decNumReplicas(const PipelineModel *model)
-{
-    uint8_t numReplicas = model->numReplicas;
-    std::string deviceTypeName = model->deviceTypeName;
-    ModelProfile profile = model->processProfiles.at(deviceTypeName);
-    uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat + profile.batchInfer.at(model->batchSize).p95postLat);
-    float processRate = indiProcessRate * numReplicas;
-    while (numReplicas > 1)
-    {
-        numReplicas--;
-        processRate = indiProcessRate * numReplicas;
-        // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if (processRate < model->arrivalProfiles.arrivalRates)
-        {
-            numReplicas++;
-            break;
-        }
-    }
-    return model->numReplicas - numReplicas;
-}
-
-/**
  * @brief Calculate queueing latency for each query coming to the preprocessor's queue, in microseconds
  * Queue type is expected to be M/D/1
  *
@@ -625,7 +258,6 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model)
 uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const float &preprocess_rate)
 {
     float rho = arrival_rate / preprocess_rate;
-    float numQueriesInSystem = rho / (1 - rho);
     float averageQueueLength = rho * rho / (1 - rho);
     return (uint64_t)(averageQueueLength / arrival_rate * 1000000);
 }
@@ -798,7 +430,6 @@ void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitione
 void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle> &nodes)
 {
     float w;
-    int totalServerQueue;
     float tmp;
     while (true)
     {
@@ -806,19 +437,19 @@ void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const
         // get edge and server sides queue data
         float wbar = calculateTotalQueue(nodes, true);
         std::cout << "wbar " << wbar << std::endl;
-        float w = calculateTotalQueue(nodes, false);
+        w = calculateTotalQueue(nodes, false);
         std::cout << "w " << w << std::endl;
         // based on the queue sides to claculate the fine grained point
         //  If there's no queue on the edge, set a default adjustment factor
         if (wbar == 0)
         {
-            float tmp = 1.0f;
+            tmp = 1.0f;
             partitioner->FineGrainedOffset = tmp * partitioner->BaseParPoint;
         }
         // Otherwise, calculate the fine grained offset based on the relative queue sizes
         else
         {
-            float tmp = (wbar - w) / std::max(wbar, w);
+            tmp = (wbar - w) / std::max(wbar, w);
             partitioner->FineGrainedOffset = tmp * partitioner->BaseParPoint;
         }
         break;
@@ -832,17 +463,13 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
     // tolerance threshold for decision making
     float tolerance = 0.1;
     // ratio for current worload 
-    float ratio = 0.0f;//calculateTotalQueue(nodes, true) /calculateTotalQueue(nodes, false);
+    float ratio = 0.0f;
     // ContainerHandle *selectedContainer = nullptr;
 
     if (calculateTotalQueue(nodes, false) != 0)
     {                                                  
         ratio = calculateTotalQueue(nodes, true) /calculateTotalQueue(nodes, false);
         ratio = std::max(0.0f, std::min(1.0f, ratio)); 
-    }
-    else
-    {
-        ratio = 0.0f; 
     }
 
     // the decisionpoint is much larger than the current workload that means we need give the edge more work
