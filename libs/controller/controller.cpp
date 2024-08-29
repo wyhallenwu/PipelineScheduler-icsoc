@@ -85,11 +85,11 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_initialBatchSizes["yolov5"] = j["yolov5_batch_size"];
     ctrl_initialBatchSizes["edge"] = j["edge_batch_size"];
     ctrl_initialBatchSizes["server"] = j["server_batch_size"];
+    ctrl_schedulingIntervalSec = j["scheduling_interval_sec"];
     initialTasks = j["initial_pipelines"];
 }
 
-void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskStruct &val)
-{
+void TaskDescription::from_json(const nlohmann::json &j, TaskDescription::TaskStruct &val) {
     j.at("pipeline_name").get_to(val.name);
     j.at("pipeline_target_slo").get_to(val.slo);
     j.at("pipeline_type").get_to(val.type);
@@ -154,20 +154,23 @@ Controller::Controller(int argc, char **argv) {
     ctrl_logPath = absl::GetFlag(FLAGS_ctrl_logPath);
     ctrl_logPath += "/" + ctrl_experimentName;
     std::filesystem::create_directories(
-        std::filesystem::path(ctrl_logPath));
+            std::filesystem::path(ctrl_logPath)
+    );
     ctrl_logPath += "/" + ctrl_systemName;
     std::filesystem::create_directories(
-        std::filesystem::path(ctrl_logPath));
+            std::filesystem::path(ctrl_logPath)
+    );
     ctrl_verbose = absl::GetFlag(FLAGS_ctrl_verbose);
     ctrl_loggingMode = absl::GetFlag(FLAGS_ctrl_loggingMode);
 
     setupLogger(
-        ctrl_logPath,
-        "controller",
-        ctrl_loggingMode,
-        ctrl_verbose,
-        ctrl_loggerSinks,
-        ctrl_logger);
+            ctrl_logPath,
+            "controller",
+            ctrl_loggingMode,
+            ctrl_verbose,
+            ctrl_loggerSinks,
+            ctrl_logger
+    );
 
     ctrl_containerLib = getContainerLib("all");
 
@@ -184,7 +187,7 @@ Controller::Controller(int argc, char **argv) {
     if (res.empty()) {
         std::string sql = "CREATE SCHEMA IF NOT EXISTS " + ctrl_metricsServerConfigs.schema + ";";
         pushSQL(*ctrl_metricsServerConn, sql);
-        sql = "ALTER DEFAULT PRIVILEGES IN SCHEMA " + ctrl_metricsServerConfigs.schema +
+        sql = "ALTER DEFAULT PRIVILEGES IN SCHEMA " + ctrl_metricsServerConfigs.schema + 
               " GRANT ALL PRIVILEGES ON TABLES TO controller;";
         pushSQL(*ctrl_metricsServerConn, sql);
         sql = "GRANT USAGE ON SCHEMA " + ctrl_metricsServerConfigs.schema + " TO device_agent, container_agent;";
@@ -222,16 +225,13 @@ Controller::Controller(int argc, char **argv) {
     ctrl_nextSchedulingTime = std::chrono::system_clock::now();
 }
 
-Controller::~Controller()
-{
+Controller::~Controller() {
     std::unique_lock<std::mutex> lock(containers.containersMutex);
-    for (auto &msvc : containers.list)
-    {
+    for (auto &msvc: containers.list) {
         StopContainer(msvc.second, msvc.second->device_agent, true);
     }
 
     std::unique_lock<std::mutex> lock2(devices.devicesMutex);
-
     for (auto &device: devices.list) {
         device.second->cq->Shutdown();
         void *got_tag;
@@ -365,10 +365,6 @@ void Controller::basicGPUScheduling(std::vector<ContainerHandle *> new_container
  *
  */
 void Controller::ApplyScheduling() {
-//    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
-    // collect all running containers by device and model name
-//    // while (true) { // TODO: REMOVE. ONLY FOR TESTING
-    std::cout << "apply scheduling" << std::endl;
     std::vector<ContainerHandle *> new_containers;
     std::unique_lock lock_devices(devices.devicesMutex);
     std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
@@ -526,7 +522,6 @@ void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-//    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
@@ -677,7 +672,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         start_config["container"]["cont_name"] = container->name;
         start_config["container"]["cont_allocationMode"] = easy_allocation ? 1 : 0;
         if (ctrl_systemName == "ppp") {
-            start_config["container"]["cont_batchMode"] = 1;
+            start_config["container"]["cont_batchMode"] = 2;
         }
         if (ctrl_systemName == "ppp" || ctrl_systemName == "jlf") {
             start_config["container"]["cont_dropMode"] = 1;
@@ -813,32 +808,21 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
 void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
     NodeHandle *old_device = container->device_agent;
     bool start_dsrc = false, merge_dsrc = false;
-    if (device->name != "server")
-    {
-        if (container->mergable)
-        {
+    if (device->name != "server") {
+        if (container->mergable) {
             merge_dsrc = true;
-            if (container->model == Yolov5n)
-            {
+            if (container->model == Yolov5n) {
                 container->model = Yolov5nDsrc;
-            }
-            else if (container->model == Retinaface)
-            {
+            } else if (container->model == Retinaface) {
                 container->model = RetinafaceDsrc;
             }
         }
-    }
-    else
-    {
-        if (container->mergable)
-        {
+    } else {
+        if (container->mergable) {
             start_dsrc = true;
-            if (container->model == Yolov5nDsrc)
-            {
+            if (container->model == Yolov5nDsrc) {
                 container->model = Yolov5n;
-            }
-            else if (container->model == RetinafaceDsrc)
-            {
+            } else if (container->model == RetinafaceDsrc) {
                 container->model = Retinaface;
             }
         }
@@ -880,8 +864,7 @@ void Controller::AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *ne
     spdlog::get("container_agent")->info("Upstream of {0:s} adjusted to container {1:s}", dwnstr, upstr->name);
 }
 
-void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr)
-{
+void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
     ContainerLink request;
     ClientContext context;
     EmptyMessage reply;
@@ -889,12 +872,11 @@ void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr)
     request.set_name(prev->name);
     request.set_downstream_name(curr->name);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-        curr->device_agent->stub->AsyncSyncDatasource(&context, request, curr->device_agent->cq));
+            curr->device_agent->stub->AsyncSyncDatasource(&context, request, curr->device_agent->cq));
     finishGrpc(rpc, reply, status, curr->device_agent->cq);
 }
 
-void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs)
-{
+void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs) {
     msvc->batch_size = new_bs;
     ContainerInts request;
     ClientContext context;
@@ -913,8 +895,7 @@ void Controller::AdjustCudaDevice(ContainerHandle *msvc, GPUHandle *new_device) 
     // TODO: also adjust actual running container
 }
 
-void Controller::AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution)
-{
+void Controller::AdjustResolution(ContainerHandle *msvc, std::vector<int> new_resolution) {
     msvc->dimensions = new_resolution;
     ContainerInts request;
     ClientContext context;
@@ -925,7 +906,7 @@ void Controller::AdjustResolution(ContainerHandle *msvc, std::vector<int> new_re
     request.add_value(new_resolution[1]);
     request.add_value(new_resolution[2]);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-        msvc->device_agent->stub->AsyncUpdateResolution(&context, request, msvc->device_agent->cq));
+            msvc->device_agent->stub->AsyncUpdateResolution(&context, request, msvc->device_agent->cq));
     finishGrpc(rpc, reply, status, msvc->device_agent->cq);
 }
 
@@ -949,8 +930,7 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     for (auto upstr: container->upstreams) {
         upstr->downstreams.erase(std::remove(upstr->downstreams.begin(), upstr->downstreams.end(), container), upstr->downstreams.end());
     }
-    for (auto dwnstr : container->downstreams)
-    {
+    for (auto dwnstr: container->downstreams) {
         dwnstr->upstreams.erase(std::remove(dwnstr->upstreams.begin(), dwnstr->upstreams.end(), container), dwnstr->upstreams.end());
     }
     spdlog::get("container_agent")->info("Container {0:s} stopped", container->name);
@@ -985,15 +965,14 @@ void Controller::queryInDeviceNetworkEntries(NodeHandle *node) {
 }
 
 /**
- * @brief
- *
+ * @brief 
+ * 
  * @param container calculating queue sizes for the container before its official deployment.
- * @param modelType
+ * @param modelType 
  */
-void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType modelType)
-{
-    float preprocessRate = 1000000.f / container.expectedPreprocessLatency;                // queries per second
-    float postprocessRate = 1000000.f / container.expectedPostprocessLatency;              // qps
+void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType modelType) {
+    float preprocessRate = 1000000.f / container.expectedPreprocessLatency; // queries per second
+    float postprocessRate = 1000000.f / container.expectedPostprocessLatency; // qps
     float inferRate = 1000000.f / (container.expectedInferLatency * container.batch_size); // batch per second
 
     QueueLengthType minimumQueueSize = 30;
@@ -1001,17 +980,17 @@ void Controller::calculateQueueSizes(ContainerHandle &container, const ModelType
     // Receiver to Preprocessor
     // Utilization of preprocessor
     float preprocess_rho = container.arrival_rate / preprocessRate;
-    QueueLengthType preprocess_inQueueSize = std::max((QueueLengthType)std::ceil(preprocess_rho * preprocess_rho / (2 * (1 - preprocess_rho))), minimumQueueSize);
+    QueueLengthType preprocess_inQueueSize = std::max((QueueLengthType) std::ceil(preprocess_rho * preprocess_rho / (2 * (1 - preprocess_rho))), minimumQueueSize);
     float preprocess_thrpt = std::min(preprocessRate, container.arrival_rate);
 
     // Preprocessor to Inferencer
     // Utilization of inferencer
     float infer_rho = preprocess_thrpt / container.batch_size / inferRate;
-    QueueLengthType infer_inQueueSize = std::max((QueueLengthType)std::ceil(infer_rho * infer_rho / (2 * (1 - infer_rho))), minimumQueueSize);
+    QueueLengthType infer_inQueueSize = std::max((QueueLengthType) std::ceil(infer_rho * infer_rho / (2 * (1 - infer_rho))), minimumQueueSize);
     float infer_thrpt = std::min(inferRate, preprocess_thrpt / container.batch_size); // batch per second
 
     float postprocess_rho = (infer_thrpt * container.batch_size) / postprocessRate;
-    QueueLengthType postprocess_inQueueSize = std::max((QueueLengthType)std::ceil(postprocess_rho * postprocess_rho / (2 * (1 - postprocess_rho))), minimumQueueSize);
+    QueueLengthType postprocess_inQueueSize = std::max((QueueLengthType) std::ceil(postprocess_rho * postprocess_rho / (2 * (1 - postprocess_rho))), minimumQueueSize);
     float postprocess_thrpt = std::min(postprocessRate, infer_thrpt * container.batch_size);
 
     QueueLengthType sender_inQueueSize = postprocess_inQueueSize * container.batch_size;
@@ -1202,6 +1181,7 @@ std::string DeviceNameToType(std::string name) {
 //     return out_result[0];
 // }
 
+
 /**
  * @brief
  *
@@ -1209,8 +1189,7 @@ std::string DeviceNameToType(std::string name) {
  * @param batch_size for targeted batch size (binary)
  * @return int for inference time per full batch in nanoseconds
  */
-int Controller::InferTimeEstimator(ModelType model, int batch_size)
-{
+int Controller::InferTimeEstimator(ModelType model, int batch_size) {
     return 0;
 }
 
@@ -1247,12 +1226,12 @@ int Controller::InferTimeEstimator(ModelType model, int batch_size)
 
 /**
  * @brief '
- *
- * @param node
+ * 
+ * @param node 
  * @param minPacketSize bytes
  * @param maxPacketSize bytes
- * @param numLoops
- * @return NetworkEntryType
+ * @param numLoops 
+ * @return NetworkEntryType 
  */
 NetworkEntryType Controller::initNetworkCheck(NodeHandle &node, uint32_t minPacketSize, uint32_t maxPacketSize, uint32_t numLoops) {
     if (!node.networkCheckMutex.try_lock()) {
@@ -1274,8 +1253,7 @@ NetworkEntryType Controller::initNetworkCheck(NodeHandle &node, uint32_t minPack
         spdlog::get("container_agent")->error("Error while starting network check for device {}.", node.name);
     }
 
-    while (network_check_buffer[node.name].size() < numLoops)
-    {
+    while (network_check_buffer[node.name].size() < numLoops) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
@@ -1294,13 +1272,11 @@ NetworkEntryType Controller::initNetworkCheck(NodeHandle &node, uint32_t minPack
 /**
  * @brief Query the latest network entries for each device to determine the network conditions.
  * If no such entries exists, send to each device a request for network testing.
- *
+ * 
  */
-void Controller::checkNetworkConditions()
-{
+void Controller::checkNetworkConditions() {
     std::this_thread::sleep_for(TimePrecisionType(5 * 1000000));
-    while (running)
-    {
+    while (running) {
         Stopwatch stopwatch;
         stopwatch.start();
         std::map<std::string, NetworkEntryType> networkEntries = {};
@@ -1318,38 +1294,6 @@ void Controller::checkNetworkConditions()
             }
             initNetworkCheck(*nodeHandle, 1000, 300000, 30);
         }
-        // std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
-        // std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
-        //                     "FROM %s ", tableName);
-
-        // pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
-        // //Getting the latest network entries into the networkEntries map
-        // for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
-        //     std::string sender_host = row["sender_host"].as<std::string>();
-        //     if (sender_host == "server" || sender_host == "serv") {
-        //         continue;
-        //     }
-        //     std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
-        //     networkEntries[sender_host].emplace_back(entry);
-        // }
-
-        // // Updating NodeHandle object with the latest network entries
-        // for (auto &[deviceName, entries] : networkEntries) {
-        //     // If entry belongs to a device that is not in the list of devices, ignore it
-        //     if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
-        //         continue;
-        //     }
-        //     std::lock_guard<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
-        //     devices.list[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
-        // }
-
-        // // If no network entries exist for a device, send a request to the device to perform network testing
-        // for (auto &[deviceName, nodeHandle] : devices.list) {
-        //     if (nodeHandle.latestNetworkEntries.size() == 0) {
-        //         // TODO: Send a request to the device to perform network testing
-
-        //     }
-        // }
 
         stopwatch.stop();
         uint64_t sleepTimeUs = 60 * 1000000 - stopwatch.elapsed_microseconds();
@@ -1585,7 +1529,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            emotionnet->possibleDevices = {startDevice, "server"};
+            emotionnet->possibleDevices = {"server"};
             retina1face->downstreams.push_back({emotionnet, -1});
 
             auto *age = new PipelineModel{

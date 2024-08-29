@@ -126,6 +126,8 @@ public:
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
+    bool readModelProfile(const json &profile);
+
 protected:
     BatchSizeType msvc_onBufferBatchSize = 0;
     std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
@@ -139,6 +141,13 @@ protected:
     std::vector<float> msvc_subVals, msvc_divVals;
     BatchInferProfileListType msvc_batchInferProfileList;
     ClockType oldestReqTime;
+    // This is the time calculated by the ideal schedule
+    // It will be calculated assuming the batch is filled with the ideal batch size
+    // and the requests come in at the ideal rate
+    ClockType msvc_nextIdealBatchTime;
+    // This is the time calculated by the actual schedule to for oldest req in the batch
+    // to be processed on time
+    ClockType msvc_nextMustBatchTime;
     uint64_t timeout = 100000; //microseconds
 };
 

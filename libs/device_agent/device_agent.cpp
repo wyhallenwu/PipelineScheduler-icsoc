@@ -224,8 +224,8 @@ void DeviceAgent::collectRuntimeMetrics() {
         startTime = metricsStopwatch.getStartTime();
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextMetricsReportTime)) {
-            
-            if (dev_runtimeMetrics.size() == 0) {
+
+            if (dev_runtimeMetrics.empty()) {
                 spdlog::get("container_agent")->trace("{0:s} No runtime metrics to push to the database.", dev_name);
                 dev_metricsServerConfigs.nextMetricsReportTime = std::chrono::high_resolution_clock::now() +
                                                                  std::chrono::milliseconds(
@@ -234,7 +234,7 @@ void DeviceAgent::collectRuntimeMetrics() {
             }
             sql = "INSERT INTO " + dev_hwMetricsTableName +
                   " (timestamps, cpu_usage, mem_usage";
-            
+
             for (int i = 0; i < dev_numCudaDevices; i++) {
                 sql += ", gpu_" + std::to_string(i) + "_usage, gpu_" + std::to_string(i) + "_mem_usage";
             }
