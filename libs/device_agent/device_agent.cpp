@@ -229,7 +229,7 @@ void DeviceAgent::collectRuntimeMetrics() {
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextMetricsReportTime)) {
 
-            if (dev_runtimeMetrics.size() == 0) {
+            if (dev_runtimeMetrics.empty()) {
                 spdlog::get("container_agent")->trace("{0:s} No runtime metrics to push to the database.", dev_name);
                 dev_metricsServerConfigs.nextMetricsReportTime = std::chrono::high_resolution_clock::now() +
                                                                  std::chrono::milliseconds(
