@@ -364,9 +364,6 @@ void Controller::basicGPUScheduling(std::vector<ContainerHandle *> new_container
  *
  */
 void Controller::ApplyScheduling() {
-//    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
-    // collect all running containers by device and model name
-//    while (true) { // TODO: REMOVE. ONLY FOR TESTING
     std::vector<ContainerHandle *> new_containers;
     std::unique_lock lock_devices(devices.devicesMutex);
     std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
@@ -524,7 +521,6 @@ void Controller::ApplyScheduling() {
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-//    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
@@ -1297,38 +1293,6 @@ void Controller::checkNetworkConditions() {
             }
             initNetworkCheck(*nodeHandle, 1000, 300000, 30);
         }
-        // std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
-        // std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
-        //                     "FROM %s ", tableName);
-
-        // pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
-        // //Getting the latest network entries into the networkEntries map
-        // for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
-        //     std::string sender_host = row["sender_host"].as<std::string>();
-        //     if (sender_host == "server" || sender_host == "serv") {
-        //         continue;
-        //     }
-        //     std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
-        //     networkEntries[sender_host].emplace_back(entry);
-        // }
-
-        // // Updating NodeHandle object with the latest network entries
-        // for (auto &[deviceName, entries] : networkEntries) {
-        //     // If entry belongs to a device that is not in the list of devices, ignore it
-        //     if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
-        //         continue;
-        //     }
-        //     std::lock_guard<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
-        //     devices.list[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
-        // }
-
-        // // If no network entries exist for a device, send a request to the device to perform network testing
-        // for (auto &[deviceName, nodeHandle] : devices.list) {
-        //     if (nodeHandle.latestNetworkEntries.size() == 0) {
-        //         // TODO: Send a request to the device to perform network testing
-
-        //     }
-        // }
 
         stopwatch.stop();
         uint64_t sleepTimeUs = 60 * 1000000 - stopwatch.elapsed_microseconds();

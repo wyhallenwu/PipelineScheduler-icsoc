@@ -924,8 +924,7 @@ private:
             std::lock_guard<std::mutex> lock(devicesMutex);
             return list.find(name) != list.end();
         }
-    // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
-    public:
+    private:
         std::map<std::string, NodeHandle*> list = {};
         std::mutex devicesMutex;
     };
@@ -994,8 +993,7 @@ private:
             return *this;
         }
 
-    // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
-    public:
+    private:
         std::map<std::string, TaskHandle*> list = {};
         mutable std::mutex tasksMutex;
     };
@@ -1036,8 +1034,8 @@ private:
             std::lock_guard<std::mutex> lock(containersMutex);
             return list.find(name) != list.end();
         }
-    //TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
-    public:
+
+    private:
         std::map<std::string, ContainerHandle*> list = {};
         std::mutex containersMutex;
     };
