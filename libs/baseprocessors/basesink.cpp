@@ -18,7 +18,7 @@ BaseSink::BaseSink(const json &jsonConfigs) : Microservice(jsonConfigs) {
 }
 
 void BaseSink::sink() {
-    Request <LocalCPUReqDataType> inferTimeReport;
+    Request<LocalCPUReqDataType> inferTimeReport;
     BatchSizeType batchSize;
 
     while (true) {
@@ -65,10 +65,7 @@ void BaseSink::sink() {
          */
         batchSize = inferTimeReport.req_batchSize;
 
-        if (msvc_RUNMODE == RUNMODE::PROFILING) {
-            // delete all allocated variables by the request
-            inferTimeReport = {};
-        } else if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
+        if (msvc_RUNMODE == RUNMODE::EMPTY_PROFILING) {
             for (BatchSizeType i = 0; i < batchSize; i++) {
                 msvc_logFile << inferTimeReport.req_travelPath[i] << "|";
                 for (unsigned int j = 0; j < inferTimeReport.req_origGenTime[i].size() - 1; j++) {
@@ -77,20 +74,16 @@ void BaseSink::sink() {
                 msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[i].back()) << "|";
 
                 for (BatchSizeType j = 1; j < inferTimeReport.req_origGenTime[i].size(); j++) {
-                    msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(
-                            inferTimeReport.req_origGenTime[i].at(j) -
-                            inferTimeReport.req_origGenTime[i].at(j - 1)).count() << ",";
+                    msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(inferTimeReport.req_origGenTime[i].at(j) - inferTimeReport.req_origGenTime[i].at(j-1)).count() << ",";
                 }
-                msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(
-                        inferTimeReport.req_origGenTime[i].back() - inferTimeReport.req_origGenTime[i].front()).count()
-                             << std::endl;
+                msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(inferTimeReport.req_origGenTime[i].back() - inferTimeReport.req_origGenTime[i].front()).count() << std::endl;
             }
 
-            /**
-             * @brief
-             *
-             */
-        } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT) {
+        /**
+         * @brief
+         *
+         */
+        } else if (msvc_RUNMODE == RUNMODE::DEPLOYMENT || msvc_RUNMODE == RUNMODE::PROFILING) {
             spdlog::get("container_agent")->trace("{0:s} is processing request {1:s}...", msvc_name, inferTimeReport.req_travelPath[0]);
             msvc_logFile << inferTimeReport.req_travelPath[0] << "|";
             for (unsigned int j = 0; j < inferTimeReport.req_origGenTime[0].size() - 1; j++) {
@@ -99,13 +92,9 @@ void BaseSink::sink() {
             msvc_logFile << timePointToEpochString(inferTimeReport.req_origGenTime[0].back()) << "|";
 
             for (BatchSizeType j = 1; j < inferTimeReport.req_origGenTime[0].size(); j++) {
-                msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(
-                        inferTimeReport.req_origGenTime[0].at(j) - inferTimeReport.req_origGenTime[0].at(j - 1)).count()
-                             << ",";
+                msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(inferTimeReport.req_origGenTime[0].at(j) - inferTimeReport.req_origGenTime[0].at(j-1)).count() << ",";
             }
-            msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(
-                    inferTimeReport.req_origGenTime[0].back() - inferTimeReport.req_origGenTime[0].front()).count()
-                         << std::endl;
+            msvc_logFile << std::chrono::duration_cast<TimePrecisionType>(inferTimeReport.req_origGenTime[0].back() - inferTimeReport.req_origGenTime[0].front()).count() << std::endl;
         }
     }
     msvc_logFile.close();

@@ -78,6 +78,7 @@ target_include_directories(device_agent
             $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
             $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
         PRIVATE
+            # Used only when building the library:
             src)
 
 target_link_libraries(device_agent

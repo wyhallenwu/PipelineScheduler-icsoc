@@ -420,6 +420,7 @@ ContainerAgent::ContainerAgent(const json& configs) {
             //     cont_hostDeviceType,
             //     cont_inferModel
             // );
+
             cont_arrivalTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "_" + cont_taskNameAbbr + "_arr";
             cont_processTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_proc";
             cont_batchInferTableName = cont_metricsServerConfigs.schema + "." + cont_experimentNameAbbr + "_" +  cont_pipeNameAbbr + "__" + cont_inferModel + "__" + cont_hostDeviceTypeAbbr + "_batch";
@@ -795,7 +796,7 @@ std::vector<float> getRatesInPeriods(const std::vector<ClockType> &timestamps, c
 
 
 void ContainerAgent::collectRuntimeMetrics() {
-    int lateCount;
+    unsigned int lateCount, totalRequests;
     ArrivalRecordType arrivalRecords;
     ProcessRecordType processRecords;
     BatchInferRecordType batchInferRecords;
@@ -857,7 +858,10 @@ void ContainerAgent::collectRuntimeMetrics() {
                 timePointCastMillisecond(cont_metricsServerConfigs.nextMetricsReportTime)) {
             Stopwatch pushMetricsStopWatch;
             pushMetricsStopWatch.start();
-            lateCount = cont_msvcsList[1]->GetDroppedReqCount();
+            lateCount = cont_msvcsList[0]->GetDroppedReqCount();
+            lateCount += cont_msvcsList[1]->GetDroppedReqCount();
+            spdlog::get("container_agent")->info("{0:s} had {1:d} late requests.", cont_name, lateCount);
+            totalRequests = cont_msvcsList[0]->GetTotalReqCount();
 
             std::string modelName = cont_msvcsList[2]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
