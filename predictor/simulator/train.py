@@ -35,8 +35,8 @@ download_model = RandomizedSearchCV(lgb.LGBMRegressor(), param_grid, n_iter=50, 
 download_model.fit(X_train_download, y_train_download)
 
 # Save the trained models to files
-upload_model.best_estimator_.booster_.save_model('upload_model.txt')
-download_model.best_estimator_.booster_.save_model('download_model.txt')
+upload_model.best_estimator_.booster_.save_model('upload_model_orn.txt')
+download_model.best_estimator_.booster_.save_model('download_model_orn.txt')
 
 # Evaluate the models on the test set
 upload_preds = upload_model.predict(X_test_upload)

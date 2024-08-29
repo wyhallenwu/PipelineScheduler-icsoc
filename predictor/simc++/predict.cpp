@@ -6,7 +6,7 @@ int main() {
     // Load the pre-trained model
     BoosterHandle booster;
     int num_iterations = 1;
-    int ret = LGBM_BoosterCreateFromModelfile("download_model_agx.txt", &num_iterations, &booster);
+    int ret = LGBM_BoosterCreateFromModelfile("download_model_orn.txt", &num_iterations, &booster);
 
     // Prepare the input data
     double input_mem_size = 1111111;  // Replace with the actual input value

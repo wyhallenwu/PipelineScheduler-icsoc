@@ -142,7 +142,6 @@ else()
     endif ()
     # Use the correct version of CUDA
     set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
-# set(CUDA_INCLUDE_DIRS "/usr/local/cuda/include")
 
     # Set LightGBM include directories
     # set(LIGHTGBM_INCLUDE_DIR "/usr/include/LightGBM")
