@@ -657,7 +657,13 @@ public:
 
     virtual QueueLengthType GetOutQueueSize(int i) { return msvc_OutQueue[i]->size(); };
 
-    int GetDroppedReqCount() const { return droppedReqCount; };
+    unsigned int GetDroppedReqCount() {
+        return msvc_droppedReqCount.exchange(0);
+    };
+
+    unsigned int GetTotalReqCount() {
+        return msvc_totalReqCount.exchange(0);
+    };
 
     void stopThread() {
         STOP_THREADS = true;
@@ -666,12 +672,10 @@ public:
     void pauseThread() {
         PAUSE_THREADS = true;
         READY = false;
-        spdlog::get("container_agent")->trace("Paused Microservice: {0:s}", msvc_name);
     }
 
     void unpauseThread() {
         PAUSE_THREADS = false;
-        spdlog::get("container_agent")->trace("Unpaused Microservice: {0:s}", msvc_name);
     }
 
     bool checkReady() {
@@ -807,6 +811,9 @@ protected:
     uint64_t msvc_outReqCount = 0;
     //
     uint64_t msvc_batchCount = 0;
+
+    std::atomic<unsigned int> msvc_droppedReqCount;
+    std::atomic<unsigned int> msvc_totalReqCount = 0;
 
     //
     NumMscvType nummsvc_upstreamMicroservices = 0;
@@ -951,8 +958,6 @@ protected:
 
     // Logging file path, where each microservice is supposed to log in running metrics
     std::string msvc_microserviceLogPath;
-
-    int droppedReqCount;
 };
 
 
