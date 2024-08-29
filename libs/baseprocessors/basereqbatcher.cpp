@@ -487,9 +487,9 @@ void BaseReqBatcher::batchRequests() {
             }
         }
 
-        data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
+        // data.data = cvtHWCToCHW(data.data, *preProcStream, msvc_imgType);
 
-        data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
+        // data.data = normalize(data.data, *preProcStream, msvc_subVals, msvc_divVals, msvc_imgNormScale);
 
         data.shape = RequestDataShapeType({(msvc_outReqShape.at(0))[0][1], (msvc_outReqShape.at(0))[0][1],
                                            (msvc_outReqShape.at(0))[0][2]});
@@ -659,7 +659,7 @@ void BaseReqBatcher::batchRequestsProfiling() {
                 READY = true;
                 spdlog::get("container_agent")->info("{0:s} is (RE)LOADED.", msvc_name);
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            //info("{0:s} is being PAUSED.", msvc_name);
             continue;
         }
         // Processing the next incoming request

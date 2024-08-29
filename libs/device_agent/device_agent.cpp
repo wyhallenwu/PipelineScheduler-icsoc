@@ -229,7 +229,7 @@ void DeviceAgent::collectRuntimeMetrics() {
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextMetricsReportTime)) {
 
-            if (dev_runtimeMetrics.empty()) {
+            if (dev_runtimeMetrics.size() == 0) {
                 spdlog::get("container_agent")->trace("{0:s} No runtime metrics to push to the database.", dev_name);
                 dev_metricsServerConfigs.nextMetricsReportTime = std::chrono::high_resolution_clock::now() +
                                                                  std::chrono::milliseconds(
@@ -262,6 +262,7 @@ void DeviceAgent::collectRuntimeMetrics() {
         }
 
         //TODO: push individual container metrics to the database
+
 
         metricsStopwatch.stop();
         auto reportLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);

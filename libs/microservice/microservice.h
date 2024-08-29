@@ -672,12 +672,10 @@ public:
     void pauseThread() {
         PAUSE_THREADS = true;
         READY = false;
-        spdlog::get("container_agent")->trace("Paused Microservice: {0:s}", msvc_name);
     }
 
     void unpauseThread() {
         PAUSE_THREADS = false;
-        spdlog::get("container_agent")->trace("Unpaused Microservice: {0:s}", msvc_name);
     }
 
     bool checkReady() {

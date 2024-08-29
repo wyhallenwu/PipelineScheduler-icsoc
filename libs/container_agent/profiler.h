@@ -1,5 +1,6 @@
 #ifndef PIPEPLUSPLUS_PROFILER_H
 #define PIPEPLUSPLUS_PROFILER_H
+
 #include <vector>
 #include <map>
 #include <iostream>
