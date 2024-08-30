@@ -5,7 +5,6 @@
 #include <grpcpp/grpcpp.h>
 #include "../json/json.h"
 #include <thread>
-#include <random>
 #include "controlcommunication.grpc.pb.h"
 #include <pqxx/pqxx>
 #include "absl/strings/str_format.h"
@@ -1072,7 +1071,7 @@ private:
 
     void estimateTimeBudgetLeft(PipelineModel *currModel);
 
-    void setRandomMemUtilization(Controller::Devices& devices);
+    /// RIM CODE
     void rim_action(TaskHandle *task);
 };
 
