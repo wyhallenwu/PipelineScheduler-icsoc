@@ -728,9 +728,11 @@ struct ModelInfoJF
     float accuracy;
     PipelineModel *model;
 
-    ModelInfoJF();
+    ModelInfoJF() {}
     ModelInfoJF(int bs, float il, int w, int h, std::string n, float acc, PipelineModel *m);
-    bool operator==(const ModelInfoJF& other) const;
+    bool operator==(const ModelInfoJF& other) const{
+        return batch_size == other.batch_size && inference_latency == other.inference_latency && throughput == other.throughput && width == other.width && height == other.height && name == other.name && accuracy == other.accuracy;
+    }
 };
 
 /**
@@ -739,7 +741,9 @@ struct ModelInfoJF
  */
 struct ModelSetCompare
 {
-    bool operator()(const std::tuple<std::string, float> &lhs, const std::tuple<std::string, float> &rhs) const;
+    bool operator()(const std::tuple<std::string, float> &lhs, const std::tuple<std::string, float> &rhs) const{
+        return std::get<1>(lhs) > std::get<1>(rhs);
+    }
 };
 
 /**
@@ -785,9 +789,9 @@ struct ClientInfoJF
                req_rate == other.req_rate;
     }
 
-    void set_transmission_latency(int lat);
-
-    // void set_bandwidth(float bw);
+    void set_transmission_latency(int lat) {
+        this->transmission_latency = lat;
+    }
 };
 
 /**
