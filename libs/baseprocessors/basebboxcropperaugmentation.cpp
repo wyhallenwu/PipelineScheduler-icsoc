@@ -382,7 +382,7 @@ void BaseBBoxCropperAugmentation::cropping() {
                     if (qIndex == MAX_NUM_QUEUES) {
                         continue;
                     }
-                    if (msvc_activeInQueueIndex.at(qIndex) == 1) { //If CPU serialized data
+                    if (msvc_activeOutQueueIndex.at(qIndex) != 1) { //If not supposed to be sent as CPU serialized data
                         continue;
                     }
                     if (cpuBox.empty()) {
@@ -521,7 +521,7 @@ void BaseBBoxCropperAugmentation::cropping() {
                 currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
                 std::string originStream = getOriginStream(currReq.req_travelPath[i]);
                 // TODO: Add the request number
-                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, 0, originStream);
+                msvc_processRecords.addRecord(currReq.req_origGenTime[i], currReq_batchSize, totalInMem, totalOutMem, totalEncodedOutMem, 0, originStream);
                 msvc_arrivalRecords.addRecord(
                         currReq.req_origGenTime[i],
                         10,

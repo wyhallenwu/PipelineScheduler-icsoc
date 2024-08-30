@@ -82,6 +82,10 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_port_offset = j["port_offset"];
     ctrl_systemFPS = j["system_fps"];
     ctrl_sinkNodeIP = j["sink_ip"];
+    ctrl_initialBatchSizes["yolov5"] = j["yolov5_batch_size"];
+    ctrl_initialBatchSizes["edge"] = j["edge_batch_size"];
+    ctrl_initialBatchSizes["server"] = j["server_batch_size"];
+    ctrl_schedulingIntervalSec = j["scheduling_interval_sec"];
     initialTasks = j["initial_pipelines"];
 }
 
@@ -221,23 +225,21 @@ Controller::Controller(int argc, char **argv) {
     ctrl_nextSchedulingTime = std::chrono::system_clock::now();
 
 
-    // added for jellyfish
+    /// JELLYFISH CODE
     clientProfilesCSJF = {{"people", ClientProfilesJF()}, {"traffic", ClientProfilesJF()}};
     modelProfilesCSJF = {{"people", ModelProfilesJF()}, {"traffic", ModelProfilesJF()}};
 }
 
 Controller::~Controller() {
-    std::unique_lock<std::mutex> lock(containers.containersMutex);
-    for (auto &msvc: containers.list) {
-        StopContainer(msvc.second, msvc.second->device_agent, true);
+    for (auto msvc: containers.getList()) {
+        StopContainer(msvc, msvc->device_agent, true);
     }
 
-    std::unique_lock<std::mutex> lock2(devices.devicesMutex);
-    for (auto &device: devices.list) {
-        device.second->cq->Shutdown();
+    for (auto &device: devices.getList()) {
+        device->cq->Shutdown();
         void *got_tag;
         bool ok = false;
-        while (device.second->cq->Next(&got_tag, &ok));
+        while (device->cq->Next(&got_tag, &ok));
     }
     server->Shutdown();
     cq->Shutdown();
@@ -285,19 +287,15 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
 
     task->tk_src_device = t.device;
 
-    task->tk_pipelineModels = getModelsByPipelineTypeTest(t.type, t.device, t.name, t.source);
+    task->tk_pipelineModels = getModelsByPipelineType(t.type, t.device, t.name, t.source);
     for (auto &model: task->tk_pipelineModels) {
         model->datasourceName = t.source;
         model->task = task;
         
     }
-    std::unique_lock<std::mutex> lock2(ctrl_unscheduledPipelines.tasksMutex);
-    std::unique_lock<std::mutex> lock3(ctrl_savedUnscheduledPipelines.tasksMutex);
-    ctrl_unscheduledPipelines.list.insert({task->tk_name, task});
-    ctrl_savedUnscheduledPipelines.list.insert({task->tk_name, task});
 
-    lock2.unlock();
-    lock3.unlock();
+    ctrl_unscheduledPipelines.addTask(task->tk_name, task);
+    ctrl_savedUnscheduledPipelines.addTask(task->tk_name, task);
     return true;
 }
 
@@ -317,7 +315,7 @@ void Controller::initialiseGPU(NodeHandle *node, int numGPUs, std::vector<int> m
 
 void Controller::basicGPUScheduling(std::vector<ContainerHandle *> new_containers) {
     std::map<std::string, std::vector<ContainerHandle *>> scheduledContainers;
-    for (auto device: devices.list) {
+    for (auto device: devices.getMap()) {
         for (auto &container: new_containers) {
             if (container->device_agent->name != device.first) {
                 continue;
@@ -335,7 +333,7 @@ void Controller::basicGPUScheduling(std::vector<ContainerHandle *> new_container
                     return aMemUsage > bMemUsage;
                 });
     }
-    for (auto device: devices.list) {
+    for (auto device: devices.getMap()) {
         std::vector<GPUHandle *> gpus = device.second->gpuHandles;
         for (auto &container: scheduledContainers[device.first]) {
             MemUsageType containerMemUsage = container->getExpectedTotalMemUsage();
@@ -366,38 +364,26 @@ void Controller::basicGPUScheduling(std::vector<ContainerHandle *> new_container
  *
  */
 void Controller::ApplyScheduling() {
-//    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines; // TODO: ONLY FOR TESTING, REMOVE THIS
-    // collect all running containers by device and model name
-//    while (true) { // TODO: REMOVE. ONLY FOR TESTING
-    if (ctrl_scheduledPipelines.list.empty()) {
-        std::cout << "empty pipeline in the beginning" << std::endl;
-    }
     std::vector<ContainerHandle *> new_containers;
-    std::unique_lock lock_devices(devices.devicesMutex);
-    std::unique_lock lock_pipelines(ctrl_scheduledPipelines.tasksMutex);
-    std::unique_lock lock_pastPipelines(ctrl_pastScheduledPipelines.tasksMutex);
-    std::unique_lock lock_containers(containers.containersMutex);
 
     // designate all current models no longer valid to run
     // after scheduling some of them will be designated as valid
     // All the invalid will be stopped and removed.
-    for (auto &[deviceName, device]: devices.list) {
+    for (auto device: devices.getList()) {
         std::unique_lock lock_device(device->nodeHandleMutex);
-        for (auto &[modelName, model]: device->modelList) {
+        for (auto &[modelName, model] : device->modelList) {
             model->toBeRun = false;
         }
     }
-
-    std::cout << "b1" << std::endl;
 
     /**
      * @brief // Turn schedule tasks/pipelines into containers
      * Containers that are already running may be kept running if they are still valid
      */
-    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.getMap()) {
         for (auto &model: pipe->tk_pipelineModels) {
             if (ctrl_systemName != "ppp" && ctrl_systemName != "jlf") {
-                model->cudaDevices.emplace_back(0); // TODO: ADD ACTUAL CUDA DEVICES
+                model->cudaDevices.emplace_back(0);
                 model->numReplicas = 1;
             }
             bool upstreamIsDatasource = (std::find_if(model->upstreams.begin(), model->upstreams.end(),
@@ -420,18 +406,19 @@ void Controller::ApplyScheduling() {
             std::string modelFullName = model->name;
 
             // check if the pipeline already been scheduled once before
-            PipelineModel *pastModel = nullptr;
-            if (ctrl_pastScheduledPipelines.list.find(pipeName) != ctrl_pastScheduledPipelines.list.end()) {
+            PipelineModel* pastModel = nullptr;
+            std::map<std::string, TaskHandle*> pastScheduledPipelines = ctrl_pastScheduledPipelines.getMap();
+            if (pastScheduledPipelines.find(pipeName) != pastScheduledPipelines.end()) {
 
-                auto it = std::find_if(ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.begin(),
-                                              ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.end(),
+                auto it = std::find_if(pastScheduledPipelines[pipeName]->tk_pipelineModels.begin(),
+                                       pastScheduledPipelines[pipeName]->tk_pipelineModels.end(),
                                               [&modelFullName](PipelineModel *m) {
                                                   return m->name == modelFullName;
                                               });
                 // if the model is found in the past scheduled pipelines, its containers can be reused
-                if (it != ctrl_pastScheduledPipelines.list[pipeName]->tk_pipelineModels.end()) {
+                if (it != pastScheduledPipelines[pipeName]->tk_pipelineModels.end()) {
                     pastModel = *it;
-                    std::vector<ContainerHandle *> pastModelContainers = pastModel->task->tk_subTasks[model->name];
+                    std::vector<ContainerHandle*> pastModelContainers = pastModel->task->tk_subTasks[model->name];
                     for (auto container: pastModelContainers) {
                         if (container->device_agent->name == model->device) {
                             model->task->tk_subTasks[model->name].push_back(container);
@@ -446,9 +433,7 @@ void Controller::ApplyScheduling() {
             if (candidate_size < model->numReplicas) {
                 // start additional containers
                 for (unsigned int i = candidate_size; i < model->numReplicas; i++) {
-                    std::cout << "test translate" << std::endl;
-                    ContainerHandle *container = TranslateToContainer(model, devices.list[model->device], i);
-                    std::cout << "end test translate" << std::endl;
+                    ContainerHandle *container = TranslateToContainer(model, devices.getDevice(model->device), i);
                     if (container == nullptr) {
                         continue;
                     }
@@ -468,10 +453,8 @@ void Controller::ApplyScheduling() {
             }
         }
     }
-
-    std::cout << "b2" << std::endl;
     // Rearranging the upstreams and downstreams for containers;
-    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+    for (auto pipe: ctrl_scheduledPipelines.getList()) {
         for (auto &model: pipe->tk_pipelineModels) {
             // If its a datasource, we dont have to do it now
             // datasource doesnt have upstreams
@@ -493,64 +476,13 @@ void Controller::ApplyScheduling() {
         }
     }
 
-    std::cout << "b3" << std::endl;
-    // debugging:
-    // if (ctrl_scheduledPipelines.list.empty()){
-    //     std::cout << "empty in the debugging before" << std::endl;
-    // }
-    int count = 0;
-    std::cout << "==================== In ApplySchedule =====================" << std::endl;
-    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
-        // if (pipe->tk_pipelineModels.empty()) {
-        //     std::cout << "empty in the debugging" << std::endl;
-        // }
-        if (count == 2) {
-            break;
-        }
-        for (auto &model: pipe->tk_pipelineModels) {
-            // If its a datasource, we dont have to do it now
-            // datasource doesnt have upstreams
-            // and the downstreams will be set later
-            // std::cout << "test in debugging" << std::endl;
-            // std::cout << "===========Debugging: ==========" <<  std::endl;
-            // std::cout << "upstream of model: " << model->name << ", resolution: " << model->dimensions[0] << " " << model->dimensions[1] << std::endl;
-            // for (auto us: model->upstreams) {
-            //     std::cout << us.first->name << ", ";
-            // }
-            // std::cout << std::endl;
-            // std::cout << "dstream of model: " << model->name << std::endl;
-            // for (auto ds: model->downstreams) {
-            //     std::cout << ds.first->name << ", ";
-            // }
-            // std::cout << std::endl;
-            // std::cout << "==============================" << std::endl;
-
-            if (model->name.find("datasource") != std::string::npos) {
-                std::cout << "datasource name: " << model->datasourceName;
-                if (model->downstreams.size() > 1) {
-                    std::cerr << " datasource has more than one downstreams" << std::endl;
-                    std::exit(1);
-                }
-                for (auto &ds: model->downstreams) {
-                    std::cout << ", ds name: " << ds.first->name;
-                }
-                std::cout << std::endl;
-            }
-        }
-        count++;
-    }
-    std::cout << "==================== End ApplySchedule =====================" << std::endl;
-
-    std::cout << "b4" << std::endl;
-
-
     // Basic GPU scheduling
     if (ctrl_systemName != "ppp") {
         basicGPUScheduling(new_containers);
     }
 
 
-    for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.list) {
+    for (auto pipe: ctrl_scheduledPipelines.getList()) {
         for (auto &model: pipe->tk_pipelineModels) {
             //int i = 0;
             std::vector<ContainerHandle *> candidates = model->task->tk_subTasks[model->name];
@@ -561,7 +493,7 @@ void Controller::ApplyScheduling() {
                 if (candidate->device_agent->name != model->device) {
                     candidate->batch_size = model->batchSize;
                     //candidate->cuda_device = model->cudaDevices[i++];
-                    MoveContainer(candidate, devices.list[model->device]);
+                    MoveContainer(candidate, devices.getDevice(model->device));
                     continue;
                 }
                 if (candidate->batch_size != model->batchSize)
@@ -573,24 +505,14 @@ void Controller::ApplyScheduling() {
         }
     }
 
-    std::cout << "b5" << std::endl;
-
     for (auto container: new_containers) {
         StartContainer(container);
-        containers.list.insert({container->name, container});
+        containers.addContainer(container->name, container);
     }
-
-    lock_containers.unlock();
-    lock_devices.unlock();
-    lock_pipelines.unlock();
-    lock_pastPipelines.unlock();
-
-    std::cout << "b6" << std::endl;
 
     ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 
     spdlog::get("container_agent")->info("SCHEDULING DONE! SEE YOU NEXT TIME!");
-//    } // TODO: REMOVE. ONLY FOR TESTING
 }
 
 bool CheckMergable(const std::string &m) {
@@ -599,7 +521,7 @@ bool CheckMergable(const std::string &m) {
 
 ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i) {
     if (model->name.find("datasource") != std::string::npos) {
-        for (auto &[downstream, coi]: model->downstreams) {
+        for (auto &[downstream, coi] : model->downstreams) {
             if ((downstream->name.find("yolov5n") != std::string::npos ||
                  downstream->name.find("retina1face") != std::string::npos) &&
                 downstream->device != "server") {
@@ -744,7 +666,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         start_config["container"]["cont_name"] = container->name;
         start_config["container"]["cont_allocationMode"] = easy_allocation ? 1 : 0;
         if (ctrl_systemName == "ppp") {
-            start_config["container"]["cont_batchMode"] = 1;
+            start_config["container"]["cont_batchMode"] = 2;
         }
         if (ctrl_systemName == "ppp" || ctrl_systemName == "jlf") {
             start_config["container"]["cont_dropMode"] = 1;
@@ -757,18 +679,21 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         start_config["container"]["cont_localDutyCycle"] = container->localDutyCycle;
         start_config["container"]["cont_cycleStartTime"] = std::chrono::duration_cast<TimePrecisionType>(container->cycleStartTime.time_since_epoch()).count();
 
-        std::vector<uint32_t> modelProfile;
-        for (auto &[batchSize, profile]: container->pipelineModel->processProfiles.at(container->device_agent->name).batchInfer) {
-            modelProfile.push_back(batchSize);
-            modelProfile.push_back(profile.p95prepLat);
-            modelProfile.push_back(profile.p95inferLat);
-            modelProfile.push_back(profile.p95postLat);
-        }
+        if (container->model != DataSource &&
+            container->model != Sink) {
+            std::vector<uint32_t> modelProfile;
+            for (auto &[batchSize, profile]: container->pipelineModel->processProfiles.at(ctrl_sysDeviceInfo[container->device_agent->type]).batchInfer) {
+                modelProfile.push_back(batchSize);
+                modelProfile.push_back(profile.p95prepLat);
+                modelProfile.push_back(profile.p95inferLat);
+                modelProfile.push_back(profile.p95postLat);
+            }
 
-        if (modelProfile.empty()) {
-            spdlog::get("container_agent")->warn("Model profile not found for container: {0:s}", container->name);
+            if (modelProfile.empty()) {
+                spdlog::get("container_agent")->warn("Model profile not found for container: {0:s}", container->name);
+            }
+            start_config["container"]["cont_modelProfile"] = modelProfile;
         }
-        start_config["container"]["cont_modelProfile"] = modelProfile;
 
         json base_config = start_config["container"]["cont_pipeline"];
 
@@ -780,11 +705,12 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         if (model == ModelType::DataSource) {
             base_config[0]["msvc_dataShape"] = {container->dimensions};
             base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
-        } else if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
-            base_config[0]["msvc_dataShape"] = {container->dimensions};
-            base_config[0]["msvc_type"] = 500;
-            base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
         } else {
+            if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
+                base_config[0]["msvc_dataShape"] = {container->dimensions};
+                base_config[0]["msvc_type"] = 500;
+                base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
+            }
             base_config[1]["msvc_dnstreamMicroservices"][0]["nb_expectedShape"] = {container->dimensions};
             base_config[2]["path"] = container->model_file;
         }
@@ -852,6 +778,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
 
     request.set_name(container->name);
     request.set_json_config(start_config.dump());
+    std::cout << start_config.dump() << std::endl;
     request.set_executable(ctrl_containerLib[modelName].runCommand);
     if (container->model == DataSource || container->model == Sink) {
         request.set_device(-1);
@@ -986,12 +913,12 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     request.set_name(container->name);
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            device->stub->AsyncStopContainer(&context, request, containers.list[container->name]->device_agent->cq));
+            device->stub->AsyncStopContainer(&context, request, containers.getContainer(container->name)->device_agent->cq));
     finishGrpc(rpc, reply, status, device->cq);
     if (container->gpuHandle != nullptr)
         container->gpuHandle->removeContainer(container);
     if (!forced) { //not forced means the container is stopped during scheduling and should be removed
-        containers.list.erase(container->name);
+        containers.removeContainer(container->name);
         container->device_agent->containers.erase(container->name);
     }
     for (auto upstr: container->upstreams) {
@@ -1119,10 +1046,10 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         controller->initialiseGPU(node, request.processors(), std::vector<int>(request.memory().begin(), request.memory().end()));
         controller->devices.addDevice(deviceName, node);
         spdlog::get("container_agent")->info("Device {} is connected to the system", request.device_name());
-        controller->queryInDeviceNetworkEntries(controller->devices.list.at(deviceName));
+        controller->queryInDeviceNetworkEntries(controller->devices.getDevice(deviceName));
 
         if (node->type != SystemDeviceType::Server) {
-            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.list[deviceName])), 1000, 1200000, 30);
+            std::thread networkCheck(&Controller::initNetworkCheck, controller, std::ref(*(controller->devices.getDevice(deviceName))), 1000, 300000, 30);
             networkCheck.detach();
         }
     } else {
@@ -1359,40 +1286,8 @@ void Controller::checkNetworkConditions() {
                 spdlog::get("container_agent")->info("Skipping network check for device {}.", deviceName);
                 continue;
             }
-            initNetworkCheck(*nodeHandle, 1000, 1200000, 30);
+            initNetworkCheck(*nodeHandle, 1000, 300000, 30);
         }
-        // std::string tableName = ctrl_metricsServerConfigs.schema + "." + abbreviate(ctrl_experimentName) + "_serv_netw";
-        // std::string query = absl::StrFormat("SELECT sender_host, p95_transfer_duration_us, p95_total_package_size_b "
-        //                     "FROM %s ", tableName);
-
-        // pqxx::result res = pullSQL(*ctrl_metricsServerConn, query);
-        // //Getting the latest network entries into the networkEntries map
-        // for (pqxx::result::const_iterator row = res.begin(); row != res.end(); ++row) {
-        //     std::string sender_host = row["sender_host"].as<std::string>();
-        //     if (sender_host == "server" || sender_host == "serv") {
-        //         continue;
-        //     }
-        //     std::pair<uint32_t, uint64_t> entry = {row["p95_total_package_size_b"].as<uint32_t>(), row["p95_transfer_duration_us"].as<uint64_t>()};
-        //     networkEntries[sender_host].emplace_back(entry);
-        // }
-
-        // // Updating NodeHandle object with the latest network entries
-        // for (auto &[deviceName, entries] : networkEntries) {
-        //     // If entry belongs to a device that is not in the list of devices, ignore it
-        //     if (devices.list.find(deviceName) == devices.list.end() || deviceName != "server") {
-        //         continue;
-        //     }
-        //     std::lock_guard<std::mutex> lock(devices.list[deviceName].nodeHandleMutex);
-        //     devices.list[deviceName].latestNetworkEntries["server"] = aggregateNetworkEntries(entries);
-        // }
-
-        // // If no network entries exist for a device, send a request to the device to perform network testing
-        // for (auto &[deviceName, nodeHandle] : devices.list) {
-        //     if (nodeHandle.latestNetworkEntries.size() == 0) {
-        //         // TODO: Send a request to the device to perform network testing
-
-        //     }
-        // }
 
         stopwatch.stop();
         uint64_t sleepTimeUs = 60 * 1000000 - stopwatch.elapsed_microseconds();
@@ -1485,7 +1380,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             yolov5n->downstreams.push_back({platedet, 2});
 
             auto *sink = new PipelineModel{
-                    "server",
+                    "sink",
                     "sink",
                     {},
                     false,
@@ -1578,7 +1473,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             retina1face->downstreams.push_back({age, -1});
 
             auto *sink = new PipelineModel{
-                    "server",
+                    "sink",
                     "sink",
                     {},
                     false,
@@ -1671,7 +1566,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             retina1face->downstreams.push_back({arcface, -1});
 
             auto *sink = new PipelineModel{
-                    "server",
+                    "sink",
                     "sink",
                     {},
                     false,
@@ -1701,10 +1596,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
     }
 }
 
-PipelineModelListType deepCopyPipelineModelList(const PipelineModelListType &original) {
+PipelineModelListType deepCopyPipelineModelList(const PipelineModelListType& original) {
     PipelineModelListType newList;
     newList.reserve(original.size());
-    for (const auto *model: original) {
+    for (const auto* model : original) {
         newList.push_back(new PipelineModel(*model));
     }
     return newList;

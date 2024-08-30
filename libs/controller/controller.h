@@ -5,7 +5,6 @@
 #include <grpcpp/grpcpp.h>
 #include "../json/json.h"
 #include <thread>
-#include <random>
 #include "controlcommunication.grpc.pb.h"
 #include <pqxx/pqxx>
 #include "absl/strings/str_format.h"
@@ -176,10 +175,10 @@ struct ContainerHandle {
 
     NodeHandle *device_agent;
     TaskHandle *task;
-    std::vector<ContainerHandle *> downstreams = {};
-    std::vector<ContainerHandle *> upstreams = {};
+    std::vector<ContainerHandle *> downstreams;
+    std::vector<ContainerHandle *> upstreams;
     // Queue sizes of the model
-    std::vector<QueueLengthType> queueSizes = {};
+    std::vector<QueueLengthType> queueSizes;
 
     // Flag to indicate whether the container is running
     // At the end of scheduling, all containerhandle marked with `running = false` object will be deleted
@@ -555,8 +554,6 @@ struct PipelineModel {
 
 PipelineModelListType deepCopyPipelineModelList(const PipelineModelListType& original);
 
-PipelineModelListType deepCopyPipelineModelList(const PipelineModelListType& original);
-
 struct TaskHandle {
     std::string tk_name;
     std::string tk_fullName;
@@ -571,7 +568,6 @@ struct TaskHandle {
     mutable std::mutex tk_mutex;
 
     bool tk_newlyAdded = true;
-
 
     TaskHandle() = default;
 
@@ -884,7 +880,6 @@ public:
         const std::string& path 
     );
 
-
 private:
     void initiateGPULanes(NodeHandle &node);
 
@@ -917,9 +912,6 @@ private:
     void basicGPUScheduling(std::vector<ContainerHandle *> new_containers);
 
     PipelineModelListType getModelsByPipelineType(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "", const std::string &streamName = "");
-
-    // added for testing jlf
-    PipelineModelListType getModelsByPipelineTypeTest(PipelineType type, const std::string &startDevice, const std::string &pipelineName = "", const std::string &streamName = "");
 
     void checkNetworkConditions();
 
@@ -1063,8 +1055,7 @@ private:
             std::lock_guard<std::mutex> lock(devicesMutex);
             return list.find(name) != list.end();
         }
-    // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
-    public:
+    private:
         std::map<std::string, NodeHandle*> list = {};
         std::mutex devicesMutex;
     };
@@ -1133,8 +1124,7 @@ private:
             return *this;
         }
 
-    // TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
-    public:
+    private:
         std::map<std::string, TaskHandle*> list = {};
         mutable std::mutex tasksMutex;
     };
@@ -1175,8 +1165,8 @@ private:
             std::lock_guard<std::mutex> lock(containersMutex);
             return list.find(name) != list.end();
         }
-    //TODO: MAKE THIS PRIVATE TO AVOID NON-THREADSAFE ACCESS
-    public:
+
+    private:
         std::map<std::string, ContainerHandle*> list = {};
         std::mutex containersMutex;
     };
@@ -1197,8 +1187,7 @@ private:
 
     std::map<std::string, NetworkEntryType> ctrl_inDeviceNetworkEntries;
 
-    // TODO: Read from config file
-    std::uint64_t ctrl_schedulingIntervalSec = 10;//600;
+    std::uint64_t ctrl_schedulingIntervalSec;
     ClockType ctrl_nextSchedulingTime = std::chrono::system_clock::now();
     ClockType ctrl_currSchedulingTime = std::chrono::system_clock::now();
 
@@ -1206,15 +1195,16 @@ private:
 
     uint16_t ctrl_systemFPS;
 
-    // ADD
-    std::map<std::string, ClientProfilesJF> clientProfilesCSJF;
-    std::map<std::string, ModelProfilesJF> modelProfilesCSJF;
-    // ClientProfilesJF client_profiles_jf;
-    // ModelProfilesJF model_profiles_jf;
+    // Fixed batch sizes for SOTAs that don't provide dynamic batching
+    std::map<std::string, BatchSizeType> ctrl_initialBatchSizes;
 
     std::atomic<bool> isPipelineInitialised = false;
 
     void estimateTimeBudgetLeft(PipelineModel *currModel);
+
+    /// JELLYFISH CODE
+    std::map<std::string, ClientProfilesJF> clientProfilesCSJF;
+    std::map<std::string, ModelProfilesJF> modelProfilesCSJF;
 };
 
 
