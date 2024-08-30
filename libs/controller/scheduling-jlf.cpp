@@ -68,8 +68,8 @@ void Controller::queryingProfiles(TaskHandle *task)
             std::string senderDeviceType = getDeviceTypeName(deviceList.at(pair.first)->type);
             std::string receiverDeviceType = getDeviceTypeName(deviceList.at(pair.second)->type);
             containerName = model->name + "_" + receiverDeviceType;
-            std::unique_lock lock(devices.list[pair.first]->nodeHandleMutex);
-            NetworkEntryType entry = devices.list[pair.first]->latestNetworkEntries[receiverDeviceType];
+            std::unique_lock lock(devices.getDevice(pair.first)->nodeHandleMutex);
+            NetworkEntryType entry = devices.getDevice(pair.first)->latestNetworkEntries[receiverDeviceType];
             lock.unlock();
             NetworkProfile test = queryNetworkProfile(
                 *ctrl_metricsServerConn,
@@ -275,7 +275,6 @@ void Controller::Scheduling()
             std::cout << "end" << std::endl;
         }
         std::cout << "======================================================" << std::endl;
-        std::map<std::string, TaskHandle *> taskList = {};
 
         std::vector<std::string> taskTypes = {"traffic", "people"};
         for (auto taskType : taskTypes)
@@ -283,6 +282,7 @@ void Controller::Scheduling()
             std::vector<std::string> taskNameToRemove;
             for (auto &[taskName, taskHandle] : untrimmedTaskList)
             {
+                std::map<std::string, TaskHandle*> taskList = ctrl_unscheduledPipelines.getMap();
                 if (taskName.find(taskType) == std::string::npos || taskName == taskType)
                 {
                     continue;
@@ -303,24 +303,15 @@ void Controller::Scheduling()
                 }
             }
         }
-
-
-        // // TODO: assure the correct number of people and traffic pipelines in better way
-        // if (taskList["traffic"] == nullptr || taskList["people"] == nullptr)
-        // {
-        //     continue;
-        // } else if (taskList["traffic"]->tk_pipelineModels.size() != 2 || taskList["people"]->tk_pipelineModels.size() != 2)
-        // {
-        //     continue;
-        // }
         
         std::map<std::string, uint64_t> pipelineSLOs;
 
         for (auto &taskType : taskTypes)
         {
-            queryingProfiles(taskList[taskType]);
+            auto task = ctrl_unscheduledPipelines.getTask(taskType);
+            queryingProfiles(task);
             std::cout << "debugging query profile" << std::endl;
-            for (auto &model : taskList[taskType]->tk_pipelineModels)
+            for (auto &model : task->tk_pipelineModels)
             {
                 std::unique_lock<std::mutex> lock(model->pipelineModelMutex);
                 std::cout << "model name: " << model->name << ", " << model->device << std::endl;
@@ -331,7 +322,7 @@ void Controller::Scheduling()
                 lock.unlock();
             }
             std::cout << "debugging query profile end" << std::endl;
-            for (auto &model : taskList[taskType]->tk_pipelineModels)
+            for (auto &model : task->tk_pipelineModels)
             {
                 if (model->name.find("datasource") != std::string::npos)
                 {
@@ -344,12 +335,12 @@ void Controller::Scheduling()
                 }
             }
             // Assigned dummy value for yolo batch size
-            taskList[taskType]->tk_pipelineModels.at(1)->batchSize = 1;
-            for (auto &model : taskList[taskType]->tk_pipelineModels) {
+            task->tk_pipelineModels.at(1)->batchSize = 1;
+            for (auto &model : task->tk_pipelineModels) {
                 estimateModelNetworkLatency(model);
                 estimateModelLatency(model);
             }
-            for (auto &model : taskList[taskType]->tk_pipelineModels)
+            for (auto &model : task->tk_pipelineModels)
             {
                 if (model->name.find("datasource") == std::string::npos)
                 {
@@ -357,10 +348,10 @@ void Controller::Scheduling()
                 }
                 estimatePipelineLatency(model, 0);
             }
-            pipelineSLOs[taskType] = taskList[taskType]->tk_slo;
-            taskList[taskType]->tk_slo -= taskList[taskType]->tk_pipelineModels.back()->expectedStart2HereLatency;
+            pipelineSLOs[taskType] = task->tk_slo;
+            task->tk_slo -= task->tk_pipelineModels.back()->expectedStart2HereLatency;
 
-            for (auto &model : taskList[taskType]->tk_pipelineModels)
+            for (auto &model : task->tk_pipelineModels)
             {
                 if (model->name.find("datasource") == std::string::npos)
                 {
@@ -371,7 +362,7 @@ void Controller::Scheduling()
         }
 
         std::cout << "===================== after ==========================" << std::endl;
-        for (auto &[task_name, task] : taskList)
+        for (auto task : ctrl_unscheduledPipelines.getList())
         {
             auto pipes = task->tk_pipelineModels;
             for (auto &pipe : pipes)
@@ -383,9 +374,6 @@ void Controller::Scheduling()
             std::cout << "end" << std::endl;
         }
         std::cout << "======================================================" << std::endl;
-        std::unique_lock<std::mutex> lock(ctrl_unscheduledPipelines.tasksMutex);
-        ctrl_unscheduledPipelines.list = taskList;
-        lock.unlock();
 
         // clear all the information
         for (auto &pair : clientProfilesCSJF)
@@ -398,7 +386,7 @@ void Controller::Scheduling()
         }
 
         // collect all information
-        for (auto &[task_name, task] : taskList)
+        for (auto &[task_name, task] : ctrl_unscheduledPipelines.getMap())
         {
             std::cout << "task name: " << task_name << std::endl;
             for (auto model : task->tk_pipelineModels)
@@ -421,7 +409,7 @@ void Controller::Scheduling()
         }
 
         int count = 0;
-        for (auto &[task_name, task] : taskList)
+        for (auto task : ctrl_unscheduledPipelines.getList())
         {
             if (count == 2)
             {
@@ -723,9 +711,7 @@ void Controller::Scheduling()
             std::endl;
         }
 
-        // TODO: test
-
-        for (auto &task : taskList)
+        for (auto &task : ctrl_unscheduledPipelines.getMap())
         {
             for (auto &model : task.second->tk_pipelineModels)
             {
@@ -871,7 +857,7 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel)
 
 void Controller::temporalScheduling()
 {
-    for (auto &[taskName, taskHandle] : ctrl_scheduledPipelines.list)
+    for (auto &[taskName, taskHandle] : ctrl_scheduledPipelines.getMap())
     {
     }
 }
@@ -993,8 +979,7 @@ void Controller::mergePipelines()
     for (const auto &taskName : toMerge)
     {
         mergedPipeline = mergePipelines(taskName);
-        std::lock_guard lock(ctrl_scheduledPipelines.tasksMutex);
-        ctrl_scheduledPipelines.list.insert({mergedPipeline.tk_name, &mergedPipeline});
+        ctrl_scheduledPipelines.addTask(mergedPipeline.tk_name, &mergedPipeline);
     }
 }
 
@@ -1033,7 +1018,7 @@ void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel
         return;
     }
 
-    std::string deviceTypeName = getDeviceTypeName(devices.list[edgeDevice]->type);
+    std::string deviceTypeName = getDeviceTypeName(devices.getDevice(edgeDevice)->type);
 
     uint32_t inputSize = currModel->processProfiles.at(deviceTypeName).p95InputSize;
     uint32_t outputSize = currModel->processProfiles.at(deviceTypeName).p95OutputSize;
