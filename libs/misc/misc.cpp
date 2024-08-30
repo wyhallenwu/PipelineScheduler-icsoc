@@ -259,11 +259,9 @@ NetworkProfile queryNetworkProfile(
     query = absl::StrFormat(query.c_str(), profileTableName, receiverDeviceTypeAbbr, abbreviate(modelNameAbbr));
     res = pullSQL(metricsConn, query);
 
-    if (!res[0][0].is_null()) {
-        d2dNetworkProfile.p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
-        d2dNetworkProfile.p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
-        d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
-    }
+    d2dNetworkProfile.p95OutQueueingDuration = res[0]["p95_out_queueing_duration_us"].as<uint64_t>();
+    d2dNetworkProfile.p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
+    d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
 
     if (taskName.find("yolo") != std::string::npos) {
         std::vector<int> res = {320, 512}; // The package sizes we have data
