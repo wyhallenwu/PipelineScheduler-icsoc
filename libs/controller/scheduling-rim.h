@@ -413,6 +413,3 @@ void Controller::rim_action(TaskHandle *task)
 }
 
 // ====================================================== END OF IMPLEMENTATION OF RIM  ===========================================================
-
-// 2. Comment out all the important functions
-// 3. The behaviour of unscheduled and scheduled pipeline is not correct
