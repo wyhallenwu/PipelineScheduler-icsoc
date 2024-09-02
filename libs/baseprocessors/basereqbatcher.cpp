@@ -436,31 +436,6 @@ void BaseReqBatcher::batchRequests() {
 
         msvc_inReqCount++;
 
-        // uint32_t requestSize =
-        //         currReq.req_data[0].data.channels() * currReq.req_data[0].data.rows * currReq.req_data[0].data.cols *
-        //         CV_ELEM_SIZE1(currReq.req_data[0].data.type());
-
-        // Keeping record of the arrival requests
-        // TODO: Add rpc batch size instead of hardcoding
-        // if (warmupCompleted()) {
-        //     msvc_arrivalRecords.addRecord(
-        //             currReq.req_origGenTime[0],
-        //             10,
-        //             getArrivalPkgSize(currReq.req_travelPath[0]),
-        //             requestSize,
-        //             msvc_inReqCount,
-        //             getOriginStream(currReq.req_travelPath[0]),
-        //             getSenderHost(currReq.req_travelPath[0])
-        //     );
-        // }
-
-        // The generated time of this incoming request will be used to determine the rate with which the microservice should
-        // check its incoming queue.
-        // currReq_genTime = currReq.req_origGenTime[0][0];
-        // if (msvc_inReqCount > 1) {
-        //     updateReqRate(currReq_genTime);
-        // }
-
         // After the communication-related timestamps have been kept in the arrival record, all except the very first one (genTime) are removed.
         // The first timestamp will be carried till the end of the pipeline to determine the total latency and if the request is late, along the way.
         // outReq_genTime = {currReq_genTime, std::chrono::high_resolution_clock::now()};
@@ -606,9 +581,8 @@ validateRequest(Request<T> &req) {
         return false;
     }
 
-    // We need to check if the next request is worth processing.
-    // If it's too late, then we can drop and stop processing this request.
-    return this->checkReqEligibility(req.req_origGenTime[0]);
+    req.req_origGenTime[0].emplace_back(std::chrono::high_resolution_clock::now());
+    return true;
 }
 
 void BaseReqBatcher::batchRequestsProfiling() {
@@ -898,29 +872,4 @@ inline bool BaseReqBatcher::isTimeToBatch() {
         return true;
     }
     return false;
-}
-
-/**
- * @brief Check if the request is still worth being processed.
- * For instance, if the request is already late at the moment of checking, there is no value in processing it anymore.
- * 
- * @return true 
- * @return false 
- */
-bool BaseReqBatcher::checkReqEligibility(std::vector<ClockType> &currReq_time) {
-    if (msvc_RUNMODE == RUNMODE::PROFILING) {
-        currReq_time.emplace_back(std::chrono::high_resolution_clock::now()); // SECOND_TIMESTAMP
-        return true;
-    }
-    auto now = std::chrono::high_resolution_clock::now();
-    MsvcSLOType diff = std::chrono::duration_cast<std::chrono::microseconds>(now - currReq_time[0]).count();
-    if (diff > msvc_pipelineSLO - msvc_timeBudgetLeft && msvc_DROP_MODE == DROP_MODE::LAZY) {
-        this->droppedReqCount++;
-        spdlog::get("container_agent")->trace("{0:s} dropped the {1:d}th request.", msvc_name, this->droppedReqCount);
-        return false;
-    }
-    // `currReq_recvTime` will also be used to measured how much for the req to sit in queue and
-    // how long it took for the request to be preprocessed
-    currReq_time.emplace_back(now); // SECOND_TIMESTAMP
-    return true;
 }

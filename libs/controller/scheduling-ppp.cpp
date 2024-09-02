@@ -11,7 +11,7 @@ void Controller::initiateGPULanes(NodeHandle &node) {
         return;
     }
     auto deviceList = devices.list;
-    
+
     if (deviceList.find(node.name) == deviceList.end()) {
         spdlog::get("container_agent")->error("Device {0:s} is not found in the device list", node.name);
         return;
@@ -24,7 +24,7 @@ void Controller::initiateGPULanes(NodeHandle &node) {
     }
     node.gpuHandles.clear();
     node.freeGPUPortions.list.clear();
-    
+
 
     for (auto i = 0; i < node.numGPULanes; i++) {
         node.gpuLanes.push_back(new GPULane{});
@@ -95,8 +95,8 @@ void Controller::queryingProfiles(TaskHandle *task) {
             std::string senderDeviceType = getDeviceTypeName(deviceList.at(pair.first)->type);
             std::string receiverDeviceType = getDeviceTypeName(deviceList.at(pair.second)->type);
             containerName = model->name + "_" + receiverDeviceType;
-            std::unique_lock lock(devices.list[pair.first]->nodeHandleMutex);
-            NetworkEntryType entry = devices.list[pair.first]->latestNetworkEntries[receiverDeviceType];
+            std::unique_lock lock(devices.getDevice(pair.first)->nodeHandleMutex);
+            NetworkEntryType entry = devices.getDevice(pair.first)->latestNetworkEntries[receiverDeviceType];
             lock.unlock();
             NetworkProfile test = queryNetworkProfile(
                 *ctrl_metricsServerConn,
@@ -210,9 +210,9 @@ void Controller::Scheduling() {
  * @brief insert the newly created free portion into the sorted list of free portions
  * Since the list is sorted, we can insert the new portion by traversing the list from the head
  * Complexity: O(n)
- * 
- * @param head 
- * @param freePortion 
+ *
+ * @param head
+ * @param freePortion
  */
 void Controller::insertFreeGPUPortion(GPUPortionList &portionList, GPUPortion *freePortion) {
     auto &head = portionList.head;
@@ -265,7 +265,7 @@ GPUPortion* Controller::findFreePortionForInsertion(GPUPortionList &portionList,
     GPUPortion *curr = head;
     while (true) {
         auto laneDutyCycle = curr->lane->dutyCycle;
-        if (curr->start <= container->startTime && 
+        if (curr->start <= container->startTime &&
             curr->end >= container->endTime &&
             container->pipelineModel->localDutyCycle >= laneDutyCycle) {
             return curr;
@@ -278,11 +278,11 @@ GPUPortion* Controller::findFreePortionForInsertion(GPUPortionList &portionList,
 }
 
 /**
- * @brief 
- * 
- * @param node 
- * @param scheduledPortion 
- * @param toBeDividedFreePortion 
+ * @brief
+ *
+ * @param node
+ * @param scheduledPortion
+ * @param toBeDividedFreePortion
  */
 std::pair<GPUPortion *, GPUPortion *> Controller::insertUsedGPUPortion(GPUPortionList &portionList, ContainerHandle *container, GPUPortion *toBeDividedFreePortion) {
     auto &head = portionList.head;
@@ -410,7 +410,7 @@ void Controller::temporalScheduling() {
     unsigned int replica_id = 0;
     while (process_flag) {
         process_flag = false;
-        for (auto &[taskName, taskHandle]: ctrl_scheduledPipelines.list) {
+        for (auto &[taskName, taskHandle]: ctrl_scheduledPipelines.getMap()) {
             auto front_model = taskHandle->tk_pipelineModels.front();
             if (!front_model->gpuScheduled) {
                 process_flag = process_flag || !modelTemporalScheduling(front_model, replica_id);
@@ -437,10 +437,10 @@ bool Controller::mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const 
             }
             std::pair<std::string, std::string> newPair = {pair1.first + "_" + upstreamDevice, pair1.second};
             newProfile.insert({newPair, {}});
-            newProfile[newPair].p95TransferDuration = 
+            newProfile[newPair].p95TransferDuration =
                 mergedD2DProfile->at(pair1).p95TransferDuration * coefficient1 +
                 toBeMergedD2DProfile->at(pair2).p95TransferDuration * coefficient2;
-            newProfile[newPair].p95PackageSize = 
+            newProfile[newPair].p95PackageSize =
                 mergedD2DProfile->at(pair1).p95PackageSize * coefficient1 +
                 toBeMergedD2DProfile->at(pair2).p95PackageSize * coefficient2;
         }
@@ -513,12 +513,12 @@ bool Controller::mergeModels(PipelineModel *mergedModel, PipelineModel* toBeMerg
         return true;
     }
     // If the devices are different, we should not merge the models
-    if (mergedModel->device != toBeMergedModel->device || 
+    if (mergedModel->device != toBeMergedModel->device ||
         toBeMergedModel->merged || mergedModel->device != device || toBeMergedModel->device != device) {
         return false;
     }
 
-    
+
     float rate1 = mergedModel->arrivalProfiles.arrivalRates;
     float rate2 = toBeMergedModel->arrivalProfiles.arrivalRates;
 
@@ -575,7 +575,7 @@ TaskHandle* Controller::mergePipelines(const std::string& taskName) {
                 continue;
             }
             // If model is not scheduled to be run on the server, we should not merge it.
-            // However, the model is still 
+            // However, the model is still
             if (task.second->tk_pipelineModels[i]->device != "server") {
                 mergedPipeline->tk_pipelineModels.emplace_back(new PipelineModel(*task.second->tk_pipelineModels[i]));
                 task.second->tk_pipelineModels[i]->merged = true;
@@ -606,7 +606,7 @@ TaskHandle* Controller::mergePipelines(const std::string& taskName) {
             std::string oldDnstreamModelName = splitString(oldDownstream.first->name, "_").back();
             for (auto &newDownstream : mergedPipeline->tk_pipelineModels) {
                 std::string newDownstreamModelName = splitString(newDownstream->name, "_").back();
-                if (oldDnstreamModelName == newDownstreamModelName && 
+                if (oldDnstreamModelName == newDownstreamModelName &&
                     oldDownstream.first->device == newDownstream->device &&
                     oldDownstream.first != newDownstream) {
                     model->downstreams.emplace_back(std::make_pair(newDownstream, oldDownstream.second));
@@ -674,8 +674,7 @@ void Controller::mergePipelines() {
         for (auto &mergedModel : mergedPipeline->tk_pipelineModels) {
             mergedModel->task = mergedPipeline;
         }
-        std::lock_guard lock(ctrl_mergedPipelines.tasksMutex);
-        ctrl_mergedPipelines.list.insert({mergedPipeline->tk_name, mergedPipeline});
+        ctrl_scheduledPipelines.addTask(mergedPipeline->tk_name, mergedPipeline);
     }
 }
 
@@ -708,7 +707,7 @@ void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel
         return;
     }
 
-    std::string deviceTypeName = getDeviceTypeName(devices.list[edgeDevice]->type);
+    std::string deviceTypeName = getDeviceTypeName(devices.getDevice(edgeDevice)->type);
 
     uint32_t inputSize = currModel->processProfiles.at(deviceTypeName).p95InputSize;
     uint32_t outputSize = currModel->processProfiles.at(deviceTypeName).p95OutputSize;
@@ -912,7 +911,7 @@ void Controller::estimatePipelineLatency(PipelineModel *currModel, const uint64_
                 currModel->expectedQueueingLatency
             );
         }
-            
+
     }
 
     std::vector<std::pair<PipelineModel *, int>> downstreams = currModel->downstreams;
@@ -920,7 +919,7 @@ void Controller::estimatePipelineLatency(PipelineModel *currModel, const uint64_
         estimatePipelineLatency(d.first, currModel->expectedStart2HereLatency);
     }
 
-    if (currModel->downstreams.size() == 0) {
+    if (currModel->downstreams.empty()) {
         return;
     }
 }
@@ -934,7 +933,7 @@ void Controller::estimateTimeBudgetLeft(PipelineModel *currModel)
     } else if (currModel->name.find("datasource") != std::string::npos) {
         currModel->timeBudgetLeft = currModel->task->tk_slo;
     }
-    
+
     uint64_t dnstreamBudget = 0;
     for (const auto &d : currModel->downstreams)
     {
@@ -952,7 +951,7 @@ void Controller::estimateModelTiming(PipelineModel *currModel, const uint64_t st
         currModel->startTime = 0;
         currModel->endTime = 0;
         // if (currModel->name.find("sink") != std::string::npos) {
-        
+
     }
     else if (currModel->name.find("sink") != std::string::npos) {
         currModel->batchingDeadline = 0;
@@ -980,7 +979,7 @@ void Controller::estimateModelTiming(PipelineModel *currModel, const uint64_t st
                                     profile.batchInfer.at(batchSize).p95inferLat * batchSize * 1.05 -
                                     profile.batchInfer.at(batchSize).p95postLat;
     }
-    
+
     uint64_t maxDnstreamDutyCycle = currModel->localDutyCycle;
     for (auto &downstream : currModel->downstreams) {
         if (downstream.first->device != currModel->device &&
@@ -1018,7 +1017,7 @@ void Controller::estimatePipelineTiming() {
         for (auto &model: task->tk_pipelineModels) {
             if (model->name.find("datasource") == std::string::npos &&
                 model->name.find("dsrc") == std::string::npos) {
-                
+
                 continue;
             }
             estimateTimeBudgetLeft(model);
