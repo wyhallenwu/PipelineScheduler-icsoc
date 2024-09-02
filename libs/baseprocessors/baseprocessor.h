@@ -134,7 +134,6 @@ protected:
     inline bool isTimeToBatch() override;
     template <typename T>
     bool validateRequest(Request<T> &req);
-    bool checkReqEligibility(std::vector<ClockType> &currReq_time) override;
 
     uint8_t msvc_imgType, msvc_colorCvtType, msvc_resizeInterpolType;
     float msvc_imgNormScale;
