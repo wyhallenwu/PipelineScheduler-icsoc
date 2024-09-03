@@ -137,10 +137,9 @@ void Controller::Scheduling()
 
         partitioner.BaseParPoint = ratio;
 
-        auto nodes = devices.getList();
-        scheduleBaseParPointLoop(&model, &partitioner, nodes);
-        scheduleFineGrainedParPointLoop(&partitioner, nodes);
-        DecideAndMoveContainer(&model, nodes, &partitioner, 2);
+        Dis::scheduleBaseParPointLoop(&partitioner, devices, ctrl_unscheduledPipelines);
+        Dis::scheduleFineGrainedParPointLoop(&partitioner, devices, ctrl_unscheduledPipelines);
+        Dis::DecideAndMoveContainer(devices, ctrl_unscheduledPipelines, &partitioner, 2);
 
         for (auto &taskPair : taskList)
         {
@@ -248,13 +247,13 @@ uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const fl
 
 ///////////////////////////////////////////////////////////////////////distream add//////////////////////////////////////////////////////////////////////////////////////
 
-double Controller::calculateTotalprocessedRate(const PipelineModel *model, const std::vector<NodeHandle *> &nodes, bool is_edge)
+double Dis::calculateTotalprocessedRate(Devices &nodes, Tasks &pipelines, bool is_edge)
 {
     double totalRequestRate = 0.0;
-    std::map<std::string, NodeHandle *> deviceList = devices.getMap();
+    std::map<std::string, NodeHandle *> deviceList = nodes.getMap();
 
     // Iterate over all unscheduled pipeline tasks
-    for (const auto &taskPair : ctrl_unscheduledPipelines.getMap())
+    for (const auto &taskPair : pipelines.getMap())
     {
         const auto &task = taskPair.second;
         // Iterate over all models in the task's pipeline
@@ -297,14 +296,14 @@ double Controller::calculateTotalprocessedRate(const PipelineModel *model, const
 }
 
 // calculate the queue based on arrival rate
-int Controller::calculateTotalQueue(const std::vector<NodeHandle *> &nodes, bool is_edge)
+int Dis::calculateTotalQueue(Devices &nodes, Tasks &pipelines, bool is_edge)
 {
     // init the info
     double totalQueue = 0.0;
-    std::map<std::string, NodeHandle *> deviceList = devices.getMap();
+    std::map<std::string, NodeHandle *> deviceList = nodes.getMap();
 
     // for loop every model in the system
-    for (const auto &taskPair : ctrl_unscheduledPipelines.getMap())
+    for (const auto &taskPair : pipelines.getMap())
     {
         const auto &task = taskPair.second;
         for (auto &model : task->tk_pipelineModels)
@@ -346,7 +345,7 @@ int Controller::calculateTotalQueue(const std::vector<NodeHandle *> &nodes, bool
 }
 
 // calculate the BaseParPoint based on the TP
-void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitioner *partitioner, std::vector<NodeHandle *> &nodes)
+void Dis::scheduleBaseParPointLoop(Partitioner *partitioner, Devices &nodes, Tasks &pipelines)
 {
     // init the data
     float TPedgesAvg = 0.0f;
@@ -356,9 +355,9 @@ void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitione
     while (true)
     {
         // get the TP on edge and server sides.
-        float TPEdges = calculateTotalprocessedRate(model, nodes, true);
+        float TPEdges = calculateTotalprocessedRate(nodes, pipelines, true);
         std::cout << "TPEdges: " << TPEdges << std::endl;
-        float TPServer = calculateTotalprocessedRate(model, nodes, false);
+        float TPServer = calculateTotalprocessedRate(nodes, pipelines, false);
         std::cout << "TPServer: " << TPServer << std::endl;
 
         // init the TPedgesAvg and TPserverAvg based on the current runtime
@@ -411,7 +410,7 @@ void Controller::scheduleBaseParPointLoop(const PipelineModel *model, Partitione
 }
 
 // fine grained the parpoint based on the queue
-void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const std::vector<NodeHandle *> &nodes)
+void Dis::scheduleFineGrainedParPointLoop(Partitioner *partitioner, Devices &nodes, Tasks &pipelines)
 {
     float w;
     float tmp;
@@ -419,9 +418,9 @@ void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const
     {
 
         // get edge and server sides queue data
-        float wbar = calculateTotalQueue(nodes, true);
+        float wbar = calculateTotalQueue(nodes, pipelines, true);
         std::cout << "wbar " << wbar << std::endl;
-        w = calculateTotalQueue(nodes, false);
+        w = calculateTotalQueue(nodes, pipelines, false);
         std::cout << "w " << w << std::endl;
         // based on the queue sides to claculate the fine grained point
         //  If there's no queue on the edge, set a default adjustment factor
@@ -440,7 +439,8 @@ void Controller::scheduleFineGrainedParPointLoop(Partitioner *partitioner, const
     }
 }
 
-void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<NodeHandle *> &nodes, Partitioner *partitioner, int cuda_device)
+void Dis::DecideAndMoveContainer(Devices &nodes, Tasks &pipelines, Partitioner *partitioner,
+                                 int cuda_device)
 {
     // Calculate the decision point by adding the base and fine grained partition
     float decisionPoint = partitioner->BaseParPoint + partitioner->FineGrainedOffset*0.2;
@@ -450,9 +450,9 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
     float ratio = 0.0f;
     // ContainerHandle *selectedContainer = nullptr;
 
-    if (calculateTotalQueue(nodes, false) != 0)
+    if (calculateTotalQueue(nodes, pipelines, false) != 0)
     {                                                  
-        ratio = calculateTotalQueue(nodes, true) / calculateTotalQueue(nodes, false);
+        ratio = calculateTotalQueue(nodes, pipelines, true) / calculateTotalQueue(nodes, pipelines, false);
         ratio = std::max(0.0f, std::min(1.0f, ratio)); 
     }
 
@@ -461,7 +461,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
     {
         std::cout << "Move Container from server to edge based on model priority: " << std::endl;
         // for loop every model to find out the current splitpoint.
-        for (const auto &taskPair : ctrl_unscheduledPipelines.getMap())
+        for (const auto &taskPair : pipelines.getMap())
         {
             const auto &task = taskPair.second;
 
@@ -485,7 +485,7 @@ void Controller::DecideAndMoveContainer(const PipelineModel *model, std::vector<
     if (decisionPoint < ratio - tolerance)
     {
         std::cout << "Move Container from edge to server based on model priority: " << std::endl;
-        for (const auto &taskPair : ctrl_unscheduledPipelines.getMap())
+        for (const auto &taskPair : pipelines.getMap())
         {
             const auto &task = taskPair.second;
 
