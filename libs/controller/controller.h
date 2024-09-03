@@ -1166,20 +1166,5 @@ private:
     std::map<std::string, ModelProfilesJF> modelProfilesCSJF;
 };
 
-// --------------------------------------------------------------------------------------------------------
-//                                     start of jellyfish scheduling implementation
-// --------------------------------------------------------------------------------------------------------
-
-std::vector<std::tuple<std::tuple<std::string, float>, std::vector<ClientInfoJF>, int>> mapClient(ClientProfilesJF &client_profile, ModelProfilesJF &model_profiles);
-std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &models, std::vector<ClientInfoJF> &clients);
-int check_and_assign(std::vector<ModelInfoJF> &model, std::vector<ClientInfoJF> &selected_clients);
-
-std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models, const ClientInfoJF &client, int max_available_batch_size = 16);
-void differenceClients(std::vector<ClientInfoJF> &src, const std::vector<ClientInfoJF> &diff);
-
-// --------------------------------------------------------------------------------------------------------
-//                                      end of jellyfish scheduling implementation
-// --------------------------------------------------------------------------------------------------------
-
 
 #endif //PIPEPLUSPLUS_CONTROLLER_H
