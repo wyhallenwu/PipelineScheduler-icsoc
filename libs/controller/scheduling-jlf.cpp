@@ -554,6 +554,7 @@ void Controller::Scheduling()
             for (auto &not_select_yolo : not_selected_yolos)
             {
                 not_select_yolo->upstreams.clear();
+                not_select_yolo->batchSize = 1;
             }
 
             for (auto &mapping : mappings)
@@ -577,13 +578,11 @@ void Controller::Scheduling()
                     }
                 }
                 // clear the upstream of that model
-                // CHECKME: lock correctness here
                 std::unique_lock<std::mutex> model_lock(m.model->pipelineModelMutex);
                 m.model->upstreams.clear();
                 m.model->batchSize = m.batch_size;
 
                 // adjust downstream, upstream and resolution
-                // CHECKME: vaildate the class of interest here, default to 1 for simplicity
                 for (auto &client : selected_clients)
                 {
                     m.model->upstreams.push_back(std::make_pair(client.model, 1));
@@ -605,7 +604,6 @@ void Controller::Scheduling()
                     // {
                     //     if (it->first == client.name)
                     //     {
-                    //         // CHECKME: excute resolution adjustment
                     //         std::vector<int> rs = {width, height, 3};
                     //         AdjustResolution(it->second, rs);
                     //     }

@@ -1339,8 +1339,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                         {},
                         {},
                         {},
-                        {{datasource, -1}},
-                        1
+                        {{datasource, -1}}
                 };
                 yolov5n320->possibleDevices = {"server"};
 
@@ -1505,8 +1504,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                         {},
                         {},
                         {},
-                        {{datasource, -1}},
-                        1
+                        {{datasource, -1}}
                 };
                 yolov5n320->possibleDevices = {"server"};
 
