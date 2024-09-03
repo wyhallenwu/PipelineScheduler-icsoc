@@ -291,10 +291,8 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     for (auto &model: task->tk_pipelineModels) {
         model->datasourceName = t.source;
         model->task = task;
-        
     }
 
-    ctrl_unscheduledPipelines.addTask(task->tk_name, task);
     ctrl_savedUnscheduledPipelines.addTask(task->tk_name, task);
     return true;
 }
@@ -1387,7 +1385,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
 
             if (ctrl_systemName == "jlf") {
                 retina1face->possibleDevices = {"server"};
-                retina1face->downstreams = {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}};
+                retina1face->upstreams = {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}};
                 yolov5n320->downstreams.push_back({retina1face, 0});
                 yolov5n512->downstreams.push_back({retina1face, 0});
                 yolov5s->downstreams.push_back({retina1face, 0});
@@ -1421,7 +1419,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
 
             if (ctrl_systemName == "jlf") {
                 carbrand->possibleDevices = {"server"};
-                carbrand->downstreams = {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}};
+                carbrand->upstreams = {{yolov5n, 2}, {yolov5n320, 2}, {yolov5n512, 2}, {yolov5s, 2}};
                 yolov5n320->downstreams.push_back({carbrand, 2});
                 yolov5n512->downstreams.push_back({carbrand, 2});
                 yolov5s->downstreams.push_back({carbrand, 2});
@@ -1442,7 +1440,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
 
             if (ctrl_systemName == "jlf") {
                 platedet->possibleDevices = {"server"};
-                platedet->downstreams = {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}};
+                platedet->upstreams = {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}};
                 yolov5n320->downstreams.push_back({platedet, 2});
                 yolov5n512->downstreams.push_back({platedet, 2});
                 yolov5s->downstreams.push_back({platedet, 2});
@@ -1471,6 +1469,9 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 platedet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][platedet->name];
             }
 
+            if (ctrl_systemName == "jlf") {
+                return {datasource, yolov5n, yolov5n320, yolov5n512, yolov5s, retina1face, arcface, carbrand, platedet, sink};
+            }
             return {datasource, yolov5n, retina1face, arcface, carbrand, platedet, sink};
         }
         case PipelineType::Building_Security: {
@@ -1550,7 +1551,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
 
             if (ctrl_systemName == "jlf") {
                 retina1face->possibleDevices = {"server"};
-                retina1face->downstreams = {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}};
+                retina1face->upstreams = {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}};
                 yolov5n320->downstreams.push_back({retina1face, 0});
                 yolov5n512->downstreams.push_back({retina1face, 0});
                 yolov5s->downstreams.push_back({retina1face, 0});
@@ -1571,7 +1572,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
 
             if (ctrl_systemName == "jlf") {
                 movenet->possibleDevices = {"server"};
-                movenet->downstreams = {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}};
+                movenet->upstreams = {{yolov5n, 0}, {yolov5n320, 0}, {yolov5n512, 0}, {yolov5s, 0}};
                 yolov5n320->downstreams.push_back({movenet, 0});
                 yolov5n512->downstreams.push_back({movenet, 0});
                 yolov5s->downstreams.push_back({movenet, 0});
@@ -1626,6 +1627,9 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                 age->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][age->name];
             }
 
+            if (ctrl_systemName == "jlf") {
+                return {datasource, yolov5n, yolov5n320, yolov5n512, yolov5s, retina1face, movenet, gender, age, sink};
+            }
             return {datasource, yolov5n, retina1face, movenet, gender, age, sink};
         }
         case PipelineType::Video_Call: {

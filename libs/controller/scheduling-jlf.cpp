@@ -236,8 +236,9 @@ void Controller::Scheduling()
         {
             continue;
         }
-        ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
-        auto untrimmedTaskList = ctrl_unscheduledPipelines.getMap();
+
+        ctrl_unscheduledPipelines = {};
+        auto untrimmedTaskList = ctrl_savedUnscheduledPipelines.getMap();
         auto deviceList = devices.getMap();
         if (!isPipelineInitialised)
         {
@@ -261,27 +262,26 @@ void Controller::Scheduling()
         std::vector<std::string> taskTypes = {"traffic", "people"};
         for (auto taskType : taskTypes)
         {
-            std::vector<std::string> taskNameToRemove;
             for (auto &[taskName, taskHandle] : untrimmedTaskList)
             {
-                std::map<std::string, TaskHandle*> taskList = ctrl_unscheduledPipelines.getMap();
                 if (taskName.find(taskType) == std::string::npos || taskName == taskType)
                 {
                     continue;
                 }
+                std::map<std::string, TaskHandle*> taskList = ctrl_unscheduledPipelines.getMap();
                 if (taskList.find(taskType) == taskList.end())
                 {
-                    taskList[taskType] = new TaskHandle(*taskHandle);
-                    taskList[taskType]->tk_pipelineModels.front()->name = taskName + "_datasource";
-                    taskList[taskType]->tk_name = taskType;
+                    ctrl_unscheduledPipelines.addTask(taskType, new TaskHandle(*taskHandle));
+                    ctrl_unscheduledPipelines.getTask(taskType)->tk_pipelineModels.front()->name = taskName + "_datasource";
+                    ctrl_unscheduledPipelines.getTask(taskType)->tk_name = taskType;
                 }
                 else
                 {
-                    taskList[taskType]->tk_pipelineModels.emplace_back(new PipelineModel(*taskHandle->tk_pipelineModels.front()));
-                    taskList[taskType]->tk_pipelineModels.back()->downstreams = {};
-                    auto yolo = taskList[taskType]->tk_pipelineModels.front()->downstreams.front().first;
-                    taskList[taskType]->tk_pipelineModels.back()->downstreams.emplace_back(std::make_pair(yolo, -1));
-                    taskList[taskType]->tk_pipelineModels.back()->name = taskName + "_datasource";
+                    ctrl_unscheduledPipelines.getTask(taskType)->tk_pipelineModels.emplace_back(new PipelineModel(*taskHandle->tk_pipelineModels.front()));
+                    ctrl_unscheduledPipelines.getTask(taskType)->tk_pipelineModels.back()->downstreams = {};
+                    auto yolo = ctrl_unscheduledPipelines.getTask(taskType)->tk_pipelineModels.front()->downstreams.front().first;
+                    ctrl_unscheduledPipelines.getTask(taskType)->tk_pipelineModels.back()->downstreams.emplace_back(std::make_pair(yolo, -1));
+                    ctrl_unscheduledPipelines.getTask(taskType)->tk_pipelineModels.back()->name = taskName + "_datasource";
                 }
             }
         }
