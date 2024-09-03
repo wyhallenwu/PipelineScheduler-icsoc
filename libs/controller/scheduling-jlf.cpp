@@ -231,9 +231,7 @@ void Controller::Scheduling()
         Stopwatch schedulingSW;
         schedulingSW.start();
         if (std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::system_clock::now() - ctrl_nextSchedulingTime)
-                .count() < 10)
-        {
+                std::chrono::system_clock::now() - ctrl_nextSchedulingTime).count() < 10) {
             continue;
         }
 
@@ -732,6 +730,9 @@ void Controller::Scheduling()
 
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
         ApplyScheduling();
+        schedulingSW.stop();
+        ctrl_nextSchedulingTime = std::chrono::system_clock::now() + std::chrono::seconds(ctrl_schedulingIntervalSec);
+        std::this_thread::sleep_for(TimePrecisionType((ctrl_schedulingIntervalSec + 1) * 1000000 - schedulingSW.elapsed_microseconds()));
     }
 }
 
@@ -765,7 +766,6 @@ ModelInfoJF::ModelInfoJF(int bs, float il, int w, int h, std::string n, float ac
     inference_latency = il;
 
     // throughput is req/s
-    // CHECKME: validate the unit of the time stamp and the gcd of all throughputs,
     // now the time stamp is us, and the gcd of all throughputs is 10, maybe need change to ease the dp table
     throughput = (int(bs / (il * 1e-6)) / 10) * 10; // round it to be devidisble by 10 for better dp computing
     width = w;
