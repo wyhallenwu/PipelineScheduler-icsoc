@@ -225,6 +225,9 @@ void Controller::estimateTimeBudgetLeft(PipelineModel *currModel)
 
 void Controller::Scheduling()
 {
+    std::map<std::string, ClientProfilesJF> clientProfilesCSJF = {{"people", ClientProfilesJF()}, {"traffic", ClientProfilesJF()}};
+    std::map<std::string, ModelProfilesJF> modelProfilesCSJF = {{"people", ModelProfilesJF()}, {"traffic", ModelProfilesJF()}};
+
     while (running)
     {
         // Check if it is the next scheduling period

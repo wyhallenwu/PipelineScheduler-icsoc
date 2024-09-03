@@ -223,11 +223,6 @@ Controller::Controller(int argc, char **argv) {
     devices.addDevice("sink", sink_node);
 
     ctrl_nextSchedulingTime = std::chrono::system_clock::now();
-
-
-    /// JELLYFISH CODE
-    clientProfilesCSJF = {{"people", ClientProfilesJF()}, {"traffic", ClientProfilesJF()}};
-    modelProfilesCSJF = {{"people", ModelProfilesJF()}, {"traffic", ModelProfilesJF()}};
 }
 
 Controller::~Controller() {
@@ -1403,6 +1398,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             arcface->possibleDevices = {"server"};
             retina1face->downstreams.push_back({arcface, -1});
 
+            if (ctrl_systemName == "jlf") {
+                arcface->possibleDevices = {"server"};
+            }
+
             auto *carbrand = new PipelineModel{
                     "server",
                     "carbrand",
@@ -1601,6 +1600,11 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             };
             age->possibleDevices = {startDevice, "server"};
             retina1face->downstreams.push_back({age, -1});
+
+            if (ctrl_systemName == "jlf") {
+                gender->possibleDevices = {"server"};
+                age->possibleDevices = {"server"};
+            }
 
             auto *sink = new PipelineModel{
                     "sink",
