@@ -10,7 +10,7 @@ void Controller::initiateGPULanes(NodeHandle &node) {
     if (node.name == "sink") {
         return;
     }
-    auto deviceList = devices.list;
+    auto deviceList = devices.getMap();
 
     if (deviceList.find(node.name) == deviceList.end()) {
         spdlog::get("container_agent")->error("Device {0:s} is not found in the device list", node.name);
@@ -362,7 +362,8 @@ std::pair<GPUPortion *, GPUPortion *> Controller::insertUsedGPUPortion(GPUPortio
 
 bool Controller::containerTemporalScheduling(ContainerHandle *container) {
     std::string deviceName = container->device_agent->name;
-    auto portion = findFreePortionForInsertion(devices.list[deviceName]->freeGPUPortions, container);
+    auto deviceList = devices.getMap();
+    auto portion = findFreePortionForInsertion(deviceList[deviceName]->freeGPUPortions, container);
 
     if (portion == nullptr) {
         spdlog::get("container_agent")->error("No free portion found for container {0:s}", container->name);
@@ -370,7 +371,7 @@ bool Controller::containerTemporalScheduling(ContainerHandle *container) {
     }
     container->executionPortion = portion;
     container->gpuHandle = portion->lane->gpuHandle;
-    auto newPortions = insertUsedGPUPortion(devices.list[deviceName]->freeGPUPortions, container, portion);
+    auto newPortions = insertUsedGPUPortion(deviceList[deviceName]->freeGPUPortions, container, portion);
 
     return true;
 }
@@ -403,7 +404,8 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned 
 }
 
 void Controller::temporalScheduling() {
-    for (auto &[deviceName, deviceHandle]: devices.list) {
+    auto deviceList = devices.getMap();
+    for (auto &[deviceName, deviceHandle]: deviceList) {
         initiateGPULanes(*deviceHandle);
     }
     bool process_flag = true;
