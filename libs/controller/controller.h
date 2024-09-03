@@ -1164,9 +1164,6 @@ private:
     /// JELLYFISH CODE
     std::map<std::string, ClientProfilesJF> clientProfilesCSJF;
     std::map<std::string, ModelProfilesJF> modelProfilesCSJF;
-
-    /// RIM CODE
-    void rim_action(TaskHandle *task);
 };
 
 
