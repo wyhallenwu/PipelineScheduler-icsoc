@@ -110,6 +110,13 @@ void Controller::Scheduling()
 {
     while (running)
     {
+        Stopwatch schedulingSW;
+        schedulingSW.start();
+        if (std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now() - ctrl_nextSchedulingTime).count() < 10) {
+            continue;
+        }
+
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto taskList = ctrl_unscheduledPipelines.getMap();
 
@@ -180,8 +187,9 @@ void Controller::Scheduling()
         ApplyScheduling();
         std::cout << "end_scheduleBaseParPoint " << partitioner.BaseParPoint << std::endl;
         std::cout << "end_FineGrainedParPoint " << partitioner.FineGrainedOffset << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(
-                ctrl_schedulingIntervalSec)); // sleep time can be adjusted to your algorithm or just left at 5 seconds for now
+        schedulingSW.stop();
+        ctrl_nextSchedulingTime = std::chrono::system_clock::now() + std::chrono::seconds(ctrl_schedulingIntervalSec);
+        std::this_thread::sleep_for(TimePrecisionType((ctrl_schedulingIntervalSec + 1) * 1000000 - schedulingSW.elapsed_microseconds()));
     }
 }
 
