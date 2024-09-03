@@ -532,7 +532,7 @@ void Controller::Scheduling()
 
             // std::cout << "START SCHEDULING" << std::endl;
 
-            auto mappings = mapClient(client_profiles_jf, model_profiles_jf);
+            auto mappings = Jlf::mapClient(client_profiles_jf, model_profiles_jf);
 
             // std::cout << "FINISH STRATEGY COMPUTING" << std::endl;
 
@@ -877,7 +877,7 @@ void ClientProfilesJF::debugging()
 //                               implementation of scheduling algorithms
 // -------------------------------------------------------------------------------------------
 
-std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &models,
+std::vector<ClientInfoJF> Jlf::findOptimalClients(const std::vector<ModelInfoJF> &models,
                                              std::vector<ClientInfoJF> &clients)
 {
     // sort clients
@@ -886,7 +886,7 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
     int best_value = 0;
 
     // dp
-    auto [max_batch_size, max_index] = findMaxBatchSize(models, clients[0], 16);
+    auto [max_batch_size, max_index] = Jlf::findMaxBatchSize(models, clients[0], 16);
     std::cout << "max batch size: " << max_batch_size << " and index: " << max_index << std::endl;
     assert(max_batch_size > 0);
 
@@ -909,7 +909,7 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
     for (unsigned int client_index = 1; client_index <= clients.size(); client_index++)
     {
         auto &client = clients[client_index - 1];
-        auto result = findMaxBatchSize(models, client, max_batch_size);
+        auto result = Jlf::findMaxBatchSize(models, client, max_batch_size);
         max_batch_size = std::get<0>(result);
         max_index = std::get<1>(result);
         if (max_batch_size <= 0)
@@ -984,7 +984,7 @@ std::vector<ClientInfoJF> findOptimalClients(const std::vector<ModelInfoJF> &mod
  */
 std::vector<
     std::tuple<std::tuple<std::string, float>, std::vector<ClientInfoJF>, int>>
-mapClient(ClientProfilesJF &client_profile, ModelProfilesJF &model_profiles)
+Jlf::mapClient(ClientProfilesJF &client_profile, ModelProfilesJF &model_profiles)
 {
 
     std::vector<
@@ -998,7 +998,7 @@ mapClient(ClientProfilesJF &client_profile, ModelProfilesJF &model_profiles)
          ++it)
     {
         key_index++;
-        auto selected_clients = findOptimalClients(it->second, clients);
+        auto selected_clients = Jlf::findOptimalClients(it->second, clients);
 
         // tradeoff:
         // assign all left clients to the last available model
@@ -1015,10 +1015,10 @@ mapClient(ClientProfilesJF &client_profile, ModelProfilesJF &model_profiles)
             assert(clients.size() == 0);
         }
 
-        int batch_size = check_and_assign(it->second, selected_clients);
+        int batch_size = Jlf::check_and_assign(it->second, selected_clients);
         mappings.push_back(
             std::make_tuple(it->first, selected_clients, batch_size));
-        differenceClients(clients, selected_clients);
+        Jlf::differenceClients(clients, selected_clients);
         if (clients.size() == 0)
         {
             break;
@@ -1035,7 +1035,7 @@ mapClient(ClientProfilesJF &client_profile, ModelProfilesJF &model_profiles)
  * @param selected_clients
  * @return int
  */
-int check_and_assign(std::vector<ModelInfoJF> &model,
+int Jlf::check_and_assign(std::vector<ModelInfoJF> &model,
                      std::vector<ClientInfoJF> &selected_clients)
 {
     int total_req_rate = 0;
@@ -1071,7 +1071,7 @@ int check_and_assign(std::vector<ModelInfoJF> &model,
  * @param budget
  * @return max_batch_size, index
  */
-std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models,
+std::tuple<int, int> Jlf::findMaxBatchSize(const std::vector<ModelInfoJF> &models,
                                       const ClientInfoJF &client, int max_available_batch_size)
 {
     int max_batch_size = 2;
@@ -1096,7 +1096,7 @@ std::tuple<int, int> findMaxBatchSize(const std::vector<ModelInfoJF> &models,
  * @param src
  * @param diff
  */
-void differenceClients(std::vector<ClientInfoJF> &src,
+void Jlf::differenceClients(std::vector<ClientInfoJF> &src,
                        const std::vector<ClientInfoJF> &diff)
 {
     auto is_in_diff = [&diff](const ClientInfoJF &client)
