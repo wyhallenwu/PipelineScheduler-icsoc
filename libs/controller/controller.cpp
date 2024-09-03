@@ -286,10 +286,8 @@ bool Controller::AddTask(const TaskDescription::TaskStruct &t) {
     for (auto &model: task->tk_pipelineModels) {
         model->datasourceName = t.source;
         model->task = task;
-        
     }
 
-    ctrl_unscheduledPipelines.addTask(task->tk_name, task);
     ctrl_savedUnscheduledPipelines.addTask(task->tk_name, task);
     return true;
 }
@@ -377,7 +375,7 @@ void Controller::ApplyScheduling() {
      */
     for (auto &[pipeName, pipe]: ctrl_scheduledPipelines.getMap()) {
         for (auto &model: pipe->tk_pipelineModels) {
-            if (ctrl_systemName != "ppp") {
+            if (ctrl_systemName != "ppp" && ctrl_systemName != "jlf") {
                 model->cudaDevices.emplace_back(0);
                 model->numReplicas = 1;
             }
@@ -527,10 +525,9 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     }
     std::string modelName = splitString(model->name, "_").back();
 
-    int class_of_interest;
-    if (model->name.find("datasource") != std::string::npos || model->name.find("dsrc") != std::string::npos) {
-        class_of_interest = -1;
-    } else {
+    int class_of_interest = -1;
+    if (!model->upstreams.empty() && model->name.find("datasource") == std::string::npos &&
+        model->name.find("dsrc") == std::string::npos) {
         class_of_interest = model->upstreams[0].second;
     }
 
@@ -1358,7 +1355,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 2}}
             };
-            carbrand->possibleDevices = {"server"};
+            carbrand->possibleDevices = {startDevice, "server"};
             yolov5n->downstreams.push_back({carbrand, 2});
 
             auto *platedet = new PipelineModel{
@@ -1371,7 +1368,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 2}}
             };
-            platedet->possibleDevices = {"server"};
+            platedet->possibleDevices = {startDevice, "server"};
             yolov5n->downstreams.push_back({platedet, 2});
 
             auto *sink = new PipelineModel{
@@ -1451,7 +1448,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            gender->possibleDevices = {"server"};
+            gender->possibleDevices = {startDevice, "server"};
             retina1face->downstreams.push_back({gender, -1});
 
             auto *age = new PipelineModel{
@@ -1464,7 +1461,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            age->possibleDevices = {"server"};
+            age->possibleDevices = {startDevice, "server"};
             retina1face->downstreams.push_back({age, -1});
 
             auto *sink = new PipelineModel{
@@ -1557,7 +1554,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            arcface->possibleDevices = {"server"};
+            arcface->possibleDevices = {startDevice, "server"};
             retina1face->downstreams.push_back({arcface, -1});
 
             auto *sink = new PipelineModel{
