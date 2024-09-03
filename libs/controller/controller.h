@@ -676,8 +676,6 @@ struct TaskHandle {
     }
 };
 
-
-
 namespace TaskDescription {
     struct TaskStruct {
         // Name of the task (e.g., traffic, video_call, people, etc.)
@@ -693,6 +691,154 @@ namespace TaskDescription {
 
     void from_json(const nlohmann::json &j, TaskStruct &val);
 }
+
+struct Devices {
+public:
+    void addDevice(const std::string &name, NodeHandle *node) {
+        std::lock_guard<std::mutex> lock(devicesMutex);
+        list[name] = node;
+    }
+
+    void removeDevice(const std::string &name) {
+        std::lock_guard<std::mutex> lock(devicesMutex);
+        list.erase(name);
+    }
+
+    NodeHandle *getDevice(const std::string &name) {
+        std::lock_guard<std::mutex> lock(devicesMutex);
+        return list[name];
+    }
+
+    std::vector<NodeHandle *> getList() {
+        std::lock_guard<std::mutex> lock(devicesMutex);
+        std::vector<NodeHandle *> elements;
+        for (auto &d: list) {
+            elements.push_back(d.second);
+        }
+        return elements;
+    }
+
+    std::map<std::string, NodeHandle*> getMap() {
+        std::lock_guard<std::mutex> lock(devicesMutex);
+        return list;
+    }
+
+    bool hasDevice(const std::string &name) {
+        std::lock_guard<std::mutex> lock(devicesMutex);
+        return list.find(name) != list.end();
+    }
+private:
+    std::map<std::string, NodeHandle*> list = {};
+    std::mutex devicesMutex;
+};
+
+struct Tasks {
+public:
+    void addTask(const std::string &name, TaskHandle *task) {
+        std::lock_guard<std::mutex> lock(tasksMutex);
+        list[name] = task;
+    }
+
+    void removeTask(const std::string &name) {
+        std::lock_guard<std::mutex> lock(tasksMutex);
+        list.erase(name);
+    }
+
+    TaskHandle *getTask(const std::string &name) {
+        std::lock_guard<std::mutex> lock(tasksMutex);
+        return list[name];
+    }
+
+    std::vector<TaskHandle *> getList() {
+        std::lock_guard<std::mutex> lock(tasksMutex);
+        std::vector<TaskHandle *> tasks;
+        for (auto &t: list) {
+            tasks.push_back(t.second);
+        }
+        return tasks;
+    }
+
+    std::map<std::string, TaskHandle*> getMap() {
+        std::lock_guard<std::mutex> lock(tasksMutex);
+        return list;
+    }
+
+    bool hasTask(const std::string &name) {
+        std::lock_guard<std::mutex> lock(tasksMutex);
+        return list.find(name) != list.end();
+    }
+
+    Tasks() = default;
+
+    // Copy constructor
+    Tasks(const Tasks &other) {
+        std::lock(tasksMutex, other.tasksMutex);
+        std::lock_guard<std::mutex> lock1(tasksMutex, std::adopt_lock);
+        std::lock_guard<std::mutex> lock2(other.tasksMutex, std::adopt_lock);
+        list = {};
+        for (auto &t: other.list) {
+            list[t.first] = new TaskHandle(*t.second);
+        }
+    }
+
+    Tasks& operator=(const Tasks &other) {
+        if (this != &other) {
+            std::lock(tasksMutex, other.tasksMutex);
+            std::lock_guard<std::mutex> lock1(tasksMutex, std::adopt_lock);
+            std::lock_guard<std::mutex> lock2(other.tasksMutex, std::adopt_lock);
+            list = {};
+            for (auto &t: other.list) {
+                list[t.first] = new TaskHandle(*t.second);
+            }
+        }
+        return *this;
+    }
+
+private:
+    std::map<std::string, TaskHandle*> list = {};
+    mutable std::mutex tasksMutex;
+};
+
+struct Containers {
+public:
+    void addContainer(const std::string &name, ContainerHandle *container) {
+        std::lock_guard<std::mutex> lock(containersMutex);
+        list[name] = container;
+    }
+
+    void removeContainer(const std::string &name) {
+        std::lock_guard<std::mutex> lock(containersMutex);
+        list.erase(name);
+    }
+
+    ContainerHandle *getContainer(const std::string &name) {
+        std::lock_guard<std::mutex> lock(containersMutex);
+        return list[name];
+    }
+
+    std::vector<ContainerHandle *> getList() {
+        std::lock_guard<std::mutex> lock(containersMutex);
+        std::vector<ContainerHandle *> elements;
+        for (auto &c: list) {
+            elements.push_back(c.second);
+        }
+        return elements;
+    }
+
+    std::map<std::string, ContainerHandle *> getMap() {
+        std::lock_guard<std::mutex> lock(containersMutex);
+        return list;
+    }
+
+    bool hasContainer(const std::string &name) {
+        std::lock_guard<std::mutex> lock(containersMutex);
+        return list.find(name) != list.end();
+    }
+
+private:
+    std::map<std::string, ContainerHandle*> list = {};
+    std::mutex containersMutex;
+};
 
 class Controller {
 public:
@@ -888,157 +1034,11 @@ private:
         {NXXavier, "nxavier"},
         {OrinNano, "orinano"}
     };
-
-    struct Devices {
-    public:
-        void addDevice(const std::string &name, NodeHandle *node) {
-            std::lock_guard<std::mutex> lock(devicesMutex);
-            list[name] = node;
-        }
-
-        void removeDevice(const std::string &name) {
-            std::lock_guard<std::mutex> lock(devicesMutex);
-            list.erase(name);
-        }
-
-        NodeHandle *getDevice(const std::string &name) {
-            std::lock_guard<std::mutex> lock(devicesMutex);
-            return list[name];
-        }
-
-        std::vector<NodeHandle *> getList() {
-            std::lock_guard<std::mutex> lock(devicesMutex);
-            std::vector<NodeHandle *> elements;
-            for (auto &d: list) {
-                elements.push_back(d.second);
-            }
-            return elements;
-        }
-
-        std::map<std::string, NodeHandle*> getMap() {
-            std::lock_guard<std::mutex> lock(devicesMutex);
-            return list;
-        }
-
-        bool hasDevice(const std::string &name) {
-            std::lock_guard<std::mutex> lock(devicesMutex);
-            return list.find(name) != list.end();
-        }
-    private:
-        std::map<std::string, NodeHandle*> list = {};
-        std::mutex devicesMutex;
-    };
     
     Devices devices;
 
-    struct Tasks {
-    public:
-        void addTask(const std::string &name, TaskHandle *task) {
-            std::lock_guard<std::mutex> lock(tasksMutex);
-            list[name] = task;
-        }
-
-        void removeTask(const std::string &name) {
-            std::lock_guard<std::mutex> lock(tasksMutex);
-            list.erase(name);
-        }
-
-        TaskHandle *getTask(const std::string &name) {
-            std::lock_guard<std::mutex> lock(tasksMutex);
-            return list[name];
-        }
-
-        std::vector<TaskHandle *> getList() {
-            std::lock_guard<std::mutex> lock(tasksMutex);
-            std::vector<TaskHandle *> tasks;
-            for (auto &t: list) {
-                tasks.push_back(t.second);
-            }
-            return tasks;
-        }
-
-        std::map<std::string, TaskHandle*> getMap() {
-            std::lock_guard<std::mutex> lock(tasksMutex);
-            return list;
-        }
-
-        bool hasTask(const std::string &name) {
-            std::lock_guard<std::mutex> lock(tasksMutex);
-            return list.find(name) != list.end();
-        }
-
-        Tasks() = default;
-
-        // Copy constructor
-        Tasks(const Tasks &other) {
-            std::lock(tasksMutex, other.tasksMutex);
-            std::lock_guard<std::mutex> lock1(tasksMutex, std::adopt_lock);
-            std::lock_guard<std::mutex> lock2(other.tasksMutex, std::adopt_lock);
-            list = {};
-            for (auto &t: other.list) {
-                list[t.first] = new TaskHandle(*t.second);
-            }
-        }
-
-        Tasks& operator=(const Tasks &other) {
-            if (this != &other) {
-                std::lock(tasksMutex, other.tasksMutex);
-                std::lock_guard<std::mutex> lock1(tasksMutex, std::adopt_lock);
-                std::lock_guard<std::mutex> lock2(other.tasksMutex, std::adopt_lock);
-                list = {};
-                for (auto &t: other.list) {
-                    list[t.first] = new TaskHandle(*t.second);
-                }
-            }
-            return *this;
-        }
-
-    private:
-        std::map<std::string, TaskHandle*> list = {};
-        mutable std::mutex tasksMutex;
-    };
     Tasks ctrl_unscheduledPipelines, ctrl_savedUnscheduledPipelines, ctrl_scheduledPipelines, ctrl_pastScheduledPipelines;
 
-    struct Containers {
-    public:
-        void addContainer(const std::string &name, ContainerHandle *container) {
-            std::lock_guard<std::mutex> lock(containersMutex);
-            list[name] = container;
-        }
-
-        void removeContainer(const std::string &name) {
-            std::lock_guard<std::mutex> lock(containersMutex);
-            list.erase(name);
-        }
-
-        ContainerHandle *getContainer(const std::string &name) {
-            std::lock_guard<std::mutex> lock(containersMutex);
-            return list[name];
-        }
-
-        std::vector<ContainerHandle *> getList() {
-            std::lock_guard<std::mutex> lock(containersMutex);
-            std::vector<ContainerHandle *> elements;
-            for (auto &c: list) {
-                elements.push_back(c.second);
-            }
-            return elements;
-        }
-
-        std::map<std::string, ContainerHandle *> getMap() {
-            std::lock_guard<std::mutex> lock(containersMutex);
-            return list;
-        }
-
-        bool hasContainer(const std::string &name) {
-            std::lock_guard<std::mutex> lock(containersMutex);
-            return list.find(name) != list.end();
-        }
-
-    private:
-        std::map<std::string, ContainerHandle*> list = {};
-        std::mutex containersMutex;
-    };
     Containers containers;
 
     std::map<std::string, NetworkEntryType> network_check_buffer;
@@ -1055,7 +1055,7 @@ private:
     std::shared_ptr<spdlog::logger> ctrl_logger;
 
     std::map<std::string, NetworkEntryType> ctrl_inDeviceNetworkEntries;
-    
+
     std::uint64_t ctrl_schedulingIntervalSec;
     ClockType ctrl_nextSchedulingTime = std::chrono::system_clock::now();
     ClockType ctrl_currSchedulingTime = std::chrono::system_clock::now();
@@ -1065,9 +1065,11 @@ private:
     uint16_t ctrl_systemFPS;
 
     // Fixed batch sizes for SOTAs that don't provide dynamic batching
-    std::map<std::string, BatchSizeType> ctrl_initialBatchSizes; 
+    std::map<std::string, BatchSizeType> ctrl_initialBatchSizes;
 
     std::atomic<bool> isPipelineInitialised = false;
+
+    void estimateTimeBudgetLeft(PipelineModel *currModel);
 };
 
 
