@@ -3,7 +3,7 @@
 // ====================================================== IMPLEMENTATION OF RIM  ===========================================================
 
 // Helper functions
-namespace rim {
+namespace Rim {
     const BatchSizeType RIM_BATCH_SIZE = 8;
 
     std::string device_type_str(NodeHandle *device) {
@@ -335,9 +335,11 @@ namespace rim {
 
 
         // update device for datasource
-        std::lock_guard<std::mutex> source_lock(root->pipelineModelMutex);
+        // std::lock_guard<std::mutex> source_lock(root->pipelineModelMutex);
+        std::unique_lock<std::mutex> source_lock(root->pipelineModelMutex);
         root->deviceAgent = edges.at(root->device);
         root->deviceTypeName = device_type_str(root->deviceAgent);
+        source_lock.unlock();
 
         std::list<std::string> *chosen_subgraph = choosing_subgraph_for_edge(suitable_subgraphs, root, edges,
                                                                              desiredFps);

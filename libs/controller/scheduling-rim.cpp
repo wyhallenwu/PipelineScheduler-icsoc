@@ -124,7 +124,7 @@ void Controller::Scheduling() {
 
                 try {
                     std::cout << "START SCHEDULING" << std::endl;
-                    rim_action(task);
+                    Rim::rim_action(task, devices);
                     std::cout << "SCHEDULING END" << std::endl;
                 } catch (const std::exception& e) {
                     std::cerr << "Exception in rim_action: " << e.what() << std::endl;
