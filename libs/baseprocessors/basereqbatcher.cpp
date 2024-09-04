@@ -434,7 +434,7 @@ void BaseReqBatcher::batchRequests() {
             msvc_nextMustBatchTime = oldestReqTime + TimePrecisionType(timeOutByLastReq);
         }
 
-        msvc_inReqCount++;
+        msvc_overallTotalReqCount++;
 
         // After the communication-related timestamps have been kept in the arrival record, all except the very first one (genTime) are removed.
         // The first timestamp will be carried till the end of the pipeline to determine the total latency and if the request is late, along the way.
@@ -445,7 +445,7 @@ void BaseReqBatcher::batchRequests() {
 
         outBatch_slo.emplace_back(currReq.req_e2eSLOLatency[0]);
         outBatch_path.emplace_back(currReq.req_travelPath[0] + "[" + msvc_hostDevice + "|" + msvc_containerName + "|" +
-                                   std::to_string(msvc_inReqCount));
+                                   std::to_string(msvc_overallTotalReqCount));
         spdlog::get("container_agent")->trace("{0:s} popped a request of batch size {1:d}. In queue size is {2:d}.",
                                               msvc_name, currReq_batchSize, msvc_InQueue.at(0)->size());
 
@@ -684,12 +684,12 @@ void BaseReqBatcher::batchRequestsProfiling() {
             }
         }
 
-        msvc_inReqCount++;
+        msvc_overallTotalReqCount++;
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_genTime = currReq.req_origGenTime[0][0];
-        if (msvc_inReqCount > 1) {
+        if (msvc_overallTotalReqCount > 1) {
             updateReqRate(currReq_genTime);
         }
 
