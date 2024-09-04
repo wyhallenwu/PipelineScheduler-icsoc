@@ -665,6 +665,10 @@ public:
         return msvc_totalReqCount.exchange(0);
     };
 
+    virtual PerSecondArrivalRecord getPerSecondArrivalRecord() {
+        return {};
+    }
+
     void stopThread() {
         STOP_THREADS = true;
     }
@@ -806,7 +810,7 @@ protected:
     MsvcSLOType msvc_interReqTime = 1;
 
     //
-    uint64_t msvc_inReqCount = 0;
+    uint64_t msvc_overallTotalReqCount = 0;
     //
     uint64_t msvc_outReqCount = 0;
     //
