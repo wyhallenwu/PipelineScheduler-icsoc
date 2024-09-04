@@ -216,15 +216,16 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 
         std::vector<RequestData<LocalCPUReqDataType>> elements = {};
         for (const auto &el: *request.mutable_elements()) {
-            receiverInstance->msvc_totalReqCount++;
             auto timestamps = std::vector<ClockType>();
             for (auto ts: el.timestamp()) {
                 timestamps.emplace_back(TimePrecisionType(ts));
             }
+            auto receivedTime = std::chrono::system_clock::now();
+            receiverInstance->updateStats(receivedTime);
+            timestamps.push_back(receivedTime);
             if (!validateReq(timestamps[0])) {
                 continue;
             }
-            timestamps.push_back(std::chrono::system_clock::now());
             if (receiverInstance->checkProfileEnd(el.path())) {
                 receiverInstance->STOP_THREADS = true;
                 break;
@@ -276,9 +277,9 @@ void Receiver::SerializedDataRequestHandler::Proceed() {
 // This can be run in multiple threads if needed.
 void Receiver::HandleRpcs() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
-    new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount, this);
-    new SharedMemoryRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount, this);
-    new SerializedDataRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_inReqCount, this);
+    new GpuPointerRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_overallTotalReqCount, this);
+    new SharedMemoryRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_overallTotalReqCount, this);
+    new SerializedDataRequestHandler(&service, cq.get(), msvc_OutQueue[0], msvc_overallTotalReqCount, this);
     void *tag;  // uniquely identifies a request.
     bool ok;
     READY = true;

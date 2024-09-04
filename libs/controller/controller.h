@@ -41,16 +41,18 @@ struct ContainerHandle;
 struct PipelineModel;
 
 struct GPUPortion;
+struct GPUHandle;
 
 struct GPULane {
-    std::uint16_t gpuNum;
+    GPUHandle *gpuHandle;
     std::uint16_t laneNum;
     std::uint64_t dutyCycle = 0;
 };
 
-struct GPUPortion : GPULane {
+struct GPUPortion {
     std::uint64_t start = 0;
     std::uint64_t end = 9999999999999999;
+    ContainerHandle *container = nullptr;
     GPULane * lane = nullptr;
     GPUPortion* next = nullptr;
     GPUPortion* prev = nullptr;
@@ -65,6 +67,7 @@ struct GPUHandle {
     std::uint16_t numLanes;
 
     std::map<std::string, ContainerHandle *> containers = {};
+    std::vector<GPUPortion *> freeGPUPortions;
 
     GPUHandle() = default;
 
@@ -161,6 +164,7 @@ struct NodeHandle {
 
 struct ContainerHandle {
     std::string name;
+    unsigned int replica_id;
     int class_of_interest;
     ModelType model;
     bool mergable;
@@ -218,7 +222,7 @@ struct ContainerHandle {
     // GPU Handle
     GPUHandle *gpuHandle = nullptr;
     //
-    GPUPortion *executionLane = nullptr;
+    GPUPortion *executionPortion = nullptr;
     // points to the pipeline model that this container is part of
     PipelineModel *pipelineModel = nullptr;
 
@@ -229,6 +233,7 @@ struct ContainerHandle {
 
         // Constructor
     ContainerHandle(const std::string& name,
+                unsigned int replica_id,
                 int class_of_interest,
                 ModelType model,
                 bool mergable,
@@ -246,6 +251,7 @@ struct ContainerHandle {
                 const std::vector<QueueLengthType>& queueSizes = {},
                 uint64_t timeBudgetLeft = 9999999999)
     : name(name),
+      replica_id(replica_id),
       class_of_interest(class_of_interest),
       model(model),
       mergable(mergable),
@@ -270,6 +276,7 @@ struct ContainerHandle {
         std::lock_guard<std::mutex> lock2(other.containerHandleMutex, std::adopt_lock);
 
         name = other.name;
+        replica_id = other.replica_id;
         class_of_interest = other.class_of_interest;
         model = other.model;
         mergable = other.mergable;
@@ -300,7 +307,7 @@ struct ContainerHandle {
         localDutyCycle = other.localDutyCycle;
         batchingDeadline = other.batchingDeadline;
         gpuHandle = other.gpuHandle;
-        executionLane = other.executionLane;
+        executionPortion = other.executionPortion;
         pipelineModel = other.pipelineModel;
         timeBudgetLeft = other.timeBudgetLeft;
     }
@@ -312,6 +319,7 @@ struct ContainerHandle {
             std::lock_guard<std::mutex> lock1(containerHandleMutex, std::adopt_lock);
             std::lock_guard<std::mutex> lock2(other.containerHandleMutex, std::adopt_lock);
             name = other.name;
+            replica_id = other.replica_id;
             class_of_interest = other.class_of_interest;
             model = other.model;
             mergable = other.mergable;
@@ -342,7 +350,7 @@ struct ContainerHandle {
             localDutyCycle = other.localDutyCycle;
             batchingDeadline = other.batchingDeadline;
             gpuHandle = other.gpuHandle;
-            executionLane = other.executionLane;
+            executionPortion = other.executionPortion;
             pipelineModel = other.pipelineModel;
             timeBudgetLeft = other.timeBudgetLeft;
         }
@@ -911,17 +919,25 @@ private:
     void estimateModelNetworkLatency(PipelineModel *currModel);
     void estimatePipelineLatency(PipelineModel *currModel, const uint64_t start2HereLatency);
 
+    void estimateModelTiming(PipelineModel *currModel, const uint64_t start2HereDutyCycle);
+
     void getInitialBatchSizes(TaskHandle *task, uint64_t slo);
     void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
 
-    bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile);
-    bool mergeProcessProfiles(PerDeviceModelProfileType &mergedProfile, const PerDeviceModelProfileType &toBeMergedProfile);
-    bool mergeModels(PipelineModel *mergedModel, PipelineModel *tobeMergedModel);
-    TaskHandle mergePipelines(const std::string& taskName);
+    bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile, const std::string &device, const std::string &upstreamDevice);
+    bool mergeProcessProfiles(
+        PerDeviceModelProfileType &mergedProfile,
+        float arrivalRate1,
+        const PerDeviceModelProfileType &toBeMergedProfile,
+        float arrivalRate2,
+        const std::string &device
+    );
+    bool mergeModels(PipelineModel *mergedModel, PipelineModel *tobeMergedModel, const std::string &device);
+    TaskHandle* mergePipelines(const std::string& taskName);
     void mergePipelines();
 
     bool containerTemporalScheduling(ContainerHandle *container);
-    bool modelTemporalScheduling(PipelineModel *pipelineModel);
+    bool modelTemporalScheduling(PipelineModel *pipelineModel, unsigned int replica_id);
     void temporalScheduling();
 
     void basicGPUScheduling(std::vector<ContainerHandle *> new_containers);
@@ -1069,7 +1085,15 @@ private:
 
     std::atomic<bool> isPipelineInitialised = false;
 
+    uint16_t ctrl_numGPULanes = NUM_LANES_PER_GPU * NUM_GPUS, ctrl_numGPUPortions;
+
+    void insertFreeGPUPortion(GPUPortionList &portionList, GPUPortion *freePortion);
+    std::pair<GPUPortion *, GPUPortion *> insertUsedGPUPortion(GPUPortionList &portionList, ContainerHandle *container, GPUPortion *toBeDividedFreePortion);
+    GPUPortion* findFreePortionForInsertion(GPUPortionList &portionList, ContainerHandle *container);
+    void estimatePipelineTiming();
     void estimateTimeBudgetLeft(PipelineModel *currModel);
+
+    Tasks ctrl_mergedPipelines;
 };
 
 
