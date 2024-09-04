@@ -469,9 +469,10 @@ void Controller::ApplyScheduling() {
         }
     }
 
-    // Basic GPU scheduling
     if (ctrl_systemName != "ppp") {
         basicGPUScheduling(new_containers);
+    } else {
+        temporalScheduling();
     }
 
 
@@ -536,7 +537,7 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
     // the name of the container type to look it up in the container library
     std::string containerTypeName = modelName + "_" + getDeviceTypeName(device->type);
     
-    auto *container = new ContainerHandle{containerName,
+    auto *container = new ContainerHandle{containerName, i,
                                           class_of_interest,
                                           ModelTypeReverseList[modelName],
                                           CheckMergable(modelName),
@@ -771,8 +772,10 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     request.set_executable(ctrl_containerLib[modelName].runCommand);
     if (container->model == DataSource || container->model == Sink) {
         request.set_device(-1);
-    } else {
+    } else if (container->device_agent->name == "server") {
         request.set_device(container->gpuHandle->number);
+    } else {
+        request.set_device(0);
     }
     request.set_control_port(control_port);
 
@@ -1326,7 +1329,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 0}}
             };
-            retina1face->possibleDevices = {startDevice, "server"};
+            retina1face->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({retina1face, 0});
 
             auto *arcface = new PipelineModel{
@@ -1419,7 +1422,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{yolov5n, 0}}
             };
-            retina1face->possibleDevices = {startDevice, "server"};
+            retina1face->possibleDevices = {"server"};
             yolov5n->downstreams.push_back({retina1face, 0});
 
             auto *movenet = new PipelineModel{
@@ -1499,7 +1502,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{datasource, -1}}
             };
-            retina1face->possibleDevices = {startDevice, "server"};
+            retina1face->possibleDevices = {"server"};
             datasource->downstreams.push_back({retina1face, -1});
 
             auto *emotionnet = new PipelineModel{
@@ -1525,7 +1528,7 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{retina1face, -1}}
             };
-            age->possibleDevices = {startDevice, "server"};
+            age->possibleDevices = {"server"};
             retina1face->downstreams.push_back({age, -1});
 
             auto *gender = new PipelineModel{

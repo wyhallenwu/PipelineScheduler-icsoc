@@ -37,6 +37,51 @@ public:
     ReceiverConfigs loadConfigsFromJson(const json &jsonConfigs);
 
     void loadConfigs(const json &jsonConfigs, bool isConstructing = true);
+
+    ClockType msvc_lastReqTime;
+    std::atomic<int64_t> msvc_interReqTimeRunningMean = 0;
+    std::atomic<int64_t> msvc_interReqTimeRunningVar = 0;
+
+    /**
+     * @brief update the statistics of the receiver including the inter-request time mean/std, total request count
+     * All the statistics except overallTotalReqCount are reset after each second by ContainerAgent's calling 
+     * `getPerSecondArrivalRecord()` method, which clears out msvc_totalReqCount
+     * 
+     * @param receiveTime 
+     */
+    inline void updateStats(ClockType &receiveTime) {
+        msvc_overallTotalReqCount++;
+        msvc_totalReqCount++;
+        if (msvc_totalReqCount == 1) {
+            msvc_interReqTimeRunningMean.store(0);
+            msvc_interReqTimeRunningVar.store(0);
+            msvc_lastReqTime = receiveTime;
+            return;
+        }
+        int64_t interReqTime = std::chrono::duration_cast<std::chrono::microseconds>(receiveTime - msvc_lastReqTime).count();
+        if (interReqTime < 0) {
+            return;
+        }
+        int64_t mean = msvc_interReqTimeRunningMean.load();
+        int64_t var = msvc_interReqTimeRunningVar.load();
+        auto oldMean = mean;
+        // std::cout << "totalReqCount: " << msvc_totalReqCount.load() << " mean: " << mean << std::endl;
+        mean += ((interReqTime - oldMean) / msvc_totalReqCount);
+        // std::cout << " var: " << var << std::endl;
+        var += ((interReqTime - oldMean) * (interReqTime - mean));
+        // var /= msvc_totalReqCount;
+        msvc_interReqTimeRunningMean.exchange(mean);
+        msvc_interReqTimeRunningVar.exchange(var);
+        msvc_lastReqTime = receiveTime;
+        // std::cout << "totalReqCount: " << msvc_totalReqCount.load() << " interReqTime: " << interReqTime << " mean: " << mean << " var: " << var << std::endl;
+    }
+
+    virtual PerSecondArrivalRecord getPerSecondArrivalRecord() override {
+        auto reqCount = msvc_totalReqCount.exchange(0);
+        auto mean = msvc_interReqTimeRunningMean.exchange(0);
+        auto var = msvc_interReqTimeRunningVar.exchange(0);
+        return {reqCount, mean, var};
+    }
     
 private:
     class RequestHandler {
