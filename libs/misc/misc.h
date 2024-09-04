@@ -5,7 +5,7 @@
 #include <string>
 #include <cuda_runtime.h>
 #include <iostream>
-#include "../json/json.h"
+#include "../utils/json.h"
 #include "spdlog/spdlog.h"
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>

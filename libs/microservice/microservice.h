@@ -12,7 +12,7 @@
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <iostream>
-#include "../json/json.h"
+#include "../utils/json.h"
 #include <vector>
 
 #include <chrono>

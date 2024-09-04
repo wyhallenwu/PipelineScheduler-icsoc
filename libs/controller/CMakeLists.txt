@@ -31,7 +31,6 @@ if(SYSTEM_NAME STREQUAL "PPP")
                 HEADER_FILES
                 controller.h
                 scheduling-ppp.h
-                ../json/json.h
         )
 
         # All source files and private header files go here.
@@ -45,7 +44,6 @@ elseif (SYSTEM_NAME STREQUAL "JLF")
                 HEADER_FILES
                 controller.h
                 scheduling-jlf.h
-                ../json/json.h
         )
 
         # All source files and private header files go here.
@@ -59,7 +57,6 @@ elseif (SYSTEM_NAME STREQUAL "DIS")
                 HEADER_FILES
                 controller.h
                 scheduling-dis.h
-                ../json/json.h
         )
 
         # All source files and private header files go here.
@@ -73,7 +70,6 @@ elseif (SYSTEM_NAME STREQUAL "RIM")
                 HEADER_FILES
                 controller.h
                 scheduling-rim.h
-                ../json/json.h
         )
 
         # All source files and private header files go here.
@@ -116,7 +112,7 @@ target_include_directories(controller
         $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
         ${OpenCV_INCLUDE_DIRS}
         # ${LIGHTGBM_INCLUDE_DIR}
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../utils/protobufprotocols>
         PRIVATE
         # Used only when building the library:
         src)
