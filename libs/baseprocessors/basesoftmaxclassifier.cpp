@@ -142,7 +142,7 @@ void BaseSoftmaxClassifier::classify() {
         cudaStreamSynchronize(postProcStream);
 
         for (uint8_t i = 0; i < currReq_batchSize; ++i) {
-            msvc_inReqCount++;
+            msvc_overallTotalReqCount++;
             // We consider this when the request was received by the postprocessor
             currReq.req_origGenTime[i].emplace_back(std::chrono::high_resolution_clock::now());
 
@@ -213,7 +213,7 @@ void BaseSoftmaxClassifier::classify() {
                         10,
                         getArrivalPkgSize(currReq.req_travelPath[i]),
                         totalInMem,
-                        msvc_inReqCount,
+                        msvc_overallTotalReqCount,
                         originStream,
                         getSenderHost(currReq.req_travelPath[i])
                 );
@@ -299,12 +299,12 @@ void BaseSoftmaxClassifier::classifyProfiling() {
             continue;
         }
         
-        msvc_inReqCount++;
+        msvc_overallTotalReqCount++;
 
         // The generated time of this incoming request will be used to determine the rate with which the microservice should
         // check its incoming queue.
         currReq_recvTime = std::chrono::high_resolution_clock::now();
-        if (msvc_inReqCount > 1) {
+        if (msvc_overallTotalReqCount > 1) {
             updateReqRate(currReq_genTime);
         }
 

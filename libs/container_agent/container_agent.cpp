@@ -533,6 +533,7 @@ ContainerAgent::ContainerAgent(const json& configs) {
                                                                                     "timestamps BIGINT NOT NULL, ";
             for (auto &period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) {
                 sql_statement += "arrival_rate_" + std::to_string(period/1000) + "s FLOAT, ";
+                sql_statement += "coeff_var_" + std::to_string(period/1000) + "s FLOAT, ";
             }
             sql_statement += "stream TEXT NOT NULL, "
                              "model_name TEXT NOT NULL, "
@@ -762,7 +763,7 @@ void ContainerAgent::runService(const json &pipeConfigs, const json &configs) {
  * @param periodMillisec a vector of periods in milliseconds, sorted in an ascending order
  * @return std::vector<float> 
  */
-std::vector<float> getRatesInPeriods(const std::vector<ClockType> &timestamps, const std::vector<uint64_t> &periodMillisec) {
+std::vector<float> getThrptsInPeriods(const std::vector<ClockType> &timestamps, const std::vector<uint64_t> &periodMillisec) {
     // Get the current time
     ClockType now = timestamps.back();
 
@@ -796,7 +797,7 @@ std::vector<float> getRatesInPeriods(const std::vector<ClockType> &timestamps, c
 
 
 void ContainerAgent::collectRuntimeMetrics() {
-    unsigned int lateCount, totalRequests;
+    unsigned int lateCount, oldReqCount, totalRequests;
     ArrivalRecordType arrivalRecords;
     ProcessRecordType processRecords;
     BatchInferRecordType batchInferRecords;
@@ -828,8 +829,12 @@ void ContainerAgent::collectRuntimeMetrics() {
         }
     }
 
+    // Maximum number of seconds to keep the arrival records, usually 60
+    uint16_t maxNumSeconds = cont_metricsServerConfigs.queryArrivalPeriodMillisec.back() / 1000;
+    // Initiate a fixed-size vector to store the arrival records for each second
+    RunningArrivalRecord perSecondArrivalRecords(maxNumSeconds);
     while (run) {
-        bool hwMetricsScraped = false;
+        bool hwMetricsScraped = false, interArrivalTimeScraped = false;
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
         auto startTime = metricsStopwatch.getStartTime();
@@ -853,6 +858,17 @@ void ContainerAgent::collectRuntimeMetrics() {
             }
         }
 
+        if (timePointCastMillisecond(startTime) >= timePointCastMillisecond(cont_metricsServerConfigs.nextArrivalRateScrapeTime)) {;
+            perSecondArrivalRecords.addRecord(cont_msvcsList[0]->getPerSecondArrivalRecord());
+            // secondIndex = (secondIndex + 1) % maxNumSeconds;
+            metricsStopwatch.stop();
+            auto localScrapeLatencyMilisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
+            scrapeLatencyMillisec += localScrapeLatencyMilisec;
+
+            cont_metricsServerConfigs.nextArrivalRateScrapeTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(1000 - localScrapeLatencyMilisec);
+            metricsStopwatch.start();
+        }
+
         startTime = std::chrono::high_resolution_clock::now();
         if (timePointCastMillisecond(startTime) >= 
                 timePointCastMillisecond(cont_metricsServerConfigs.nextMetricsReportTime)) {
@@ -861,7 +877,6 @@ void ContainerAgent::collectRuntimeMetrics() {
             lateCount = cont_msvcsList[0]->GetDroppedReqCount();
             lateCount += cont_msvcsList[1]->GetDroppedReqCount();
             spdlog::get("container_agent")->info("{0:s} had {1:d} late requests.", cont_name, lateCount);
-            totalRequests = cont_msvcsList[0]->GetTotalReqCount();
 
             std::string modelName = cont_msvcsList[2]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
@@ -905,8 +920,11 @@ void ContainerAgent::collectRuntimeMetrics() {
 
                 for (auto &period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) {
                     sql += "arrival_rate_" + std::to_string(period/1000) + "s, ";
+                    sql += "coeff_var_" + std::to_string(period/1000) + "s, ";
                 }
-                std::vector<float> requestRates = getRatesInPeriods(records.arrivalTime, cont_metricsServerConfigs.queryArrivalPeriodMillisec);
+                perSecondArrivalRecords.aggregateArrivalRecord(cont_metricsServerConfigs.queryArrivalPeriodMillisec);
+                std::vector<float> requestRates = perSecondArrivalRecords.getArrivalRatesInPeriods();
+                std::vector<float> coeffVars = perSecondArrivalRecords.getCoeffVarsInPeriods();
                 sql += absl::StrFormat("p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b) "
                                         "VALUES ('%s', '%s', '%s', '%s', '%s'",
                                         timePointToEpochString(std::chrono::system_clock::now()), 
@@ -914,8 +932,9 @@ void ContainerAgent::collectRuntimeMetrics() {
                                         cont_inferModel,
                                         senderHostAbbr,
                                         abbreviate(cont_hostDevice));
-                for (auto &rate: requestRates) {
-                    sql += ", " + std::to_string(rate);
+                for (auto i = 0; i < requestRates.size(); i++) {
+                    sql += ", " + std::to_string(requestRates[i]);
+                    sql += ", " + std::to_string(coeffVars[i]);
                 }
                 sql += absl::StrFormat(", %ld, %ld, %ld, %d);",
                                         percentilesRecord[95].outQueueingDuration,
@@ -974,7 +993,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 sql += timePointToEpochString(std::chrono::high_resolution_clock::now()) + ", '" + reqOriginStream + "'," + std::to_string(inferBatchSize);
 
                 // Calculate the throughput rates for the configured periods
-                std::vector<float> throughputRates = getRatesInPeriods(records.postEndTime, cont_metricsServerConfigs.queryArrivalPeriodMillisec);
+                std::vector<float> throughputRates = getThrptsInPeriods(records.postEndTime, cont_metricsServerConfigs.queryArrivalPeriodMillisec);
                 for (const auto& rate : throughputRates) {
                     sql += ", " + std::to_string(rate);
                 }
@@ -1037,11 +1056,11 @@ void ContainerAgent::collectRuntimeMetrics() {
         metricsStopwatch.stop();
         auto reportLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
         ClockType nextTime;
-        if (reportHwMetrics && hwMetricsScraped){
-            nextTime = std::min(cont_metricsServerConfigs.nextMetricsReportTime,
+        nextTime = std::min(cont_metricsServerConfigs.nextMetricsReportTime,
+                            cont_metricsServerConfigs.nextArrivalRateScrapeTime);
+        if (reportHwMetrics && hwMetricsScraped) {
+            nextTime = std::min(nextTime,
                                 cont_metricsServerConfigs.nextHwMetricsScrapeTime);
-        } else {
-            nextTime = cont_metricsServerConfigs.nextMetricsReportTime;
         }
         timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - std::chrono::high_resolution_clock::now()).count();
         std::chrono::milliseconds sleepPeriod(timeDiff - (reportLatencyMillisec) + 2);

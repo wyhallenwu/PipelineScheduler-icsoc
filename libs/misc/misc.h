@@ -17,6 +17,7 @@
 #include "absl/flags/parse.h"
 #include "absl/flags/flag.h"
 #include <fstream>
+#include <boost/circular_buffer.hpp>
 
 ABSL_DECLARE_FLAG(uint16_t, deploy_mode);
 
@@ -113,6 +114,70 @@ struct ArrivalRecord : public Record {
 
 //<reqOriginStream, SenderHost>, Record>>
 typedef std::map<std::pair<std::string, std::string>, ArrivalRecord> ArrivalRecordType;
+
+struct PerSecondArrivalRecord {
+    uint32_t numRequests = 0;
+    MsvcSLOType interArrivalMean = 0;
+    MsvcSLOType interArrivalVariance = 0;
+};
+
+struct RunningArrivalRecord {
+public:
+    uint16_t maxNumSeconds;
+    boost::circular_buffer<PerSecondArrivalRecord> perSecondArrivalRecords;
+    std::vector<float> arrivalRatesInPeriods;
+    std::vector<float> coeffVarsInPeriods;
+
+    RunningArrivalRecord(uint16_t maxNumSeconds) : maxNumSeconds(maxNumSeconds) {
+        perSecondArrivalRecords.set_capacity(maxNumSeconds);
+    }
+
+    void addRecord(const PerSecondArrivalRecord &record) {
+        perSecondArrivalRecords.push_front(record);
+        // std::cout << perSecondArrivalRecords.front().numRequests << " " << perSecondArrivalRecords.front().interArrivalMean << " " << perSecondArrivalRecords.front().interArrivalVariance << std::endl;
+    }
+
+    void aggregateArrivalRecord(const std::vector<uint64_t> &periodsMilisec) {
+        arrivalRatesInPeriods.clear();
+        coeffVarsInPeriods.clear();
+
+        for (const auto& period : periodsMilisec) {
+            float totalRequests = 0;
+            double weightedMean = 0;
+            double weightedVariance = 0;
+            uint16_t secondsCovered = 0;
+
+            for (auto it = perSecondArrivalRecords.begin(); it != perSecondArrivalRecords.end(); ++it) {
+                if (secondsCovered * 1000 >= period) break;
+
+                totalRequests += it->numRequests;
+                weightedMean += it->numRequests * it->interArrivalMean;
+                weightedVariance += it->numRequests * (it->interArrivalVariance + it->interArrivalMean * it->interArrivalMean);
+                secondsCovered++;
+            }
+
+            if (totalRequests > 0) {
+                double meanInterArrival = weightedMean / totalRequests;
+                double varInterArrival = (weightedVariance / totalRequests) - (meanInterArrival * meanInterArrival);
+                double stdInterArrival = std::sqrt(varInterArrival);
+
+                arrivalRatesInPeriods.push_back(std::ceil(totalRequests / secondsCovered));
+                coeffVarsInPeriods.push_back(stdInterArrival / meanInterArrival);
+            } else {
+                arrivalRatesInPeriods.push_back(0);
+                coeffVarsInPeriods.push_back(0);
+            }
+        }
+    }
+
+    std::vector<float> getArrivalRatesInPeriods() {
+        return arrivalRatesInPeriods;
+    }
+
+    std::vector<float> getCoeffVarsInPeriods() {
+        return coeffVarsInPeriods;
+    }
+};
 
 struct PercentilesProcessRecord {
     uint64_t prepDuration;
@@ -317,6 +382,7 @@ struct MetricsServerConfigs {
     std::vector<uint64_t> queryArrivalPeriodMillisec;
     ClockType nextHwMetricsScrapeTime;
     ClockType nextMetricsReportTime;
+    ClockType nextArrivalRateScrapeTime;
 
     MetricsServerConfigs(const std::string &path) {
         std::ifstream file(path);
@@ -337,8 +403,10 @@ struct MetricsServerConfigs {
         j.at("metricsServer_hwMetricsScrapeIntervalMillisec").get_to(hwMetricsScrapeIntervalMillisec);
         j.at("metricsServer_metricsReportIntervalMillisec").get_to(metricsReportIntervalMillisec);
 
-        nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(4 * hwMetricsScrapeIntervalMillisec);
-        nextMetricsReportTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(metricsReportIntervalMillisec);
+        auto timeNow = std::chrono::high_resolution_clock::now();
+        nextHwMetricsScrapeTime = timeNow + std::chrono::milliseconds(4 * hwMetricsScrapeIntervalMillisec);
+        nextMetricsReportTime = timeNow + std::chrono::milliseconds(metricsReportIntervalMillisec);
+        nextArrivalRateScrapeTime = timeNow + std::chrono::milliseconds(1000);
     }
 };
 
@@ -538,6 +606,19 @@ float queryArrivalRate(
     const uint16_t systemFPS = 15,
     const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
 );
+
+std::pair<float, float> queryArrivalRateAndCoeffVar(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::string &modelName,
+    const uint16_t systemFPS = 15,
+    const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
+);
+
 
 NetworkProfile queryNetworkProfile(
     pqxx::connection &metricsConn,
