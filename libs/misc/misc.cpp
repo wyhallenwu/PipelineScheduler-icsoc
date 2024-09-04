@@ -264,18 +264,15 @@ NetworkProfile queryNetworkProfile(
     d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
 
     if (taskName.find("yolo") != std::string::npos) {
-        std::vector<int> res = {320, 512}; // The package sizes we have data
-        int foundRes = 0;
-        for (const auto &reso : res) {
-            if (modelName.find(std::to_string(reso)) != std::string::npos) {
-                foundRes = reso;
-                d2dNetworkProfile.p95PackageSize = reso * reso * 3;
-            }
-            if (foundRes == 0) {
-                foundRes = 640;
-                d2dNetworkProfile.p95PackageSize = 640 * 640 * 3;
+        std::vector<int> resolutions = {320, 512}; // The package sizes we have data
+        int foundRes = 640;
+        for (const auto &res : resolutions) {
+            if (modelName.find(std::to_string(res)) != std::string::npos) {
+                foundRes = res;
+                break;
             }
         }
+        d2dNetworkProfile.p95PackageSize = foundRes * foundRes * 3;
     }
 
     if ((senderHost != "server") && (senderHost == receiverHost) && (taskName.find("yolo") != std::string::npos)) {
