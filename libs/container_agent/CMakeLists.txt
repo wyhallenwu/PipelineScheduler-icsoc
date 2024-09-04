@@ -5,7 +5,6 @@ project(container_agent)
 # Only public header files go here.
 set(
         HEADER_FILES
-        ../json/json.h
         container_agent.h
         profiler.h
 )
@@ -47,9 +46,6 @@ find_package(communicator CONFIG REQUIRED)
 set(controller_DIR "${CMAKE_CURRENT_BINARY_DIR}/../controller")
 find_package(controller CONFIG REQUIRED)
 
-set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
-find_package(misc CONFIG REQUIRED)
-
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(container_agent
@@ -62,7 +58,7 @@ target_include_directories(container_agent
         ${OpenCV_INCLUDE_DIRS}
         ${PostgreSQL_INCLUDE_DIRS}
         ${LIBPQXX_INCLUDE_DIRS}
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../utils/protobufprotocols>
         PRIVATE
         # Used only when building the library:
         src)

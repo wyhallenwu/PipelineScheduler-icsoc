@@ -3,7 +3,7 @@
 
 #include "microservice.h"
 #include <grpcpp/grpcpp.h>
-#include "../json/json.h"
+#include "../utils/json.h"
 #include <thread>
 #include "controlcommunication.grpc.pb.h"
 #include <pqxx/pqxx>
