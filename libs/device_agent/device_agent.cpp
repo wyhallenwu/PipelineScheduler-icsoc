@@ -312,6 +312,9 @@ bool DeviceAgent::CreateContainer(ContainerConfig &c) {
     try {
         runDocker(c.executable(), c.name(), c.json_config(), c.device(), c.control_port());
         std::string target = absl::StrFormat("%s:%d", "localhost", c.control_port());
+        if (c.name().find("sink") != std::string::npos) {
+            return true;
+        }
         containers[c.name()] = {InDeviceCommunication::NewStub(
                 grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
                                  new CompletionQueue(), static_cast<unsigned int>(c.control_port()), 0, {}};

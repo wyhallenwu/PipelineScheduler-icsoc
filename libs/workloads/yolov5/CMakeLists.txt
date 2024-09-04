@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(microservice)
+project(yolov5)
 
 # This include defines standard install locations.
 # https://cmake.org/cmake/help/v3.11/module/GNUInstallDirs.html
@@ -26,59 +26,68 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 # Only public header files go here.
 set(
-        HEADER_FILES
-        microservice.h
+        HEADER_FILES 
+        yolov5.h
 )
 
 # All source files and private header files go here.
 set(
         SOURCE_FILES
-        microservice.cpp
+        yolov5.cpp
 )
 
 # Here we define the library.
-add_library(microservice
+add_library(yolov5
         ${HEADER_FILES}
         ${SOURCE_FILES})
 
 # We also add an alias definition so that we shadown
 # the export namespace when using add_subdirectory() instead.
-add_library(microservice::microservice ALIAS microservice)
+add_library(yolov5::yolov5 ALIAS yolov5)
 
 
 # Required compiler features.
 # https://cmake.org/cmake/help/v3.1/manual/cmake-compile-features.7.html
-target_compile_features(microservice
+target_compile_features(yolov5
         # Features required to compile the library itself.
         PRIVATE cxx_std_11)
 # By prefixing the installation paths with our name and version
 # we can have multiple versions installed at the same time.
-set(PROJECT_PREFIX microservice)
+set(PROJECT_PREFIX yolov5)
 
-set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
-find_package(misc CONFIG REQUIRED)
+set(baseprocessors_DIR "${CMAKE_CURRENT_BINARY_DIR}/../../baseprocessors")
+find_package(baseprocessors CONFIG REQUIRED)
+
+set(container_agent_DIR "${CMAKE_CURRENT_BINARY_DIR}/../../container_agent")
+find_package(container_agent CONFIG REQUIRED)
+
+set(data_source_DIR "${CMAKE_CURRENT_BINARY_DIR}/../data_source")
+find_package(data_source CONFIG REQUIRED)
 
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
-target_include_directories(microservice
+target_include_directories(yolov5
         PUBLIC
             # Used when building the library:
-            $<BUILD_INTERFACE:${microservice_SOURCE_DIR}/>
+            $<BUILD_INTERFACE:${yolov5_SOURCE_DIR}/>
             # Used when installing the library:
             $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
             ${OpenCV_INCLUDE_DIRS}
-            ${CUDA_INCLUDE_DIRS} 
+            ${CUDA_INCLUDE_DIRS}
+	    	${TensorRT_INCLUDE_DIRS}
         PRIVATE
             # Used only when building the library:
             src)
 
-target_link_libraries(microservice
+target_link_libraries(yolov5
         PUBLIC
         ${OpenCV_LIBS}
         ${CUDA_LIBRARIES}
-        ${CMAKE_THREAD_LIBS_INIT}
-        misc
-        spdlog
+		${CMAKE_THREAD_LIBS_INIT}
+		${TensorRT_LIBRARIES}
+		baseprocessors
+        container_agent
+		data_source
 )
 
 # Here we configure variables specifying the target directories.
@@ -86,21 +95,21 @@ set(INSTALL_RUNTIME_DIR ${CMAKE_INSTALL_BINDIR})
 set(INSTALL_CONFIG_DIR  ${CMAKE_INSTALL_LIBDIR}/${PROJECT_PREFIX}/cmake)
 set(INSTALL_LIBRARY_DIR ${CMAKE_INSTALL_LIBDIR}/${PROJECT_PREFIX}/${CMAKE_BUILD_TYPE})
 set(INSTALL_ARCHIVE_DIR ${CMAKE_INSTALL_LIBDIR}/${PROJECT_PREFIX}/${CMAKE_BUILD_TYPE}/static)
-set(INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_PREFIX}/microservice)
+set(INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_PREFIX}/yolov5)
 
 # Define the configuration file locations.
-set(PROJECT_CONFIG_VERSION_FILE "${PROJECT_BINARY_DIR}/microservice-config-version.cmake")
-set(PROJECT_CONFIG_FILE         "${PROJECT_BINARY_DIR}/microservice-config.cmake")
+set(PROJECT_CONFIG_VERSION_FILE "${PROJECT_BINARY_DIR}/yolov5-config-version.cmake")
+set(PROJECT_CONFIG_FILE         "${PROJECT_BINARY_DIR}/yolov5-config.cmake")
 
-configure_package_config_file(cmake/microservice-config.cmake.in
+configure_package_config_file(cmake/yolov5-config.cmake.in
         ${PROJECT_CONFIG_FILE}
         INSTALL_DESTINATION ${INSTALL_CONFIG_DIR})
 
 
 # The INSTALL(TARGET) command specifies where to install specific targets.
 # By specifying EXPORT here, we add these targets to an export group.
-install(TARGETS microservice
-        EXPORT microservice-targets
+install(TARGETS yolov5
+        EXPORT yolov5-targets
         RUNTIME DESTINATION ${INSTALL_RUNTIME_DIR}
         LIBRARY DESTINATION ${INSTALL_LIBRARY_DIR}
         ARCHIVE DESTINATION ${INSTALL_ARCHIVE_DIR})
@@ -116,15 +125,15 @@ install(FILES
         DESTINATION ${INSTALL_CONFIG_DIR})
 
 # The INSTALL(EXPORT) command installs a previously defined export group to a script.
-install(EXPORT microservice-targets
-        FILE microservice-targets.cmake
-        NAMESPACE microservice::
+install(EXPORT yolov5-targets
+        FILE yolov5-targets.cmake
+        NAMESPACE yolov5::
         DESTINATION ${INSTALL_CONFIG_DIR})
 
-export(EXPORT microservice-targets
-       FILE ${CMAKE_CURRENT_BINARY_DIR}/microservice-targets.cmake
-       NAMESPACE microservice::)
+export(EXPORT yolov5-targets
+       FILE ${CMAKE_CURRENT_BINARY_DIR}/yolov5-targets.cmake
+       NAMESPACE yolov5::)
 
 # Register the package in the user's package registry.
 # https://cmake.org/cmake/help/v3.11/command/export.html
-export(PACKAGE microservice)
+export(PACKAGE yolov5)
