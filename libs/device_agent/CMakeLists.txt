@@ -28,7 +28,6 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 set(
         HEADER_FILES
         device_agent.h
-        ../json/json.h
 )
 
 # All source files and private header files go here.
@@ -65,9 +64,6 @@ find_package(container_agent CONFIG REQUIRED)
 set(controller_DIR "${CMAKE_CURRENT_BINARY_DIR}/../controller")
 find_package(controller CONFIG REQUIRED)
 
-set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
-find_package(misc CONFIG REQUIRED)
-
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
 target_include_directories(device_agent
@@ -76,7 +72,7 @@ target_include_directories(device_agent
             $<BUILD_INTERFACE:${device_agent_SOURCE_DIR}/>
             # Used when installing the library:
             $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols>
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../utils/protobufprotocols>
         PRIVATE
             # Used only when building the library:
             src)
@@ -89,7 +85,6 @@ target_link_libraries(device_agent
         absl::flags_parse
         ${CMAKE_THREAD_LIBS_INIT}
         microservice
-        misc
         container_agent
         controller
 )

@@ -67,9 +67,6 @@ set(PROJECT_PREFIX baseprocessors)
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
 find_package(microservice CONFIG REQUIRED)
 
-set(misc_DIR "${CMAKE_CURRENT_BINARY_DIR}/../misc")
-find_package(misc CONFIG REQUIRED)
-
 set(trtengine_DIR "${CMAKE_CURRENT_BINARY_DIR}/../trtengine")
 find_package(trtengine CONFIG REQUIRED)
 
