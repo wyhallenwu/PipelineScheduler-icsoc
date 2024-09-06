@@ -141,6 +141,7 @@ private:
     std::int16_t class_of_interest;
     bool isEmpty;
     bool isEncoded = false;
+    std::atomic<unsigned int> dropedCount = 0;
 
 public:
     ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi, std::string name) :  q_name(name), q_MaxSize(size), class_of_interest(coi) {}
@@ -162,6 +163,7 @@ public:
     void emplace(Request<LocalCPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
         if (q_cpuQueue.size() == q_MaxSize) {
+            dropedCount++;
             spdlog::get("container_agent")->warn("Queue {0:s} is full, dropping request", q_name);
             q_cpuQueue.pop();
         }
@@ -250,6 +252,10 @@ public:
         } //else if (activeQueueIndex == 2) {
         return q_gpuQueue.size();
         //}
+    }
+
+    unsigned int drops() {
+        return dropedCount.exchange(0);
     }
 
     void setActiveQueueIndex(uint8_t index) {
@@ -665,6 +671,14 @@ public:
         return msvc_totalReqCount.exchange(0);
     };
 
+    unsigned int GetQueueDrops() {
+        unsigned int val = 0;
+        for (auto &queue : msvc_OutQueue) {
+            val += queue->drops();
+        }
+        return val;
+    };
+
     virtual PerSecondArrivalRecord getPerSecondArrivalRecord() {
         return {};
     }
@@ -816,7 +830,7 @@ protected:
     //
     uint64_t msvc_batchCount = 0;
 
-    std::atomic<unsigned int> msvc_droppedReqCount;
+    std::atomic<unsigned int> msvc_droppedReqCount = 0;
     std::atomic<unsigned int> msvc_totalReqCount = 0;
 
     //
