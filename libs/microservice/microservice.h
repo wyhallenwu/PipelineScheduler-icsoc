@@ -163,7 +163,7 @@ public:
     void emplace(Request<LocalCPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
         if (q_cpuQueue.size() == q_MaxSize) {
-            dropedCount++;
+            dropedCount += q_cpuQueue.front().req_batchSize;
             spdlog::get("container_agent")->warn("Queue {0:s} is full, dropping request", q_name);
             q_cpuQueue.pop();
         }
@@ -179,6 +179,7 @@ public:
     void emplace(Request<LocalGPUReqDataType> request) {
         std::unique_lock<std::mutex> lock(q_mutex);
         if (q_gpuQueue.size() == q_MaxSize) {
+            dropedCount += q_gpuQueue.front().req_batchSize;
             spdlog::get("container_agent")->warn("Queue {0:s} is full, dropping request", q_name);
             q_gpuQueue.pop();
         }
