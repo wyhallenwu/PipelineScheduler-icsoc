@@ -250,7 +250,7 @@ void Controller::insertFreeGPUPortion(GPUPortionList &portionList, GPUPortion *f
                 freePortion->prev = curr;
                 curr->next = freePortion;
                 freePortion->next->prev = freePortion;
-                portionList.list.insert(it, freePortion);
+                portionList.list.insert(it + 1, freePortion);
                 return;
             } else {
                 curr = curr->next;
