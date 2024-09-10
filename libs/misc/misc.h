@@ -44,6 +44,7 @@ typedef uint16_t BatchSizeType;
 typedef uint32_t RequestMemSizeType;
 
 const NumQueuesType MAX_NUM_QUEUES = std::numeric_limits<NumQueuesType>::max();
+const uint64_t MAX_PORTION_SIZE = std::numeric_limits<uint64_t>::max();
 
 // Hw Metrics
 typedef int CpuUtilType;
