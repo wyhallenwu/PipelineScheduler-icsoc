@@ -285,6 +285,7 @@ struct ModelArrivalProfile {
     // Network profile between two devices, one of which is the receiver host that runs the model
     D2DNetworkProfile d2dNetworkProfile;
     float arrivalRates;
+    float coeffVar;
 };
 
 // <<pipelineName, modelName>, ModelArrivalProfile>

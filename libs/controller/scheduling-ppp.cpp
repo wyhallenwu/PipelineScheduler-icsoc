@@ -88,7 +88,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
         }
         std::string containerName = model->name + "_" + model->deviceTypeName;
         if (!task->tk_newlyAdded) {
-            model->arrivalProfiles.arrivalRates = queryArrivalRate(
+            auto rateAndCoeffVar = queryArrivalRateAndCoeffVar(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
                 ctrl_systemName,
@@ -98,6 +98,8 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_containerLib[containerName].modelName,
                 ctrl_systemFPS
             );
+            model->arrivalProfiles.arrivalRates = rateAndCoeffVar.first;
+            model->arrivalProfiles.coeffVar = rateAndCoeffVar.second;
         }
 
         for (const auto &pair : possibleDevicePairList) {
@@ -166,18 +168,39 @@ void Controller::queryingProfiles(TaskHandle *task) {
 
 void Controller::Scheduling() {
     while (running) {
-        // Check if it is the next scheduling period
         Stopwatch schedulingSW;
         schedulingSW.start();
-        if (std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::system_clock::now() - ctrl_nextSchedulingTime).count() < 10) {
+        // Check if it is the next scheduling period
+        auto timeNow = std::chrono::system_clock::now();
+        // Only rescale periodically and if its not right before the next scheduling period, because scheduling() will take care of rescaling as well.
+        if (timeNow >= ctrl_controlTimings.nextRescalingTime && 
+            (timeNow < ctrl_controlTimings.nextSchedulingTime &&
+             std::chrono::duration_cast<std::chrono::seconds>(ctrl_controlTimings.nextSchedulingTime - timeNow).count() >= 30)) {
+            Rescaling();
+            schedulingSW.stop();
+            ctrl_controlTimings.nextRescalingTime = ctrl_controlTimings.currSchedulingTime + std::chrono::seconds(ctrl_controlTimings.rescalingIntervalSec -
+                                                                                                                  schedulingSW.elapsed_microseconds() / 1000000);
+            std::this_thread::sleep_for(TimePrecisionType((ctrl_schedulingIntervalSec) * 1000000 - schedulingSW.elapsed_microseconds()));
             continue;
         }
+
+        if (timeNow < ctrl_nextSchedulingTime) {
+            std::this_thread::sleep_for(
+                std::chrono::seconds(
+                    std::chrono::duration_cast<std::chrono::seconds>(ctrl_nextSchedulingTime - timeNow).count()
+                )
+            );
+            continue;
+        }
+
         ctrl_unscheduledPipelines = ctrl_savedUnscheduledPipelines;
         auto taskList = ctrl_unscheduledPipelines.getMap();
         if (!isPipelineInitialised) {
             continue;
         }
+        ctrl_controlTimings.currSchedulingTime = std::chrono::system_clock::now();
+        ctrl_controlTimings.nextSchedulingTime = ctrl_controlTimings.currSchedulingTime + std::chrono::seconds(ctrl_controlTimings.schedulingIntervalSec);
+
 
         for (auto &[taskName, taskHandle]: taskList) {
             queryingProfiles(taskHandle);
@@ -209,9 +232,111 @@ void Controller::Scheduling() {
         estimatePipelineTiming();
         ctrl_scheduledPipelines = ctrl_mergedPipelines;
         ApplyScheduling();
+        ctrl_controlTimings.nextRescalingTime = ctrl_controlTimings.currSchedulingTime + std::chrono::seconds(ctrl_controlTimings.rescalingIntervalSec);
         schedulingSW.stop();
-        ctrl_nextSchedulingTime = std::chrono::system_clock::now() + std::chrono::seconds(ctrl_schedulingIntervalSec);
-        std::this_thread::sleep_for(TimePrecisionType((ctrl_schedulingIntervalSec + 1) * 1000000 - schedulingSW.elapsed_microseconds()));
+
+        ClockType nextTime = std::min(ctrl_controlTimings.nextSchedulingTime, ctrl_controlTimings.nextRescalingTime);
+        uint64_t sleepTime = std::chrono::duration_cast<TimePrecisionType>(nextTime - std::chrono::system_clock::now()).count();
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleepTime));
+    }
+}
+
+void Controller::ScaleUp(PipelineModel *model) {
+    std::vector<ContainerHandle*> currContainers = model->task->tk_subTasks[model->name];
+    uint16_t numCurrContainers = currContainers.size();
+    for (uint16_t i = numCurrContainers; i < model->numReplicas; i++) {
+        ContainerHandle *newContainer = TranslateToContainer(model, devices.getDevice(model->device), i);
+        if (newContainer == nullptr) {
+            spdlog::get("container_agent")->error("Failed to create container for model {0:s} of pipeline {1:s}", model->name, model->task->tk_name);
+            continue;
+        }
+        newContainer->pipelineModel = model;
+        for (auto &upstream : model->upstreams) {
+            for (auto &upstreamContainer : upstream.first->task->tk_subTasks[upstream.first->name]) {
+                // TODO: Update the upstreams' downstream addresses
+                upstreamContainer->downstreams.push_back(newContainer);
+                newContainer->upstreams.push_back(upstreamContainer);
+            }
+        }
+        for (auto &downstream : model->downstreams) {
+            for (auto &downstreamContainer : downstream.first->task->tk_subTasks[downstream.first->name]) {
+                downstreamContainer->upstreams.push_back(newContainer);
+                newContainer->downstreams.push_back(downstreamContainer);
+            }
+        }
+        containerTemporalScheduling(newContainer);
+        containers.addContainer(newContainer->name, newContainer);
+        StartContainer(newContainer);
+    }
+}
+
+void Controller::ScaleDown(PipelineModel *model) {
+    std::vector<ContainerHandle*> currContainers = model->task->tk_subTasks[model->name];
+    uint16_t numCurrContainers = currContainers.size();
+    for (uint16_t i = model->numReplicas; i < numCurrContainers; i++) {
+        StopContainer(currContainers[i], currContainers[i]->device_agent);
+        auto reclaimed = reclaimGPUPortion(currContainers[i]->executionPortion);
+        if (!reclaimed) {
+            spdlog::get("container_agent")->error("Failed to reclaim portion for container {0:s}", currContainers[i]->name);
+            return;
+        }
+        containers.removeContainer(currContainers[i]->name);
+    }
+}
+
+void Controller::Rescaling() {
+    auto taskList = ctrl_scheduledPipelines.getMap();
+    // std::mt19937 gen(100);
+    // std::uniform_int_distribution<int> dist(0, 2);
+
+    for (auto &[taskName, taskHandle]: taskList) {
+        for (auto &model: taskHandle->tk_pipelineModels) {
+            auto ratesAndCoeffVars = queryArrivalRateAndCoeffVar(
+                *ctrl_metricsServerConn,
+                ctrl_experimentName,
+                ctrl_systemName,
+                taskHandle->tk_name,
+                taskHandle->tk_source,
+                model->name,
+                model->device
+            );
+            model->arrivalProfiles.arrivalRates = ratesAndCoeffVars.first;
+            model->arrivalProfiles.coeffVar = ratesAndCoeffVars.second;
+
+            auto candidates = model->task->tk_subTasks[model->name];
+
+            auto numIncReps = incNumReplicas(model);
+
+            // // testing scaling up
+            // if (model->device != "server") {
+            //     continue;
+            // }
+            // auto numIncReps = dist(gen);
+            // // testing done
+            
+            model->numReplicas += numIncReps;
+
+            if (numIncReps > 0) {
+                ScaleUp(model);
+                spdlog::get("container_agent")->info("Rescaling increases number of replicas of model {0:s} of pipeline {1:s} by {2:d}", model->name, taskHandle->tk_name, numIncReps);
+                continue;
+            }
+
+            // //testing
+            // if (numIncReps) {
+            //     model->numReplicas -= numIncReps;
+            //     ScaleDown(model);
+            // }
+            // //testing done
+
+            auto numDecReps = decNumReplicas(model);
+            model->numReplicas -= numDecReps;
+            if (numDecReps > 0) {
+                ScaleDown(model);
+                spdlog::get("container_agent")->info("Rescaling decreases number of replicas of model {0:s} of pipeline {1:s} by {2:d}", model->name, taskHandle->tk_name, numDecReps);
+            }
+
+        }
     }
 }
 
@@ -463,10 +588,11 @@ bool Controller::removeFreeGPUPortion(GPUPortionList &portionList, GPUPortion *t
 /**
  * @brief 
  * 
- * @param container 
- * @return GPUPortion* 
+ * @param toBeReclaimedPortion 
+ * @return true 
+ * @return false 
  */
-GPUPortion *Controller::reclaimGPUPortion(GPUPortion *toBeReclaimedPortion) {
+bool Controller::reclaimGPUPortion(GPUPortion *toBeReclaimedPortion) {
     if (toBeReclaimedPortion == nullptr) {
         throw std::runtime_error("Portion to be reclaimed is null");
     }
@@ -578,7 +704,7 @@ GPUPortion *Controller::reclaimGPUPortion(GPUPortion *toBeReclaimedPortion) {
     // Insert the reclaimed portion into the free portion list
     insertFreeGPUPortion(node->freeGPUPortions, toBeReclaimedPortion);
 
-    return toBeReclaimedPortion;
+    return true;
 }
 
 bool Controller::containerTemporalScheduling(ContainerHandle *container) {
@@ -1266,7 +1392,7 @@ uint8_t Controller::incNumReplicas(const PipelineModel *model) {
     float indiProcessRate = 1000000.f / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
                                  + profile.batchInfer.at(model->batchSize).p95postLat);
     float processRate = indiProcessRate * numReplicas;
-    while (processRate < model->arrivalProfiles.arrivalRates) {
+    while (processRate < model->arrivalProfiles.arrivalRates * 0.8) {
         numReplicas++;
         processRate = indiProcessRate * numReplicas;
     }
@@ -1291,7 +1417,7 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model) {
         numReplicas--;
         processRate = indiProcessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if (processRate < model->arrivalProfiles.arrivalRates) {
+        if (processRate < model->arrivalProfiles.arrivalRates * 0.8) {
             numReplicas++;
             break;
         }

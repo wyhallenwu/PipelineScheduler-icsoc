@@ -741,6 +741,8 @@ public:
 
     void Scheduling();
 
+    void Rescaling();
+
     void Init() {
         for (auto &t: initialTasks) {
             if (!t.added) {
@@ -777,6 +779,10 @@ public:
     ContainerHandle *TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i);
 
     void ApplyScheduling();
+
+    void ScaleUp(PipelineModel *model);
+
+    void ScaleDown(PipelineModel *model);
 
     [[nodiscard]] bool isRunning() const { return running; };
 
@@ -837,6 +843,18 @@ private:
     //                                                           int fps = 30);
 
     void queryInDeviceNetworkEntries(NodeHandle *node);
+
+    struct TimingControl {
+        uint64_t schedulingIntervalSec;
+        uint64_t rescalingIntervalSec;
+        uint64_t networkCheckIntervalSec;
+
+        ClockType nextSchedulingTime = std::chrono::system_clock::time_point::min();
+        ClockType currSchedulingTime = std::chrono::system_clock::time_point::min();
+        ClockType nextRescalingTime = std::chrono::system_clock::time_point::max();
+    };
+
+    TimingControl ctrl_controlTimings;
 
     class RequestHandler {
     public:
@@ -1119,7 +1137,7 @@ private:
     void insertFreeGPUPortion(GPUPortionList &portionList, GPUPortion *freePortion);
     bool removeFreeGPUPortion(GPUPortionList &portionList, GPUPortion *freePortion);
     std::pair<GPUPortion *, GPUPortion *> insertUsedGPUPortion(GPUPortionList &portionList, ContainerHandle *container, GPUPortion *toBeDividedFreePortion);
-    GPUPortion *reclaimGPUPortion(GPUPortion *toBeReclaimedPortion);
+    bool reclaimGPUPortion(GPUPortion *toBeReclaimedPortion);
     GPUPortion* findFreePortionForInsertion(GPUPortionList &portionList, ContainerHandle *container);
     void estimatePipelineTiming();
     void estimateTimeBudgetLeft(PipelineModel *currModel);
