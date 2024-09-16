@@ -31,7 +31,9 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 task->tk_source,
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
-                ctrl_systemFPS
+                // TODO: Change back once we have profilings in every fps
+                //ctrl_systemFPS
+                15
             );
         }
         for (const auto deviceName : model->possibleDevices) {
@@ -46,7 +48,9 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 deviceName,
                 deviceTypeName,
                 ctrl_containerLib[containerName].modelName,
-                ctrl_systemFPS
+                // TODO: Change back once we have profilings in every fps
+                //ctrl_systemFPS
+                15
             );
 
 

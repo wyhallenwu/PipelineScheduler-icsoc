@@ -124,8 +124,8 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 pair.second,
                 receiverDeviceType,
                 entry,
-                    // TODO: Change back once we have profilings in every fps
-                    //ctrl_systemFPS
+                // TODO: Change back once we have profilings in every fps
+                //ctrl_systemFPS
                 15
             );
             model->arrivalProfiles.d2dNetworkProfile[std::make_pair(pair.first, pair.second)] = test;
@@ -145,7 +145,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_containerLib[containerName].modelName,
                 // TODO: Change back once we have profilings in every fps
                 //ctrl_systemFPS
-            15
+                15
             );
             model->processProfiles[deviceTypeName] = profile;
             model->processProfiles[deviceTypeName].maxBatchSize = std::max_element(
