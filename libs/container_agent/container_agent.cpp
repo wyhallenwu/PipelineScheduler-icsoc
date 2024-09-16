@@ -797,7 +797,7 @@ std::vector<float> getThrptsInPeriods(const std::vector<ClockType> &timestamps, 
 
 
 void ContainerAgent::collectRuntimeMetrics() {
-    unsigned int lateCount, queueDrops, totalRequests;
+    unsigned int lateCount, queueDrops, oldReqCount;
     ArrivalRecordType arrivalRecords;
     ProcessRecordType processRecords;
     BatchInferRecordType batchInferRecords;
@@ -875,13 +875,12 @@ void ContainerAgent::collectRuntimeMetrics() {
             Stopwatch pushMetricsStopWatch;
             pushMetricsStopWatch.start();
             lateCount = cont_msvcsList[0]->GetDroppedReqCount();
-            totalRequests = cont_msvcsList[0]->GetTotalReqCount();
             queueDrops = 0;
             for (auto msvc: cont_msvcsList) {
                 queueDrops += msvc->GetQueueDrops();
             }
 
-            spdlog::get("container_agent")->info("{0:s} had {1:d} late requests of {2:d} total requests.", cont_name, lateCount, totalRequests);
+            spdlog::get("container_agent")->info("{0:s} had {1:d} late requests and dropped {2:d} requests in queues.", cont_name, lateCount, queueDrops);
 
             std::string modelName = cont_msvcsList[2]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
