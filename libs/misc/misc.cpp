@@ -92,8 +92,89 @@ uint64_t estimateNetworkLatency(const NetworkEntryType& res, const uint32_t &tot
 // =======================================================================================================================================================
 
 /**
+ * @brief Query the arrival rate and coefficient of variation of inter arrival time of queries coming to a particular model. 
+ * The function first look the most recent data. But if such data doesn't exist, it looks for the most recent profiled data.
+ * 
+ * @param metricsConn PostGreSQL connection object
+ * @param experimentName Name of the experiment currently being run
+ * @param systemName Name of the current system (e.g., ppp, jlf, dis, rim)
+ * @param pipelineName Name of the current pipeline type (e.g., traffic, people...)
+ * @param streamName Name of the stream (e.g., traffic0, traffic1...). Should be defined in the experiment configuration file
+ * @param taskName The common name for all variants of a model. For instance, both yolov5n and yolov5s will have the same task name yolov5.
+ *                  Should be define in `ctrl_containerLib`.
+ * @param modelName The exact name of the model, specific for each type of device. Should be defined in `ctrl_containerLib`.
+ * @param systemFPS The current system-wide fps used for data sources
+ * @param periods 
+ * @return float 
+ */
+std::pair<float, float> queryArrivalRateAndCoeffVar(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::string &modelName,
+    const uint16_t systemFPS,
+    const std::vector<uint8_t> &periods //seconds
+) {
+    std::string schemaName = abbreviate(experimentName + "_" + systemName);
+    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
+
+    std::string periodQueryRates;
+    std::string periodQueryCoeffVar;
+    for (const auto &period: periods) {
+        periodQueryRates += absl::StrFormat("recent_data.arrival_rate_%ds,", period);
+        periodQueryCoeffVar += absl::StrFormat("recent_data.coeff_var_%ds,", period);
+    }
+    periodQueryRates.pop_back();
+    periodQueryCoeffVar.pop_back();
+
+    std::string query = "WITH recent_data AS ("
+                        "   SELECT * "
+                        "   FROM %s "
+                        "   WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 60 * 1000000)"
+                        "   LIMIT 1"
+                        "), "
+                        "arrival_rate AS ("
+                        "  SELECT GREATEST(%s) AS max_rate, GREATEST(%s) AS max_coeff_var "
+                        "  FROM recent_data "
+                        "  WHERE stream = '%s'"
+                        ") "
+                        "SELECT MAX(max_rate) AS max_arrival_rate, MAX(max_coeff_var) AS max_coeff_var "
+                        "FROM arrival_rate;";
+    query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, periodQueryRates, periodQueryCoeffVar, streamName);
+    pqxx::result res = pullSQL(metricsConn, query);
+
+    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
+
+    if (res[0][0].is_null()) {
+        // If there is no historical data, we look for the rate of the most recent profiled data
+        std::string profileTableName = abbreviate("pf" + std::to_string(systemFPS) + "_" + taskName + "_arr");
+        query = "WITH recent_data AS ("
+                "   SELECT * "
+                "   FROM %s "
+                "   WHERE model_name = '%s' "
+                "   LIMIT 10 "
+                "), "
+                "arrival_rate AS ("
+                "  SELECT GREATEST(%s) AS max_rate, GREATEST(%s) AS max_coeff_var "
+                "  FROM recent_data "
+                ") "
+                "SELECT MAX(max_rate) AS max_arrival_rate, MAX(max_coeff_var) AS max_coeff_var "
+                "FROM arrival_rate;";
+        query = absl::StrFormat(query.c_str(), profileTableName, modelNameAbbr, periodQueryRates, periodQueryCoeffVar);
+        res = pullSQL(metricsConn, query);
+    }
+    return {res[0]["max_arrival_rate"].as<float>(), res[0]["max_coeff_var"].as<float>()};
+}
+
+/**
  * @brief Query the arrival rate of queries coming to a particular model. The function first look the most recent data.
  * But if such data doesn't exist, it looks for the most recent profiled data.
+ * 
+ * Note: This function is a wrapper around `queryArrivalRateAndCoeffVar` that only returns the arrival rate to provide backward compatibility
+ * for SOTAs that dont really care about the coefficient of variation.
  * 
  * @param metricsConn PostGreSQL connection object
  * @param experimentName Name of the experiment currently being run
@@ -118,52 +199,10 @@ float queryArrivalRate(
     const uint16_t systemFPS,
     const std::vector<uint8_t> &periods //seconds
 ) {
-    std::string schemaName = abbreviate(experimentName + "_" + systemName);
-    std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
-
-    std::string periodQuery;
-    for (const auto &period: periods) {
-        periodQuery += absl::StrFormat("recent_data.arrival_rate_%ds,", period);
-    }
-    periodQuery.pop_back();
-
-    std::string query = "WITH recent_data AS ("
-                        "   SELECT * "
-                        "   FROM %s "
-                        "   WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000)"
-                        "   LIMIT 1"
-                        "), "
-                        "arrival_rate AS ("
-                        "  SELECT GREATEST(%s) AS max_rate "
-                        "  FROM recent_data "
-                        "  WHERE stream = '%s'"
-                        ") "
-                        "SELECT MAX(max_rate) AS max_arrival_rate "
-                        "FROM arrival_rate;";
-    query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, periodQuery, streamName);
-    pqxx::result res = pullSQL(metricsConn, query);
-
-    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
-
-    if (res[0][0].is_null()) {
-        // If there is no historical data, we look for the rate of the most recent profiled data
-        std::string profileTableName = abbreviate("pf" + std::to_string(systemFPS) + "_" + taskName + "_arr");
-        query = "WITH recent_data AS ("
-                "   SELECT * "
-                "   FROM %s "
-                "   WHERE model_name = '%s' "
-                "   LIMIT 10 "
-                "), "
-                "arrival_rate AS ("
-                "  SELECT GREATEST(%s) AS max_rate "
-                "  FROM recent_data "
-                ") "
-                "SELECT MAX(max_rate) AS max_arrival_rate "
-                "FROM arrival_rate;";
-        query = absl::StrFormat(query.c_str(), profileTableName, modelNameAbbr, periodQuery);
-        res = pullSQL(metricsConn, query);
-    }
-    return res[0]["max_arrival_rate"].as<float>();
+    std::pair<float, float> arrivalRateAndCoeffVar = queryArrivalRateAndCoeffVar(
+        metricsConn, experimentName, systemName, pipelineName, streamName, taskName, modelName, systemFPS, periods
+    );
+    return arrivalRateAndCoeffVar.first;
 }
 
 /**
