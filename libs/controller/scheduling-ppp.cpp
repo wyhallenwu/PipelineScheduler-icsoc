@@ -25,7 +25,7 @@ void Controller::initiateGPULanes(NodeHandle &node) {
     node.gpuHandles.clear();
     node.freeGPUPortions.list.clear();
 
-    for (auto i = 0; i < node.numGPULanes; i++) {
+    for (unsigned short i = 0; i < node.numGPULanes; i++) {
         GPULane *gpuLane = new GPULane{node.gpuHandles[i / NUM_LANES_PER_GPU], &node, i};
         node.gpuLanes.push_back(gpuLane);
         // Initially the number of portions is the number of lanes'
