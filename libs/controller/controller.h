@@ -10,6 +10,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/flag.h"
+#include <random>
 
 using grpc::Status;
 using grpc::CompletionQueue;
@@ -42,20 +43,51 @@ struct PipelineModel;
 
 struct GPUPortion;
 struct GPUHandle;
+struct NodeHandle;
+
+struct GPUPortionList {
+    GPUPortion *head = nullptr;
+    std::vector<GPUPortion *> list;
+};
 
 struct GPULane {
     GPUHandle *gpuHandle;
+    NodeHandle *node;
     std::uint16_t laneNum;
     std::uint64_t dutyCycle = 0;
+
+    GPUPortionList portionList;
+
+    GPULane() = default;
+    GPULane(GPUHandle *gpuHandle, NodeHandle *node, std::uint16_t laneNum);
+
+    bool removePortion(GPUPortion *portion);
 };
 
 struct GPUPortion {
     std::uint64_t start = 0;
-    std::uint64_t end = 9999999999999999;
+    std::uint64_t end = MAX_PORTION_SIZE;
     ContainerHandle *container = nullptr;
     GPULane * lane = nullptr;
+    // The next portion in the device's global sorted list
     GPUPortion* next = nullptr;
+    // The prev portion in the device's global sorted list
     GPUPortion* prev = nullptr;
+    // The next portion in the lane, used to quickly recover the lane's original structure
+    // When a container is removed and its portion is freed
+    GPUPortion* nextInLane = nullptr;
+    // The prev portion in the lane, used to quickly recover the lane's original structure
+    // When a container is removed and its portion is freed
+    GPUPortion* prevInLane = nullptr;
+    std::uint64_t getLength() const { return end - start; }
+
+    GPUPortion() = default;
+    // ~GPUPortion();
+    GPUPortion(GPULane *lane) : lane(lane) {}
+    GPUPortion(std::uint64_t start, std::uint64_t end, ContainerHandle *container, GPULane *lane)
+        : start(start), end(end), container(container), lane(lane) {}
+
+    bool assignContainer(ContainerHandle *container);
 };
 
 struct GPUHandle {
@@ -67,20 +99,17 @@ struct GPUHandle {
     std::uint16_t numLanes;
 
     std::map<std::string, ContainerHandle *> containers = {};
-    std::vector<GPUPortion *> freeGPUPortions;
+    // TODO: HANDLE FREE PORTIONS WITHIN THE GPU
+    // std::vector<GPUPortion *> freeGPUPortions;
+    NodeHandle *node;
 
     GPUHandle() = default;
 
-    GPUHandle(const std::string &type, const std::string &hostName, std::uint16_t number, MemUsageType memLimit, std::uint16_t numLanes)
-        : type(type), hostName(hostName), number(number), memLimit(memLimit), numLanes(numLanes) {}
+    GPUHandle(const std::string &type, const std::string &hostName, std::uint16_t number, MemUsageType memLimit, std::uint16_t numLanes, NodeHandle *node)
+        : type(type), hostName(hostName), number(number), memLimit(memLimit), numLanes(numLanes), node(node) {}
 
     bool addContainer(ContainerHandle *container);
     bool removeContainer(ContainerHandle *container);
-};
-
-struct GPUPortionList {
-    GPUPortion *head = nullptr;
-    std::vector<GPUPortion *> list;
 };
 
 // Structure that whole information about the pipeline used for scheduling
@@ -858,6 +887,8 @@ public:
 
     void Scheduling();
 
+    void Rescaling();
+
     void Init() {
         for (auto &t: initialTasks) {
             if (!t.added) {
@@ -894,6 +925,10 @@ public:
     ContainerHandle *TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i);
 
     void ApplyScheduling();
+
+    void ScaleUp(PipelineModel *model);
+
+    void ScaleDown(PipelineModel *model);
 
     [[nodiscard]] bool isRunning() const { return running; };
 
@@ -954,6 +989,18 @@ private:
     //                                                           int fps = 30);
 
     void queryInDeviceNetworkEntries(NodeHandle *node);
+
+    struct TimingControl {
+        uint64_t schedulingIntervalSec;
+        uint64_t rescalingIntervalSec;
+        uint64_t networkCheckIntervalSec;
+
+        ClockType nextSchedulingTime = std::chrono::system_clock::time_point::min();
+        ClockType currSchedulingTime = std::chrono::system_clock::time_point::min();
+        ClockType nextRescalingTime = std::chrono::system_clock::time_point::max();
+    };
+
+    TimingControl ctrl_controlTimings;
 
     class RequestHandler {
     public:
@@ -1088,7 +1135,9 @@ private:
     uint16_t ctrl_numGPULanes = NUM_LANES_PER_GPU * NUM_GPUS, ctrl_numGPUPortions;
 
     void insertFreeGPUPortion(GPUPortionList &portionList, GPUPortion *freePortion);
+    bool removeFreeGPUPortion(GPUPortionList &portionList, GPUPortion *freePortion);
     std::pair<GPUPortion *, GPUPortion *> insertUsedGPUPortion(GPUPortionList &portionList, ContainerHandle *container, GPUPortion *toBeDividedFreePortion);
+    bool reclaimGPUPortion(GPUPortion *toBeReclaimedPortion);
     GPUPortion* findFreePortionForInsertion(GPUPortionList &portionList, ContainerHandle *container);
     void estimatePipelineTiming();
     void estimateTimeBudgetLeft(PipelineModel *currModel);
