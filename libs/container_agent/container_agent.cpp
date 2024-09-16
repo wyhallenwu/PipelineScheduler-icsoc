@@ -542,7 +542,9 @@ ContainerAgent::ContainerAgent(const json& configs) {
                              "p95_out_queueing_duration_us BIGINT NOT NULL, "
                              "p95_transfer_duration_us BIGINT NOT NULL, "
                              "p95_queueing_duration_us BIGINT NOT NULL, "
-                             "p95_total_package_size_b INTEGER NOT NULL)";
+                             "p95_total_package_size_b INTEGER NOT NULL, "
+                             "late_requests INTEGER NOT NULL, "
+                             "queue_drops INTEGER NOT NULL)";
 
             pushSQL(*cont_metricsServerConn, sql_statement);
 
@@ -929,7 +931,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 perSecondArrivalRecords.aggregateArrivalRecord(cont_metricsServerConfigs.queryArrivalPeriodMillisec);
                 std::vector<float> requestRates = perSecondArrivalRecords.getArrivalRatesInPeriods();
                 std::vector<float> coeffVars = perSecondArrivalRecords.getCoeffVarsInPeriods();
-                sql += absl::StrFormat("p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b) "
+                sql += absl::StrFormat("p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b, late_requests, queue_drops) "
                                         "VALUES ('%s', '%s', '%s', '%s', '%s'",
                                         timePointToEpochString(std::chrono::system_clock::now()), 
                                         stream,
@@ -940,11 +942,13 @@ void ContainerAgent::collectRuntimeMetrics() {
                     sql += ", " + std::to_string(requestRates[i]);
                     sql += ", " + std::to_string(coeffVars[i]);
                 }
-                sql += absl::StrFormat(", %ld, %ld, %ld, %d);",
+                sql += absl::StrFormat(", %ld, %ld, %ld, %d, %d, %d);",
                                         percentilesRecord[95].outQueueingDuration,
                                         percentilesRecord[95].transferDuration,
                                         percentilesRecord[95].queueingDuration,
-                                        percentilesRecord[95].totalPkgSize);
+                                        percentilesRecord[95].totalPkgSize,
+                                        lateCount,
+                                        queueDrops);
 
                 pushSQL(*cont_metricsServerConn, sql.c_str());
 
