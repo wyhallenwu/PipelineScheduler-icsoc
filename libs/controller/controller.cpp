@@ -10,6 +10,68 @@ const int DATA_BASE_PORT = 55001;
 const int CONTROLLER_BASE_PORT = 60001;
 const int DEVICE_CONTROL_PORT = 60002;
 
+// ======================================================================================================================================== //
+// ======================================================================================================================================== //
+// ======================================================================================================================================== //
+
+GPULane::GPULane(GPUHandle *gpu, NodeHandle *device, uint16_t laneNum) : laneNum(laneNum), gpuHandle(gpu), node(device) {
+    dutyCycle = 0;
+    portionList.head = nullptr;
+    portionList.list = {};
+}
+
+bool GPUPortion::assignContainer(ContainerHandle *container) {
+    if (this->container != nullptr) {
+        spdlog::get("console")->error("Portion already assigned to container {0:s}", this->container->name);
+        return false;
+    }
+    container->executionPortion = this;
+    this->container = container;
+    start = container->startTime;
+    end = container->endTime;
+
+    spdlog::get("container_agent")->info("Portion assigned to container {0:s}", container->name);
+    return true;
+}
+
+// GPUPortion::~GPUPortion() {
+//     if (container != nullptr) {
+//         throw std::runtime_error("Portion cannot be destroyed while it is still assigned to a container %s" + container->name);
+//     }
+//     lane->removePortion(this);
+//     // TODO: remove from the list of free portions
+//     spdlog::get("container_agent")->info("Portion is destroyed.");
+// }
+
+bool GPULane::removePortion(GPUPortion *portion) {
+    if (portion->lane != this) {
+        throw std::runtime_error("Lane %d cannot remove portion %s, which does not belong to it." + portion->container->name + std::to_string(laneNum));
+        return false;
+    }
+    if (portion->prevInLane != nullptr) {
+        portion->prevInLane->nextInLane = portion->nextInLane;
+        
+    }
+    if (portion->nextInLane != nullptr) {
+        portion->nextInLane->prevInLane = portion->prevInLane;
+    }
+
+    if (portion == portionList.head) {
+        portionList.head = portion->nextInLane;
+    }
+    portion->prevInLane = nullptr;
+    portion->nextInLane = nullptr;
+
+    auto it = std::find(portionList.list.begin(), portionList.list.end(), portion);
+    portionList.list.erase(it);
+    return true;
+}
+
+// ======================================================================================================================================== //
+// ======================================================================================================================================== //
+// ======================================================================================================================================== //
+
+
 // ============================================================ Configurations ============================================================ //
 // ======================================================================================================================================== //
 // ======================================================================================================================================== //
@@ -85,7 +147,8 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_initialBatchSizes["yolov5"] = j["yolov5_batch_size"];
     ctrl_initialBatchSizes["edge"] = j["edge_batch_size"];
     ctrl_initialBatchSizes["server"] = j["server_batch_size"];
-    ctrl_schedulingIntervalSec = j["scheduling_interval_sec"];
+    ctrl_controlTimings.schedulingIntervalSec = j["scheduling_interval_sec"];
+    ctrl_controlTimings.rescalingIntervalSec = j["rescaling_interval_sec"];
     initialTasks = j["initial_pipelines"];
 }
 
@@ -296,12 +359,12 @@ void Controller::initialiseGPU(NodeHandle *node, int numGPUs, std::vector<int> m
     if (node->type == SystemDeviceType::Server) {
         for (uint8_t gpuIndex = 0; gpuIndex < numGPUs; gpuIndex++) {
             std::string gpuName = "gpu" + std::to_string(gpuIndex);
-            GPUHandle *gpuNode = new GPUHandle{"3090", "server", gpuIndex, memLimits[gpuIndex] - 2000, NUM_LANES_PER_GPU};
+            GPUHandle *gpuNode = new GPUHandle{"3090", "server", gpuIndex, memLimits[gpuIndex] - 2000, NUM_LANES_PER_GPU, node};
             node->gpuHandles.emplace_back(gpuNode);
         }
     } else {
         //MemUsageType memSize = node->type == SystemDeviceType::AGXXavier ? 30000 : 5000;
-        GPUHandle *gpuNode = new GPUHandle{node->name, node->name, 0, memLimits[0] - 1500, 1};
+        GPUHandle *gpuNode = new GPUHandle{node->name, node->name, 0, memLimits[0] - 1500, 1, node};
         node->gpuHandles.emplace_back(gpuNode);
     }
 }
@@ -475,6 +538,34 @@ void Controller::ApplyScheduling() {
         temporalScheduling();
     }
 
+    // // Testing gpu portion reclaiming
+    // uint8_t numReclaims = 0, numSinks = 0;
+
+    // for (auto container: new_containers) {
+    //     if (container->model == Sink) {
+    //         numSinks++;
+    //     }
+    // }
+
+    // std::mt19937 gen(3000);
+
+    // std::uniform_int_distribution<> dis(1, 100);
+    // while (numReclaims < new_containers.size() - numSinks) {
+        
+    //     for (auto container : new_containers) {
+    //         if (container->model == Sink || container->executionPortion == nullptr) {
+    //             continue;
+    //         }
+    //         int random = dis(gen);
+    //         if (random <= 33) {
+    //             std::cout << "Reclaiming GPU Portion for container: " << container->name << std::endl;
+    //             reclaimGPUPortion(container->executionPortion);
+    //             container->executionPortion = nullptr;
+    //             numReclaims++;
+    //         }
+    //     }
+    // }
+    // // done testing
 
     for (auto pipe: ctrl_scheduledPipelines.getList()) {
         for (auto &model: pipe->tk_pipelineModels) {
