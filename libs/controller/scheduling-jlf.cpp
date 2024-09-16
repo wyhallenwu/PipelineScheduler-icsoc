@@ -1117,3 +1117,5 @@ void Jlf::differenceClients(std::vector<ClientInfoJF> &src,
 // -------------------------------------------------------------------------------------------
 //                                  end of implementations
 // -------------------------------------------------------------------------------------------
+
+void Controller::temporalScheduling() {} // Dummy Method for Compiler

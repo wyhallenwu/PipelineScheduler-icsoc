@@ -231,3 +231,6 @@ uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const fl
     float averageQueueLength = rho * rho / (1 - rho);
     return (uint64_t) (averageQueueLength / arrival_rate * 1000000);
 }
+
+
+void Controller::temporalScheduling() {} // Dummy Method for Compiler
