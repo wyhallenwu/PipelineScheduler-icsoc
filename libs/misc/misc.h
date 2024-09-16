@@ -44,6 +44,7 @@ typedef uint16_t BatchSizeType;
 typedef uint32_t RequestMemSizeType;
 
 const NumQueuesType MAX_NUM_QUEUES = std::numeric_limits<NumQueuesType>::max();
+const uint64_t MAX_PORTION_SIZE = std::numeric_limits<uint64_t>::max();
 
 // Hw Metrics
 typedef int CpuUtilType;
@@ -284,6 +285,7 @@ struct ModelArrivalProfile {
     // Network profile between two devices, one of which is the receiver host that runs the model
     D2DNetworkProfile d2dNetworkProfile;
     float arrivalRates;
+    float coeffVar;
 };
 
 // <<pipelineName, modelName>, ModelArrivalProfile>
@@ -606,6 +608,19 @@ float queryArrivalRate(
     const uint16_t systemFPS = 15,
     const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
 );
+
+std::pair<float, float> queryArrivalRateAndCoeffVar(
+    pqxx::connection &metricsConn,
+    const std::string &experimentName,
+    const std::string &systemName,
+    const std::string &pipelineName,
+    const std::string &streamName,
+    const std::string &taskName,
+    const std::string &modelName,
+    const uint16_t systemFPS = 15,
+    const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
+);
+
 
 NetworkProfile queryNetworkProfile(
     pqxx::connection &metricsConn,
