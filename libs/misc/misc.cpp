@@ -302,6 +302,18 @@ NetworkProfile queryNetworkProfile(
     d2dNetworkProfile.p95QueueingDuration = res[0]["p95_queuing_duration_us"].as<uint64_t>();
     d2dNetworkProfile.p95PackageSize = res[0]["p95_total_package_size_b"].as<uint32_t>();
 
+    if (taskName.find("yolo") != std::string::npos) {
+        std::vector<int> resolutions = {320, 512}; // The package sizes we have data
+        int foundRes = 640;
+        for (const auto &res : resolutions) {
+            if (modelName.find(std::to_string(res)) != std::string::npos) {
+                foundRes = res;
+                break;
+            }
+        }
+        d2dNetworkProfile.p95PackageSize = foundRes * foundRes * 3;
+    }
+
     if ((senderHost != "server") && (senderHost == receiverHost) && (taskName.find("yolo") != std::string::npos)) {
         d2dNetworkProfile.p95TransferDuration = 0;
         return d2dNetworkProfile;
@@ -1142,6 +1154,10 @@ std::map<std::string, ModelType> ModelTypeReverseList = {
     {"dsrc", DataSource},
     {"sink", Sink},
     {"yolov5n", Yolov5n},
+    {"yolov5n320", Yolov5n320},
+    {"yolov5n512", Yolov5n512},
+    {"y5n320", Yolov5n320},
+    {"y5n512", Yolov5n512},
     {"y5n", Yolov5n},
     {"yolov5n320", Yolov5n320},
     {"y5n320", Yolov5n320},
