@@ -108,6 +108,9 @@ protected:
         } else {
             command += " --logging_mode 1";
         }
+        if (dev_type == SystemDeviceType::Server) { // since many models might start on the server we need to slow down creation to prevent errors
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
         spdlog::get("container_agent")->info("Running command: {}", command);
         return system(command.c_str());
     };
