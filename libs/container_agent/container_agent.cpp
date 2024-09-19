@@ -822,7 +822,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
     }
 
-    if (cont_msvcsList[0]->msvc_type == MicroserviceType::DataReader) {
+    if (cont_msvcsList[0]->msvc_type == MicroserviceType::DataReader && cont_msvcsList.size() < 3) {
         while (run) {
             if (cont_msvcsList[0]->STOP_THREADS) {
                 run = false;
@@ -939,8 +939,8 @@ void ContainerAgent::collectRuntimeMetrics() {
                                         senderHostAbbr,
                                         abbreviate(cont_hostDevice));
                 for (auto i = 0; i < requestRates.size(); i++) {
-                    sql += ", " + std::to_string(requestRates[i]);
-                    sql += ", " + std::to_string(coeffVars[i]);
+                    sql += ", " + std::to_string(std::isnan(requestRates[i]) ? 0 : requestRates[i]);
+                    sql += ", " + std::to_string(std::isnan(coeffVars[i]) ? 0 : coeffVars[i]);
                 }
                 sql += absl::StrFormat(", %ld, %ld, %ld, %d, %d, %d);",
                                         percentilesRecord[95].outQueueingDuration,
@@ -1069,6 +1069,9 @@ void ContainerAgent::collectRuntimeMetrics() {
         if (reportHwMetrics && hwMetricsScraped) {
             nextTime = std::min(nextTime,
                                 cont_metricsServerConfigs.nextHwMetricsScrapeTime);
+        }
+        if (cont_msvcsList[0]->msvc_type == MicroserviceType::DataReader && cont_msvcsList[0]->STOP_THREADS) {
+            run = false;
         }
         timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - std::chrono::high_resolution_clock::now()).count();
         std::chrono::milliseconds sleepPeriod(timeDiff - (reportLatencyMillisec) + 2);

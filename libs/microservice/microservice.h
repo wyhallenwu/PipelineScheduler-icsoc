@@ -969,7 +969,8 @@ protected:
     }
 
     inline std::string getSenderHost(const std::string &path) {
-        std::string temp = splitString(path, "[").back();
+        auto parts = splitString(path, "[");
+        std::string temp = (parts.size() > 1)? *(++parts.rbegin()) : parts.front();
         temp = splitString(temp, "]").front();
         temp = splitString(temp, "|")[0];
         return temp;
