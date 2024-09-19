@@ -5,7 +5,8 @@
 #include <grpcpp/grpcpp.h>
 #include "../utils/json.h"
 #include <thread>
-#include "controlcommunication.grpc.pb.h"
+#include "controlcommands.grpc.pb.h"
+#include "controlmessages.grpc.pb.h"
 #include <pqxx/pqxx>
 #include "absl/strings/str_format.h"
 #include "absl/flags/parse.h"
@@ -19,16 +20,17 @@ using grpc::ClientAsyncResponseReader;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::ServerCompletionQueue;
-using controlcommunication::ControlCommunication;
-using controlcommunication::ConnectionConfigs;
-using controlcommunication::SystemInfo;
-using controlcommunication::LoopRange;
-using controlcommunication::DummyMessage;
-using controlcommunication::ContainerConfig;
-using controlcommunication::TimeKeeping;
-using controlcommunication::ContainerLink;
-using controlcommunication::ContainerInts;
-using controlcommunication::ContainerSignal;
+using controlcommands::ControlCommands;
+using controlcommands::LoopRange;
+using controlcommands::ContainerConfig;
+using controlcommands::TimeKeeping;
+using controlcommands::ContainerLink;
+using controlcommands::ContainerInts;
+using controlcommands::ContainerSignal;
+using controlmessages::ControlMessages;
+using controlmessages::ConnectionConfigs;
+using controlmessages::SystemInfo;
+using controlmessages::DummyMessage;
 using EmptyMessage = google::protobuf::Empty;
 
 ABSL_DECLARE_FLAG(std::string, ctrl_configPath);
@@ -119,7 +121,7 @@ struct TaskHandle;
 struct NodeHandle {
     std::string name;
     std::string ip;
-    std::shared_ptr<ControlCommunication::Stub> stub;
+    std::shared_ptr<ControlCommands::Stub> stub;
     CompletionQueue *cq;
     SystemDeviceType type;
     int next_free_port;
@@ -146,7 +148,7 @@ struct NodeHandle {
 
     NodeHandle(const std::string& name,
                const std::string& ip,
-               std::shared_ptr<ControlCommunication::Stub> stub,
+               std::shared_ptr<ControlCommands::Stub> stub,
                grpc::CompletionQueue* cq,
                SystemDeviceType type,
                int next_free_port,
@@ -1004,7 +1006,7 @@ private:
 
     class RequestHandler {
     public:
-        RequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq, Controller *c)
+        RequestHandler(ControlMessages::AsyncService *service, ServerCompletionQueue *cq, Controller *c)
                 : service(service), cq(cq), status(CREATE), controller(c) {}
 
         virtual ~RequestHandler() = default;
@@ -1015,7 +1017,7 @@ private:
         enum CallStatus {
             CREATE, PROCESS, FINISH
         };
-        ControlCommunication::AsyncService *service;
+        ControlMessages::AsyncService *service;
         ServerCompletionQueue *cq;
         ServerContext ctx;
         CallStatus status;
@@ -1024,7 +1026,7 @@ private:
 
     class DeviseAdvertisementHandler : public RequestHandler {
     public:
-        DeviseAdvertisementHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        DeviseAdvertisementHandler(ControlMessages::AsyncService *service, ServerCompletionQueue *cq,
                                    Controller *c)
                 : RequestHandler(service, cq, c), responder(&ctx) {
             Proceed();
@@ -1042,7 +1044,7 @@ private:
 
     class DummyDataRequestHandler : public RequestHandler {
     public:
-        DummyDataRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        DummyDataRequestHandler(ControlMessages::AsyncService *service, ServerCompletionQueue *cq,
                                    Controller *c)
                 : RequestHandler(service, cq, c), responder(&ctx) {
             Proceed();
@@ -1106,7 +1108,7 @@ private:
 
     std::map<std::string, NetworkEntryType> network_check_buffer;
 
-    ControlCommunication::AsyncService service;
+    ControlMessages::AsyncService service;
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<ServerCompletionQueue> cq;
 
