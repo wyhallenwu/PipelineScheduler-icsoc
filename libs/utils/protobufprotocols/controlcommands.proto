@@ -4,12 +4,10 @@ import "google/protobuf/empty.proto";
 option java_multiple_files = true;
 option objc_class_prefix = "HLW";
 
-package controlcommunication;
+package controlcommands;
 
-service ControlCommunication {
-  rpc AdvertiseToController(ConnectionConfigs) returns (SystemInfo) {}
+service ControlCommands {
   rpc ExecuteNetworkTest(LoopRange) returns (google.protobuf.Empty) {}
-  rpc SendDummyData(DummyMessage) returns (google.protobuf.Empty) {}
   rpc StartContainer(ContainerConfig) returns (google.protobuf.Empty) {}
   rpc UpdateDownstream(ContainerLink) returns (google.protobuf.Empty) {}
   rpc SyncDatasource(ContainerLink) returns (google.protobuf.Empty) {}
@@ -17,19 +15,6 @@ service ControlCommunication {
   rpc UpdateResolution(ContainerInts) returns (google.protobuf.Empty) {}
   rpc UpdateTimeKeeping(TimeKeeping) returns (google.protobuf.Empty) {}
   rpc StopContainer(ContainerSignal) returns (google.protobuf.Empty) {}
-}
-
-message ConnectionConfigs {
-  string device_name = 1;
-  uint32 device_type = 2;
-  string ip_address = 3;
-  int32 processors = 4;
-  repeated uint64 memory = 5;
-}
-
-message SystemInfo {
-  string name = 1;
-  string experiment = 2;
 }
 
 message ContainerConfig {
@@ -72,10 +57,4 @@ message LoopRange {
   int32 min = 1;
   int32 max = 2;
   int32 repetitions = 3;
-}
-
-message DummyMessage {
-  string origin_name = 1;
-  int64 gen_time = 2;
-  bytes data = 3;
 }

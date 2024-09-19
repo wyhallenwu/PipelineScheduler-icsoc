@@ -8,7 +8,6 @@
 #include "profiler.h"
 #include "controller.h"
 #include "indevicecommunication.grpc.pb.h"
-#include "controlcommunication.grpc.pb.h"
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -107,6 +106,9 @@ protected:
         } else {
             command += " --logging_mode 1";
         }
+        if (dev_type == SystemDeviceType::Server) { // since many models might start on the server we need to slow down creation to prevent errors
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
         spdlog::get("container_agent")->info("Running command: {}", command);
         return system(command.c_str());
     };
@@ -153,11 +155,11 @@ protected:
 
     class ControlRequestHandler : public RequestHandler {
     public:
-        ControlRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq, DeviceAgent *d)
+        ControlRequestHandler(ControlCommands::AsyncService *service, ServerCompletionQueue *cq, DeviceAgent *d)
                 : RequestHandler(cq, d), service(service) {};
 
     protected:
-        ControlCommunication::AsyncService *service;
+        ControlCommands::AsyncService *service;
     };
 
 
@@ -179,7 +181,7 @@ protected:
 
     class ExecuteNetworkTestRequestHandler : public ControlRequestHandler {
     public:
-        ExecuteNetworkTestRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        ExecuteNetworkTestRequestHandler(ControlCommands::AsyncService *service, ServerCompletionQueue *cq,
                                      DeviceAgent *device)
                 : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
@@ -195,7 +197,7 @@ protected:
 
     class StartContainerRequestHandler : public ControlRequestHandler {
     public:
-        StartContainerRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        StartContainerRequestHandler(ControlCommands::AsyncService *service, ServerCompletionQueue *cq,
                                      DeviceAgent *device)
                 : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
@@ -211,7 +213,7 @@ protected:
 
     class StopContainerRequestHandler : public ControlRequestHandler {
     public:
-        StopContainerRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        StopContainerRequestHandler(ControlCommands::AsyncService *service, ServerCompletionQueue *cq,
                                     DeviceAgent *device)
                 : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
@@ -227,7 +229,7 @@ protected:
 
     class UpdateDownstreamRequestHandler : public ControlRequestHandler {
     public:
-        UpdateDownstreamRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        UpdateDownstreamRequestHandler(ControlCommands::AsyncService *service, ServerCompletionQueue *cq,
                                        DeviceAgent *device)
                 : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
@@ -243,7 +245,7 @@ protected:
 
     class SyncDatasourceRequestHandler : public ControlRequestHandler {
     public:
-        SyncDatasourceRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        SyncDatasourceRequestHandler(ControlCommands::AsyncService *service, ServerCompletionQueue *cq,
                                        DeviceAgent *device)
                 : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
@@ -259,7 +261,7 @@ protected:
 
     class UpdateBatchsizeRequestHandler : public ControlRequestHandler {
     public:
-        UpdateBatchsizeRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        UpdateBatchsizeRequestHandler(ControlCommands::AsyncService *service, ServerCompletionQueue *cq,
                                        DeviceAgent *device)
                 : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
@@ -275,7 +277,7 @@ protected:
 
     class UpdateResolutionRequestHandler : public ControlRequestHandler {
     public:
-        UpdateResolutionRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        UpdateResolutionRequestHandler(ControlCommands::AsyncService *service, ServerCompletionQueue *cq,
                                       DeviceAgent *device)
                 : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
@@ -291,7 +293,7 @@ protected:
 
     class UpdateTimeKeepingRequestHandler : public ControlRequestHandler {
     public:
-        UpdateTimeKeepingRequestHandler(ControlCommunication::AsyncService *service, ServerCompletionQueue *cq,
+        UpdateTimeKeepingRequestHandler(ControlCommands::AsyncService *service, ServerCompletionQueue *cq,
                                       DeviceAgent *device)
                 : ControlRequestHandler(service, cq, device), responder(&ctx) {
             Proceed();
@@ -326,11 +328,11 @@ protected:
     std::unique_ptr<ServerCompletionQueue> device_cq;
     std::unique_ptr<grpc::Server> device_server;
     InDeviceCommunication::AsyncService device_service;
-    std::unique_ptr<ControlCommunication::Stub> controller_stub;
+    std::unique_ptr<ControlMessages::Stub> controller_stub;
     CompletionQueue *controller_sending_cq;
     std::unique_ptr<grpc::Server> controller_server;
     std::unique_ptr<ServerCompletionQueue> controller_cq;
-    ControlCommunication::AsyncService controller_service;
+    ControlCommands::AsyncService controller_service;
 
     // This will be mounted into the container to easily collect all logs.
     std::string dev_logPath = "../logs";
