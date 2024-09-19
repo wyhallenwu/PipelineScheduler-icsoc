@@ -278,8 +278,7 @@ Controller::Controller(int argc, char **argv) {
 
     // append one device for sink of type server
     NodeHandle *sink_node = new NodeHandle("sink", ctrl_sinkNodeIP,
-                      ControlCommunication::NewStub(
-                              grpc::CreateChannel(
+                                           ControlCommands::NewStub(grpc::CreateChannel(
                                       absl::StrFormat("%s:%d", ctrl_sinkNodeIP, DEVICE_CONTROL_PORT + ctrl_port_offset), grpc::InsecureChannelCredentials())),
                       new CompletionQueue(), SystemDeviceType::Server,
                       DATA_BASE_PORT + ctrl_port_offset, {});
@@ -1121,7 +1120,7 @@ void Controller::DeviseAdvertisementHandler::Proceed() {
         std::string deviceName = request.device_name();
         NodeHandle *node = new NodeHandle{deviceName,
                                      request.ip_address(),
-                                     ControlCommunication::NewStub(
+                                          ControlCommands::NewStub(
                                              grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials())),
                                      new CompletionQueue(),
                                      static_cast<SystemDeviceType>(request.device_type()),
