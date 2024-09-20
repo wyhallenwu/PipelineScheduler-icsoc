@@ -459,6 +459,9 @@ public:
         std::string originDevice
     ) {
         std::unique_lock<std::mutex> lock(mutex);
+        for (size_t i = 0; i < timestamps.size() - 1; ++i) {
+            if (timestamps[i] >= timestamps[i + 1]) return;
+        }
         ArrivalRecord * record = &records[{reqOriginStream, originDevice}];
         auto transferDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count();
         // If transfer latency is 0 or negative, which only happens when time between devices are not properly synchronized
@@ -471,8 +474,18 @@ public:
         }
         record->transferDuration.emplace_back(transferDuration);
         lastTransferDuration = transferDuration;
-        record->outQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
-        record->queueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
+        if (timestamps[2] <= timestamps[1]) {
+            record->outQueueingDuration.emplace_back(0);
+        } else {
+            record->outQueueingDuration.emplace_back(
+                    std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
+        }
+        if (timestamps[4] <= timestamps[3]) {
+            record->queueingDuration.emplace_back(0);
+        } else {
+            record->queueingDuration.emplace_back(
+                    std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
+        }
         record->arrivalTime.emplace_back(timestamps[2]);
         record->totalPkgSize.emplace_back(totalPkgSize); //Byte
         record->reqSize.emplace_back(requestSize); //Byte
@@ -531,6 +544,9 @@ public:
         std::string reqOrigin = "stream"
     ) {
         std::unique_lock<std::mutex> lock(mutex);
+        for (size_t i = 0; i < timestamps.size() - 1; ++i) {
+            if (timestamps[i] >= timestamps[i + 1]) return;
+        }
         processRecords[{reqOrigin, inferBatchSize}].prepDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[6] - timestamps[5]).count());
         processRecords[{reqOrigin, inferBatchSize}].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[7] - timestamps[6]).count());
         processRecords[{reqOrigin, inferBatchSize}].inferQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[8] - timestamps[7]).count());
