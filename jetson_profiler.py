@@ -14,8 +14,9 @@ def get_runtime_stats(pid):
     with jtop(interval=0.1) as jetson:
         while True:
             for p in jetson.processes:
-                if p[0] >= pid:
-                    print(f"{p[0]}|{p[6]}|{p[7]}|{p[8]}|{list(jetson.gpu.values())[0]['status']['load']}|{jetson.memory['RAM'].get('used', 0)}", flush=True)
+                if len(p) > 8:
+                    if p[0] >= pid:
+                        print(f"{p[0]}|{p[6]}|{p[7]}|{p[8]}|{list(jetson.gpu.values())[0]['status']['load']}|{jetson.memory['RAM'].get('used', 0)}", flush=True)
             sleep(0.1)
 
 if __name__ == '__main__':
