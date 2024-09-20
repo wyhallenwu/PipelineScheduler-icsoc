@@ -297,6 +297,10 @@ void Controller::Rescaling() {
 
     for (auto &[taskName, taskHandle]: taskList) {
         for (auto &model: taskHandle->tk_pipelineModels) {
+            if (model->name.find("datasource") != std::string::npos || model->name.find("dsrc") != std::string::npos
+                || model->name.find("sink") != std::string::npos) {
+                continue;
+            }
             auto ratesAndCoeffVars = queryArrivalRateAndCoeffVar(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
