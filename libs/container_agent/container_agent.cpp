@@ -776,6 +776,9 @@ std::vector<float> getThrptsInPeriods(const std::vector<ClockType> &timestamps, 
     uint8_t periodIndex = 0;
     // Iterate through each period
     for (int i = timestamps.size() - 1; i >= 0; i--) {
+        if (timestamps[i] > now) { // TODO: This is a hack to avoid the case where the timestamp is in the future because of lokal Timing Updates of the device. This needs a better solution in the future
+            continue;
+        }
         // Calculate the lower bound time point for the current period
         uint64_t timeDif = std::chrono::duration_cast<TimePrecisionType>(now - timestamps[i]).count();
 
@@ -785,6 +788,7 @@ std::vector<float> getThrptsInPeriods(const std::vector<ClockType> &timestamps, 
         }
         counts[periodIndex]++;
     }
+
     while (periodIndex < periodMillisec.size() - 1) {
         periodIndex++;
         counts[periodIndex] = counts[periodIndex - 1];
@@ -822,7 +826,7 @@ void ContainerAgent::collectRuntimeMetrics() {
                 cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
     }
 
-    if (cont_msvcsList[0]->msvc_type == MicroserviceType::DataReader) {
+    if (cont_msvcsList[0]->msvc_type == MicroserviceType::DataReader && cont_msvcsList.size() < 3) {
         while (run) {
             if (cont_msvcsList[0]->STOP_THREADS) {
                 run = false;
@@ -860,7 +864,7 @@ void ContainerAgent::collectRuntimeMetrics() {
             }
         }
 
-        if (timePointCastMillisecond(startTime) >= timePointCastMillisecond(cont_metricsServerConfigs.nextArrivalRateScrapeTime)) {;
+        if (timePointCastMillisecond(startTime) >= timePointCastMillisecond(cont_metricsServerConfigs.nextArrivalRateScrapeTime)) {
             perSecondArrivalRecords.addRecord(cont_msvcsList[0]->getPerSecondArrivalRecord());
             // secondIndex = (secondIndex + 1) % maxNumSeconds;
             metricsStopwatch.stop();
@@ -939,8 +943,8 @@ void ContainerAgent::collectRuntimeMetrics() {
                                         senderHostAbbr,
                                         abbreviate(cont_hostDevice));
                 for (auto i = 0; i < requestRates.size(); i++) {
-                    sql += ", " + std::to_string(requestRates[i]);
-                    sql += ", " + std::to_string(coeffVars[i]);
+                    sql += ", " + std::to_string(std::isnan(requestRates[i]) ? 0 : requestRates[i]);
+                    sql += ", " + std::to_string(std::isnan(coeffVars[i]) ? 0 : coeffVars[i]);
                 }
                 sql += absl::StrFormat(", %ld, %ld, %ld, %d, %d, %d);",
                                         percentilesRecord[95].outQueueingDuration,
@@ -1069,6 +1073,9 @@ void ContainerAgent::collectRuntimeMetrics() {
         if (reportHwMetrics && hwMetricsScraped) {
             nextTime = std::min(nextTime,
                                 cont_metricsServerConfigs.nextHwMetricsScrapeTime);
+        }
+        if (cont_msvcsList[0]->msvc_type == MicroserviceType::DataReader && cont_msvcsList[0]->STOP_THREADS) {
+            run = false;
         }
         timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - std::chrono::high_resolution_clock::now()).count();
         std::chrono::milliseconds sleepPeriod(timeDiff - (reportLatencyMillisec) + 2);
