@@ -1,9 +1,9 @@
 {
-    "expName": "full",
-    "system_fps": 15,
-    "systemName": "ppp",
+    "expName": "thir",
+    "system_fps": 30,
+    "systemName": "rim",
     "runtime": 30,
-    "port_offset": 0,
+    "port_offset": 3000,
     "sink_ip": "143.248.55.76",
     "yolov5_batch_size": 2,
     "edge_batch_size": 4,
