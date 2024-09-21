@@ -114,7 +114,7 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &taskName,
-    const std::string &modelName,
+    const std::string &modelFile,
     const uint16_t systemFPS,
     const std::vector<uint8_t> &periods //seconds
 ) {
@@ -146,7 +146,7 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
     query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, periodQueryRates, periodQueryCoeffVar, streamName);
     pqxx::result res = pullSQL(metricsConn, query);
 
-    std::string modelNameAbbr = abbreviate(splitString(modelName, ".").front());
+    std::string modelFileAbbr = abbreviate(splitString(modelFile, ".").front());
 
     if (res[0][0].is_null()) {
         // If there is no historical data, we look for the rate of the most recent profiled data
@@ -163,7 +163,7 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
                 ") "
                 "SELECT MAX(max_rate) AS max_arrival_rate, MAX(max_coeff_var) AS max_coeff_var "
                 "FROM arrival_rate;";
-        query = absl::StrFormat(query.c_str(), profileTableName, modelNameAbbr, periodQueryRates, periodQueryCoeffVar);
+        query = absl::StrFormat(query.c_str(), profileTableName, modelFileAbbr, periodQueryRates, periodQueryCoeffVar);
         res = pullSQL(metricsConn, query);
     }
     return {res[0]["max_arrival_rate"].as<float>(), res[0]["max_coeff_var"].as<float>()};

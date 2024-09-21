@@ -929,15 +929,17 @@ void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
 }
 
 void Controller::AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *new_device,
-                                const std::string &dwnstr) {
+                                const std::string &dwnstr, AdjustUpstreamMode mode) {
     ContainerLink request;
     ClientContext context;
     EmptyMessage reply;
     Status status;
+    request.set_mode(mode);
     request.set_name(upstr->name);
     request.set_downstream_name(dwnstr);
     request.set_ip(new_device->ip);
     request.set_port(port);
+
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
     finishGrpc(rpc, reply, status, upstr->device_agent->cq);

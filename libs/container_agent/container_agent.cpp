@@ -1213,8 +1213,18 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
         for (auto msvc: *msvcs) {
             if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
                 config = msvc->msvc_configs;
-                config["msvc_dnstreamMicroservices"][0]["nb_link"][0] = absl::StrFormat("%s:%d", request.ip(),
-                                                                                        request.port());
+                if (request.mode() == AdjustUpstreamMode::Overwrite) {
+                    config["msvc_dnstreamMicroservices"][0]["nb_link"][0] = absl::StrFormat("%s:%d", request.ip(),
+                                                                                            request.port());
+                } else if (request.mode() == AdjustUpstreamMode::Add) {
+                    config["msvc_dnstreamMicroservices"][0]["nb_link"].push_back(absl::StrFormat("%s:%d", request.ip(),
+                                                                                                 request.port()));
+                } else if (request.mode() == AdjustUpstreamMode::Remove) {
+                    auto nb_links = config["msvc_dnstreamMicroservices"][0]["nb_link"];
+                    nb_links.erase(std::remove(nb_links.begin(), nb_links.end(), absl::StrFormat("%s:%d", request.ip(),
+                                                                                                 request.port())), nb_links.end());
+                    config["msvc_dnstreamMicroservices"][0]["nb_link"] = nb_links;
+                }
                 inqueue = msvc->GetInQueue();
                 msvc->stopThread();
                 msvcs->erase(std::remove(msvcs->begin(), msvcs->end(), msvc), msvcs->end());
