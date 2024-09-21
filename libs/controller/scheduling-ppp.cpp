@@ -301,14 +301,18 @@ void Controller::Rescaling() {
                 || model->name.find("sink") != std::string::npos) {
                 continue;
             }
+            std::string taskName = splitString(model->name, "_").back();
             auto ratesAndCoeffVars = queryArrivalRateAndCoeffVar(
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
                 ctrl_systemName,
                 taskHandle->tk_name,
                 taskHandle->tk_source,
-                model->name,
-                model->device
+                taskName,
+                ctrl_containerLib[taskName + "_" + model->deviceTypeName].modelName,
+                // TODO: Change back once we have profilings in every fps
+                //ctrl_systemFPS
+                15
             );
             model->arrivalProfiles.arrivalRates = ratesAndCoeffVars.first;
             model->arrivalProfiles.coeffVar = ratesAndCoeffVars.second;
