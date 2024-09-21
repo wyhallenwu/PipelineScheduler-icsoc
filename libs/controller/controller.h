@@ -1062,7 +1062,8 @@ private:
 
     void MoveContainer(ContainerHandle *container, NodeHandle *new_device);
 
-    static void AdjustUpstream(int port, ContainerHandle *msvc, NodeHandle *new_device, const std::string &dwnstr);
+    static void AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *new_device,
+                               const std::string &dwnstr, AdjustUpstreamMode mode = AdjustUpstreamMode::Overwrite);
 
     static void SyncDatasource(ContainerHandle *prev, ContainerHandle *curr);
 

@@ -421,6 +421,12 @@ enum SystemDeviceType {
     OrinNano
 };
 
+enum AdjustUpstreamMode {
+    Overwrite,
+    Add,
+    Remove
+};
+
 typedef std::map<SystemDeviceType, std::string> DeviceInfoType;
 
 enum PipelineType {
@@ -616,7 +622,7 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
     const std::string &pipelineName,
     const std::string &streamName,
     const std::string &taskName,
-    const std::string &modelName,
+    const std::string &modelFile,
     const uint16_t systemFPS = 15,
     const std::vector<uint8_t> &periods = {1, 3, 7, 15, 30, 60} //seconds
 );
