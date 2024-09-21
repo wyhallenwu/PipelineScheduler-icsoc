@@ -116,7 +116,7 @@ protected:
 
     static void StopContainer(const DevContainerHandle &container, bool forced = false);
 
-    void UpdateContainerSender(const std::string &cont_name, const std::string &dwnstr, const std::string &ip,
+    void UpdateContainerSender(int mode, const std::string &cont_name, const std::string &dwnstr, const std::string &ip,
                                const int &port);
 
     void SyncDatasources(const std::string &cont_name, const std::string &dsrc);

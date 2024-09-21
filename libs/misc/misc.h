@@ -421,6 +421,12 @@ enum SystemDeviceType {
     OrinNano
 };
 
+enum AdjustUpstreamMode {
+    Overwrite,
+    Add,
+    Remove
+};
+
 typedef std::map<SystemDeviceType, std::string> DeviceInfoType;
 
 enum PipelineType {

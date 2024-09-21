@@ -257,13 +257,6 @@ void Controller::ScaleUp(PipelineModel *model) {
             continue;
         }
         newContainer->pipelineModel = model;
-        for (auto &upstream : model->upstreams) {
-            for (auto &upstreamContainer : upstream.first->task->tk_subTasks[upstream.first->name]) {
-                // TODO: Update the upstreams' downstream addresses
-                upstreamContainer->downstreams.push_back(newContainer);
-                newContainer->upstreams.push_back(upstreamContainer);
-            }
-        }
         for (auto &downstream : model->downstreams) {
             for (auto &downstreamContainer : downstream.first->task->tk_subTasks[downstream.first->name]) {
                 downstreamContainer->upstreams.push_back(newContainer);
@@ -273,6 +266,14 @@ void Controller::ScaleUp(PipelineModel *model) {
         containerTemporalScheduling(newContainer);
         containers.addContainer(newContainer->name, newContainer);
         StartContainer(newContainer);
+        for (auto &upstream : model->upstreams) {
+            for (auto &upstreamContainer : upstream.first->task->tk_subTasks[upstream.first->name]) {
+                upstreamContainer->downstreams.push_back(newContainer);
+                AdjustUpstream(newContainer->recv_port, upstreamContainer, newContainer->device_agent,
+                               model->name, AdjustUpstreamMode::Add);
+                newContainer->upstreams.push_back(upstreamContainer);
+            }
+        }
     }
 }
 
@@ -280,6 +281,12 @@ void Controller::ScaleDown(PipelineModel *model) {
     std::vector<ContainerHandle*> currContainers = model->task->tk_subTasks[model->name];
     uint16_t numCurrContainers = currContainers.size();
     for (uint16_t i = model->numReplicas; i < numCurrContainers; i++) {
+        for (auto &upstream : model->upstreams) {
+            for (auto &upstreamContainer : upstream.first->task->tk_subTasks[upstream.first->name]) {
+                AdjustUpstream(currContainers[i]->recv_port, upstreamContainer, currContainers[i]->device_agent,
+                               model->name, AdjustUpstreamMode::Remove);
+            }
+        }
         StopContainer(currContainers[i], currContainers[i]->device_agent);
         auto reclaimed = reclaimGPUPortion(currContainers[i]->executionPortion);
         if (!reclaimed) {
@@ -757,7 +764,7 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned 
         if (!modelTemporalScheduling(downstream.first, replica_id)) allScheduled = false;
     }
     if (!allScheduled) return false;
-    if (replica_id == pipelineModel->numReplicas - 1) {
+    if (replica_id >= pipelineModel->numReplicas - 1) {
         pipelineModel->gpuScheduled = true;
         return true;
     }

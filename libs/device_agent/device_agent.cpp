@@ -332,12 +332,13 @@ void DeviceAgent::StopContainer(const DevContainerHandle &container, bool forced
     finishGrpc(rpc, reply, status, container.cq);
 }
 
-void DeviceAgent::UpdateContainerSender(const std::string &cont_name, const std::string &dwnstr, const std::string &ip,
-                                        const int &port) {
+void DeviceAgent::UpdateContainerSender(int mode, const std::string &cont_name, const std::string &dwnstr,
+                                        const std::string &ip, const int &port) {
     Connection request;
     EmptyMessage reply;
     ClientContext context;
     Status status;
+    request.set_mode(mode);
     request.set_name(dwnstr);
     request.set_ip(ip);
     request.set_port(port);
@@ -538,7 +539,7 @@ void DeviceAgent::UpdateDownstreamRequestHandler::Proceed() {
         service->RequestUpdateDownstream(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new UpdateDownstreamRequestHandler(service, cq, device_agent);
-        device_agent->UpdateContainerSender(request.name(), request.downstream_name(), request.ip(), request.port());
+        device_agent->UpdateContainerSender(request.mode(), request.name(), request.downstream_name(), request.ip(), request.port());
         status = FINISH;
         responder.Finish(reply, Status::OK, this);
     } else {

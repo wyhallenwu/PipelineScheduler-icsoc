@@ -37,10 +37,11 @@ message TimeKeeping {
 }
 
 message ContainerLink {
-  string name = 1;
-  string downstream_name = 2;
-  string ip = 3;
-  int32 port = 4;
+  int32 mode = 1;
+  string name = 2;
+  string downstream_name = 3;
+  string ip = 4;
+  int32 port = 5;
 }
 
 message ContainerSignal {
