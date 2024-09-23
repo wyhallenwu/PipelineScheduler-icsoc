@@ -1240,7 +1240,12 @@ void Controller::estimateModelLatency(PipelineModel *currModel) {
     uint64_t preprocessLatency = profile.batchInfer[batchSize].p95prepLat;
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
     uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
-    float preprocessRate = 1000000.f / preprocessLatency;
+    float preprocessRate = 1000000.f / preprocessLatency * currModel->numReplicas;
+    while (preprocessRate < currModel->arrivalProfiles.arrivalRates * 0.8) {
+        currModel->numReplicas++;
+        spdlog::get("container_agent")->info("Increasing the number of replicas of model {0:s} to {1:d}", currModel->name, currModel->numReplicas);
+        preprocessRate = 1000000.f / preprocessLatency * currModel->numReplicas;
+    }   
 
     currModel->expectedQueueingLatency = calculateQueuingLatency(currModel->arrivalProfiles.arrivalRates,
                                                                  preprocessRate);
@@ -1418,10 +1423,15 @@ uint8_t Controller::incNumReplicas(const PipelineModel *model) {
     uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
     float indiProcessRate = 1000000.f / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
                                  + profile.batchInfer.at(model->batchSize).p95postLat);
+    float indiPreprocessRate = 1000000.f / profile.batchInfer.at(model->batchSize).p95prepLat;
     float processRate = indiProcessRate * numReplicas;
-    while (processRate < model->arrivalProfiles.arrivalRates * 0.8) {
+    float preprocessRate = indiPreprocessRate * numReplicas;
+    while (processRate < model->arrivalProfiles.arrivalRates * 0.8 ||
+           preprocessRate < model->arrivalProfiles.arrivalRates * 0.8) {
         numReplicas++;
+        spdlog::get("container_agent")->info("Increasing the number of replicas of model {0:s} to {1:d}", model->name, numReplicas);
         processRate = indiProcessRate * numReplicas;
+        preprocessRate = indiPreprocessRate * numReplicas;
     }
     return numReplicas - model->numReplicas;
 }
@@ -1437,17 +1447,21 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model) {
     std::string deviceTypeName = model->deviceTypeName;
     ModelProfile profile = model->processProfiles.at(deviceTypeName);
     uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
+    float indiProcessRate = 1000000.f / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
                                  + profile.batchInfer.at(model->batchSize).p95postLat);
+    float indiPreprocessRate = 1000000.f / profile.batchInfer.at(model->batchSize).p95prepLat;
     float processRate = indiProcessRate * numReplicas;
+    float preprocessRate = indiPreprocessRate * numReplicas;
     while (numReplicas > 1) {
         numReplicas--;
         processRate = indiProcessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if (processRate < model->arrivalProfiles.arrivalRates * 0.8) {
+        if (processRate < model->arrivalProfiles.arrivalRates * 0.8 ||
+            preprocessRate < model->arrivalProfiles.arrivalRates * 0.8) {
             numReplicas++;
             break;
         }
+        spdlog::get("container_agent")->info("Decreasing the number of replicas of model {0:s} to {1:d}", model->name, numReplicas);
     }
     return model->numReplicas - numReplicas;
 }
