@@ -168,7 +168,10 @@ void Controller::Scheduling() {
 
         ctrl_scheduledPipelines = ctrl_unscheduledPipelines;
         ApplyScheduling();
-        std::this_thread::sleep_for(std::chrono::seconds(ctrl_schedulingIntervalSec));
+        ApplyScheduling();
+        schedulingSW.stop();
+        ctrl_nextSchedulingTime = std::chrono::system_clock::now() + std::chrono::seconds(ctrl_schedulingIntervalSec);
+        std::this_thread::sleep_for(TimePrecisionType((ctrl_schedulingIntervalSec + 1) * 1000000 - schedulingSW.elapsed_microseconds()));
         // break;
     }
 }
