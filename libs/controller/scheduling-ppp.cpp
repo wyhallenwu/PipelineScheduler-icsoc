@@ -70,6 +70,12 @@ void Controller::queryingProfiles(TaskHandle *task) {
 
     auto pipelineModels = &task->tk_pipelineModels;
 
+    //if task->tk_name ends with number, remove it
+    std::string sanitizedTaskName = task->tk_name;
+    if (task->tk_name.back() >= '0' && task->tk_name.back() <= '9') {
+        sanitizedTaskName = task->tk_name.substr(0, task->tk_name.size() - 1);
+    }
+
     for (auto model: *pipelineModels) {
         if (model->name.find("datasource") != std::string::npos || model->name.find("sink") != std::string::npos) {
             continue;
@@ -92,7 +98,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
                 ctrl_systemName,
-                task->tk_name,
+                sanitizedTaskName,
                 task->tk_source,
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
@@ -115,7 +121,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
                 ctrl_systemName,
-                task->tk_name,
+                sanitizedTaskName,
                 task->tk_source,
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
@@ -138,7 +144,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
                 ctrl_systemName,
-                task->tk_name,
+                sanitizedTaskName,
                 task->tk_source,
                 deviceName,
                 deviceTypeName,
@@ -243,7 +249,7 @@ void Controller::Scheduling() {
 
         ClockType nextTime = std::min(ctrl_controlTimings.nextSchedulingTime, ctrl_controlTimings.nextRescalingTime);
         uint64_t sleepTime = std::chrono::duration_cast<TimePrecisionType>(nextTime - std::chrono::system_clock::now()).count();
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleepTime));
+        std::this_thread::sleep_for(std::chrono::microseconds(sleepTime));
     }
 }
 
