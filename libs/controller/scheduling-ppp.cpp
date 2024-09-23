@@ -1193,7 +1193,8 @@ void Controller::getInitialBatchSizes(TaskHandle *task, uint64_t slo) {
                 // If increasing the batch size of model `m` creates a pipeline that meets the SLO, we should keep it
                 uint64_t estimatedE2Ecost = models->back()->estimatedStart2HereCost;
                 // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
-                if (estimatedE2Ecost < bestCost) {
+                // 0.9 to avoid small numerical errors during profiling
+                if (estimatedE2Ecost < bestCost * 1.1) {
                     bestCost = estimatedE2Ecost;
                     foundBest = true;
                 }
@@ -1240,6 +1241,11 @@ void Controller::estimateModelLatency(PipelineModel *currModel) {
     uint64_t preprocessLatency = profile.batchInfer[batchSize].p95prepLat;
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
     uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
+    if (currModel->task->tk_name.find("traffic") != std::string::npos) {
+        inferLatency = profile.batchInfer[batchSize].p95inferLat * 1.02;
+        preprocessLatency = profile.batchInfer[batchSize].p95prepLat * 1.02;
+        postprocessLatency = profile.batchInfer[batchSize].p95postLat * 1.02;
+    }
     float preprocessRate = 1000000.f / preprocessLatency * currModel->numReplicas;
     while (preprocessRate < currModel->arrivalProfiles.arrivalRates * 0.8) {
         currModel->numReplicas++;
