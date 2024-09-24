@@ -28,7 +28,6 @@ message ContainerConfig {
 message TimeKeeping {
   string name = 1;
   int32 slo = 2;
-  int32 cont_slo = 3;
   uint64 time_budget = 4;
   uint64 start_time = 5;
   uint64 end_time = 6;

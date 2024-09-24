@@ -388,7 +388,7 @@ namespace msvcconfigs {
         // Application level configs
         std::string msvc_appLvlConfigs = "";
         // The acceptable latency for each individual request processed by this microservice, in `microsecond`
-        MsvcSLOType msvc_svcLevelObjLatency;
+        MsvcSLOType msvc_pipelineSLO;
         // 
         QueueLengthType msvc_maxQueueSize;
         // Ideal batch size for this microservice, runtime batch size could be smaller though

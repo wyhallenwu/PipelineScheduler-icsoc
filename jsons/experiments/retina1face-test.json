@@ -1,0 +1,657 @@
+{
+    "container": {
+        "cont_allocationMode": 1,
+        "cont_batchMode": 2,
+        "cont_cycleStartTime": 1727073164231222,
+        "cont_dropMode": 1,
+        "cont_endTime": 6556,
+        "cont_experimentName": "full",
+        "cont_hostDevice": "server",
+        "cont_hostDeviceType": "server",
+        "cont_localDutyCycle": 40412,
+        "cont_metricServerConfigs": "../jsons/metricsserver.json",
+        "cont_modelProfile": [
+            1,
+            710,
+            2839,
+            168,
+            2,
+            624,
+            1737,
+            171,
+            3,
+            519,
+            1329,
+            171,
+            4,
+            482,
+            963,
+            194,
+            5,
+            430,
+            843,
+            178,
+            6,
+            365,
+            729,
+            185,
+            7,
+            846,
+            654,
+            218,
+            8,
+            697,
+            670,
+            292,
+            9,
+            683,
+            657,
+            291,
+            10,
+            642,
+            592,
+            272,
+            11,
+            737,
+            535,
+            322,
+            12,
+            709,
+            514,
+            279,
+            13,
+            692,
+            481,
+            297,
+            14,
+            718,
+            477,
+            279,
+            15,
+            775,
+            411,
+            256,
+            16,
+            788,
+            402,
+            306,
+            17,
+            937,
+            390,
+            330,
+            18,
+            864,
+            413,
+            268,
+            19,
+            879,
+            368,
+            241,
+            20,
+            952,
+            367,
+            244,
+            21,
+            901,
+            337,
+            271,
+            22,
+            902,
+            310,
+            246,
+            23,
+            1077,
+            315,
+            237,
+            24,
+            969,
+            306,
+            233,
+            25,
+            1030,
+            315,
+            205,
+            26,
+            990,
+            290,
+            236,
+            27,
+            924,
+            305,
+            207,
+            28,
+            1046,
+            278,
+            204,
+            29,
+            1108,
+            347,
+            207,
+            30,
+            902,
+            282,
+            215,
+            31,
+            888,
+            273,
+            193,
+            32,
+            1092,
+            262,
+            237,
+            33,
+            1007,
+            257,
+            186,
+            34,
+            1019,
+            279,
+            211,
+            35,
+            909,
+            250,
+            204,
+            36,
+            1220,
+            263,
+            206,
+            37,
+            1003,
+            245,
+            210,
+            38,
+            976,
+            252,
+            201,
+            39,
+            1104,
+            247,
+            223,
+            40,
+            798,
+            242,
+            189,
+            41,
+            903,
+            223,
+            195,
+            42,
+            706,
+            217,
+            238,
+            43,
+            1190,
+            221,
+            153,
+            44,
+            779,
+            223,
+            230,
+            45,
+            720,
+            213,
+            221,
+            46,
+            787,
+            211,
+            196,
+            47,
+            920,
+            216,
+            208,
+            48,
+            658,
+            207,
+            183,
+            49,
+            550,
+            223,
+            189,
+            50,
+            738,
+            206,
+            188,
+            51,
+            845,
+            206,
+            203,
+            52,
+            685,
+            202,
+            177,
+            53,
+            614,
+            190,
+            192,
+            54,
+            753,
+            220,
+            174,
+            55,
+            551,
+            210,
+            176,
+            56,
+            754,
+            198,
+            169,
+            57,
+            622,
+            199,
+            198,
+            58,
+            653,
+            207,
+            159,
+            59,
+            592,
+            196,
+            190,
+            60,
+            625,
+            195,
+            186,
+            61,
+            598,
+            200,
+            194,
+            62,
+            1179,
+            183,
+            190,
+            63,
+            583,
+            186,
+            156,
+            64,
+            642,
+            200,
+            176
+        ],
+        "cont_name": "full_ppp_people_retina1face_0",
+        "cont_numWarmUpBatches": 15,
+        "cont_pipeName": "people",
+        "cont_pipeline": [
+            {
+                "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice.",
+                "msvc_appLvlConfigs": "",
+                "msvc_dataShape": [
+                    [
+                        3,
+                        640,
+                        640
+                    ]
+                ],
+                "msvc_dnstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -1,
+                        "nb_commMethod": 2,
+                        "nb_expectedShape": [
+                            [
+                                -1,
+                                -1,
+                                -1
+                            ]
+                        ],
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "preprocessor"
+                    }
+                ],
+                "msvc_idealBatchSize": 4,
+                "msvc_maxQueueSize": 100,
+                "msvc_name": "receiver",
+                "msvc_pipelineSLO": 2317,
+                "msvc_type": 0,
+                "msvc_upstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -2,
+                        "nb_commMethod": 2,
+                        "nb_expectedShape": [
+                            [
+                                -1,
+                                -1,
+                                -1
+                            ]
+                        ],
+                        "nb_link": [
+                            "0.0.0.0:55001"
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "people3_yolov5ndsrc"
+                    }
+                ]
+            },
+            {
+                "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice.",
+                "msvc_appLvlConfigs": "../jsons/retinaface_preproc.json",
+                "msvc_colorCvtType": 4,
+                "msvc_dataShape": [
+                    [
+                        -1,
+                        -1
+                    ]
+                ],
+                "msvc_divVals": [
+                    1,
+                    1,
+                    1
+                ],
+                "msvc_dnstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -1,
+                        "nb_commMethod": 3,
+                        "nb_expectedShape": [
+                            [
+                                3,
+                                288,
+                                320
+                            ]
+                        ],
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "inference"
+                    }
+                ],
+                "msvc_idealBatchSize": 4,
+                "msvc_imgNormScale": "1/1",
+                "msvc_imgType": 16,
+                "msvc_maxQueueSize": 100,
+                "msvc_name": "preprocessor",
+                "msvc_resizeInterpolType": 3,
+                "msvc_subVals": [
+                    104,
+                    117,
+                    123
+                ],
+                "msvc_pipelineSLO": 2317,
+                "msvc_type": 1,
+                "msvc_upstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -2,
+                        "nb_commMethod": 4,
+                        "nb_expectedShape": [
+                            [
+                                -1,
+                                -1
+                            ]
+                        ],
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "receiver"
+                    }
+                ]
+            },
+            {
+                "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice.",
+                "calibration": "",
+                "cbs": 1,
+                "di": 0,
+                "mbs": 1,
+                "msvc_appLvlConfigs": "../jsons/retinaface_trt.json",
+                "msvc_dataShape": [
+                    [
+                        0,
+                        0
+                    ]
+                ],
+                "msvc_divVals": [
+                    1,
+                    1,
+                    1
+                ],
+                "msvc_dnstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -1,
+                        "nb_commMethod": 3,
+                        "nb_expectedShape": [
+                            [
+                                1
+                            ],
+                            [
+                                5,
+                                4
+                            ],
+                            [
+                                5
+                            ],
+                            [
+                                5
+                            ]
+                        ],
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "postprocessor"
+                    }
+                ],
+                "msvc_idealBatchSize": 4,
+                "msvc_imgNormScale": "1/1",
+                "msvc_maxQueueSize": 100,
+                "msvc_name": "inference",
+                "msvc_subVals": [
+                    104,
+                    117,
+                    123
+                ],
+                "msvc_pipelineSLO": 2317,
+                "msvc_type": 2,
+                "msvc_upstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -2,
+                        "nb_commMethod": 3,
+                        "nb_expectedShape": [
+                            [
+                                0,
+                                0
+                            ]
+                        ],
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "preprocessor"
+                    }
+                ],
+                "normalize": true,
+                "obs": 1,
+                "path": "../models/retina1face_3090_fp32_64_1.engine",
+                "prec": 4
+            },
+            {
+                "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice.",
+                "msvc_appLvlConfigs": "",
+                "msvc_dataShape": [
+                    [
+                        1
+                    ],
+                    [
+                        5,
+                        4
+                    ],
+                    [
+                        5
+                    ],
+                    [
+                        5
+                    ]
+                ],
+                "msvc_dnstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -1,
+                        "nb_commMethod": 5,
+                        "nb_expectedShape": [
+                            [
+                                0,
+                                0
+                            ]
+                        ],
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "sender1"
+                    },
+                    {
+                        "nb_classOfInterest": -1,
+                        "nb_commMethod": 5,
+                        "nb_expectedShape": [
+                            [
+                                0,
+                                0
+                            ]
+                        ],
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "sender2"
+                    }
+                ],
+                "msvc_idealBatchSize": 4,
+                "msvc_maxQueueSize": 100,
+                "msvc_name": "postprocessor",
+                "msvc_pipelineSLO": 2317,
+                "msvc_type": 3,
+                "msvc_upstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -2,
+                        "nb_commMethod": 3,
+                        "nb_expectedShape": [
+                            [
+                                0,
+                                0
+                            ]
+                        ],
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "inference"
+                    }
+                ]
+            },
+            {
+                "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice.",
+                "msvc_appLvlConfigs": "",
+                "msvc_dataShape": [
+                    [
+                        0,
+                        0
+                    ]
+                ],
+                "msvc_dnstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -1,
+                        "nb_commMethod": 2,
+                        "nb_expectedShape": [
+                            [
+                                -1,
+                                -1
+                            ]
+                        ],
+                        "nb_link": [
+                            "143.248.57.94:55003"
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "people_gender"
+                    }
+                ],
+                "msvc_idealBatchSize": 4,
+                "msvc_maxQueueSize": 100,
+                "msvc_name": "sender1",
+                "msvc_pipelineSLO": 2317,
+                "msvc_type": 4,
+                "msvc_upstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -2,
+                        "nb_commMethod": 4,
+                        "nb_expectedShape": [
+                            [
+                                0,
+                                0
+                            ]
+                        ],
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "postprocessor"
+                    }
+                ]
+            },
+            {
+                "=========================================Here ends the common part of the microservice configuration": "The following are the specific configurations for each microservice.",
+                "msvc_appLvlConfigs": "",
+                "msvc_dataShape": [
+                    [
+                        0,
+                        0
+                    ]
+                ],
+                "msvc_dnstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -1,
+                        "nb_commMethod": 2,
+                        "nb_expectedShape": [
+                            [
+                                -1,
+                                -1
+                            ]
+                        ],
+                        "nb_link": [
+                            "143.248.57.94:55004"
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "people_age"
+                    }
+                ],
+                "msvc_idealBatchSize": 4,
+                "msvc_maxQueueSize": 100,
+                "msvc_name": "sender2",
+                "msvc_pipelineSLO": 2317,
+                "msvc_type": 4,
+                "msvc_upstreamMicroservices": [
+                    {
+                        "nb_classOfInterest": -2,
+                        "nb_commMethod": 4,
+                        "nb_expectedShape": [
+                            [
+                                0,
+                                0
+                            ]
+                        ],
+                        "nb_link": [
+                            ""
+                        ],
+                        "nb_maxQueueSize": 100,
+                        "nb_name": "postprocessor"
+                    }
+                ]
+            }
+        ],
+        "cont_pipelineSLO": 300000,
+        "cont_startTime": 0,
+        "cont_systemName": "ppp",
+        "cont_taskName": "retina1face",
+        "cont_timeBudgetLeft": 56661
+    },
+    "profiling": {
+        "profile_inputRandomizeScheme": 0,
+        "profile_maxBatch": 64,
+        "profile_minBatch": 1,
+        "profile_numProfileBatches": 100,
+        "profile_numProfileReqs": 1800,
+        "profile_numWarmUpBatches": 10,
+        "profile_step": 1,
+        "profile_stepMode": 1,
+        "profile_templateModelPath": "../models/retina_single_face_3090_fp32_[batch]_1.engine"
+    }
+}
