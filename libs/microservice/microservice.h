@@ -458,6 +458,9 @@ public:
         std::string reqOriginStream,
         std::string originDevice
     ) {
+        for (size_t i = 0; i < timestamps.size() - 1; ++i) {
+            if (timestamps[i] > timestamps[i + 1]) return;
+        }
         std::unique_lock<std::mutex> lock(mutex);
         ArrivalRecord * record = &records[{reqOriginStream, originDevice}];
         auto transferDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count();
@@ -540,10 +543,10 @@ public:
         uint32_t reqNumber,
         std::string reqOrigin = "stream"
     ) {
-        std::unique_lock<std::mutex> lock(mutex);
         for (size_t i = 0; i < timestamps.size() - 1; ++i) {
-            if (timestamps[i] > timestamps[i + 1]) return;
+            if (timestamps[i] >= timestamps[i + 1]) return;
         }
+        std::unique_lock<std::mutex> lock(mutex);
         processRecords[{reqOrigin, inferBatchSize}].prepDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[6] - timestamps[5]).count());
         processRecords[{reqOrigin, inferBatchSize}].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[7] - timestamps[6]).count());
         processRecords[{reqOrigin, inferBatchSize}].inferQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[8] - timestamps[7]).count());
