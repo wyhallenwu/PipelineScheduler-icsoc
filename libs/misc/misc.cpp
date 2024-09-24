@@ -120,6 +120,9 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
 ) {
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
+    if (taskName.find("yolo") != std::string::npos) {
+        tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName.substr(0, taskName.length() - 1) + "_arr");
+    }
 
     std::string periodQueryRates;
     std::string periodQueryCoeffVar;
@@ -165,6 +168,9 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
                 "FROM arrival_rate;";
         query = absl::StrFormat(query.c_str(), profileTableName, modelFileAbbr, periodQueryRates, periodQueryCoeffVar);
         res = pullSQL(metricsConn, query);
+    }
+    if (res[0][0].is_null()) {
+        return {0.0, 0.0};
     }
     return {res[0]["max_arrival_rate"].as<float>(), res[0]["max_coeff_var"].as<float>()};
 }
