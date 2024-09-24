@@ -200,7 +200,7 @@ struct ContainerHandle {
     ModelType model;
     bool mergable;
     std::vector<int> dimensions;
-    uint64_t inference_deadline;
+    uint64_t pipelineSLO;
 
     float arrival_rate;
 
@@ -246,8 +246,6 @@ struct ContainerHandle {
     uint64_t endTime;
     //
     uint64_t localDutyCycle = 0;
-    //
-    uint64_t batchingDeadline;
     // 
     ClockType cycleStartTime;
     // GPU Handle
@@ -269,7 +267,7 @@ struct ContainerHandle {
                 ModelType model,
                 bool mergable,
                 const std::vector<int>& dimensions = {},
-                uint64_t inference_deadline = 0,
+                uint64_t pipelineSLO = 0,
                 float arrival_rate = 0.0f,
                 const int batch_size = 0,
                 const int recv_port = 0,
@@ -287,7 +285,7 @@ struct ContainerHandle {
       model(model),
       mergable(mergable),
       dimensions(dimensions),
-      inference_deadline(inference_deadline),
+      pipelineSLO(pipelineSLO),
       arrival_rate(arrival_rate),
       batch_size(batch_size),
       recv_port(recv_port),
@@ -312,7 +310,7 @@ struct ContainerHandle {
         model = other.model;
         mergable = other.mergable;
         dimensions = other.dimensions;
-        inference_deadline = other.inference_deadline;
+        pipelineSLO = other.pipelineSLO;
         arrival_rate = other.arrival_rate;
         batch_size = other.batch_size;
         recv_port = other.recv_port;
@@ -336,7 +334,6 @@ struct ContainerHandle {
         startTime = other.startTime;
         endTime = other.endTime;
         localDutyCycle = other.localDutyCycle;
-        batchingDeadline = other.batchingDeadline;
         gpuHandle = other.gpuHandle;
         executionPortion = other.executionPortion;
         pipelineModel = other.pipelineModel;
@@ -355,7 +352,7 @@ struct ContainerHandle {
             model = other.model;
             mergable = other.mergable;
             dimensions = other.dimensions;
-            inference_deadline = other.inference_deadline;
+            pipelineSLO = other.pipelineSLO;
             arrival_rate = other.arrival_rate;
             batch_size = other.batch_size;
             recv_port = other.recv_port;
@@ -379,7 +376,6 @@ struct ContainerHandle {
             startTime = other.startTime;
             endTime = other.endTime;
             localDutyCycle = other.localDutyCycle;
-            batchingDeadline = other.batchingDeadline;
             gpuHandle = other.gpuHandle;
             executionPortion = other.executionPortion;
             pipelineModel = other.pipelineModel;
@@ -429,8 +425,6 @@ struct PipelineModel {
     uint64_t estimatedPerQueryCost = 0;
     // The estimated latency of the model
     uint64_t estimatedStart2HereCost = 0;
-    // Batching deadline
-    uint64_t batchingDeadline = 9999999999;
     uint64_t startTime = 0;
     uint64_t endTime = 0;
     uint64_t localDutyCycle = 0;
@@ -528,7 +522,6 @@ struct PipelineModel {
         startTime = other.startTime;
         endTime = other.endTime;
         localDutyCycle = other.localDutyCycle;
-        batchingDeadline = other.batchingDeadline;
         deviceTypeName = other.deviceTypeName;
         merged = other.merged;
         toBeRun = other.toBeRun;
@@ -573,7 +566,6 @@ struct PipelineModel {
             startTime = other.startTime;
             endTime = other.endTime;
             localDutyCycle = other.localDutyCycle;
-            batchingDeadline = other.batchingDeadline;
             deviceTypeName = other.deviceTypeName;
             merged = other.merged;
             toBeRun = other.toBeRun;

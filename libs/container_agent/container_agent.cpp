@@ -106,7 +106,6 @@ json loadRunArgs(int argc, char **argv) {
     }
 
     for (uint16_t i = 0; i < containerConfigs["cont_pipeline"].size(); i++) {
-        containerConfigs.at("cont_pipeline")[i]["msvc_contSLO"] = containerConfigs["cont_SLO"];
         containerConfigs.at("cont_pipeline")[i]["msvc_contStartTime"] = containerConfigs["cont_startTime"];
         containerConfigs.at("cont_pipeline")[i]["msvc_contEndTime"] = containerConfigs["cont_endTime"];
         containerConfigs.at("cont_pipeline")[i]["msvc_localDutyCycle"] = containerConfigs["cont_localDutyCycle"];
@@ -1312,7 +1311,6 @@ void ContainerAgent::UpdateTimeKeepingRequestHandler::Proceed() {
         service->RequestUpdateTimeKeeping(&ctx, &request, &responder, cq, cq, this);
     } else if (status == PROCESS) {
         new UpdateTimeKeepingRequestHandler(service, cq, container_agent);
-        container_agent->cont_msvcsList[1]->msvc_contSLO = request.cont_slo();
         container_agent->cont_msvcsList[1]->msvc_pipelineSLO = request.slo();
         container_agent->cont_msvcsList[1]->msvc_timeBudgetLeft = request.time_budget();
         container_agent->cont_msvcsList[1]->msvc_contStartTime = request.start_time();
