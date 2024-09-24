@@ -121,7 +121,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
                 ctrl_systemName,
-                task->tk_name,
+                sanitizedTaskName,
                 task->tk_source,
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
