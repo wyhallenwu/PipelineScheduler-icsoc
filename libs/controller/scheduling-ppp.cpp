@@ -760,7 +760,6 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned 
             if (container->replica_id == replica_id) {
                 container->startTime = pipelineModel->startTime;
                 container->endTime = pipelineModel->endTime;
-                container->batchingDeadline = pipelineModel->batchingDeadline;
                 containerTemporalScheduling(container);
             }
         }
@@ -1334,14 +1333,12 @@ void Controller::estimateTimeBudgetLeft(PipelineModel *currModel)
 void Controller::estimateModelTiming(PipelineModel *currModel, const uint64_t start2HereLatency) {
 
     if (currModel->name.find("datasource") != std::string::npos) {
-        currModel->batchingDeadline = 0;
         currModel->startTime = 0;
         currModel->endTime = 0;
         // if (currModel->name.find("sink") != std::string::npos) {
 
     }
     else if (currModel->name.find("sink") != std::string::npos) {
-        currModel->batchingDeadline = 0;
         currModel->startTime = 0;
         currModel->endTime = 0;
         for (auto &upstream : currModel->upstreams) {
@@ -1362,9 +1359,6 @@ void Controller::estimateModelTiming(PipelineModel *currModel, const uint64_t st
         }
         currModel->startTime = maxStartTime;
         currModel->endTime = currModel->startTime + currModel->expectedMaxProcessLatency;
-        currModel->batchingDeadline = currModel->endTime -
-                                    profile.batchInfer.at(batchSize).p95inferLat * batchSize * 1.05 -
-                                    profile.batchInfer.at(batchSize).p95postLat;
     }
 
     uint64_t maxDnstreamDutyCycle = currModel->localDutyCycle;

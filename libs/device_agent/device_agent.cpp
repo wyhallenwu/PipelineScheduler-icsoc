@@ -649,7 +649,6 @@ void DeviceAgent::UpdateTimeKeepingRequestHandler::Proceed() {
         Status state;
         indevicecommunication::TimeKeeping tk;
         tk.set_slo(request.slo());
-        tk.set_cont_slo(request.cont_slo());
         tk.set_time_budget(request.time_budget());
         tk.set_start_time(request.start_time());
         tk.set_end_time(request.end_time());

@@ -632,7 +632,7 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
                                           ModelTypeReverseList[modelName],
                                           CheckMergable(modelName),
                                           {0},
-                                          model->batchingDeadline,
+                                          model->task->tk_slo,
                                           0.0,
                                           model->batchSize,
                                           device->next_free_port++,
@@ -653,8 +653,6 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
 
     // container->timeBudgetLeft for lazy dropping
     container->timeBudgetLeft = container->pipelineModel->timeBudgetLeft;
-    // container->batchingDeadline for lazy dynamic batching
-    container->batchingDeadline = container->pipelineModel->batchingDeadline;
     // container start time
     container->startTime = container->pipelineModel->startTime;
     // container end time
@@ -688,13 +686,11 @@ ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHand
 void Controller::AdjustTiming(ContainerHandle *container) {
     // container->timeBudgetLeft for lazy dropping
     container->timeBudgetLeft = container->pipelineModel->timeBudgetLeft;
-    // container->batchingDeadline for lazy dynamic batching
-    container->batchingDeadline = container->pipelineModel->batchingDeadline;
     // container->start_time
     container->startTime = container->pipelineModel->startTime;
     // container->end_time
     container->endTime = container->pipelineModel->endTime;
-    // container SLO
+    // duty cycle of the lane where the container is assigned
     container->localDutyCycle = container->pipelineModel->localDutyCycle;
     // `container->task->tk_slo` for the total SLO of the pipeline
     container->cycleStartTime = ctrl_currSchedulingTime;
@@ -704,8 +700,7 @@ void Controller::AdjustTiming(ContainerHandle *container) {
     EmptyMessage reply;
     Status status;
     request.set_name(container->name);
-    request.set_slo(container->inference_deadline);
-    request.set_cont_slo(container->batchingDeadline);
+    request.set_slo(container->pipelineSLO);
     request.set_time_budget(container->timeBudgetLeft);
     request.set_start_time(container->startTime);
     request.set_end_time(container->endTime);
@@ -756,7 +751,6 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             start_config["container"]["cont_dropMode"] = 1;
         }
         start_config["container"]["cont_pipelineSLO"] = container->task->tk_slo;
-        start_config["container"]["cont_SLO"] = container->batchingDeadline;
         start_config["container"]["cont_timeBudgetLeft"] = container->timeBudgetLeft;
         start_config["container"]["cont_startTime"] = container->startTime;
         start_config["container"]["cont_endTime"] = container->endTime;
@@ -784,7 +778,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
         // adjust pipeline configs
         for (auto &j: base_config) {
             j["msvc_idealBatchSize"] = container->batch_size;
-            j["msvc_svcLevelObjLatency"] = container->inference_deadline;
+            j["msvc_pipelineSLO"] = container->pipelineSLO;
         }
         if (model == ModelType::DataSource) {
             base_config[0]["msvc_dataShape"] = {container->dimensions};

@@ -30,7 +30,6 @@ message Connection {
 
 message TimeKeeping {
   int32 slo = 1;
-  int32 cont_slo = 2;
   uint64 time_budget = 3;
   uint64 start_time = 4;
   uint64 end_time = 5;
