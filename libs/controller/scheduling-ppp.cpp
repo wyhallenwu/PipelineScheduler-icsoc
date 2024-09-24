@@ -70,6 +70,12 @@ void Controller::queryingProfiles(TaskHandle *task) {
 
     auto pipelineModels = &task->tk_pipelineModels;
 
+    //if task->tk_name ends with number, remove it
+    std::string sanitizedTaskName = task->tk_name;
+    if (task->tk_name.back() >= '0' && task->tk_name.back() <= '9') {
+        sanitizedTaskName = task->tk_name.substr(0, task->tk_name.size() - 1);
+    }
+
     for (auto model: *pipelineModels) {
         if (model->name.find("datasource") != std::string::npos || model->name.find("sink") != std::string::npos) {
             continue;
@@ -92,7 +98,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 *ctrl_metricsServerConn,
                 ctrl_experimentName,
                 ctrl_systemName,
-                task->tk_name,
+                sanitizedTaskName,
                 task->tk_source,
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
@@ -243,7 +249,7 @@ void Controller::Scheduling() {
 
         ClockType nextTime = std::min(ctrl_controlTimings.nextSchedulingTime, ctrl_controlTimings.nextRescalingTime);
         uint64_t sleepTime = std::chrono::duration_cast<TimePrecisionType>(nextTime - std::chrono::system_clock::now()).count();
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleepTime));
+        std::this_thread::sleep_for(std::chrono::microseconds(sleepTime));
     }
 }
 
@@ -754,7 +760,6 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned 
             if (container->replica_id == replica_id) {
                 container->startTime = pipelineModel->startTime;
                 container->endTime = pipelineModel->endTime;
-                container->batchingDeadline = pipelineModel->batchingDeadline;
                 containerTemporalScheduling(container);
             }
         }
@@ -1187,7 +1192,8 @@ void Controller::getInitialBatchSizes(TaskHandle *task, uint64_t slo) {
                 // If increasing the batch size of model `m` creates a pipeline that meets the SLO, we should keep it
                 uint64_t estimatedE2Ecost = models->back()->estimatedStart2HereCost;
                 // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
-                if (estimatedE2Ecost < bestCost) {
+                // 0.9 to avoid small numerical errors during profiling
+                if (estimatedE2Ecost < bestCost * 1.1) {
                     bestCost = estimatedE2Ecost;
                     foundBest = true;
                 }
@@ -1234,7 +1240,17 @@ void Controller::estimateModelLatency(PipelineModel *currModel) {
     uint64_t preprocessLatency = profile.batchInfer[batchSize].p95prepLat;
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
     uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
-    float preprocessRate = 1000000.f / preprocessLatency;
+    if (currModel->task->tk_name.find("traffic") != std::string::npos) {
+        inferLatency = profile.batchInfer[batchSize].p95inferLat * 1.02;
+        preprocessLatency = profile.batchInfer[batchSize].p95prepLat * 1.02;
+        postprocessLatency = profile.batchInfer[batchSize].p95postLat * 1.02;
+    }
+    float preprocessRate = 1000000.f / preprocessLatency * currModel->numReplicas;
+    while (preprocessRate < currModel->arrivalProfiles.arrivalRates * 0.8) {
+        currModel->numReplicas++;
+        spdlog::get("container_agent")->info("Increasing the number of replicas of model {0:s} to {1:d}", currModel->name, currModel->numReplicas);
+        preprocessRate = 1000000.f / preprocessLatency * currModel->numReplicas;
+    }   
 
     currModel->expectedQueueingLatency = calculateQueuingLatency(currModel->arrivalProfiles.arrivalRates,
                                                                  preprocessRate);
@@ -1317,14 +1333,12 @@ void Controller::estimateTimeBudgetLeft(PipelineModel *currModel)
 void Controller::estimateModelTiming(PipelineModel *currModel, const uint64_t start2HereLatency) {
 
     if (currModel->name.find("datasource") != std::string::npos) {
-        currModel->batchingDeadline = 0;
         currModel->startTime = 0;
         currModel->endTime = 0;
         // if (currModel->name.find("sink") != std::string::npos) {
 
     }
     else if (currModel->name.find("sink") != std::string::npos) {
-        currModel->batchingDeadline = 0;
         currModel->startTime = 0;
         currModel->endTime = 0;
         for (auto &upstream : currModel->upstreams) {
@@ -1345,9 +1359,6 @@ void Controller::estimateModelTiming(PipelineModel *currModel, const uint64_t st
         }
         currModel->startTime = maxStartTime;
         currModel->endTime = currModel->startTime + currModel->expectedMaxProcessLatency;
-        currModel->batchingDeadline = currModel->endTime -
-                                    profile.batchInfer.at(batchSize).p95inferLat * batchSize * 1.05 -
-                                    profile.batchInfer.at(batchSize).p95postLat;
     }
 
     uint64_t maxDnstreamDutyCycle = currModel->localDutyCycle;
@@ -1412,10 +1423,15 @@ uint8_t Controller::incNumReplicas(const PipelineModel *model) {
     uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
     float indiProcessRate = 1000000.f / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
                                  + profile.batchInfer.at(model->batchSize).p95postLat);
+    float indiPreprocessRate = 1000000.f / profile.batchInfer.at(model->batchSize).p95prepLat;
     float processRate = indiProcessRate * numReplicas;
-    while (processRate < model->arrivalProfiles.arrivalRates * 0.8) {
+    float preprocessRate = indiPreprocessRate * numReplicas;
+    while (processRate < model->arrivalProfiles.arrivalRates * 0.8 ||
+           preprocessRate < model->arrivalProfiles.arrivalRates * 0.8) {
         numReplicas++;
+        spdlog::get("container_agent")->info("Increasing the number of replicas of model {0:s} to {1:d}", model->name, numReplicas);
         processRate = indiProcessRate * numReplicas;
+        preprocessRate = indiPreprocessRate * numReplicas;
     }
     return numReplicas - model->numReplicas;
 }
@@ -1431,17 +1447,21 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model) {
     std::string deviceTypeName = model->deviceTypeName;
     ModelProfile profile = model->processProfiles.at(deviceTypeName);
     uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
-    float indiProcessRate = 1 / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
+    float indiProcessRate = 1000000.f / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
                                  + profile.batchInfer.at(model->batchSize).p95postLat);
+    float indiPreprocessRate = 1000000.f / profile.batchInfer.at(model->batchSize).p95prepLat;
     float processRate = indiProcessRate * numReplicas;
+    float preprocessRate = indiPreprocessRate * numReplicas;
     while (numReplicas > 1) {
         numReplicas--;
         processRate = indiProcessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if (processRate < model->arrivalProfiles.arrivalRates * 0.8) {
+        if (processRate < model->arrivalProfiles.arrivalRates * 0.8 ||
+            preprocessRate < model->arrivalProfiles.arrivalRates * 0.8) {
             numReplicas++;
             break;
         }
+        spdlog::get("container_agent")->info("Decreasing the number of replicas of model {0:s} to {1:d}", model->name, numReplicas);
     }
     return model->numReplicas - numReplicas;
 }
