@@ -254,8 +254,15 @@ void Controller::Scheduling() {
 }
 
 void Controller::ScaleUp(PipelineModel *model) {
+    if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - 
+                                   model->lastScaleTime).count() < ctrl_controlTimings.scaleUpIntervalThresholdSec) {
+        spdlog::get("container_agent")->info("The model {0:s} has been scaled up recently."
+                                             "Skipping the scaling up process to avoid uncessary waste.", model->name);
+        return;
+    }
     std::vector<ContainerHandle*> currContainers = model->task->tk_subTasks[model->name];
     uint16_t numCurrContainers = currContainers.size();
+    model->lastScaleTime = std::chrono::system_clock::now();
     for (uint16_t i = numCurrContainers; i < model->numReplicas; i++) {
         ContainerHandle *newContainer = TranslateToContainer(model, devices.getDevice(model->device), i);
         if (newContainer == nullptr) {
@@ -281,9 +288,16 @@ void Controller::ScaleUp(PipelineModel *model) {
             }
         }
     }
+    model->lastScaleTime = std::chrono::system_clock::now();
 }
 
 void Controller::ScaleDown(PipelineModel *model) {
+
+    if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - 
+                                   model->lastScaleTime).count() < ctrl_controlTimings.scaleDownIntervalThresholdSec) {
+        spdlog::get("container_agent")->info("The model {0:s} has been scaled up recently."
+                                             "Skipping the scaling down process to avoid THRASHING.", model->name);
+    }
     std::vector<ContainerHandle*> currContainers = model->task->tk_subTasks[model->name];
     uint16_t numCurrContainers = currContainers.size();
     for (uint16_t i = model->numReplicas; i < numCurrContainers; i++) {
@@ -301,6 +315,7 @@ void Controller::ScaleDown(PipelineModel *model) {
         }
         containers.removeContainer(currContainers[i]->name);
     }
+    model->lastScaleTime = std::chrono::system_clock::now();
 }
 
 void Controller::Rescaling() {
@@ -1056,6 +1071,7 @@ void Controller::mergePipelines() {
                 continue;
             }
             auto numIncReps = incNumReplicas(mergedModel);
+            mergedModel->lastScaleTime = std::chrono::system_clock::now();
             mergedModel->numReplicas += numIncReps;
             estimateModelLatency(mergedModel);
         }
@@ -1185,6 +1201,7 @@ void Controller::crossDeviceWorkloadDistributor(TaskHandle *task, uint64_t slo) 
     // Increase number of replicas to avoid bottlenecks
     for (auto m: *models) {
         auto numIncReplicas = incNumReplicas(m);
+        m->lastScaleTime = std::chrono::system_clock::now();
         m->numReplicas += numIncReplicas;
     }
     estimatePipelineLatency(models->front(), 0);
@@ -1215,6 +1232,7 @@ void Controller::crossDeviceWorkloadDistributor(TaskHandle *task, uint64_t slo) 
                 if (estimatedE2Ecost * 0.98 < bestCost) {
                     bestCost = estimatedE2Ecost;
                     foundBest = true;
+                    spdlog::get("container_agent")->trace("Increasing the batch size of model {0:s} to {1:d}", m->name, m->batchSize);
                 }
                 if (!foundBest) {
                     m->batchSize = oldBatchsize;
@@ -1224,6 +1242,7 @@ void Controller::crossDeviceWorkloadDistributor(TaskHandle *task, uint64_t slo) 
                 }
                 // If increasing the batch size meets the SLO, we can try decreasing the number of replicas
                 auto numDecReplicas = decNumReplicas(m);
+                m->lastScaleTime = std::chrono::system_clock::now();
                 m->numReplicas -= numDecReplicas;
             } else {
                 m->batchSize = oldBatchsize;
@@ -1259,13 +1278,8 @@ void Controller::estimateModelLatency(PipelineModel *currModel) {
     uint64_t preprocessLatency = profile.batchInfer[batchSize].p95prepLat;
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
     uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
-    if (currModel->task->tk_name.find("traffic") != std::string::npos) {
-        inferLatency = profile.batchInfer[batchSize].p95inferLat * 1.005;
-        preprocessLatency = profile.batchInfer[batchSize].p95prepLat * 1.005;
-        postprocessLatency = profile.batchInfer[batchSize].p95postLat * 1.005;
-    }
     float preprocessRate = 1000000.f / preprocessLatency * currModel->numReplicas;
-    while (preprocessRate < currModel->arrivalProfiles.arrivalRates * 0.8) {
+    while (preprocessRate * 0.8 < currModel->arrivalProfiles.arrivalRates) {
         currModel->numReplicas++;
         spdlog::get("container_agent")->info("Increasing the number of replicas of model {0:s} to {1:d}", currModel->name, currModel->numReplicas);
         preprocessRate = 1000000.f / preprocessLatency * currModel->numReplicas;
@@ -1445,8 +1459,8 @@ uint8_t Controller::incNumReplicas(const PipelineModel *model) {
     float indiPreprocessRate = 1000000.f / profile.batchInfer.at(model->batchSize).p95prepLat;
     float processRate = indiProcessRate * numReplicas;
     float preprocessRate = indiPreprocessRate * numReplicas;
-    while (processRate < model->arrivalProfiles.arrivalRates * 0.8 ||
-           preprocessRate < model->arrivalProfiles.arrivalRates * 0.8) {
+    while (processRate * 0.7 < model->arrivalProfiles.arrivalRates ||
+           preprocessRate * 0.9 < model->arrivalProfiles.arrivalRates) {
         numReplicas++;
         spdlog::get("container_agent")->info("Increasing the number of replicas of model {0:s} to {1:d}", model->name, numReplicas);
         processRate = indiProcessRate * numReplicas;
@@ -1475,8 +1489,8 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model) {
         numReplicas--;
         processRate = indiProcessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if (processRate < model->arrivalProfiles.arrivalRates * 0.8 ||
-            preprocessRate < model->arrivalProfiles.arrivalRates * 0.8) {
+        if (processRate * 0.7 < model->arrivalProfiles.arrivalRates ||
+            preprocessRate * 0.9 < model->arrivalProfiles.arrivalRates) {
             numReplicas++;
             break;
         }

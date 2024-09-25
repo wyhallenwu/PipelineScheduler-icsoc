@@ -149,6 +149,8 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_initialBatchSizes["server"] = j["server_batch_size"];
     ctrl_controlTimings.schedulingIntervalSec = j["scheduling_interval_sec"];
     ctrl_controlTimings.rescalingIntervalSec = j["rescaling_interval_sec"];
+    ctrl_controlTimings.scaleUpIntervalThresholdSec = j["scale_up_interval_threshold_sec"];
+    ctrl_controlTimings.scaleDownIntervalThresholdSec = j["scale_down_interval_threshold_sec"];
     initialTasks = j["initial_pipelines"];
 }
 

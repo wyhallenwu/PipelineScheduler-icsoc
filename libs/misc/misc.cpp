@@ -565,9 +565,13 @@ void queryPrePostLatency(
         if (std::find(retrievedBatchSizes.begin(), retrievedBatchSizes.end(), batchSize) != retrievedBatchSizes.end()) {
             continue;
         }
-        profile.batchInfer[batchSize].p95prepLat = (uint64_t) row["p95_prep_duration_us_all"].as<double>();
-        profile.batchInfer[batchSize].p95inferLat = (uint64_t) row["p95_infer_duration_us_all"].as<double>() / batchSize;
-        profile.batchInfer[batchSize].p95postLat = (uint64_t) row["p95_post_duration_us_all"].as<double>();
+        float noiseRatio = 1.f;
+        if (pipelineName.find("traffic") != std::string::npos) {
+            noiseRatio = 1.005;
+        }
+        profile.batchInfer[batchSize].p95prepLat = (uint64_t) (row["p95_prep_duration_us_all"].as<double>() * noiseRatio);
+        profile.batchInfer[batchSize].p95inferLat = (uint64_t) (row["p95_infer_duration_us_all"].as<double>() / batchSize * noiseRatio);
+        profile.batchInfer[batchSize].p95postLat = (uint64_t) (row["p95_post_duration_us_all"].as<double>() * noiseRatio);
         profile.p95InputSize = (uint32_t) row["p95_input_size_b_all"].as<float>();
         profile.p95OutputSize = (uint32_t) row["p95_output_size_b_all"].as<float>();
         profile.p95EncodedOutputSize = (uint32_t) row["p95_encoded_size_b_all"].as<float>();

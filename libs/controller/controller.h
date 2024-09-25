@@ -448,6 +448,11 @@ struct PipelineModel {
 
     uint64_t timeBudgetLeft = 9999999999;
 
+    // The time when the last scaling or scheduling operation was performed
+    ClockType lastScaleTime = std::chrono::system_clock::now();
+    //
+    int8_t numInstancesScaledLastTime = 0;
+
     mutable std::mutex pipelineModelMutex;
 
         // Constructor with default parameters
@@ -988,6 +993,8 @@ private:
         uint64_t schedulingIntervalSec;
         uint64_t rescalingIntervalSec;
         uint64_t networkCheckIntervalSec;
+        uint64_t scaleUpIntervalThresholdSec;
+        uint64_t scaleDownIntervalThresholdSec;
 
         ClockType nextSchedulingTime = std::chrono::system_clock::time_point::min();
         ClockType currSchedulingTime = std::chrono::system_clock::time_point::min();
