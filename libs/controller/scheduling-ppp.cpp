@@ -217,7 +217,7 @@ void Controller::Scheduling() {
         for (auto &[taskName, taskHandle]: taskList) {
             queryingProfiles(taskHandle);
             crossDeviceWorkloadDistributor(taskHandle, taskHandle->tk_slo / 2);
-            shiftModelToEdge(taskHandle->tk_pipelineModels, taskHandle->tk_pipelineModels.front(), taskHandle->tk_slo / 2, taskHandle->tk_pipelineModels.front()->device);
+            shiftModelToEdge(taskHandle->tk_pipelineModels, taskHandle->tk_pipelineModels.front(), taskHandle->tk_slo, taskHandle->tk_pipelineModels.front()->device);
             for (auto &model: taskHandle->tk_pipelineModels) {
                 model->name = taskName + "_" + model->name;
             }
@@ -1212,7 +1212,7 @@ void Controller::crossDeviceWorkloadDistributor(TaskHandle *task, uint64_t slo) 
                 uint64_t estimatedE2Ecost = models->back()->estimatedStart2HereCost;
                 // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
                 // 0.9 to avoid small numerical errors during profiling
-                if (estimatedE2Ecost < bestCost * 1.1) {
+                if (estimatedE2Ecost * 0.98 < bestCost) {
                     bestCost = estimatedE2Ecost;
                     foundBest = true;
                 }
@@ -1260,9 +1260,9 @@ void Controller::estimateModelLatency(PipelineModel *currModel) {
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
     uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
     if (currModel->task->tk_name.find("traffic") != std::string::npos) {
-        inferLatency = profile.batchInfer[batchSize].p95inferLat * 1.02;
-        preprocessLatency = profile.batchInfer[batchSize].p95prepLat * 1.02;
-        postprocessLatency = profile.batchInfer[batchSize].p95postLat * 1.02;
+        inferLatency = profile.batchInfer[batchSize].p95inferLat * 1.005;
+        preprocessLatency = profile.batchInfer[batchSize].p95prepLat * 1.005;
+        postprocessLatency = profile.batchInfer[batchSize].p95postLat * 1.005;
     }
     float preprocessRate = 1000000.f / preprocessLatency * currModel->numReplicas;
     while (preprocessRate < currModel->arrivalProfiles.arrivalRates * 0.8) {
