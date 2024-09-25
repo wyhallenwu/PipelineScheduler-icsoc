@@ -534,7 +534,7 @@ void Controller::ApplyScheduling() {
     if (ctrl_systemName != "ppp") {
         basicGPUScheduling(new_containers);
     } else {
-        temporalScheduling();
+        colocationTemporalScheduling();
     }
 
     // // Testing gpu portion reclaiming

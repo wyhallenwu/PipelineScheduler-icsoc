@@ -950,7 +950,7 @@ private:
 
     void estimateModelTiming(PipelineModel *currModel, const uint64_t start2HereDutyCycle);
 
-    void getInitialBatchSizes(TaskHandle *task, uint64_t slo);
+    void crossDeviceWorkloadDistributor(TaskHandle *task, uint64_t slo);
     void shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel *currModel, uint64_t slo, const std::string& edgeDevice);
 
     bool mergeArrivalProfiles(ModelArrivalProfile &mergedProfile, const ModelArrivalProfile &toBeMergedProfile, const std::string &device, const std::string &upstreamDevice);
@@ -965,9 +965,9 @@ private:
     TaskHandle* mergePipelines(const std::string& taskName);
     void mergePipelines();
 
-    bool containerTemporalScheduling(ContainerHandle *container);
-    bool modelTemporalScheduling(PipelineModel *pipelineModel, unsigned int replica_id);
-    void temporalScheduling();
+    bool containerColocationTemporalScheduling(ContainerHandle *container);
+    bool modelColocationTemporalScheduling(PipelineModel *pipelineModel, unsigned int replica_id);
+    void colocationTemporalScheduling();
 
     void basicGPUScheduling(std::vector<ContainerHandle *> new_containers);
 

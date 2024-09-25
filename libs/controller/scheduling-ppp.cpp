@@ -216,7 +216,7 @@ void Controller::Scheduling() {
 
         for (auto &[taskName, taskHandle]: taskList) {
             queryingProfiles(taskHandle);
-            getInitialBatchSizes(taskHandle, taskHandle->tk_slo / 2);
+            crossDeviceWorkloadDistributor(taskHandle, taskHandle->tk_slo / 2);
             shiftModelToEdge(taskHandle->tk_pipelineModels, taskHandle->tk_pipelineModels.front(), taskHandle->tk_slo / 2, taskHandle->tk_pipelineModels.front()->device);
             for (auto &model: taskHandle->tk_pipelineModels) {
                 model->name = taskName + "_" + model->name;
@@ -269,7 +269,7 @@ void Controller::ScaleUp(PipelineModel *model) {
                 newContainer->downstreams.push_back(downstreamContainer);
             }
         }
-        containerTemporalScheduling(newContainer);
+        containerColocationTemporalScheduling(newContainer);
         containers.addContainer(newContainer->name, newContainer);
         StartContainer(newContainer);
         for (auto &upstream : model->upstreams) {
@@ -734,7 +734,14 @@ bool Controller::reclaimGPUPortion(GPUPortion *toBeReclaimedPortion) {
     return true;
 }
 
-bool Controller::containerTemporalScheduling(ContainerHandle *container) {
+/**
+ * @brief colocationTemporalScheduler (CORAL) for container instances
+ * 
+ * @param container 
+ * @return true 
+ * @return false 
+ */
+bool Controller::containerColocationTemporalScheduling(ContainerHandle *container) {
     std::string deviceName = container->device_agent->name;
     auto deviceList = devices.getMap();
     auto portion = findFreePortionForInsertion(deviceList[deviceName]->freeGPUPortions, container);
@@ -750,7 +757,15 @@ bool Controller::containerTemporalScheduling(ContainerHandle *container) {
     return true;
 }
 
-bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned int replica_id) {
+/**
+ * @brief colocationTemporalScheduler (CORAL) for models
+ * 
+ * @param pipelineModel 
+ * @param replica_id 
+ * @return true 
+ * @return false 
+ */
+bool Controller::modelColocationTemporalScheduling(PipelineModel *pipelineModel, unsigned int replica_id) {
     if (pipelineModel->gpuScheduled) { return true; }
     if (pipelineModel->name.find("datasource") == std::string::npos &&
         (pipelineModel->name.find("dsrc") == std::string::npos ||
@@ -760,13 +775,13 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned 
             if (container->replica_id == replica_id) {
                 container->startTime = pipelineModel->startTime;
                 container->endTime = pipelineModel->endTime;
-                containerTemporalScheduling(container);
+                containerColocationTemporalScheduling(container);
             }
         }
     }
     bool allScheduled = true;
     for (auto downstream : pipelineModel->downstreams) {
-        if (!modelTemporalScheduling(downstream.first, replica_id)) allScheduled = false;
+        if (!modelColocationTemporalScheduling(downstream.first, replica_id)) allScheduled = false;
     }
     if (!allScheduled) return false;
     if (replica_id >= pipelineModel->numReplicas - 1) {
@@ -776,7 +791,11 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned 
     return false;
 }
 
-void Controller::temporalScheduling() {
+/**
+ * @brief colocationTemporalScheduler (CORAL)
+ * 
+ */
+void Controller::colocationTemporalScheduling() {
     auto deviceList = devices.getMap();
     for (auto &[deviceName, deviceHandle]: deviceList) {
         initiateGPULanes(*deviceHandle);
@@ -788,7 +807,7 @@ void Controller::temporalScheduling() {
         for (auto &[taskName, taskHandle]: ctrl_scheduledPipelines.getMap()) {
             auto front_model = taskHandle->tk_pipelineModels.front();
             if (!front_model->gpuScheduled) {
-                process_flag = process_flag || !modelTemporalScheduling(front_model, replica_id);
+                process_flag = process_flag || !modelColocationTemporalScheduling(front_model, replica_id);
             }
         }
         replica_id++;
@@ -1130,14 +1149,14 @@ void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel
 }
 
 /**
- * @brief 
+ * @brief cross-device workload distributor (CWD - seaweed)
  * 
  * @param models 
  * @param slo 
  * @param nObjects 
  * @return std::map<ModelType, int> 
  */
-void Controller::getInitialBatchSizes(TaskHandle *task, uint64_t slo) {
+void Controller::crossDeviceWorkloadDistributor(TaskHandle *task, uint64_t slo) {
 
     PipelineModelListType *models = &(task->tk_pipelineModels);
 
