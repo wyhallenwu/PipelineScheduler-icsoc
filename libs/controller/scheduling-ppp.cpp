@@ -1481,13 +1481,13 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model) {
     ModelProfile profile = model->processProfiles.at(deviceTypeName);
     uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
     float indiProcessRate = 1000000.f / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
-                                 + profile.batchInfer.at(model->batchSize).p95postLat);
+                                         + profile.batchInfer.at(model->batchSize).p95postLat);
     float indiPreprocessRate = 1000000.f / profile.batchInfer.at(model->batchSize).p95prepLat;
-    float processRate = indiProcessRate * numReplicas;
-    float preprocessRate = indiPreprocessRate * numReplicas;
+    float processRate, preprocessRate;
     while (numReplicas > 1) {
         numReplicas--;
         processRate = indiProcessRate * numReplicas;
+        preprocessRate = indiPreprocessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
         if (processRate * 0.7 < model->arrivalProfiles.arrivalRates ||
             preprocessRate * 0.9 < model->arrivalProfiles.arrivalRates) {

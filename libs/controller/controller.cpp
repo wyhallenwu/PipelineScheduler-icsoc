@@ -997,7 +997,7 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     request.set_name(container->name);
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            device->stub->AsyncStopContainer(&context, request, containers.getContainer(container->name)->device_agent->cq));
+            device->stub->AsyncStopContainer(&context, request, container->device_agent->cq));
     finishGrpc(rpc, reply, status, device->cq);
     if (container->gpuHandle != nullptr)
         container->gpuHandle->removeContainer(container);

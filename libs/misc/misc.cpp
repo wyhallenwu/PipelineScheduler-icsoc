@@ -120,7 +120,7 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
 ) {
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
-    if (taskName.find("yolo") != std::string::npos) {
+    if (taskName.find("yolov5") != std::string::npos && taskName != "yolov5") {
         tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName.substr(0, taskName.length() - 1) + "_arr");
     }
 
@@ -254,6 +254,9 @@ NetworkProfile queryNetworkProfile(
 
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
+    if (taskName.find("yolov5n") != std::string::npos) {
+        tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName.substr(0, taskName.length() - 1) + "_arr");
+    }
 
     NetworkProfile d2dNetworkProfile;
 
