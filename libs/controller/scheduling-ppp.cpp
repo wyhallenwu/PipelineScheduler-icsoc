@@ -75,6 +75,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
     if (task->tk_name.back() >= '0' && task->tk_name.back() <= '9') {
         sanitizedTaskName = task->tk_name.substr(0, task->tk_name.size() - 1);
     }
+    std::string source = task->tk_source.substr(task->tk_source.find_last_of('/') + 1);
 
     for (auto model: *pipelineModels) {
         if (model->name.find("datasource") != std::string::npos || model->name.find("sink") != std::string::npos) {
@@ -99,7 +100,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_experimentName,
                 ctrl_systemName,
                 sanitizedTaskName,
-                task->tk_source,
+                source,
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
                 // TODO: Change back once we have profilings in every fps
@@ -122,7 +123,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_experimentName,
                 ctrl_systemName,
                 sanitizedTaskName,
-                task->tk_source,
+                source,
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
                 pair.first,
@@ -145,7 +146,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_experimentName,
                 ctrl_systemName,
                 task->tk_name,
-                task->tk_source,
+                source,
                 deviceName,
                 deviceTypeName,
                 ctrl_containerLib[containerName].modelName,
@@ -323,7 +324,9 @@ void Controller::Rescaling() {
     // std::mt19937 gen(100);
     // std::uniform_int_distribution<int> dist(0, 2);
 
+
     for (auto &[taskName, taskHandle]: taskList) {
+        std::string source = taskHandle->tk_source.substr(taskHandle->tk_source.find_last_of('/') + 1);
         for (auto &model: taskHandle->tk_pipelineModels) {
             if (model->name.find("datasource") != std::string::npos || model->name.find("dsrc") != std::string::npos
                 || model->name.find("sink") != std::string::npos) {
@@ -335,12 +338,13 @@ void Controller::Rescaling() {
                 ctrl_experimentName,
                 ctrl_systemName,
                 taskHandle->tk_name,
-                taskHandle->tk_source,
+                source,
                 taskName,
                 ctrl_containerLib[taskName + "_" + model->deviceTypeName].modelName,
                 // TODO: Change back once we have profilings in every fps
                 //ctrl_systemFPS
-                15
+                15,
+                {15, 30, 60}
             );
             model->arrivalProfiles.arrivalRates = ratesAndCoeffVars.first;
             model->arrivalProfiles.coeffVar = ratesAndCoeffVars.second;
@@ -1049,9 +1053,9 @@ TaskHandle* Controller::mergePipelines(const std::string& taskName) {
         auto names = splitString(model->name, "_");
         model->name = taskName + "_" + names[1];
     }
-    mergedPipeline->tk_src_device = "merged";
     mergedPipeline->tk_name = taskName.substr(0, taskName.length());
-    mergedPipeline->tk_source  = "merged";
+    mergedPipeline->tk_src_device = mergedPipeline->tk_name;
+    mergedPipeline->tk_source  = mergedPipeline->tk_name;
     return mergedPipeline;
 }
 
