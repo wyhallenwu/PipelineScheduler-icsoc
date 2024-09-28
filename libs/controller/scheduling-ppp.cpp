@@ -75,6 +75,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
     if (task->tk_name.back() >= '0' && task->tk_name.back() <= '9') {
         sanitizedTaskName = task->tk_name.substr(0, task->tk_name.size() - 1);
     }
+    std::string source = task->tk_source.substr(task->tk_source.find_last_of('/') + 1);
 
     for (auto model: *pipelineModels) {
         if (model->name.find("datasource") != std::string::npos || model->name.find("sink") != std::string::npos) {
@@ -99,7 +100,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_experimentName,
                 ctrl_systemName,
                 sanitizedTaskName,
-                task->tk_source,
+                source,
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
                 // TODO: Change back once we have profilings in every fps
@@ -122,7 +123,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_experimentName,
                 ctrl_systemName,
                 sanitizedTaskName,
-                task->tk_source,
+                source,
                 ctrl_containerLib[containerName].taskName,
                 ctrl_containerLib[containerName].modelName,
                 pair.first,
@@ -145,7 +146,7 @@ void Controller::queryingProfiles(TaskHandle *task) {
                 ctrl_experimentName,
                 ctrl_systemName,
                 task->tk_name,
-                task->tk_source,
+                source,
                 deviceName,
                 deviceTypeName,
                 ctrl_containerLib[containerName].modelName,
@@ -216,8 +217,8 @@ void Controller::Scheduling() {
 
         for (auto &[taskName, taskHandle]: taskList) {
             queryingProfiles(taskHandle);
-            getInitialBatchSizes(taskHandle, taskHandle->tk_slo / 2);
-            shiftModelToEdge(taskHandle->tk_pipelineModels, taskHandle->tk_pipelineModels.front(), taskHandle->tk_slo / 2, taskHandle->tk_pipelineModels.front()->device);
+            crossDeviceWorkloadDistributor(taskHandle, taskHandle->tk_slo / 2);
+            shiftModelToEdge(taskHandle->tk_pipelineModels, taskHandle->tk_pipelineModels.front(), taskHandle->tk_slo, taskHandle->tk_pipelineModels.front()->device);
             for (auto &model: taskHandle->tk_pipelineModels) {
                 model->name = taskName + "_" + model->name;
             }
@@ -254,8 +255,15 @@ void Controller::Scheduling() {
 }
 
 void Controller::ScaleUp(PipelineModel *model) {
+    if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - 
+                                   model->lastScaleTime).count() < ctrl_controlTimings.scaleUpIntervalThresholdSec) {
+        spdlog::get("container_agent")->info("The model {0:s} has been scaled up recently."
+                                             "Skipping the scaling up process to avoid uncessary waste.", model->name);
+        return;
+    }
     std::vector<ContainerHandle*> currContainers = model->task->tk_subTasks[model->name];
     uint16_t numCurrContainers = currContainers.size();
+    model->lastScaleTime = std::chrono::system_clock::now();
     for (uint16_t i = numCurrContainers; i < model->numReplicas; i++) {
         ContainerHandle *newContainer = TranslateToContainer(model, devices.getDevice(model->device), i);
         if (newContainer == nullptr) {
@@ -269,7 +277,7 @@ void Controller::ScaleUp(PipelineModel *model) {
                 newContainer->downstreams.push_back(downstreamContainer);
             }
         }
-        containerTemporalScheduling(newContainer);
+        containerColocationTemporalScheduling(newContainer);
         containers.addContainer(newContainer->name, newContainer);
         StartContainer(newContainer);
         for (auto &upstream : model->upstreams) {
@@ -281,9 +289,16 @@ void Controller::ScaleUp(PipelineModel *model) {
             }
         }
     }
+    model->lastScaleTime = std::chrono::system_clock::now();
 }
 
 void Controller::ScaleDown(PipelineModel *model) {
+
+    if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - 
+                                   model->lastScaleTime).count() < ctrl_controlTimings.scaleDownIntervalThresholdSec) {
+        spdlog::get("container_agent")->info("The model {0:s} has been scaled up recently."
+                                             "Skipping the scaling down process to avoid THRASHING.", model->name);
+    }
     std::vector<ContainerHandle*> currContainers = model->task->tk_subTasks[model->name];
     uint16_t numCurrContainers = currContainers.size();
     for (uint16_t i = model->numReplicas; i < numCurrContainers; i++) {
@@ -301,6 +316,7 @@ void Controller::ScaleDown(PipelineModel *model) {
         }
         containers.removeContainer(currContainers[i]->name);
     }
+    model->lastScaleTime = std::chrono::system_clock::now();
 }
 
 void Controller::Rescaling() {
@@ -308,7 +324,9 @@ void Controller::Rescaling() {
     // std::mt19937 gen(100);
     // std::uniform_int_distribution<int> dist(0, 2);
 
+
     for (auto &[taskName, taskHandle]: taskList) {
+        std::string source = taskHandle->tk_source.substr(taskHandle->tk_source.find_last_of('/') + 1);
         for (auto &model: taskHandle->tk_pipelineModels) {
             if (model->name.find("datasource") != std::string::npos || model->name.find("dsrc") != std::string::npos
                 || model->name.find("sink") != std::string::npos) {
@@ -320,12 +338,13 @@ void Controller::Rescaling() {
                 ctrl_experimentName,
                 ctrl_systemName,
                 taskHandle->tk_name,
-                taskHandle->tk_source,
+                source,
                 taskName,
                 ctrl_containerLib[taskName + "_" + model->deviceTypeName].modelName,
                 // TODO: Change back once we have profilings in every fps
                 //ctrl_systemFPS
-                15
+                15,
+                {15, 30, 60}
             );
             model->arrivalProfiles.arrivalRates = ratesAndCoeffVars.first;
             model->arrivalProfiles.coeffVar = ratesAndCoeffVars.second;
@@ -734,7 +753,14 @@ bool Controller::reclaimGPUPortion(GPUPortion *toBeReclaimedPortion) {
     return true;
 }
 
-bool Controller::containerTemporalScheduling(ContainerHandle *container) {
+/**
+ * @brief colocationTemporalScheduler (CORAL) for container instances
+ * 
+ * @param container 
+ * @return true 
+ * @return false 
+ */
+bool Controller::containerColocationTemporalScheduling(ContainerHandle *container) {
     std::string deviceName = container->device_agent->name;
     auto deviceList = devices.getMap();
     auto portion = findFreePortionForInsertion(deviceList[deviceName]->freeGPUPortions, container);
@@ -750,7 +776,15 @@ bool Controller::containerTemporalScheduling(ContainerHandle *container) {
     return true;
 }
 
-bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned int replica_id) {
+/**
+ * @brief colocationTemporalScheduler (CORAL) for models
+ * 
+ * @param pipelineModel 
+ * @param replica_id 
+ * @return true 
+ * @return false 
+ */
+bool Controller::modelColocationTemporalScheduling(PipelineModel *pipelineModel, unsigned int replica_id) {
     if (pipelineModel->gpuScheduled) { return true; }
     if (pipelineModel->name.find("datasource") == std::string::npos &&
         (pipelineModel->name.find("dsrc") == std::string::npos ||
@@ -760,13 +794,13 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned 
             if (container->replica_id == replica_id) {
                 container->startTime = pipelineModel->startTime;
                 container->endTime = pipelineModel->endTime;
-                containerTemporalScheduling(container);
+                containerColocationTemporalScheduling(container);
             }
         }
     }
     bool allScheduled = true;
     for (auto downstream : pipelineModel->downstreams) {
-        if (!modelTemporalScheduling(downstream.first, replica_id)) allScheduled = false;
+        if (!modelColocationTemporalScheduling(downstream.first, replica_id)) allScheduled = false;
     }
     if (!allScheduled) return false;
     if (replica_id >= pipelineModel->numReplicas - 1) {
@@ -776,7 +810,11 @@ bool Controller::modelTemporalScheduling(PipelineModel *pipelineModel, unsigned 
     return false;
 }
 
-void Controller::temporalScheduling() {
+/**
+ * @brief colocationTemporalScheduler (CORAL)
+ * 
+ */
+void Controller::colocationTemporalScheduling() {
     auto deviceList = devices.getMap();
     for (auto &[deviceName, deviceHandle]: deviceList) {
         initiateGPULanes(*deviceHandle);
@@ -788,7 +826,7 @@ void Controller::temporalScheduling() {
         for (auto &[taskName, taskHandle]: ctrl_scheduledPipelines.getMap()) {
             auto front_model = taskHandle->tk_pipelineModels.front();
             if (!front_model->gpuScheduled) {
-                process_flag = process_flag || !modelTemporalScheduling(front_model, replica_id);
+                process_flag = process_flag || !modelColocationTemporalScheduling(front_model, replica_id);
             }
         }
         replica_id++;
@@ -1015,9 +1053,9 @@ TaskHandle* Controller::mergePipelines(const std::string& taskName) {
         auto names = splitString(model->name, "_");
         model->name = taskName + "_" + names[1];
     }
-    mergedPipeline->tk_src_device = "merged";
     mergedPipeline->tk_name = taskName.substr(0, taskName.length());
-    mergedPipeline->tk_source  = "merged";
+    mergedPipeline->tk_src_device = mergedPipeline->tk_name;
+    mergedPipeline->tk_source  = mergedPipeline->tk_name;
     return mergedPipeline;
 }
 
@@ -1037,6 +1075,7 @@ void Controller::mergePipelines() {
                 continue;
             }
             auto numIncReps = incNumReplicas(mergedModel);
+            mergedModel->lastScaleTime = std::chrono::system_clock::now();
             mergedModel->numReplicas += numIncReps;
             estimateModelLatency(mergedModel);
         }
@@ -1130,14 +1169,14 @@ void Controller::shiftModelToEdge(PipelineModelListType &pipeline, PipelineModel
 }
 
 /**
- * @brief 
+ * @brief cross-device workload distributor (CWD - seaweed)
  * 
  * @param models 
  * @param slo 
  * @param nObjects 
  * @return std::map<ModelType, int> 
  */
-void Controller::getInitialBatchSizes(TaskHandle *task, uint64_t slo) {
+void Controller::crossDeviceWorkloadDistributor(TaskHandle *task, uint64_t slo) {
 
     PipelineModelListType *models = &(task->tk_pipelineModels);
 
@@ -1166,6 +1205,7 @@ void Controller::getInitialBatchSizes(TaskHandle *task, uint64_t slo) {
     // Increase number of replicas to avoid bottlenecks
     for (auto m: *models) {
         auto numIncReplicas = incNumReplicas(m);
+        m->lastScaleTime = std::chrono::system_clock::now();
         m->numReplicas += numIncReplicas;
     }
     estimatePipelineLatency(models->front(), 0);
@@ -1193,9 +1233,10 @@ void Controller::getInitialBatchSizes(TaskHandle *task, uint64_t slo) {
                 uint64_t estimatedE2Ecost = models->back()->estimatedStart2HereCost;
                 // Unless the estimated E2E cost is better than the best cost, we should not consider it as a candidate
                 // 0.9 to avoid small numerical errors during profiling
-                if (estimatedE2Ecost < bestCost * 1.1) {
+                if (estimatedE2Ecost * 0.98 < bestCost) {
                     bestCost = estimatedE2Ecost;
                     foundBest = true;
+                    spdlog::get("container_agent")->trace("Increasing the batch size of model {0:s} to {1:d}", m->name, m->batchSize);
                 }
                 if (!foundBest) {
                     m->batchSize = oldBatchsize;
@@ -1205,6 +1246,7 @@ void Controller::getInitialBatchSizes(TaskHandle *task, uint64_t slo) {
                 }
                 // If increasing the batch size meets the SLO, we can try decreasing the number of replicas
                 auto numDecReplicas = decNumReplicas(m);
+                m->lastScaleTime = std::chrono::system_clock::now();
                 m->numReplicas -= numDecReplicas;
             } else {
                 m->batchSize = oldBatchsize;
@@ -1240,13 +1282,8 @@ void Controller::estimateModelLatency(PipelineModel *currModel) {
     uint64_t preprocessLatency = profile.batchInfer[batchSize].p95prepLat;
     uint64_t inferLatency = profile.batchInfer[batchSize].p95inferLat;
     uint64_t postprocessLatency = profile.batchInfer[batchSize].p95postLat;
-    if (currModel->task->tk_name.find("traffic") != std::string::npos) {
-        inferLatency = profile.batchInfer[batchSize].p95inferLat * 1.02;
-        preprocessLatency = profile.batchInfer[batchSize].p95prepLat * 1.02;
-        postprocessLatency = profile.batchInfer[batchSize].p95postLat * 1.02;
-    }
     float preprocessRate = 1000000.f / preprocessLatency * currModel->numReplicas;
-    while (preprocessRate < currModel->arrivalProfiles.arrivalRates * 0.8) {
+    while (preprocessRate * 0.8 < currModel->arrivalProfiles.arrivalRates && currModel->numReplicas < 4) {
         currModel->numReplicas++;
         spdlog::get("container_agent")->info("Increasing the number of replicas of model {0:s} to {1:d}", currModel->name, currModel->numReplicas);
         preprocessRate = 1000000.f / preprocessLatency * currModel->numReplicas;
@@ -1426,8 +1463,8 @@ uint8_t Controller::incNumReplicas(const PipelineModel *model) {
     float indiPreprocessRate = 1000000.f / profile.batchInfer.at(model->batchSize).p95prepLat;
     float processRate = indiProcessRate * numReplicas;
     float preprocessRate = indiPreprocessRate * numReplicas;
-    while (processRate < model->arrivalProfiles.arrivalRates * 0.8 ||
-           preprocessRate < model->arrivalProfiles.arrivalRates * 0.8) {
+    while ((processRate * 0.7 < model->arrivalProfiles.arrivalRates ||
+           preprocessRate * 0.9 < model->arrivalProfiles.arrivalRates) && numReplicas < 4) {
         numReplicas++;
         spdlog::get("container_agent")->info("Increasing the number of replicas of model {0:s} to {1:d}", model->name, numReplicas);
         processRate = indiProcessRate * numReplicas;
@@ -1448,16 +1485,16 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model) {
     ModelProfile profile = model->processProfiles.at(deviceTypeName);
     uint64_t inferenceLatency = profile.batchInfer.at(model->batchSize).p95inferLat;
     float indiProcessRate = 1000000.f / (inferenceLatency + profile.batchInfer.at(model->batchSize).p95prepLat
-                                 + profile.batchInfer.at(model->batchSize).p95postLat);
+                                         + profile.batchInfer.at(model->batchSize).p95postLat);
     float indiPreprocessRate = 1000000.f / profile.batchInfer.at(model->batchSize).p95prepLat;
-    float processRate = indiProcessRate * numReplicas;
-    float preprocessRate = indiPreprocessRate * numReplicas;
+    float processRate, preprocessRate;
     while (numReplicas > 1) {
         numReplicas--;
         processRate = indiProcessRate * numReplicas;
+        preprocessRate = indiPreprocessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if (processRate < model->arrivalProfiles.arrivalRates * 0.8 ||
-            preprocessRate < model->arrivalProfiles.arrivalRates * 0.8) {
+        if ((processRate * 0.7 < model->arrivalProfiles.arrivalRates ||
+            preprocessRate * 0.9 < model->arrivalProfiles.arrivalRates) && numReplicas < 4) {
             numReplicas++;
             break;
         }

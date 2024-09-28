@@ -149,6 +149,8 @@ void Controller::readConfigFile(const std::string &path) {
     ctrl_initialBatchSizes["server"] = j["server_batch_size"];
     ctrl_controlTimings.schedulingIntervalSec = j["scheduling_interval_sec"];
     ctrl_controlTimings.rescalingIntervalSec = j["rescaling_interval_sec"];
+    ctrl_controlTimings.scaleUpIntervalThresholdSec = j["scale_up_interval_threshold_sec"];
+    ctrl_controlTimings.scaleDownIntervalThresholdSec = j["scale_down_interval_threshold_sec"];
     initialTasks = j["initial_pipelines"];
 }
 
@@ -534,7 +536,7 @@ void Controller::ApplyScheduling() {
     if (ctrl_systemName != "ppp") {
         basicGPUScheduling(new_containers);
     } else {
-        temporalScheduling();
+        colocationTemporalScheduling();
     }
 
     // // Testing gpu portion reclaiming
@@ -995,7 +997,7 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     request.set_name(container->name);
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-            device->stub->AsyncStopContainer(&context, request, containers.getContainer(container->name)->device_agent->cq));
+            device->stub->AsyncStopContainer(&context, request, container->device_agent->cq));
     finishGrpc(rpc, reply, status, device->cq);
     if (container->gpuHandle != nullptr)
         container->gpuHandle->removeContainer(container);
