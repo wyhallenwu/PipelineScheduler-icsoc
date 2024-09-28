@@ -10,6 +10,8 @@
     "server_batch_size": 8,
     "scheduling_interval_sec": 360,
     "rescaling_interval_sec": 30,
+    "scale_up_interval_threshold_sec": 150,
+    "scale_down_interval_threshold_sec": 240,
     "initial_pipelines": [
         {
             "pipeline_name": "traffic",

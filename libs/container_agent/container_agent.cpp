@@ -1209,24 +1209,32 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
         }
         json config;
         std::vector<ThreadSafeFixSizedDoubleQueue *> inqueue;
+        std::string link = absl::StrFormat("%s:%d", request.ip(), request.port());
         for (auto msvc: *msvcs) {
             if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
                 config = msvc->msvc_configs;
+                auto nb_links = config["msvc_dnstreamMicroservices"][0]["nb_link"];
                 if (request.mode() == AdjustUpstreamMode::Overwrite) {
-                    config["msvc_dnstreamMicroservices"][0]["nb_link"][0] = absl::StrFormat("%s:%d", request.ip(),
-                                                                                            request.port());
+                    config["msvc_dnstreamMicroservices"][0]["nb_link"][0] = link;
+                    spdlog::get("container_agent")->trace("Overwrote link {0:s} to {1:s}", link, msvc->dnstreamMicroserviceList[0].name);
                 } else if (request.mode() == AdjustUpstreamMode::Add) {
-                    config["msvc_dnstreamMicroservices"][0]["nb_link"].push_back(absl::StrFormat("%s:%d", request.ip(),
-                                                                                                 request.port()));
+                    // ensure the link is not already in the list
+                    if (std::find(nb_links.begin(),nb_links.end(), link) == nb_links.end()) {
+                        config["msvc_dnstreamMicroservices"][0]["nb_link"].push_back(link);
+                        spdlog::get("container_agent")->trace("Added link {0:s} to {1:s}", link, msvc->dnstreamMicroserviceList[0].name);
+                    }
                 } else if (request.mode() == AdjustUpstreamMode::Remove) {
-                    auto nb_links = config["msvc_dnstreamMicroservices"][0]["nb_link"];
-                    nb_links.erase(std::remove(nb_links.begin(), nb_links.end(), absl::StrFormat("%s:%d", request.ip(),
-                                                                                                 request.port())), nb_links.end());
-                    config["msvc_dnstreamMicroservices"][0]["nb_link"] = nb_links;
+                    if (std::find(nb_links.begin(),nb_links.end(), link) != nb_links.end()) {
+                        nb_links.erase(std::remove(nb_links.begin(), nb_links.end(), link), nb_links.end());
+                        config["msvc_dnstreamMicroservices"][0]["nb_link"] = nb_links;
+                        spdlog::get("container_agent")->trace("Removed link {0:s} from {1:s}", link, msvc->dnstreamMicroserviceList[0].name);
+                    }
                 }
                 inqueue = msvc->GetInQueue();
-                msvc->stopThread();
-                msvcs->erase(std::remove(msvcs->begin(), msvcs->end(), msvc), msvcs->end());
+                msvc->pauseThread();
+                msvc->msvc_configs = config;
+                msvc->loadConfigs(config, false);
+//                msvcs->erase(std::remove(msvcs->begin(), msvcs->end(), msvc), msvcs->end());
                 break;
             }
         }
@@ -1239,16 +1247,16 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
         // change postprocessing to offload data from gpu
 
         // start new serialized sender
-        msvcs->push_back(new RemoteCPUSender(config));
+//        msvcs->push_back(new RemoteCPUSender(config));
 //        }
         // align the data queue from postprocessor to new sender
-        msvcs->back()->SetInQueue(inqueue);
+//        msvcs->back()->SetInQueue(inqueue);
         //start the new sender
-        msvcs->back()->dispatchThread();
+//        msvcs->back()->dispatchThread();
         for (auto msvc: *msvcs) {
-            if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
-                continue;
-            }
+//            if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
+//                continue;
+//            }
             msvc->unpauseThread();
         }
 
