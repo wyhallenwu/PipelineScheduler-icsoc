@@ -120,33 +120,76 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
 ) {
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
-    if (taskName.find("yolo") != std::string::npos) {
+    if (taskName.find("yolov5") != std::string::npos && taskName != "yolov5") {
         tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName.substr(0, taskName.length() - 1) + "_arr");
     }
+
+    /**
+     * @brief For recent results, arrival rate is the sum of rates from all streams and 
+     * coefficient of variation is the average of all streams.
+     * And then we choose the max of these values
+     * 
+     * An example query could look like this
+     * arrival_rate AS (
+            SELECT
+                GREATEST(
+                    SUM(recent_data.arrival_rate_1s),
+                    SUM(recent_data.arrival_rate_3s),
+                    SUM(recent_data.arrival_rate_7s),
+                    SUM(recent_data.arrival_rate_15s),
+                    SUM(recent_data.arrival_rate_30s),
+                    SUM(recent_data.arrival_rate_60s)
+                ) AS max_total_arrival_rate,
+                GREATEST(
+                    AVG(recent_data.coeff_var_1s),
+                    AVG(recent_data.coeff_var_3s),
+                    AVG(recent_data.coeff_var_7s),
+                    AVG(recent_data.coeff_var_15s),
+                    AVG(recent_data.coeff_var_30s),
+                    AVG(recent_data.coeff_var_60s)
+                ) AS max_avg_coeff_var
+            FROM
+                recent_data
+            WHERE
+                stream LIKE '%traffic3%'
+        
+     * 
+     */
 
     std::string periodQueryRates;
     std::string periodQueryCoeffVar;
     for (const auto &period: periods) {
-        periodQueryRates += absl::StrFormat("recent_data.arrival_rate_%ds,", period);
-        periodQueryCoeffVar += absl::StrFormat("recent_data.coeff_var_%ds,", period);
+        periodQueryRates += absl::StrFormat("SUM(recent_data.arrival_rate_%ds), ", period);
+        periodQueryCoeffVar += absl::StrFormat("AVG(recent_data.coeff_var_%ds), ", period);
     }
-    periodQueryRates.pop_back();
-    periodQueryCoeffVar.pop_back();
 
+    // Remove the trailing ", " from both strings
+    if (!periods.empty()) {
+        periodQueryRates = periodQueryRates.substr(0, periodQueryRates.size() - 2);  // Remove trailing ", "
+        periodQueryCoeffVar = periodQueryCoeffVar.substr(0, periodQueryCoeffVar.size() - 2);  // Remove trailing ", "
+    }
+
+    // Construct the final query string
     std::string query = "WITH recent_data AS ("
                         "   SELECT * "
                         "   FROM %s "
                         "   WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 60 * 1000000)"
-                        "   LIMIT 1"
                         "), "
                         "arrival_rate AS ("
-                        "  SELECT GREATEST(%s) AS max_rate, GREATEST(%s) AS max_coeff_var "
+                        "  SELECT GREATEST(%s) AS max_total_arrival_rate, GREATEST(%s) AS max_avg_coeff_var "
                         "  FROM recent_data "
-                        "  WHERE stream = '%s'"
+                        "  WHERE stream LIKE '%%%s%%'"
                         ") "
-                        "SELECT MAX(max_rate) AS max_arrival_rate, MAX(max_coeff_var) AS max_coeff_var "
+                        "SELECT max_total_arrival_rate, max_avg_coeff_var "
                         "FROM arrival_rate;";
-    query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, periodQueryRates, periodQueryCoeffVar, streamName);
+
+    query = absl::StrFormat(query.c_str(), 
+                            schemaName + "." + tableName, 
+                            periodQueryRates,   // Inject the dynamically built SUM expression list for GREATEST
+                            periodQueryCoeffVar, // Inject the dynamically built AVG expression list for GREATEST
+                            streamName);        // Stream filter
+    
+    std::cout << query << std::endl;
     pqxx::result res = pullSQL(metricsConn, query);
 
     std::string modelFileAbbr = abbreviate(splitString(modelFile, ".").front());
@@ -154,17 +197,26 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
     if (res[0][0].is_null()) {
         // If there is no historical data, we look for the rate of the most recent profiled data
         std::string profileTableName = abbreviate("pf" + std::to_string(systemFPS) + "_" + taskName + "_arr");
+
+        periodQueryRates.clear();
+        periodQueryCoeffVar.clear();
+        for (const auto &period: periods) {
+            periodQueryRates += absl::StrFormat("recent_data.arrival_rate_%ds,", period);
+            periodQueryCoeffVar += absl::StrFormat("recent_data.coeff_var_%ds,", period);
+        }
+        periodQueryRates.pop_back(); // Remove the trailing ","
+        periodQueryCoeffVar.pop_back(); // Remove the trailing ","
+
         query = "WITH recent_data AS ("
                 "   SELECT * "
                 "   FROM %s "
                 "   WHERE model_name = '%s' "
-                "   LIMIT 10 "
                 "), "
                 "arrival_rate AS ("
-                "  SELECT GREATEST(%s) AS max_rate, GREATEST(%s) AS max_coeff_var "
-                "  FROM recent_data "
+                    "  SELECT GREATEST(%s) AS max_arrival_rate, GREATEST(%s) AS max_coeff_var "
+                    "  FROM recent_data "
                 ") "
-                "SELECT MAX(max_rate) AS max_arrival_rate, MAX(max_coeff_var) AS max_coeff_var "
+                "SELECT AVG(max_arrival_rate) AS max_total_arrival_rate, AVG(max_coeff_var) AS max_avg_coeff_var "
                 "FROM arrival_rate;";
         query = absl::StrFormat(query.c_str(), profileTableName, modelFileAbbr, periodQueryRates, periodQueryCoeffVar);
         res = pullSQL(metricsConn, query);
@@ -172,7 +224,7 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
     if (res[0][0].is_null()) {
         return {0.0, 0.0};
     }
-    return {res[0]["max_arrival_rate"].as<float>(), res[0]["max_coeff_var"].as<float>()};
+    return {res[0]["max_total_arrival_rate"].as<float>(), res[0]["max_avg_coeff_var"].as<float>()};
 }
 
 /**
@@ -254,6 +306,9 @@ NetworkProfile queryNetworkProfile(
 
     std::string schemaName = abbreviate(experimentName + "_" + systemName);
     std::string tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName + "_arr");
+    if (taskName.find("yolov5n") != std::string::npos) {
+        tableName = abbreviate(experimentName + "_" + pipelineName + "_" + taskName.substr(0, taskName.length() - 1) + "_arr");
+    }
 
     NetworkProfile d2dNetworkProfile;
 
@@ -511,7 +566,7 @@ void queryPrePostLatency(
         "WITH recent_data AS ("
         "    SELECT infer_batch_size, p95_prep_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b, p95_encoded_size_b "
         "    FROM %s "
-        "    WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
+        "    WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream LIKE '%%%s%%' "
         ") "
         "SELECT "
         "    infer_batch_size, "
@@ -565,9 +620,13 @@ void queryPrePostLatency(
         if (std::find(retrievedBatchSizes.begin(), retrievedBatchSizes.end(), batchSize) != retrievedBatchSizes.end()) {
             continue;
         }
-        profile.batchInfer[batchSize].p95prepLat = (uint64_t) row["p95_prep_duration_us_all"].as<double>();
-        profile.batchInfer[batchSize].p95inferLat = (uint64_t) row["p95_infer_duration_us_all"].as<double>() / batchSize;
-        profile.batchInfer[batchSize].p95postLat = (uint64_t) row["p95_post_duration_us_all"].as<double>();
+        float noiseRatio = 1.f;
+        if (pipelineName.find("traffic") != std::string::npos) {
+            noiseRatio = 1.005;
+        }
+        profile.batchInfer[batchSize].p95prepLat = (uint64_t) (row["p95_prep_duration_us_all"].as<double>() * noiseRatio);
+        profile.batchInfer[batchSize].p95inferLat = (uint64_t) (row["p95_infer_duration_us_all"].as<double>() / batchSize * noiseRatio);
+        profile.batchInfer[batchSize].p95postLat = (uint64_t) (row["p95_post_duration_us_all"].as<double>() * noiseRatio);
         profile.p95InputSize = (uint32_t) row["p95_input_size_b_all"].as<float>();
         profile.p95OutputSize = (uint32_t) row["p95_output_size_b_all"].as<float>();
         profile.p95EncodedOutputSize = (uint32_t) row["p95_encoded_size_b_all"].as<float>();
@@ -607,7 +666,7 @@ void queryBatchInferLatency(
     std::string tableName = schemaName + "." + abbreviate(experimentName + "_" + pipelineName + "__" + modelNameAbbr + "__" + deviceName)  + "_batch";
     std::string query = absl::StrFormat("SELECT infer_batch_size, percentile_disc(0.95) WITHIN GROUP (ORDER BY p95_infer_duration_us) AS p95_infer_duration_us "
                             "FROM %s "
-                            "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream = '%s' "
+                            "WHERE timestamps >= (EXTRACT(EPOCH FROM NOW()) * 1000000 - 120 * 1000000) AND stream LIKE '%%%s%%' "
                             "GROUP BY infer_batch_size;", tableName, streamName);
 
     pqxx::result res = pullSQL(metricsConn, query);
