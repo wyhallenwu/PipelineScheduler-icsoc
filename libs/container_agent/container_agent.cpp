@@ -1202,9 +1202,6 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
         new UpdateSenderRequestHandler(service, cq, msvcs);
         // pause processing except senders to clear out the queues
         for (auto msvc: *msvcs) {
-            if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
-                continue;
-            }
             msvc->pauseThread();
         }
         json config;
@@ -1216,18 +1213,18 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
                 auto nb_links = config["msvc_dnstreamMicroservices"][0]["nb_link"];
                 if (request.mode() == AdjustUpstreamMode::Overwrite) {
                     config["msvc_dnstreamMicroservices"][0]["nb_link"][0] = link;
-                    spdlog::get("container_agent")->trace("Overwrote link {0:s} to {1:s}", link, msvc->dnstreamMicroserviceList[0].name);
+                    spdlog::get("container_agent")->trace("Overwrote link {0:s} to {1:s}", link, msvc->msvc_name);
                 } else if (request.mode() == AdjustUpstreamMode::Add) {
                     // ensure the link is not already in the list
                     if (std::find(nb_links.begin(),nb_links.end(), link) == nb_links.end()) {
                         config["msvc_dnstreamMicroservices"][0]["nb_link"].push_back(link);
-                        spdlog::get("container_agent")->trace("Added link {0:s} to {1:s}", link, msvc->dnstreamMicroserviceList[0].name);
+                        spdlog::get("container_agent")->trace("Added link {0:s} to {1:s}", link, msvc->msvc_name);
                     }
                 } else if (request.mode() == AdjustUpstreamMode::Remove) {
                     if (std::find(nb_links.begin(),nb_links.end(), link) != nb_links.end()) {
                         nb_links.erase(std::remove(nb_links.begin(), nb_links.end(), link), nb_links.end());
                         config["msvc_dnstreamMicroservices"][0]["nb_link"] = nb_links;
-                        spdlog::get("container_agent")->trace("Removed link {0:s} from {1:s}", link, msvc->dnstreamMicroserviceList[0].name);
+                        spdlog::get("container_agent")->trace("Removed link {0:s} from {1:s}", link, msvc->msvc_name);
                     }
                 }
                 inqueue = msvc->GetInQueue();

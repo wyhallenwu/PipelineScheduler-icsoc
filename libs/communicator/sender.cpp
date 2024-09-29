@@ -9,7 +9,8 @@ SenderConfigs Sender::loadConfigsFromJson(const json &jsonConfigs) {
 void Sender::loadConfigs(const json &jsonConfigs, bool isConstructing) {
 
     if (!isConstructing) { //If this is not called from the constructor, we need to load the configs for Sender's base, Micrsoservice class
-        Microservice::loadConfigs(jsonConfigs);
+        Microservice::loadConfigs(jsonConfigs, isConstructing);
+        dnstreamMicroserviceList[0].link = jsonConfigs["msvc_dnstreamMicroservices"][0]["nb_link"].get<std::vector<std::string>>();
     }
 
     SenderConfigs configs = loadConfigsFromJson(jsonConfigs);
