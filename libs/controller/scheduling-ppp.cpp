@@ -184,23 +184,24 @@ void Controller::Scheduling() {
         Stopwatch schedulingSW;
         schedulingSW.start();
         // Check if it is the next scheduling period
-        auto timeNow = std::chrono::system_clock::now();
+        ctrl_controlTimings.currSchedulingTime = std::chrono::system_clock::now();
         // Only rescale periodically and if its not right before the next scheduling period, because scheduling() will take care of rescaling as well.
-        if (timeNow >= ctrl_controlTimings.nextRescalingTime && 
-            (timeNow < ctrl_controlTimings.nextSchedulingTime &&
-             std::chrono::duration_cast<std::chrono::seconds>(ctrl_controlTimings.nextSchedulingTime - timeNow).count() >= 30)) {
+        if (ctrl_controlTimings.currSchedulingTime >= ctrl_controlTimings.nextRescalingTime &&
+            (ctrl_controlTimings.currSchedulingTime < ctrl_controlTimings.nextSchedulingTime &&
+             std::chrono::duration_cast<std::chrono::seconds>(ctrl_controlTimings.nextSchedulingTime - ctrl_controlTimings.currSchedulingTime).count() >= 30)) {
             Rescaling();
             schedulingSW.stop();
             ctrl_controlTimings.nextRescalingTime = ctrl_controlTimings.currSchedulingTime + std::chrono::seconds(ctrl_controlTimings.rescalingIntervalSec -
                                                                                                                   schedulingSW.elapsed_microseconds() / 1000000);
-            std::this_thread::sleep_for(TimePrecisionType((ctrl_schedulingIntervalSec) * 1000000 - schedulingSW.elapsed_microseconds()));
+            uint64_t sleepTime = std::chrono::duration_cast<TimePrecisionType>(ctrl_controlTimings.nextRescalingTime - std::chrono::system_clock::now()).count();
+            std::this_thread::sleep_for(std::chrono::microseconds(sleepTime));
             continue;
         }
 
-        if (timeNow < ctrl_nextSchedulingTime) {
+        if (ctrl_controlTimings.currSchedulingTime < ctrl_nextSchedulingTime) {
             std::this_thread::sleep_for(
                 std::chrono::seconds(
-                    std::chrono::duration_cast<std::chrono::seconds>(ctrl_nextSchedulingTime - timeNow).count()
+                    std::chrono::duration_cast<std::chrono::seconds>(ctrl_nextSchedulingTime - ctrl_controlTimings.currSchedulingTime).count()
                 )
             );
             continue;
@@ -211,7 +212,6 @@ void Controller::Scheduling() {
         if (!isPipelineInitialised) {
             continue;
         }
-        ctrl_controlTimings.currSchedulingTime = std::chrono::system_clock::now();
         ctrl_controlTimings.nextSchedulingTime = ctrl_controlTimings.currSchedulingTime + std::chrono::seconds(ctrl_controlTimings.schedulingIntervalSec);
 
 
@@ -254,13 +254,14 @@ void Controller::Scheduling() {
     }
 }
 
-void Controller::ScaleUp(PipelineModel *model) {
+void Controller::ScaleUp(PipelineModel *model, uint8_t numIncReps) {
     if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - 
                                    model->lastScaleTime).count() < ctrl_controlTimings.scaleUpIntervalThresholdSec) {
         spdlog::get("container_agent")->info("The model {0:s} has been scaled up recently."
                                              "Skipping the scaling up process to avoid uncessary waste.", model->name);
         return;
     }
+    model->numReplicas += numIncReps;
     std::vector<ContainerHandle*> currContainers = model->task->tk_subTasks[model->name];
     uint16_t numCurrContainers = currContainers.size();
     model->lastScaleTime = std::chrono::system_clock::now();
@@ -277,28 +278,33 @@ void Controller::ScaleUp(PipelineModel *model) {
                 newContainer->downstreams.push_back(downstreamContainer);
             }
         }
+        for (auto &upstream : model->upstreams) {
+            for (auto &upstreamContainer : upstream.first->task->tk_subTasks[upstream.first->name]) {
+                upstreamContainer->downstreams.push_back(newContainer);
+                newContainer->upstreams.push_back(upstreamContainer);
+            }
+        }
         containerColocationTemporalScheduling(newContainer);
         containers.addContainer(newContainer->name, newContainer);
         StartContainer(newContainer);
         for (auto &upstream : model->upstreams) {
             for (auto &upstreamContainer : upstream.first->task->tk_subTasks[upstream.first->name]) {
-                upstreamContainer->downstreams.push_back(newContainer);
                 AdjustUpstream(newContainer->recv_port, upstreamContainer, newContainer->device_agent,
                                model->name, AdjustUpstreamMode::Add);
-                newContainer->upstreams.push_back(upstreamContainer);
             }
         }
     }
     model->lastScaleTime = std::chrono::system_clock::now();
 }
 
-void Controller::ScaleDown(PipelineModel *model) {
+void Controller::ScaleDown(PipelineModel *model, uint8_t numDecReps) {
 
     if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - 
                                    model->lastScaleTime).count() < ctrl_controlTimings.scaleDownIntervalThresholdSec) {
         spdlog::get("container_agent")->info("The model {0:s} has been scaled up recently."
                                              "Skipping the scaling down process to avoid THRASHING.", model->name);
     }
+    model->numReplicas -= numDecReps;
     std::vector<ContainerHandle*> currContainers = model->task->tk_subTasks[model->name];
     uint16_t numCurrContainers = currContainers.size();
     for (uint16_t i = model->numReplicas; i < numCurrContainers; i++) {
@@ -359,12 +365,10 @@ void Controller::Rescaling() {
             // }
             // auto numIncReps = dist(gen);
             // // testing done
-            
-            model->numReplicas += numIncReps;
 
             if (numIncReps > 0) {
-                ScaleUp(model);
-                spdlog::get("container_agent")->info("Rescaling increases number of replicas of model {0:s} of pipeline {1:s} by {2:d}", model->name, taskHandle->tk_name, numIncReps);
+                ScaleUp(model, numIncReps);
+                spdlog::get("container_agent")->info("Rescaling tried increasing number of replicas of model {0:s} of pipeline {1:s} by {2:d}", model->name, taskHandle->tk_name, numIncReps);
                 continue;
             }
 
@@ -376,10 +380,9 @@ void Controller::Rescaling() {
             // //testing done
 
             auto numDecReps = decNumReplicas(model);
-            model->numReplicas -= numDecReps;
             if (numDecReps > 0) {
-                ScaleDown(model);
-                spdlog::get("container_agent")->info("Rescaling decreases number of replicas of model {0:s} of pipeline {1:s} by {2:d}", model->name, taskHandle->tk_name, numDecReps);
+                ScaleDown(model, numDecReps);
+                spdlog::get("container_agent")->info("Rescaling tried decreasing number of replicas of model {0:s} of pipeline {1:s} by {2:d}", model->name, taskHandle->tk_name, numDecReps);
             }
 
         }
@@ -1463,8 +1466,8 @@ uint8_t Controller::incNumReplicas(const PipelineModel *model) {
     float indiPreprocessRate = 1000000.f / profile.batchInfer.at(model->batchSize).p95prepLat;
     float processRate = indiProcessRate * numReplicas;
     float preprocessRate = indiPreprocessRate * numReplicas;
-    while ((processRate * 0.7 < model->arrivalProfiles.arrivalRates ||
-           preprocessRate * 0.9 < model->arrivalProfiles.arrivalRates) && numReplicas < 4) {
+    while ((processRate * 0.8 < model->arrivalProfiles.arrivalRates ||
+           preprocessRate * 0.95 < model->arrivalProfiles.arrivalRates) && numReplicas < 4) {
         numReplicas++;
         spdlog::get("container_agent")->info("Increasing the number of replicas of model {0:s} to {1:d}", model->name, numReplicas);
         processRate = indiProcessRate * numReplicas;
@@ -1493,8 +1496,8 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model) {
         processRate = indiProcessRate * numReplicas;
         preprocessRate = indiPreprocessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if ((processRate * 0.7 < model->arrivalProfiles.arrivalRates ||
-            preprocessRate * 0.9 < model->arrivalProfiles.arrivalRates) && numReplicas < 4) {
+        if ((processRate * 0.8 < model->arrivalProfiles.arrivalRates ||
+            preprocessRate * 0.95 < model->arrivalProfiles.arrivalRates) && numReplicas < 4) {
             numReplicas++;
             break;
         }
