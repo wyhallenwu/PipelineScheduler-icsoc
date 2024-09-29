@@ -828,9 +828,11 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             sender["msvc_name"] = "sender" + std::to_string(i++);
             sender["msvc_dnstreamMicroservices"][0]["nb_name"] = dwnstr->name;
             sender["msvc_dnstreamMicroservices"][0]["nb_link"] = {};
-            for (auto *replica: dwnstr->manifestations) {
-                sender["msvc_dnstreamMicroservices"][0]["nb_link"].push_back(
-                        absl::StrFormat("%s:%d", replica->device_agent->ip, replica->recv_port));
+            for (auto *replica: container->downstreams) {
+                if (replica->pipelineModel->name == dwnstr->name) {
+                    sender["msvc_dnstreamMicroservices"][0]["nb_link"].push_back(
+                            absl::StrFormat("%s:%d", replica->device_agent->ip, replica->recv_port));
+                }
             }
             post_down["nb_name"] = sender["msvc_name"];
             if (container->device_agent != dwnstr->deviceAgent) {
@@ -916,7 +918,7 @@ void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
             SyncDatasource(upstr, container);
             StopContainer(upstr, old_device);
         } else {
-            AdjustUpstream(container->recv_port, upstr, device, container->name);
+            AdjustUpstream(container->recv_port, upstr, device, container->pipelineModel->name);
         }
     }
     StopContainer(container, old_device);

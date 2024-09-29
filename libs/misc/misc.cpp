@@ -189,7 +189,7 @@ std::pair<float, float> queryArrivalRateAndCoeffVar(
                             periodQueryCoeffVar, // Inject the dynamically built AVG expression list for GREATEST
                             streamName);        // Stream filter
     
-    std::cout << query << std::endl;
+//    std::cout << query << std::endl;
     pqxx::result res = pullSQL(metricsConn, query);
 
     std::string modelFileAbbr = abbreviate(splitString(modelFile, ".").front());
@@ -445,7 +445,7 @@ ModelArrivalProfile queryModelArrivalProfile(
                         "SELECT MAX(max_rate) AS max_arrival_rate "
                         "FROM arrival_rate;";
     query = absl::StrFormat(query.c_str(), schemaName + "." + tableName, periodQuery, streamName);
-    std::cout << query << std::endl;
+//    std::cout << query << std::endl;
 
     pqxx::result res = pullSQL(metricsConn, query);
     if (res[0][0].is_null()) {
