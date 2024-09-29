@@ -345,7 +345,7 @@ void DeviceAgent::UpdateContainerSender(int mode, const std::string &cont_name, 
 
     //check if cont_name is in containers
     if (containers.find(cont_name) == containers.end()) {
-        spdlog::get("container_agent")->error("Container {} not found!", cont_name);
+        spdlog::get("container_agent")->error("UpdateSender: Container {} not found!", cont_name);
         return;
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
@@ -361,7 +361,7 @@ void DeviceAgent::SyncDatasources(const std::string &cont_name, const std::strin
     request.set_value(containers[dsrc].port);
     //check if cont_name is in containers
     if (containers.find(cont_name) == containers.end()) {
-        spdlog::get("container_agent")->error("Container {} not found!", cont_name);
+        spdlog::get("container_agent")->error("SyncDatasources: Container {} not found!", cont_name);
         return;
     }
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
@@ -525,7 +525,7 @@ void DeviceAgent::StopContainerRequestHandler::Proceed() {
                 device_agent->containers.erase(request.name());
                 spdlog::get("container_agent")->info("Stopped container: {} with status: {}", request.name(), status);
             } else {
-                spdlog::get("container_agent")->warn("Container {} not found for deletion!", request.name());
+                spdlog::get("container_agent")->error("Container {} not found for deletion!", request.name());
                 status = FINISH;
                 responder.Finish(reply, Status::CANCELLED, this);
                 return;
@@ -588,7 +588,7 @@ void DeviceAgent::UpdateBatchsizeRequestHandler::Proceed() {
 
         //check if cont_name is in containers
         if (device_agent->containers.find(request.name()) == device_agent->containers.end()) {
-            spdlog::get("container_agent")->error("Container {} not found!", request.name());
+            spdlog::get("container_agent")->error("UpdateBatchSize: Container {} not found!", request.name());
             status = FINISH;
             responder.Finish(reply, Status::CANCELLED, this);
             return;
@@ -620,7 +620,7 @@ void DeviceAgent::UpdateResolutionRequestHandler::Proceed() {
 
         //check if cont_name is in containers
         if (device_agent->containers.find(request.name()) == device_agent->containers.end()) {
-            spdlog::get("container_agent")->error("Container {} not found!", request.name());
+            spdlog::get("container_agent")->error("UpdateResolution: Container {} not found!", request.name());
             status = FINISH;
             responder.Finish(reply, Status::CANCELLED, this);
             return;
@@ -657,7 +657,7 @@ void DeviceAgent::UpdateTimeKeepingRequestHandler::Proceed() {
 
         //check if cont_name is in containers
         if (device_agent->containers.find(request.name()) == device_agent->containers.end()) {
-            spdlog::get("container_agent")->error("Container {} not found!", request.name());
+            spdlog::get("container_agent")->error("UpdateTimeKeeping: Container {} not found!", request.name());
             status = FINISH;
             return;
         }
