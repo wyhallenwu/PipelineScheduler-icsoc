@@ -1202,6 +1202,9 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
         new UpdateSenderRequestHandler(service, cq, msvcs);
         // pause processing except senders to clear out the queues
         for (auto msvc: *msvcs) {
+            if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
+                continue;
+            }
             msvc->pauseThread();
         }
         json config;
@@ -1228,13 +1231,14 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
                     }
                 }
                 inqueue = msvc->GetInQueue();
-                msvc->pauseThread();
-                msvc->msvc_configs = config;
-                msvc->loadConfigs(config, false);
-//                msvcs->erase(std::remove(msvcs->begin(), msvcs->end(), msvc), msvcs->end());
+                msvc->stopThread();
+                msvcs->erase(std::remove(msvcs->begin(), msvcs->end(), msvc), msvcs->end());
                 break;
             }
         }
+
+        Microservice* new_sender = new RemoteCPUSender(config);
+        new_sender->SetInQueue(inqueue);
 //        if (request.ip() == "localhost") {
 //            // change postprocessing to keep the data on gpu
 //
@@ -1244,16 +1248,11 @@ void ContainerAgent::UpdateSenderRequestHandler::Proceed() {
         // change postprocessing to offload data from gpu
 
         // start new serialized sender
-//        msvcs->push_back(new RemoteCPUSender(config));
+        msvcs->push_back(new_sender);
 //        }
-        // align the data queue from postprocessor to new sender
-//        msvcs->back()->SetInQueue(inqueue);
         //start the new sender
-//        msvcs->back()->dispatchThread();
+        msvcs->back()->dispatchThread();
         for (auto msvc: *msvcs) {
-//            if (msvc->dnstreamMicroserviceList[0].name == request.name()) {
-//                continue;
-//            }
             msvc->unpauseThread();
         }
 
