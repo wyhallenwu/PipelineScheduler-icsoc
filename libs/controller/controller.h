@@ -925,9 +925,9 @@ public:
 
     void ApplyScheduling();
 
-    void ScaleUp(PipelineModel *model);
+    void ScaleUp(PipelineModel *model, uint8_t numIncReps);
 
-    void ScaleDown(PipelineModel *model);
+    void ScaleDown(PipelineModel *model, uint8_t numDecReps);
 
     [[nodiscard]] bool isRunning() const { return running; };
 
