@@ -303,6 +303,7 @@ void Controller::ScaleDown(PipelineModel *model, uint8_t numDecReps) {
                                    model->lastScaleTime).count() < ctrl_controlTimings.scaleDownIntervalThresholdSec) {
         spdlog::get("container_agent")->info("The model {0:s} has been scaled up recently."
                                              "Skipping the scaling down process to avoid THRASHING.", model->name);
+        return;
     }
     model->numReplicas -= numDecReps;
     std::vector<ContainerHandle*> currContainers = model->task->tk_subTasks[model->name];
@@ -387,6 +388,7 @@ void Controller::Rescaling() {
 
         }
     }
+    ctrl_pastScheduledPipelines = ctrl_scheduledPipelines;
 }
 
 /**
@@ -1467,7 +1469,7 @@ uint8_t Controller::incNumReplicas(const PipelineModel *model) {
     float processRate = indiProcessRate * numReplicas;
     float preprocessRate = indiPreprocessRate * numReplicas;
     while ((processRate * 0.8 < model->arrivalProfiles.arrivalRates ||
-           preprocessRate * 0.95 < model->arrivalProfiles.arrivalRates) && numReplicas < 4) {
+           preprocessRate * 0.95 < model->arrivalProfiles.arrivalRates)) {
         numReplicas++;
         spdlog::get("container_agent")->info("Increasing the number of replicas of model {0:s} to {1:d}", model->name, numReplicas);
         processRate = indiProcessRate * numReplicas;
@@ -1496,8 +1498,8 @@ uint8_t Controller::decNumReplicas(const PipelineModel *model) {
         processRate = indiProcessRate * numReplicas;
         preprocessRate = indiPreprocessRate * numReplicas;
         // If the number of replicas is no longer enough to meet the arrival rate, we should not decrease the number of replicas anymore.
-        if ((processRate * 0.8 < model->arrivalProfiles.arrivalRates ||
-            preprocessRate * 0.95 < model->arrivalProfiles.arrivalRates) && numReplicas < 4) {
+        if ((processRate * 0.7 < model->arrivalProfiles.arrivalRates ||
+            preprocessRate * 0.9 < model->arrivalProfiles.arrivalRates)) {
             numReplicas++;
             break;
         }
