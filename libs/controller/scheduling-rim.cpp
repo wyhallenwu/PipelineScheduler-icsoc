@@ -236,4 +236,4 @@ uint64_t Controller::calculateQueuingLatency(const float &arrival_rate, const fl
 }
 
 
-void Controller::temporalScheduling() {} // Dummy Method for Compiler
+void Controller::colocationTemporalScheduling() {} // Dummy Method for Compiler
