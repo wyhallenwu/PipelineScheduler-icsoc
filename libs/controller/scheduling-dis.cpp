@@ -537,4 +537,4 @@ void Dis::DecideAndMoveContainer(Devices &nodes, Tasks &pipelines, Partitioner *
     }
 }
 
-void Controller::temporalScheduling() {} // Dummy Method for Compiler
+void Controller::colocationTemporalScheduling() {} // Dummy Method for Compiler
