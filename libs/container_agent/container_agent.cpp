@@ -1163,6 +1163,7 @@ void ContainerAgent::updateProfileTable() {
 }
 
 void ContainerAgent::HandleRecvRpcs() {
+    new KeepAliveRequestHandler(&service, server_cq.get());
     new StopRequestHandler(&service, server_cq.get(), &run);
     new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
@@ -1177,6 +1178,20 @@ void ContainerAgent::HandleRecvRpcs() {
         }
         GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
+    }
+}
+
+void ContainerAgent::KeepAliveRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestKeepAlive(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new KeepAliveRequestHandler(service, cq);
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
     }
 }
 

@@ -180,6 +180,10 @@ void DeviceAgent::collectRuntimeMetrics() {
                 dev_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
     }
     while (running) {
+        if (dev_type == SystemDeviceType::Server) {
+            std::thread containerCheckThread(&DeviceAgent::ContainersLiveCheck, this);
+            containerCheckThread.detach();
+        }
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
         auto startTime = metricsStopwatch.getStartTime();
@@ -306,18 +310,38 @@ void DeviceAgent::testNetwork(float min_size, float max_size, int num_loops) {
 bool DeviceAgent::CreateContainer(ContainerConfig &c) {
     spdlog::get("container_agent")->info("Creating container: {}", c.name());
     try {
-        runDocker(c.executable(), c.name(), c.json_config(), c.device(), c.control_port());
+        std::string command = runDocker(c.executable(), c.name(), c.json_config(), c.device(), c.control_port());
+        if (command == "") {
+            return false;
+        }
         std::string target = absl::StrFormat("%s:%d", "localhost", c.control_port());
         if (c.name().find("sink") != std::string::npos) {
             return true;
         }
         containers[c.name()] = {InDeviceCommunication::NewStub(
                 grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
-                                 new CompletionQueue(), static_cast<unsigned int>(c.control_port()), 0, {}};
+                                 new CompletionQueue(), static_cast<unsigned int>(c.control_port()), 0, command, {}};
         return true;
     } catch (std::exception &e) {
         spdlog::get("container_agent")->error("Error creating container: {}", e.what());
         return false;
+    }
+}
+
+void DeviceAgent::ContainersLiveCheck() {
+    for (auto &container: containers) {
+        if (container.second.pid == 0) continue;
+        // send Grpc request to check if the container is still alive
+        EmptyMessage request;
+        EmptyMessage reply;
+        ClientContext context;
+        Status status;
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+                container.second.stub->AsyncKeepAlive(&context, request, container.second.cq));
+        if (!finishGrpc(rpc, reply, status, container.second.cq)){
+            container.second.pid = 0;
+            runDocker(container.second.startCommand);
+        }
     }
 }
 

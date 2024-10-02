@@ -43,6 +43,7 @@ struct DevContainerHandle {
     CompletionQueue *cq;
     unsigned int port;
     unsigned int pid;
+    std::string startCommand;
     SummarizedHardwareMetrics hwMetrics;
 };
 
@@ -89,7 +90,9 @@ protected:
 
     bool CreateContainer(ContainerConfig &c);
 
-    int runDocker(const std::string &executable, const std::string &cont_name, const std::string &start_string,
+    void ContainersLiveCheck();
+
+    std::string runDocker(const std::string &executable, const std::string &cont_name, const std::string &start_string,
                          const int &device, const int &port) {
         std::string command;
         command =
@@ -101,15 +104,20 @@ protected:
                         R"(%s pipeline-base-container %s --json '%s' --device %i --port %i --port_offset %i)",
                         cont_name, executable, start_string, device, port, dev_port_offset) +
                 " --log_dir ../logs";
+        command += deploy_mode? " --logging_mode 1" : " --verbose 0 --logging_mode 2";
 
-        if (!deploy_mode) {
-            command += " --verbose 0 --logging_mode 2";
-        } else {
-            command += " --logging_mode 1";
-        }
         if (dev_type == SystemDeviceType::Server) { // since many models might start on the server we need to slow down creation to prevent errors
             std::this_thread::sleep_for(std::chrono::milliseconds(700));
         }
+
+        if (runDocker(command) != 0) {
+            spdlog::get("container_agent")->error("Failed to start Container {}!", cont_name);
+            return "";
+        }
+        return command;
+    };
+
+    int runDocker(const std::string &command) {
         spdlog::get("container_agent")->info("Running command: {}", command);
         return system(command.c_str());
     };
