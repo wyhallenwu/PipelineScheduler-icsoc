@@ -732,7 +732,10 @@ void ContainerAgent::ReportStart() {
     Status status;
     std::unique_ptr<ClientAsyncResponseReader<ProcessData>> rpc(
             stub->AsyncReportMsvcStart(&context, request, sender_cq));
-    finishGrpc(rpc, reply, status, sender_cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (sender_cq != nullptr) GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
     pid = reply.pid();
     spdlog::get("container_agent")->info("Container Agent started with pid: {0:d}", pid);
     if (cont_taskName != "dsrc" && cont_taskName != "sink" && cont_RUNMODE == RUNMODE::PROFILING) {
@@ -1356,7 +1359,10 @@ void ContainerAgent::transferFrameID(std::string url) {
     request.set_value(cont_msvcsList[0]->msvc_currFrameID);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             dsrc_stub->AsyncSyncDatasources(&context, request, dsrc_cq));
-    finishGrpc(rpc, reply, status, dsrc_cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (dsrc_cq != nullptr) GPR_ASSERT(dsrc_cq->Next(&got_tag, &ok));
     run = false;
     for (auto msvc: cont_msvcsList) {
         msvc->stopThread();

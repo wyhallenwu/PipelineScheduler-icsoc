@@ -90,7 +90,7 @@ protected:
 
     bool CreateContainer(ContainerConfig &c);
 
-    void ContainersLiveCheck();
+    void ContainersLiveCheck(std::vector<DevContainerHandle*> cont);
 
     std::string runDocker(const std::string &executable, const std::string &cont_name, const std::string &start_string,
                          const int &device, const int &port) {
