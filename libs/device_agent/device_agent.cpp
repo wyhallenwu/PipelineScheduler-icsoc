@@ -180,20 +180,11 @@ void DeviceAgent::collectRuntimeMetrics() {
                 dev_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
     }
     while (running) {
-        if (dev_type == SystemDeviceType::Server) {
-            std::vector<DevContainerHandle*> cont_copy = {};
-            for (auto &container: containers) {
-                cont_copy.push_back(&container.second);
-            }
-            std::thread containerCheckThread(&DeviceAgent::ContainersLiveCheck, this, cont_copy);
-            containerCheckThread.detach();
-        }
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
         auto startTime = metricsStopwatch.getStartTime();
         uint64_t scrapeLatencyMillisec = 0;
         uint64_t timeDiff;
-        
 
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextHwMetricsScrapeTime)) {
@@ -263,10 +254,11 @@ void DeviceAgent::collectRuntimeMetrics() {
             dev_metricsServerConfigs.nextMetricsReportTime = std::chrono::high_resolution_clock::now() +
                                                              std::chrono::milliseconds(
                                                                      dev_metricsServerConfigs.metricsReportIntervalMillisec);
+            if (dev_type == SystemDeviceType::Server) {
+                std::thread t(&DeviceAgent::ContainersLifeCheck, this);
+                t.detach();
+            }
         }
-
-        //TODO: push individual container metrics to the database
-
 
         metricsStopwatch.stop();
         auto reportLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
@@ -326,10 +318,10 @@ bool DeviceAgent::CreateContainer(ContainerConfig &c) {
         if (c.name().find("sink") != std::string::npos) {
             return true;
         }
-        CompletionQueue *cq = new CompletionQueue();
+        std::lock_guard<std::mutex> lock(containers_mutex);
         containers[c.name()] = {InDeviceCommunication::NewStub(
                 grpc::CreateChannel(target, grpc::InsecureChannelCredentials())),
-                                 cq, static_cast<unsigned int>(c.control_port()), 0, command, {}};
+                                new CompletionQueue(), static_cast<unsigned int>(c.control_port()), 0, command, {}};
         return true;
     } catch (std::exception &e) {
         spdlog::get("container_agent")->error("Error creating container: {}", e.what());
@@ -337,25 +329,25 @@ bool DeviceAgent::CreateContainer(ContainerConfig &c) {
     }
 }
 
-void DeviceAgent::ContainersLiveCheck(std::vector<DevContainerHandle*> cont) {
-    for (auto &container: cont) {
-        if (container->pid == 0) continue;
-        // send Grpc request to check if the container is still alive
+void DeviceAgent::ContainersLifeCheck() {
+    std::lock_guard<std::mutex> lock(containers_mutex);
+    for (auto &container: containers) {
+        if (container.second.pid == 0) continue;
         EmptyMessage request;
         EmptyMessage reply;
         ClientContext context;
         Status status;
-        CompletionQueue *cq = container->cq;
+        CompletionQueue *cq = container.second.cq;
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
-                container->stub->AsyncKeepAlive(&context, request, cq));
+                container.second.stub->AsyncKeepAlive(&context, request, cq));
 
         rpc->Finish(&reply, &status, (void *)1);
         void *got_tag;
         bool ok = false;
         if (cq != nullptr) GPR_ASSERT(cq->Next(&got_tag, &ok));
         if (!ok){
-            container->pid = 0;
-            runDocker(container->startCommand);
+            container.second.pid = 0;
+            runDocker(container.second.startCommand);
         }
     }
 }
@@ -586,9 +578,11 @@ void DeviceAgent::StopContainerRequestHandler::Proceed() {
                 return;
             }
         } else {
+            unsigned int pid = device_agent->containers[request.name()].pid;
+            device_agent->containers[request.name()].pid = 0;
             spdlog::get("container_agent")->info("Stopping container: {}", request.name());
             DeviceAgent::StopContainer(device_agent->containers[request.name()], request.forced());
-            unsigned int pid = device_agent->containers[request.name()].pid;
+            std::lock_guard<std::mutex> lock(device_agent->containers_mutex);
             device_agent->containers.erase(request.name());
             device_agent->dev_profiler->removePid(pid);
         }

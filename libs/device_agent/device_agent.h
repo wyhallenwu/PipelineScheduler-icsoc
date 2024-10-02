@@ -90,7 +90,7 @@ protected:
 
     bool CreateContainer(ContainerConfig &c);
 
-    void ContainersLiveCheck(std::vector<DevContainerHandle*> cont);
+    void ContainersLifeCheck();
 
     std::string runDocker(const std::string &executable, const std::string &cont_name, const std::string &start_string,
                          const int &device, const int &port) {
@@ -330,6 +330,7 @@ protected:
     // Runtime variables
     Profiler *dev_profiler;
     std::map<std::string, DevContainerHandle> containers;
+    std::mutex containers_mutex;
     std::vector<std::thread> threads;
     std::vector<DeviceHardwareMetrics> dev_runtimeMetrics;
 
