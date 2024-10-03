@@ -295,10 +295,17 @@ Controller::~Controller() {
     }
 
     for (auto &device: devices.getList()) {
-        device->cq->Shutdown();
+        EmptyMessage request;
+        EmptyMessage reply;
+        ClientContext context;
+        Status status;
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+                device->stub->AsyncShutdown(&context, request, device->cq));
+        rpc->Finish(&reply, &status, (void *)1);
         void *got_tag;
         bool ok = false;
-        while (device->cq->Next(&got_tag, &ok));
+        if (device->cq != nullptr) GPR_ASSERT(device->cq->Next(&got_tag, &ok));
+        device->cq->Shutdown();
     }
     server->Shutdown();
     cq->Shutdown();
@@ -868,6 +875,9 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     if (container->model == DataSource || container->model == Sink) {
         request.set_device(-1);
     } else if (container->device_agent->name == "server") {
+        if (container->gpuHandle == nullptr) {
+            container->gpuHandle = container->device_agent->gpuHandles[3];
+        }
         request.set_device(container->gpuHandle->number);
     } else {
         request.set_device(0);

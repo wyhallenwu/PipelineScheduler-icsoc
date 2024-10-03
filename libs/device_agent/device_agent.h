@@ -316,13 +316,29 @@ protected:
         grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
     };
 
+    class ShutdownRequestHandler : public ControlRequestHandler {
+    public:
+        ShutdownRequestHandler(ControlCommands::AsyncService *service, ServerCompletionQueue *cq,
+                                        DeviceAgent *device)
+                : ControlRequestHandler(service, cq, device), responder(&ctx) {
+            Proceed();
+        }
+
+        void Proceed() final;
+
+    private:
+        EmptyMessage request;
+        EmptyMessage reply;
+        grpc::ServerAsyncResponseWriter<EmptyMessage> responder;
+    };
+
     SystemDeviceType dev_type;
     DeviceInfoType dev_deviceInfo;
     std::atomic<bool> deploy_mode = false;
 
     // Basic information
     std::string dev_name;
-    bool running;
+    std::atomic<bool> running;
     std::string dev_experiment_name;
     std::string dev_system_name;
     int dev_port_offset;

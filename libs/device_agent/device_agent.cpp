@@ -475,6 +475,7 @@ void DeviceAgent::HandleControlRecvRpcs() {
     new UpdateResolutionRequestHandler(&controller_service, controller_cq.get(), this);
     new UpdateTimeKeepingRequestHandler(&controller_service, controller_cq.get(), this);
     new StopContainerRequestHandler(&controller_service, controller_cq.get(), this);
+    new ShutdownRequestHandler(&controller_service, controller_cq.get(), this);
     void *tag;
     bool ok;
     while (running) {
@@ -730,6 +731,22 @@ void DeviceAgent::UpdateTimeKeepingRequestHandler::Proceed() {
     } else {
         GPR_ASSERT(status == FINISH);
         delete this;
+    }
+}
+
+void DeviceAgent::ShutdownRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestShutdown(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        device_agent->running = false;
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
+        device_agent->controller_cq->Shutdown();
+        device_agent->device_cq->Shutdown();
     }
 }
 
