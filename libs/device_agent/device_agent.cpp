@@ -345,7 +345,7 @@ void DeviceAgent::ContainersLifeCheck() {
         void *got_tag;
         bool ok = false;
         if (cq != nullptr) GPR_ASSERT(cq->Next(&got_tag, &ok));
-        if (!ok){
+        if (!status.ok()){
             container.second.pid = 0;
             runDocker(container.second.startCommand);
         }
