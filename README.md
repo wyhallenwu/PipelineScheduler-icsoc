@@ -15,5 +15,5 @@ The sub-branches contain all changes from master, with additional device specifi
 
 The main source code can be found within the `libs/` folder while `src/` contains the data sink and simulates the end-user receiving the data.
 Configurations for models and experiments can be found in `jsons/` while the directories `cmake`, `scripts/`, and `dockerfiles` show deployment related code and helpers.
-For analyzing the results we provide python scripts in `analyzis`.
+For analyzing the results we provide python scripts in `analyzes`.
 The Dockerfile and CmakeList in the root directory are the main entry points to deploy the system.
