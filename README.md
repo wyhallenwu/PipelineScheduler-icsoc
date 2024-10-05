@@ -1,6 +1,6 @@
 # PipelineScheduler
 
-PipelinePlusPlus (p++ or ppp) is the c++ implementation of the paper OctopInf: Resource-Efficient and Content-Aware Edge Video Analytics Real-Time Inference Serving.
+PipelinePlusPlus (p++ or ppp) is the c++ implementation of the paper **"OCTOPINF: Workload-Aware Real-Time Inference Serving for Edge Video Analytics"**.
 When using our Code please cite the following paper:
 
 **SPACE FOR PAPER CITATION**
