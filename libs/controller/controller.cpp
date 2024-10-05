@@ -295,10 +295,17 @@ Controller::~Controller() {
     }
 
     for (auto &device: devices.getList()) {
-        device->cq->Shutdown();
+        EmptyMessage request;
+        EmptyMessage reply;
+        ClientContext context;
+        Status status;
+        std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
+                device->stub->AsyncShutdown(&context, request, device->cq));
+        rpc->Finish(&reply, &status, (void *)1);
         void *got_tag;
         bool ok = false;
-        while (device->cq->Next(&got_tag, &ok));
+        if (device->cq != nullptr) GPR_ASSERT(device->cq->Next(&got_tag, &ok));
+        device->cq->Shutdown();
     }
     server->Shutdown();
     cq->Shutdown();
@@ -711,7 +718,10 @@ void Controller::AdjustTiming(ContainerHandle *container) {
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container->device_agent->stub->AsyncUpdateTimeKeeping(&context, request,
                                                                container->device_agent->cq));
-    finishGrpc(rpc, reply, status, container->device_agent->cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (container->device_agent->cq != nullptr) GPR_ASSERT(container->device_agent->cq->Next(&got_tag, &ok));
     if (!status.ok()) {
         spdlog::get("container_agent")->error("Failed to update TimeKeeping for container: {0:s}", container->name);
         return;
@@ -865,6 +875,9 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     if (container->model == DataSource || container->model == Sink) {
         request.set_device(-1);
     } else if (container->device_agent->name == "server") {
+        if (container->gpuHandle == nullptr) {
+            container->gpuHandle = container->device_agent->gpuHandles[3];
+        }
         request.set_device(container->gpuHandle->number);
     } else {
         request.set_device(0);
@@ -875,7 +888,10 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             container->device_agent->stub->AsyncStartContainer(&context, request,
                                                                       container->device_agent->cq));
-    finishGrpc(rpc, reply, status, container->device_agent->cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (container->device_agent->cq != nullptr) GPR_ASSERT(container->device_agent->cq->Next(&got_tag, &ok));
     if (!status.ok()) {
         spdlog::get("container_agent")->error("Failed to start container: {0:s}", container->name);
         return;
@@ -940,7 +956,10 @@ void Controller::AdjustUpstream(int port, ContainerHandle *upstr, NodeHandle *ne
 
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             upstr->device_agent->stub->AsyncUpdateDownstream(&context, request, upstr->device_agent->cq));
-    finishGrpc(rpc, reply, status, upstr->device_agent->cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (upstr->device_agent->cq != nullptr) GPR_ASSERT(upstr->device_agent->cq->Next(&got_tag, &ok));
     spdlog::get("container_agent")->info("Upstream of {0:s} adjusted to container {1:s}", dwnstr, upstr->name);
 }
 
@@ -953,7 +972,10 @@ void Controller::SyncDatasource(ContainerHandle *prev, ContainerHandle *curr) {
     request.set_downstream_name(curr->name);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             curr->device_agent->stub->AsyncSyncDatasource(&context, request, curr->device_agent->cq));
-    finishGrpc(rpc, reply, status, curr->device_agent->cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (curr->device_agent->cq != nullptr) GPR_ASSERT(curr->device_agent->cq->Next(&got_tag, &ok));
 }
 
 void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs) {
@@ -966,7 +988,10 @@ void Controller::AdjustBatchSize(ContainerHandle *msvc, int new_bs) {
     request.add_value(new_bs);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             msvc->device_agent->stub->AsyncUpdateBatchSize(&context, request, msvc->device_agent->cq));
-    finishGrpc(rpc, reply, status, msvc->device_agent->cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (msvc->device_agent->cq != nullptr) GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
     spdlog::get("container_agent")->info("Batch size of {0:s} adjusted to {1:d}", msvc->name, new_bs);
 }
 
@@ -987,7 +1012,10 @@ void Controller::AdjustResolution(ContainerHandle *msvc, std::vector<int> new_re
     request.add_value(new_resolution[2]);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             msvc->device_agent->stub->AsyncUpdateResolution(&context, request, msvc->device_agent->cq));
-    finishGrpc(rpc, reply, status, msvc->device_agent->cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (msvc->device_agent->cq != nullptr) GPR_ASSERT(msvc->device_agent->cq->Next(&got_tag, &ok));
 }
 
 void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, bool forced) {
@@ -1000,7 +1028,10 @@ void Controller::StopContainer(ContainerHandle *container, NodeHandle *device, b
     request.set_forced(forced);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             device->stub->AsyncStopContainer(&context, request, container->device_agent->cq));
-    finishGrpc(rpc, reply, status, device->cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (container->device_agent->cq != nullptr) GPR_ASSERT(container->device_agent->cq->Next(&got_tag, &ok));
     if (container->gpuHandle != nullptr)
         container->gpuHandle->removeContainer(container);
     if (!forced) { //not forced means the container is stopped during scheduling and should be removed
@@ -1327,7 +1358,10 @@ NetworkEntryType Controller::initNetworkCheck(NodeHandle &node, uint32_t minPack
     try {
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 node.stub->AsyncExecuteNetworkTest(&context, request, node.cq));
-        finishGrpc(rpc, reply, status, node.cq);
+        rpc->Finish(&reply, &status, (void *)1);
+        void *got_tag;
+        bool ok = false;
+        if (node.cq != nullptr) GPR_ASSERT(node.cq->Next(&got_tag, &ok));
         spdlog::get("container_agent")->info("Successfully started network check for device {}.", node.name);
     } catch (const std::exception &e) {
         spdlog::get("container_agent")->error("Error while starting network check for device {}.", node.name);

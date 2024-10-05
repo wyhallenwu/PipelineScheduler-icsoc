@@ -735,14 +735,5 @@ std::string getContainerName(const SystemDeviceType& deviceType, const ModelType
  */
 ContainerLibType getContainerLib(const std::string& deviceType);
 
-template <typename T>
-void finishGrpc(std::unique_ptr<ClientAsyncResponseReader<T>> &rpc, T &reply, Status &status, CompletionQueue *cq){
-    rpc->Finish(&reply, &status, (void *)1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(cq->Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
-}
-
 std::string getDeviceTypeName(SystemDeviceType deviceType);
 #endif

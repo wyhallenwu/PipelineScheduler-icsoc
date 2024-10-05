@@ -1,9 +1,9 @@
 {
-    "expName": "lslo",
+    "expName": "mslo",
     "system_fps": 15,
-    "systemName": "rim",
+    "systemName": "dis",
     "runtime": 30,
-    "port_offset": 3000,
+    "port_offset": 1000,
     "sink_ip": "143.248.55.76",
     "yolov5_batch_size": 2,
     "edge_batch_size": 4,

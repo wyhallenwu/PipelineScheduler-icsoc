@@ -732,7 +732,10 @@ void ContainerAgent::ReportStart() {
     Status status;
     std::unique_ptr<ClientAsyncResponseReader<ProcessData>> rpc(
             stub->AsyncReportMsvcStart(&context, request, sender_cq));
-    finishGrpc(rpc, reply, status, sender_cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (sender_cq != nullptr) GPR_ASSERT(sender_cq->Next(&got_tag, &ok));
     pid = reply.pid();
     spdlog::get("container_agent")->info("Container Agent started with pid: {0:d}", pid);
     if (cont_taskName != "dsrc" && cont_taskName != "sink" && cont_RUNMODE == RUNMODE::PROFILING) {
@@ -1163,6 +1166,7 @@ void ContainerAgent::updateProfileTable() {
 }
 
 void ContainerAgent::HandleRecvRpcs() {
+    new KeepAliveRequestHandler(&service, server_cq.get());
     new StopRequestHandler(&service, server_cq.get(), &run);
     new UpdateSenderRequestHandler(&service, server_cq.get(), &cont_msvcsList);
     new UpdateBatchSizeRequestHandler(&service, server_cq.get(), &cont_msvcsList);
@@ -1177,6 +1181,20 @@ void ContainerAgent::HandleRecvRpcs() {
         }
         GPR_ASSERT(ok);
         static_cast<RequestHandler *>(tag)->Proceed();
+    }
+}
+
+void ContainerAgent::KeepAliveRequestHandler::Proceed() {
+    if (status == CREATE) {
+        status = PROCESS;
+        service->RequestKeepAlive(&ctx, &request, &responder, cq, cq, this);
+    } else if (status == PROCESS) {
+        new KeepAliveRequestHandler(service, cq);
+        status = FINISH;
+        responder.Finish(reply, Status::OK, this);
+    } else {
+        GPR_ASSERT(status == FINISH);
+        delete this;
     }
 }
 
@@ -1341,7 +1359,10 @@ void ContainerAgent::transferFrameID(std::string url) {
     request.set_value(cont_msvcsList[0]->msvc_currFrameID);
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             dsrc_stub->AsyncSyncDatasources(&context, request, dsrc_cq));
-    finishGrpc(rpc, reply, status, dsrc_cq);
+    rpc->Finish(&reply, &status, (void *)1);
+    void *got_tag;
+    bool ok = false;
+    if (dsrc_cq != nullptr) GPR_ASSERT(dsrc_cq->Next(&got_tag, &ok));
     run = false;
     for (auto msvc: cont_msvcsList) {
         msvc->stopThread();
