@@ -15,6 +15,7 @@ service ControlCommands {
   rpc UpdateResolution(ContainerInts) returns (google.protobuf.Empty) {}
   rpc UpdateTimeKeeping(TimeKeeping) returns (google.protobuf.Empty) {}
   rpc StopContainer(ContainerSignal) returns (google.protobuf.Empty) {}
+  rpc Shutdown(google.protobuf.Empty) returns (google.protobuf.Empty) {}
 }
 
 message ContainerConfig {
