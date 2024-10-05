@@ -34,23 +34,6 @@ Sender::Sender(const json &jsonConfigs) : Microservice(jsonConfigs) {
     spdlog::get("container_agent")->info("{0:s} is created.", msvc_name);
 }
 
-
-std::string Sender::HandleRpcs(std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> &rpc, CompletionQueue &cq,
-                               EmptyMessage &reply, Status &status) {
-    rpc->Finish(&reply, &status, (void *) 1);
-    void *got_tag;
-    bool ok = false;
-    GPR_ASSERT(cq.Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
-
-    if (status.ok()) {
-        return "Complete";
-    } else {
-        std::cout << status.error_code() << ": " << status.error_message() << std::endl;
-        return "RPC failed";
-    }
-}
-
 void Sender::Process() {
     msvc_logFile.open(msvc_microserviceLogPath, std::ios::out);
     while (READY) {
@@ -194,12 +177,34 @@ std::string GPUSender::SendData(std::vector<RequestData<LocalGPUReqDataType>> &e
     if (!multipleStubs) {
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 stubs[0]->AsyncGpuPointerTransfer(&context, request, &cq));
-        return HandleRpcs(rpc, cq, reply, status);
+        rpc->Finish(&reply, &status, (void *) 1);
+        void *got_tag;
+        bool ok = false;
+        GPR_ASSERT(cq.Next(&got_tag, &ok));
+        GPR_ASSERT(ok);
+
+        if (status.ok()) {
+            return "Complete";
+        } else {
+            std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+            return "RPC failed";
+        };
     }
 
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             stubs[rand_int(0, stubs.size() - 1)]->AsyncGpuPointerTransfer(&context, request, &cq));
-    return HandleRpcs(rpc, cq, reply, status);
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(cq.Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+
+    if (status.ok()) {
+        return "Complete";
+    } else {
+        std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+        return "RPC failed";
+    }
 }
 
 LocalCPUSender::LocalCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
@@ -237,12 +242,34 @@ std::string LocalCPUSender::SendData(std::vector<RequestData<LocalCPUReqDataType
     if (!multipleStubs) {
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 stubs[0]->AsyncSharedMemTransfer(&context, request, &cq));
-        return HandleRpcs(rpc, cq, reply, status);
+        rpc->Finish(&reply, &status, (void *) 1);
+        void *got_tag;
+        bool ok = false;
+        GPR_ASSERT(cq.Next(&got_tag, &ok));
+        GPR_ASSERT(ok);
+
+        if (status.ok()) {
+            return "Complete";
+        } else {
+            std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+            return "RPC failed";
+        }
     }
 
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             stubs[rand_int(0, stubs.size() - 1)]->AsyncSharedMemTransfer(&context, request, &cq));
-    return HandleRpcs(rpc, cq, reply, status);
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(cq.Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+
+    if (status.ok()) {
+        return "Complete";
+    } else {
+        std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+        return "RPC failed";
+    }
 }
 
 RemoteCPUSender::RemoteCPUSender(const json &jsonConfigs) : Sender(jsonConfigs) {
@@ -276,10 +303,32 @@ std::string RemoteCPUSender::SendData(std::vector<RequestData<LocalCPUReqDataTyp
     if (!multipleStubs) {
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 stubs[0]->AsyncSerializedDataTransfer(&context, request, &cq));
-        return HandleRpcs(rpc, cq, reply, status);
+        rpc->Finish(&reply, &status, (void *) 1);
+        void *got_tag;
+        bool ok = false;
+        GPR_ASSERT(cq.Next(&got_tag, &ok));
+        GPR_ASSERT(ok);
+
+        if (status.ok()) {
+            return "Complete";
+        } else {
+            std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+            return "RPC failed";
+        }
     }
 
     std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
             stubs[rand_int(0, stubs.size() - 1)]->AsyncSerializedDataTransfer(&context, request, &cq));
-    return HandleRpcs(rpc, cq, reply, status);
+    rpc->Finish(&reply, &status, (void *) 1);
+    void *got_tag;
+    bool ok = false;
+    GPR_ASSERT(cq.Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+
+    if (status.ok()) {
+        return "Complete";
+    } else {
+        std::cout << status.error_code() << ": " << status.error_message() << std::endl;
+        return "RPC failed";
+    }
 }

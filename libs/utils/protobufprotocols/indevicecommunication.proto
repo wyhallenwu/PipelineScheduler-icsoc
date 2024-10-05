@@ -8,6 +8,7 @@ package indevicecommunication;
 
 service InDeviceCommunication {
   rpc ReportMsvcStart(ProcessData) returns (ProcessData) {}
+  rpc KeepAlive(google.protobuf.Empty) returns (google.protobuf.Empty) {}
   rpc UpdateSender(Connection) returns (google.protobuf.Empty) {}
   rpc UpdateBatchSize(Int32) returns (google.protobuf.Empty) {}
   rpc UpdateResolution(Dimensions) returns (google.protobuf.Empty) {}
