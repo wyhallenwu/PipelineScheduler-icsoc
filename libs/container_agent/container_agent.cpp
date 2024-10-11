@@ -93,6 +93,12 @@ void manageJsonConfigs(json &configs) {
         } else if (static_cast<RUNMODE>(runmode) == RUNMODE::DEPLOYMENT) {
             (*containerConfigs)["cont_maxBatchSize"] = maxModelBatchSize;
         }
+
+        containerConfigs->at("cont_pipeline")[3]["msvc_concat"] = containerConfigs->at("cont_pipeline")[1]["msvc_concat"];
+
+        if (containerConfigs->at("cont_pipeline")[3]["msvc_concat"] > 1) {
+            
+        }
     }
 
     for (uint16_t i = 0; i < containerConfigs->at("cont_pipeline").size(); i++) {
@@ -146,6 +152,8 @@ void manageJsonConfigs(json &configs) {
             containerConfigs->at("cont_pipeline")[i]["msvc_modelProfile"] = containerConfigs->at("cont_modelProfile");
         }
     };
+
+    std::cout << configs.dump(4) << std::endl;
 }
 
 json loadRunArgs(int argc, char **argv) {
