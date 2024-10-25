@@ -416,7 +416,9 @@ namespace msvcconfigs {
         ProfileGenerator = 501,
         DataSink = 502,
         // Preprocessor should have number between 1000 and 2000
-        PreprocessBatcher = 1000,
+        Preprocessor = 1000,
+        // Batcher should have number between 1500 and 2000
+        Batcher = 1500,
         // Inferencer should have number larger than 2000
         TRTInferencer = 2000,
         // Postprocessor should have number larger than 3000
@@ -1068,9 +1070,6 @@ protected:
 
     //
     virtual bool isTimeToBatch() { return true; };
-
-    //
-    virtual bool checkReqEligibility(std::vector<ClockType> &currReq_time) { return true; };
 
     //
     virtual void updateReqRate(ClockType lastInterReqDuration);
