@@ -113,7 +113,7 @@ void manageJsonConfigs(json &configs) {
         containerConfigs->at("cont_pipeline")[i]["msvc_taskName"] = containerConfigs->at("cont_taskName");
         containerConfigs->at("cont_pipeline")[i]["msvc_hostDevice"] = containerConfigs->at("cont_hostDevice");
         containerConfigs->at("cont_pipeline")[i]["msvc_deviceIndex"] = containerConfigs->at("cont_device");
-        containerConfigs->at("cont_pipeline")[i]["msvc_containerLogPath"] = containerConfigs->at("cont_logPath").get<std::string>() + "/" + name;
+        containerConfigs->at("cont_pipeline")[i]["msvc_containerLogPath"] = logPath;
         containerConfigs->at("cont_pipeline")[i]["msvc_RUNMODE"] = runmode;
         containerConfigs->at(
                 "cont_pipeline")[i]["cont_metricsScrapeIntervalMillisec"] = metricsServerConfigs["metricsServer_metricsReportIntervalMillisec"];
@@ -371,6 +371,10 @@ ContainerAgent::ContainerAgent(const json& configs) {
     cont_RUNMODE = containerConfigs["cont_RUNMODE"];
 
     cont_logDir = containerConfigs["cont_logPath"].get<std::string>();
+
+    std::filesystem::create_directory(
+        std::filesystem::path(cont_logDir)
+    );
 
     setupLogger(
         cont_logDir,
