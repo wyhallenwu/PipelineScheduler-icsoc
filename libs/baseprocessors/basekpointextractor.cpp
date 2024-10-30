@@ -238,6 +238,7 @@ void BaseKPointExtractor::extractor() {
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
     msvc_logFile.close();
+    STOPPED = true;
 }
 
 void BaseKPointExtractor::extractorProfiling() {
@@ -374,4 +375,5 @@ void BaseKPointExtractor::extractorProfiling() {
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
     msvc_logFile.close();
+    STOPPED = true;
 }

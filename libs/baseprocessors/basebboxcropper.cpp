@@ -680,6 +680,7 @@ void BaseBBoxCropper::cropping() {
     // Synchronize the cuda stream
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
     msvc_logFile.close();
+    STOPPED = true;
 }
 
 
@@ -1011,4 +1012,6 @@ void BaseBBoxCropper::cropProfiling() {
         // Synchronize the cuda stream
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
+    msvc_logFile.close();
+    STOPPED = true;
 }

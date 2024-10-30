@@ -223,6 +223,7 @@ void BaseClassifier::classify() {
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
     msvc_logFile.close();
+    STOPPED = true;
 }
 
 void BaseClassifier::classifyProfiling() {
@@ -345,4 +346,5 @@ void BaseClassifier::classifyProfiling() {
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
     msvc_logFile.close();
+    STOPPED = true;
 }
