@@ -1057,6 +1057,8 @@ protected:
     uint64_t msvc_batchCount = 0;
 
     std::atomic<unsigned int> msvc_droppedReqCount = 0;
+    std::atomic<unsigned int> msvc_avgBatchSize = 0;
+    std::atomic<unsigned int> msvc_miniBatchCount = 0;
     std::atomic<unsigned int> msvc_totalReqCount = 0;
 
     //

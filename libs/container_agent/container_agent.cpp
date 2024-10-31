@@ -13,14 +13,6 @@ ABSL_FLAG(std::string, log_dir, "../logs", "Log path for the container");
 ABSL_FLAG(uint16_t, profiling_mode, 0,
           "flag to make the model running in profiling mode 0:deployment, 1:profiling, 2:empty_profiling");
 
-const int INDEVICE_CONTROL_PORT = 60003;
-
-std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::milliseconds> timePointCastMillisecond(
-    std::chrono::system_clock::time_point tp) {
-    return std::chrono::time_point_cast<std::chrono::milliseconds>(tp);
-}
-
-
 void addProfileConfigs(json &msvcConfigs, const json &profileConfigs) {
     msvcConfigs["profile_inputRandomizeScheme"] = profileConfigs.at("profile_inputRandomizeScheme");
     msvcConfigs["profile_stepMode"] = profileConfigs.at("profile_stepMode");

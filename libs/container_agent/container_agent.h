@@ -35,8 +35,6 @@ ABSL_DECLARE_FLAG(uint16_t, logging_mode);
 ABSL_DECLARE_FLAG(std::string, log_dir);
 ABSL_DECLARE_FLAG(uint16_t, profiling_mode);
 
-using json = nlohmann::ordered_json;
-
 using grpc::Status;
 using grpc::CompletionQueue;
 using grpc::ClientContext;
@@ -55,9 +53,6 @@ enum TransferMethod {
     RemoteCPU,
     GPU
 };
-
-std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::milliseconds> timePointCastMillisecond(
-    std::chrono::system_clock::time_point tp);
 
 namespace msvcconfigs {
 
