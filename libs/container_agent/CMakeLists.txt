@@ -35,7 +35,7 @@ set(PROJECT_PREFIX container_agent)
 
 find_package(Threads REQUIRED)
 
-set (profiler_DIR "${CMAKE_CURRENT_BINARY_DIR}/../profiler")
+set (profiler_DIR "${CMAKE_CURRENT_BINARY_DIR}/../utils/profiler")
 find_package(profiler CONFIG REQUIRED)
 
 set(microservice_DIR "${CMAKE_CURRENT_BINARY_DIR}/../microservice")
