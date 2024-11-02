@@ -9,13 +9,11 @@
 #include <sstream>
 #include <chrono>
 #include <thread>
+#include <cmath>
 #include <queue>
 #include <unistd.h>
-#include <Python.h>
-#include <mutex>
-#include <condition_variable>
-#include <termios.h>
-#include <sys/select.h>
+#include <nvml.h>
+#include <spdlog/spdlog.h>
 
 class LimitedPairQueue {
 public:
@@ -37,36 +35,60 @@ private:
 
 class Profiler {
 public:
-    Profiler(const std::vector<unsigned int> &pids, std::string mode);
+    Profiler(const std::vector<unsigned int> &pids);
+
     ~Profiler();
 
-    void run();
+    void addPid(unsigned int pid);
+
+    void removePid(unsigned int pid);
 
     struct sysStats {
+        uint64_t timestamp = 0;
         int cpuUsage = 0;
-        int processMemoryUsage = 0;
-        int deviceMemoryUsage = 0;
+        int memoryUsage = 0;
+        int rssMemory = 0;
         unsigned int gpuUtilization = 0;
         unsigned int gpuMemoryUsage = 0;
     };
 
-    static int getGpuCount() { return 1; };
-    void addPid(unsigned int pid) { stats[pid] = sysStats(); };
-    static std::vector<unsigned int> getGpuMemory(int device_count) { return {0}; };
+    int getGpuCount();
 
-    sysStats reportAtRuntime(unsigned int pid) {
-        std::lock_guard<std::mutex> lock(m); return stats[pid]; };
-    sysStats reportAnyMetrics() {
-        std::lock_guard<std::mutex> lock(m); return stats.begin()->second; };
+    std::vector<long> getGpuMemory(int device_count);
+
+    sysStats reportAtRuntime(unsigned int cpu_pid, unsigned int gpu_pid);
+
+    std::vector<Profiler::sysStats> reportDeviceStats();
+
+private:
+
+    bool initializeNVML();
+
+    static bool setAccounting(nvmlDevice_t device);
+
+    static std::vector<nvmlDevice_t> getDevices();
+
+    void setPidOnDevices(unsigned int pid);
+
+    bool cleanupNVML();
+
+    int getCPUInfo(unsigned int pid);
 
     int getDeviceCPUInfo();
 
-private:
-    void jtop(const std::string &cmd);
-    LimitedPairQueue prevCpuTimes;
-    std::thread t;
-    std::mutex m;
-    std::map<unsigned int, sysStats> stats;
+    std::pair<int, int> getMemoryInfo(unsigned int pid);
+
+    int getDeviceMemoryInfo();
+
+    nvmlUtilization_t getGPUInfo(unsigned int pid, nvmlDevice_t device);
+
+    unsigned int getPcieInfo(nvmlDevice_t device);
+
+    bool nvmlInitialized;
+
+    std::map<unsigned int, LimitedPairQueue> prevCpuTimes;
+    std::vector<nvmlDevice_t> cuda_devices;
+    std::map<unsigned int, nvmlDevice_t> pidOnDevices;
 };
 
 
