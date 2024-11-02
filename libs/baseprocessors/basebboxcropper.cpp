@@ -84,6 +84,8 @@ inline std::vector<std::pair<uint8_t, uint16_t>> crop(
     int infer_w,
     uint16_t numDetections,
     const float *bbox_coorList,
+    const float *nmsed_scores,
+    const float confidenceThreshold,
     std::vector<BoundingBox<cv::cuda::GpuMat>> &croppedBBoxes
 ) {
     std::vector<std::pair<uint8_t, uint16_t>> imageIndexList = {};
@@ -152,7 +154,7 @@ inline std::vector<std::pair<uint8_t, uint16_t>> crop(
         // std::cout << "orig " << x1 << " " << y1 << " " << x2 << " " << y2 << std::endl;
 
         // Crop from the corresponding image
-        if ((y2 - y1) <= 0 || (x2 - x1) <= 0) {
+        if ((y2 - y1) <= 0 || (x2 - x1) <= 0 || nmsed_scores[i] < confidenceThreshold) {
             numInvalidDets++;
             // std::cout << "Invalid detection" << std::endl;
             continue;
@@ -171,7 +173,7 @@ inline std::vector<std::pair<uint8_t, uint16_t>> crop(
             0.f,
             0
         });
-        // saveGPUAsImg(croppedBBox, "bbox_" + std::to_string(i) + ".jpg");
+        saveGPUAsImg(croppedBBox, "bbox_" + std::to_string(i) + ".jpg");
     }
     return imageIndexList;
 }
@@ -208,6 +210,8 @@ void BaseBBoxCropper::loadConfigs(const json &jsonConfigs, bool isConstructing) 
     if (!isConstructing) { // If this is not called from the constructor
         BasePostprocessor::loadConfigs(jsonConfigs, isConstructing);
     }
+    msvc_augment = jsonConfigs["msvc_augment"];
+    msvc_confThreshold = jsonConfigs["msvc_confThreshold"];
     spdlog::get("container_agent")->trace("{0:s} FINISHED loading configs...", __func__);
 }
 
@@ -421,7 +425,33 @@ void BaseBBoxCropper::cropping() {
             // If there is no object in frame, we don't have to do nothing.
             int numDetsInFrame = (int)num_detections[i];
             if (numDetsInFrame <= 0) {
-                continue;
+                if (msvc_augment) {
+                    // Generate a random box for downstream wrorkload
+                    std::random_device rd;
+                    std::mt19937 gen(rd());
+                    std::uniform_int_distribution<> dis(0, 1);
+
+                    if (dis(gen) == 0) {
+                        continue;
+                    }
+
+                    for (uint8_t j = 0; j < numImagesInFrame; j++) {
+                        uint16_t imageIndexInBatch = currReq.req_concatInfo[i].firstImageIndex + j;
+                        singleImageBBoxList.emplace_back(
+                            BoundingBox<cv::cuda::GpuMat>{
+                                cv::cuda::GpuMat(64, 64, CV_8UC3),
+                                0, 0, 64, 64,
+                                1.f,
+                                1
+                            }
+                        );
+                        nmsed_classes[i * maxNumDets] = 1;
+                    }
+                    numDetsInFrame = numImagesInFrame;
+                    nmsed_classes[i * maxNumDets] = 1;
+                } else {
+                    continue;
+                }
             }
 
             // Otherwise, we need to do some cropping.
@@ -459,6 +489,8 @@ void BaseBBoxCropper::cropping() {
                                                                         infer_w,
                                                                         numDetsInFrame,
                                                                         nmsed_boxes + i * maxNumDets * 4,
+                                                                        nmsed_scores + i * maxNumDets,
+                                                                        msvc_confThreshold,
                                                                         singleImageBBoxList);
             // After cropping, due to some invalid detections,
             // we need to update the number of detections in the frame

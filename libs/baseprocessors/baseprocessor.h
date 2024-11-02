@@ -279,6 +279,8 @@ inline std::vector<std::pair<uint8_t, uint16_t>> crop(
     int infer_w,
     uint16_t numDetections,
     const float *bbox_coorList,
+    const float *nmsed_scores,
+    const float confidenceThreshold,
     std::vector<BoundingBox<cv::cuda::GpuMat>> &croppedBBoxes
 );
 
@@ -417,6 +419,9 @@ public:
     }
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
+
+    bool msvc_augment = false;
+    float msvc_confThreshold = 0.5;
 };
 
 class BaseBBoxCropperAugmentation : public BasePostprocessor {
