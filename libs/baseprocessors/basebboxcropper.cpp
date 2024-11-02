@@ -103,7 +103,7 @@ inline std::vector<std::pair<uint8_t, uint16_t>> crop(
         int max_overlap_area = 0;
         uint8_t chosenImgIdx = 0;
 
-        for (uint8_t imgIdx = 0; imgIdx < concatDims.size(); ++imgIdx) {
+        for (uint8_t imgIdx = 0; imgIdx < images.size(); ++imgIdx) {
             const ConcatDims &dims = concatDims[imgIdx];
             // Image bounding box in concatenated frame
             int img_x1 = dims.x1;
@@ -405,18 +405,16 @@ void BaseBBoxCropper::cropping() {
         // List of images to be cropped from
         imageList = currReq.upstreamReq_data;
 
-        std::vector<MemUsageType> totalInMem, totalOutMem(msvc_concat.numImgs, 0), totalEncodedOutMem(msvc_concat.numImgs, 0);
-        std::vector<std::string> origStreams;
-
-
 
         // Doing post processing for the whole batch
         for (BatchSizeType i = 0; i < currReq_batchSize; ++i) {
+            auto numImagesInFrame = currReq.req_concatInfo[i].numImages;
+            std::vector<MemUsageType> totalInMem, totalOutMem(numImagesInFrame, 0), totalEncodedOutMem(numImagesInFrame, 0);
             msvc_overallTotalReqCount++;
 
             // 11. The moment the request starts being processed by the cropper, after the batch was unloaded (ELEVENTH_TIMESTAMP)
-            for (uint8_t concatInd = 0; concatInd < msvc_concat.numImgs; concatInd++) {
-                uint16_t imageIndexInBatch = i * msvc_concat.numImgs + concatInd;
+            for (uint8_t concatInd = 0; concatInd < numImagesInFrame; concatInd++) {
+                uint16_t imageIndexInBatch = currReq.req_concatInfo[i].firstImageIndex + concatInd;
                 currReq.req_origGenTime[imageIndexInBatch].emplace_back(std::chrono::high_resolution_clock::now());
             }
 
@@ -439,8 +437,9 @@ void BaseBBoxCropper::cropping() {
 
             // List of the images in the concatenated frame to be cropped from
             std::vector<cv::cuda::GpuMat> concatImageList;
-            for (uint8_t concatInd = 0; concatInd < msvc_concat.numImgs; concatInd++) {
-                concatImageList.emplace_back(imageList[i * msvc_concat.numImgs + concatInd].data);
+            for (uint8_t concatInd = 0; concatInd < numImagesInFrame; concatInd++) {
+                uint16_t imageIndexInBatch = currReq.req_concatInfo[i].firstImageIndex + concatInd;
+                concatImageList.emplace_back(imageList[imageIndexInBatch].data);
             }
 
             // Cropping the detected bounding boxes from the original images and returns:
@@ -469,15 +468,15 @@ void BaseBBoxCropper::cropping() {
             std::vector<PerQueueOutRequest> outReqList(msvc_OutQueue.size());
 
             // calculate the total memory used for the input images
-            for (BatchSizeType j = 0; j < msvc_concat.numImgs; ++j) {
+            for (BatchSizeType j = 0; j < numImagesInFrame; ++j) {
                 // the index of the image in the whole batch of multiple concatenated frames
-                uint16_t imageIndexInBatch = i * msvc_concat.numImgs + j;
+                uint16_t imageIndexInBatch = currReq.req_concatInfo[i].firstImageIndex + j;
                 totalInMem.emplace_back(imageList[imageIndexInBatch].data.channels() * imageList[imageIndexInBatch].data.rows * 
                                         imageList[imageIndexInBatch].data.cols * CV_ELEM_SIZE1(imageList[imageIndexInBatch].data.type()));
             }
 
             // Number of detections in each individual image in the concatenated frame
-            std::vector<uint16_t> numsDetsInImages(msvc_concat.numImgs, 0);
+            std::vector<uint16_t> numsDetsInImages(numImagesInFrame, 0);
             // The index of the bounding box in its corresponding image
             std::vector<uint16_t> indexInImageDetList(numDetsInFrame);
             for (int j = 0; j < numDetsInFrame; ++j) {
@@ -553,7 +552,7 @@ void BaseBBoxCropper::cropping() {
 
                 // Index of the image in the whole batch of multiple concatenated frames
                 // each frame has mscc_concat.numImgs images
-                uint16_t imageIndexInBatch = i * msvc_concat.numImgs + indexLists[j].first;
+                uint16_t imageIndexInBatch = currReq.req_concatInfo[i].firstImageIndex + indexLists[j].first;
 
                 // There could be multiple timestamps in the request, but the first one always represent
                 // the moment this request was generated at the very beginning of the pipeline
@@ -648,8 +647,8 @@ void BaseBBoxCropper::cropping() {
 
             // If the number of warmup batches has been passed, we start to record the latency
             if (warmupCompleted()) {
-                for (uint8_t j = 0; j < msvc_concat.numImgs; ++j) {
-                    uint8_t imageIndexInBatch = i * msvc_concat.numImgs + j;
+                for (uint8_t j = 0; j < numImagesInFrame; ++j) {
+                    uint8_t imageIndexInBatch = currReq.req_concatInfo[i].firstImageIndex + j;
                     // 12. When the request was completed by the postprocessor (TWELFTH_TIMESTAMP)
                     currReq.req_origGenTime[imageIndexInBatch].emplace_back(std::chrono::high_resolution_clock::now());
                     std::string originStream = getOriginStream(currReq.req_travelPath[imageIndexInBatch]);

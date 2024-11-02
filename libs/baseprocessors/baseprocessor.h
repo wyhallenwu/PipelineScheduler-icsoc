@@ -191,6 +191,7 @@ protected:
     
     inline void executeBatching(BatchTimeType &genTime, RequestSLOType &slo, RequestPathType &path,
                              std::vector<RequestData<LocalGPUReqDataType>> &bufferData,
+                             BatchConcatInfo &concatInfo,
                              std::vector<RequestData<LocalGPUReqDataType>> &prevData);
 
     inline bool readModelProfile(const json &profile);
@@ -201,6 +202,7 @@ protected:
     // number of concatentated and ready to be batched requests
     BatchSizeType msvc_onBufferBatchSize = 0;
     BatchSizeType msvc_avgBatchSize;
+    uint16_t msvc_numImagesInBatch = 0;
 
     BatchInferProfileListType msvc_batchInferProfileList;
     ClockType oldestReqTime;
