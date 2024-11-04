@@ -1011,6 +1011,8 @@ public:
 
     virtual void dispatchThread() {};
 
+    virtual void flushBuffers() {};
+
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false);
 
     virtual void updateCycleTiming() {};

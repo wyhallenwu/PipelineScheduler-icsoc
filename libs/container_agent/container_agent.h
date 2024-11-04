@@ -210,11 +210,14 @@ protected:
 
     bool removePostprocessor(uint8_t numLeftInstances);
 
-    void updateProfileTable();
-
     void ReportStart();
 
     void collectRuntimeMetrics();
+
+    void updateArrivalRecords(ArrivalRecordType arrivalRecords, RunningArrivalRecord &perSecondArrivalRecords,
+                              unsigned int lateCount, unsigned int queueDrops);
+
+    void updateProcessRecords(ProcessRecordType processRecords, BatchInferRecordType batchInferRecords);
 
     class RequestHandler {
     public:
@@ -358,13 +361,15 @@ protected:
     std::string cont_hostDevice;
     std::string cont_hostDeviceType;
     std::string cont_inferModel;
+    std::atomic<bool> run;
+    std::atomic<bool> hasDataReader;
+    std::atomic<bool> isDataSource;
 
     std::unique_ptr<ServerCompletionQueue> server_cq;
     CompletionQueue *sender_cq;
     InDeviceCommunication::AsyncService service;
     std::unique_ptr<grpc::Server> server;
     std::unique_ptr<InDeviceCommunication::Stub> stub;
-    std::atomic<bool> run;
 
     unsigned int pid;
     Profiler *profiler;

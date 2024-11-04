@@ -733,6 +733,8 @@ ContainerAgent::ContainerAgent(const json& configs) {
     receiver.detach();
 
     initiateMicroservices(configs);
+    hasDataReader = cont_msvcsGroups["receiver"].msvcList[0]->msvc_type == MicroserviceType::DataReader;
+    isDataSource = hasDataReader && (cont_msvcsGroups["inference"].msvcList.size() == 0);
 }
 
 void ContainerAgent::initiateMicroservices(const json &configs) {
@@ -1076,7 +1078,8 @@ std::vector<float> getThrptsInPeriods(const std::vector<ClockType> &timestamps, 
 
 
 void ContainerAgent::collectRuntimeMetrics() {
-    unsigned int lateCount, queueDrops, oldReqCount;
+    unsigned int tmp_lateCount, lateCount = 0, queueDrops = 0, pre_queueDrops, inf_queueDrops, miniBatchCount, oldReqCount;
+    double avgRequestRate, avgExecutedBatchSize, latencyEWMA, avgLatency = 0;
     ArrivalRecordType arrivalRecords;
     ProcessRecordType processRecords;
     BatchInferRecordType batchInferRecords;
@@ -1099,11 +1102,15 @@ void ContainerAgent::collectRuntimeMetrics() {
                 cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec);
     }
 
+    // if (timeNow > cont_nextRLDecisionTime) {
+    //     cont_nextRLDecisionTime = timeNow + std::chrono::milliseconds(cont_rlIntervalMillisec);
+    // }
+
     /**
      * @brief If the container is a data source container, it will wait for the data receiver to stop before exiting
-     * 
+     *
      */
-    if (cont_msvcsGroups["receiver"].msvcList[0]->msvc_type == MicroserviceType::DataReader && cont_msvcsGroups["inference"].msvcList.size() == 0) {
+    if (isDataSource) {
         while (run) {
             if (cont_msvcsGroups["receiver"].msvcList[0]->STOP_THREADS) {
                 run = false;
@@ -1117,7 +1124,7 @@ void ContainerAgent::collectRuntimeMetrics() {
     // Initiate a fixed-size vector to store the arrival records for each second
     RunningArrivalRecord perSecondArrivalRecords(maxNumSeconds);
     while (run) {
-        bool hwMetricsScraped = false, interArrivalTimeScraped = false;
+        bool hwMetricsScraped = false;
         auto metricsStopwatch = Stopwatch();
         metricsStopwatch.start();
         auto startTime = metricsStopwatch.getStartTime();
@@ -1128,21 +1135,19 @@ void ContainerAgent::collectRuntimeMetrics() {
                 Profiler::sysStats stats = profiler->reportAtRuntime(getpid(), pid);
                 cont_hwMetrics = {stats.cpuUsage, stats.memoryUsage, stats.rssMemory, stats.gpuUtilization,
                                              stats.gpuMemoryUsage};
-
                 metricsStopwatch.stop();
                 scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);  
                 hwMetricsScraped = true;
                 cont_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() + 
                     std::chrono::milliseconds(cont_metricsServerConfigs.hwMetricsScrapeIntervalMillisec - scrapeLatencyMillisec);
                 spdlog::get("container_agent")->trace("{0:s} SCRAPE hardware metrics. Latency {1:d}ms.",
-                                                     cont_name,
-                                                     scrapeLatencyMillisec);
+                                                     cont_name, scrapeLatencyMillisec);
                 metricsStopwatch.start();
             }
         }
 
         if (timePointCastMillisecond(startTime) >= timePointCastMillisecond(cont_metricsServerConfigs.nextArrivalRateScrapeTime)) {
-            for (auto &receiver: cont_msvcsGroups["receiver"].msvcList) {   
+            for (auto &receiver: cont_msvcsGroups["receiver"].msvcList) {
                 perSecondArrivalRecords.addRecord(receiver->getPerSecondArrivalRecord());
             }
             // secondIndex = (secondIndex + 1) % maxNumSeconds;
@@ -1154,19 +1159,56 @@ void ContainerAgent::collectRuntimeMetrics() {
             metricsStopwatch.start();
         }
 
+        // if (cont_systemName == "fcpo" && timePointCastMillisecond(startTime) >= timePointCastMillisecond(cont_nextRLDecisionTime)) {
+        //     tmp_lateCount = 0;
+        //     for (auto &recv: cont_msvcsGroups["receiver"].msvcList) tmp_lateCount += recv->GetDroppedReqCount();
+        //     lateCount += tmp_lateCount;
+        //     avgRequestRate = perSecondArrivalRecords.getAvgArrivalRate() - tmp_lateCount;
+
+        //     if (avgRequestRate == 0 || std::isnan(avgRequestRate)) {
+        //         cont_fcpo_agent->rewardCallback(0.0, 0.0, 0.0, (double) cont_msvcsGroups["batcher"].msvcList[0]->msvc_idealBatchSize / 10.0);
+        //         avgRequestRate = 0;
+        //     } else {
+        //         pre_queueDrops = 0;
+        //         for (auto &recv: cont_msvcsGroups["receiver"].msvcList) pre_queueDrops += recv->GetQueueDrops();
+        //         inf_queueDrops = 0;
+        //         for (auto &pre: cont_msvcsGroups["preprocessor"].msvcList) inf_queueDrops += pre->GetQueueDrops();
+        //         queueDrops += pre_queueDrops + inf_queueDrops;
+
+        //         avgExecutedBatchSize = 0.1;
+        //         for (auto &bat: cont_msvcsGroups["batcher"].msvcList) avgExecutedBatchSize += bat->GetAvgExecutedBatchSize();
+        //         avgExecutedBatchSize /= cont_msvcsGroups["batcher"].msvcList.size();
+        //         miniBatchCount = 0;
+        //         latencyEWMA = 0.0;
+        //         for (auto &post: cont_msvcsGroups["postprocessor"].msvcList) {
+        //             miniBatchCount += post->GetMiniBatchCount();
+        //             latencyEWMA += post->getLatencyEWMA();
+        //         }
+        //         latencyEWMA /= cont_msvcsGroups["postprocessor"].msvcList.size();
+        //         cont_fcpo_agent->rewardCallback((double) miniBatchCount / avgRequestRate,
+        //                                  (double) (pre_queueDrops + inf_queueDrops) / avgRequestRate,
+        //                                  latencyEWMA / TIME_PRECISION_TO_SEC,
+        //                                  (double) cont_msvcsGroups["batcher"].msvcList[0]->msvc_idealBatchSize / avgExecutedBatchSize);
+        //     }
+        //     cont_fcpo_agent->setState(cont_msvcsGroups["batcher"].msvcList[0]->msvc_idealBatchSize,
+        //                               cont_msvcsGroups["preprocessor"].msvcList[0]->msvc_concat.numImgs,
+        //     //                           avgRequestRate, pre_queueDrops, inf_queueDrops);
+        //     auto [targetRes, newBS, scaling] = cont_fcpo_agent->runStep();
+        //     std::cout << "New Resolution: " << targetRes << ", New Batch Size: " << newBS << ", Scaling: " << scaling << std::endl;
+        //     applyResolution(targetRes);
+        //     applyBatchSize(newBS);
+        //     applyMultiThreading(scaling);
+
+        //     cont_nextRLDecisionTime = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(cont_rlIntervalMillisec);
+        // }
+
         startTime = std::chrono::high_resolution_clock::now();
         if (timePointCastMillisecond(startTime) >= 
                 timePointCastMillisecond(cont_metricsServerConfigs.nextMetricsReportTime)) {
             Stopwatch pushMetricsStopWatch;
             pushMetricsStopWatch.start();
-            queueDrops = 0;
-            lateCount = 0;
-            for (auto &receiver: cont_msvcsGroups["receiver"].msvcList) {
-                lateCount += receiver->GetDroppedReqCount();
-                queueDrops += receiver->GetQueueDrops();
-            }
 
-            spdlog::get("container_agent")->info("{0:s} had {1:d} late requests and dropped {2:d} requests in queues.", cont_name, lateCount, queueDrops);
+            spdlog::get("container_agent")->info("{0:s} had {1:d} late requests of {2:f} total requests. ({3:d} queue drops)", cont_name, lateCount, perSecondArrivalRecords.getAvgArrivalRate(), queueDrops);
 
             std::string modelName = cont_msvcsGroups["inference"].msvcList[0]->getModelName();
             if (cont_RUNMODE == RUNMODE::PROFILING) {
@@ -1206,155 +1248,18 @@ void ContainerAgent::collectRuntimeMetrics() {
                 postprocPointer->getArrivalRecords(arrivalRecords);
                 postprocPointer->getProcessRecords(processRecords);
                 postprocPointer->getBatchInferRecords(batchInferRecords);
-
-            }
-            // Keys value here is std::pair<std::string, std::string> for stream and sender_host
-            NetworkRecordType networkRecords;
-            for (auto &[keys, records]: arrivalRecords) {
-                uint32_t numEntries = records.arrivalTime.size();
-                if (numEntries == 0) {
-                    continue;
-                }
-
-                std::string stream = keys.first;
-                std::string senderHostAbbr = abbreviate(keys.second);
-                
-                std::vector<uint8_t> percentiles = {95};
-                std::map<uint8_t, PercentilesArrivalRecord> percentilesRecord = records.findPercentileAll(percentiles);
-
-                sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, model_name, sender_host, receiver_host, ", cont_arrivalTableName);
-
-                for (auto &period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) {
-                    sql += "arrival_rate_" + std::to_string(period/1000) + "s, ";
-                    sql += "coeff_var_" + std::to_string(period/1000) + "s, ";
-                }
-                perSecondArrivalRecords.aggregateArrivalRecord(cont_metricsServerConfigs.queryArrivalPeriodMillisec);
-                std::vector<float> requestRates = perSecondArrivalRecords.getArrivalRatesInPeriods();
-                std::vector<float> coeffVars = perSecondArrivalRecords.getCoeffVarsInPeriods();
-                sql += absl::StrFormat("p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b, late_requests, queue_drops) "
-                                        "VALUES ('%s', '%s', '%s', '%s', '%s'",
-                                        timePointToEpochString(std::chrono::system_clock::now()), 
-                                        stream,
-                                        cont_inferModel,
-                                        senderHostAbbr,
-                                        abbreviate(cont_hostDevice));
-                for (auto i = 0; i < requestRates.size(); i++) {
-                    sql += ", " + std::to_string(std::isnan(requestRates[i]) ? 0 : requestRates[i]);
-                    sql += ", " + std::to_string(std::isnan(coeffVars[i]) ? 0 : coeffVars[i]);
-                }
-                sql += absl::StrFormat(", %ld, %ld, %ld, %d, %d, %d);",
-                                        percentilesRecord[95].outQueueingDuration,
-                                        percentilesRecord[95].transferDuration,
-                                        percentilesRecord[95].queueingDuration,
-                                        percentilesRecord[95].totalPkgSize,
-                                        lateCount,
-                                        queueDrops);
-
-                pushSQL(*cont_metricsServerConn, sql.c_str());
-
-                if (networkRecords.find(senderHostAbbr) == networkRecords.end()) {
-                    networkRecords[senderHostAbbr] = {
-                        percentilesRecord[95].totalPkgSize,
-                        percentilesRecord[95].transferDuration
-                    };
-                } else {
-                    networkRecords[senderHostAbbr] = {
-                        std::max(percentilesRecord[95].totalPkgSize, networkRecords[senderHostAbbr].totalPkgSize),
-                        std::max(percentilesRecord[95].transferDuration, networkRecords[senderHostAbbr].transferDuration)
-                    };
-                }
-            }
-            for (auto &[senderHost, record]: networkRecords) {
-                std::string senderHostAbbr = abbreviate(senderHost);
-                sql = absl::StrFormat("INSERT INTO %s (timestamps, sender_host, p95_transfer_duration_us, p95_total_package_size_b) "
-                                      "VALUES ('%s', '%s', %ld, %d);",
-                                      cont_networkTableName,
-                                      timePointToEpochString(std::chrono::system_clock::now()),
-                                      senderHostAbbr,
-                                      record.transferDuration,
-                                      record.totalPkgSize);
-                pushSQL(*cont_metricsServerConn, sql.c_str());
-                spdlog::get("container_agent")->trace("{0:s} pushed NETWORK METRICS to the database.", cont_name);
             }
 
-            spdlog::get("container_agent")->trace("{0:s} pushed arrival metrics to the database.", cont_name);
-
-            for (auto& [key, records] : processRecords) {
-                std::string reqOriginStream = key.first;
-                BatchSizeType inferBatchSize = key.second;
-                uint32_t numEntries = records.postEndTime.size();
-                // Check if there are any records
-                if (numEntries < 20) {
-                    continue;
-                }
-
-                // Construct the SQL statement
-                sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, infer_batch_size", cont_processTableName);
-
-                for (auto& period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) {
-                    sql += ", thrput_" + std::to_string(period / 1000) + "s";
-                }
-
-                sql += ", p95_prep_duration_us, p95_batch_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b, p95_encoded_size_b) VALUES (";
-                sql += timePointToEpochString(std::chrono::high_resolution_clock::now()) + ", '" + reqOriginStream + "'," + std::to_string(inferBatchSize);
-
-                // Calculate the throughput rates for the configured periods
-                std::vector<float> throughputRates = getThrptsInPeriods(records.postEndTime, cont_metricsServerConfigs.queryArrivalPeriodMillisec);
-                for (const auto& rate : throughputRates) {
-                    sql += ", " + std::to_string(rate);
-                }
-
-                std::map<uint8_t, PercentilesProcessRecord> percentilesRecord = records.findPercentileAll({95});
-
-                // Add the 95th percentile values from the summarized records
-                sql += ", " + std::to_string(percentilesRecord[95].prepDuration);
-                sql += ", " + std::to_string(percentilesRecord[95].batchDuration);
-                sql += ", " + std::to_string(percentilesRecord[95].inferDuration);
-                sql += ", " + std::to_string(percentilesRecord[95].postDuration);
-                sql += ", " + std::to_string(percentilesRecord[95].inputSize);
-                sql += ", " + std::to_string(percentilesRecord[95].outputSize);
-                sql += ", " + std::to_string(percentilesRecord[95].encodedOutputSize);
-                sql += ")";
-
-                // Push the SQL statement
-                pushSQL(*cont_metricsServerConn, sql.c_str());
-            }            
-            processRecords.clear();
-            spdlog::get("container_agent")->trace("{0:s} pushed PROCESS METRICS to the database.", cont_name);
-
-            for (auto& [keys, records] : batchInferRecords) {
-                uint32_t numEntries = records.inferDuration.size();
-                // Check if there are any records
-                if (numEntries == 0) {
-                    continue;
-                }
-
-                std::string reqOriginStream = keys.first;
-                BatchSizeType inferBatchSize = keys.second;
-
-                std::map<uint8_t, PercentilesBatchInferRecord> percentilesRecord = records.findPercentileAll({95});
-
-                // Construct the SQL statement
-                sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, infer_batch_size, p95_infer_duration_us) "
-                                      "VALUES (%s, '%s', %d, %ld)",
-                                      cont_batchInferTableName,
-                                      timePointToEpochString(std::chrono::high_resolution_clock::now()),
-                                      reqOriginStream,
-                                      inferBatchSize,
-                                      percentilesRecord[95].inferDuration);
-
-                // Push the SQL statement
-                pushSQL(*cont_metricsServerConn, sql.c_str());
-            }
-            batchInferRecords.clear();
-
+            updateArrivalRecords(arrivalRecords, perSecondArrivalRecords, lateCount, queueDrops);
+            updateProcessRecords(processRecords, batchInferRecords);
             pushMetricsStopWatch.stop();
             auto pushMetricsLatencyMillisec = (uint64_t) std::ceil(pushMetricsStopWatch.elapsed_microseconds() / 1000.f);
-            spdlog::get("container_agent")->trace("{0:s} pushed BATCH INFER METRICS to the database", cont_name);
             spdlog::get("container_agent")->trace("{0:s} pushed ALL METRICS to the database. Latency {1:d}ms. Next push in {2:d}ms",
                                                  cont_name,
-                                                 pushMetricsLatencyMillisec, 
+                                                 pushMetricsLatencyMillisec,
                                                  cont_metricsServerConfigs.metricsReportIntervalMillisec - pushMetricsLatencyMillisec);
+
+            queueDrops = 0;
             cont_metricsServerConfigs.nextMetricsReportTime += std::chrono::milliseconds(
                     cont_metricsServerConfigs.metricsReportIntervalMillisec - pushMetricsLatencyMillisec);
         }
@@ -1364,10 +1269,9 @@ void ContainerAgent::collectRuntimeMetrics() {
         nextTime = std::min(cont_metricsServerConfigs.nextMetricsReportTime,
                             cont_metricsServerConfigs.nextArrivalRateScrapeTime);
         if (reportHwMetrics && hwMetricsScraped) {
-            nextTime = std::min(nextTime,
-                                cont_metricsServerConfigs.nextHwMetricsScrapeTime);
+            nextTime = std::min(nextTime, cont_metricsServerConfigs.nextHwMetricsScrapeTime);
         }
-        if (cont_msvcsGroups["receiver"].msvcList[0]->msvc_type == MicroserviceType::DataReader && cont_msvcsGroups["receiver"].msvcList[0]->STOP_THREADS) {
+        if (hasDataReader && cont_msvcsGroups["receiver"].msvcList[0]->STOP_THREADS) {
             run = false;
         }
         timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(nextTime - std::chrono::high_resolution_clock::now()).count();
@@ -1375,83 +1279,151 @@ void ContainerAgent::collectRuntimeMetrics() {
         spdlog::get("container_agent")->trace("{0:s} Container Agent's Metric Reporter sleeps for {1:d} milliseconds.", cont_name, sleepPeriod.count());
         std::this_thread::sleep_for(sleepPeriod);
     }
+
     stopAllMicroservices();
 }
 
-void ContainerAgent::updateProfileTable() {
-    std::string profileTableName = abbreviate("prof__" + cont_inferModel + "__" + cont_hostDeviceType);
-    std::string procTableName = profileTableName + "_proc";
-    std::string hwTableName = profileTableName + "_hw";
-    
-    BatchInferProfileListType batchInferProfile;
+void ContainerAgent::updateArrivalRecords(ArrivalRecordType arrivalRecords, RunningArrivalRecord &perSecondArrivalRecords, unsigned int lateCount, unsigned int queueDrops) {
+    std::string sql;
+    // Keys value here is std::pair<std::string, std::string> for stream and sender_host
+    NetworkRecordType networkRecords;
+    for (auto &[keys, records]: arrivalRecords) {
+        uint32_t numEntries = records.arrivalTime.size();
+        if (numEntries == 0) {
+            continue;
+        }
 
-    pqxx::nontransaction curl(*cont_metricsServerConn);
-    std::string query = absl::StrFormat(
-        "SELECT "
-        "   infer_batch_size, "
-        "   percentile_disc(0.95) WITHIN GROUP (ORDER BY infer_duration) AS p95_infer_duration "
-        "FROM %s "
-        "GROUP BY infer_batch_size", procTableName
-    );
-    pqxx::result res = curl.exec(query);
-    for (const auto& row : res) {
-        BatchSizeType batchSize = row[0].as<BatchSizeType>();
-        batchInferProfile[batchSize].p95inferLat = (uint64_t)(row[1].as<uint64_t>() / batchSize);
+        std::string stream = keys.first;
+        std::string senderHostAbbr = abbreviate(keys.second);
+
+        std::vector<uint8_t> percentiles = {95};
+        std::map<uint8_t, PercentilesArrivalRecord> percentilesRecord = records.findPercentileAll(percentiles);
+
+        sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, model_name, sender_host, receiver_host, ", cont_arrivalTableName);
+
+        for (auto &period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) {
+            sql += "arrival_rate_" + std::to_string(period/1000) + "s, ";
+            sql += "coeff_var_" + std::to_string(period/1000) + "s, ";
+        }
+        perSecondArrivalRecords.aggregateArrivalRecord(cont_metricsServerConfigs.queryArrivalPeriodMillisec);
+        std::vector<float> requestRates = perSecondArrivalRecords.getArrivalRatesInPeriods();
+        std::vector<float> coeffVars = perSecondArrivalRecords.getCoeffVarsInPeriods();
+        sql += absl::StrFormat("p95_out_queueing_duration_us, p95_transfer_duration_us, p95_queueing_duration_us, p95_total_package_size_b, late_requests, queue_drops) "
+                               "VALUES ('%s', '%s', '%s', '%s', '%s'",
+                               timePointToEpochString(std::chrono::system_clock::now()),
+                               stream,
+                               cont_inferModel,
+                               senderHostAbbr,
+                               abbreviate(cont_hostDevice));
+        for (unsigned int i = 0; i < requestRates.size(); i++) {
+            sql += ", " + std::to_string(std::isnan(requestRates[i]) ? 0 : requestRates[i]);
+            sql += ", " + std::to_string(std::isnan(coeffVars[i]) ? 0 : coeffVars[i]);
+        }
+        sql += absl::StrFormat(", %ld, %ld, %ld, %d, %d, %d);",
+                               percentilesRecord[95].outQueueingDuration,
+                               percentilesRecord[95].transferDuration,
+                               percentilesRecord[95].queueingDuration,
+                               percentilesRecord[95].totalPkgSize,
+                               lateCount,queueDrops);
+
+        pushSQL(*cont_metricsServerConn, sql.c_str());
+
+        if (networkRecords.find(senderHostAbbr) == networkRecords.end()) {
+            networkRecords[senderHostAbbr] = {
+                    percentilesRecord[95].totalPkgSize,
+                    percentilesRecord[95].transferDuration
+            };
+        } else {
+            networkRecords[senderHostAbbr] = {
+                    std::max(percentilesRecord[95].totalPkgSize, networkRecords[senderHostAbbr].totalPkgSize),
+                    std::max(percentilesRecord[95].transferDuration, networkRecords[senderHostAbbr].transferDuration)
+            };
+        }
+    }
+    for (auto &[senderHost, record]: networkRecords) {
+        std::string senderHostAbbr = abbreviate(senderHost);
+        sql = absl::StrFormat("INSERT INTO %s (timestamps, sender_host, p95_transfer_duration_us, p95_total_package_size_b) "
+                              "VALUES ('%s', '%s', %ld, %d);",
+                              cont_networkTableName,
+                              timePointToEpochString(std::chrono::system_clock::now()),
+                              senderHostAbbr,
+                              record.transferDuration,
+                              record.totalPkgSize);
+        pushSQL(*cont_metricsServerConn, sql.c_str());
+        spdlog::get("container_agent")->trace("{0:s} pushed NETWORK METRICS to the database.", cont_name);
     }
 
-    query = absl::StrFormat(
-        "SELECT "
-        "   batch_size, "
-        "   MAX(cpu_usage) AS cpu_usage, "
-        "   MAX(mem_usage) AS mem_usage, "
-        "   MAX(rss_mem_usage) AS rss_mem_usage, "
-        "   MAX(gpu_usage) AS gpu_usage, "
-        "   MAX(gpu_mem_usage) AS gpu_mem_usage "
-        "FROM %s "
-        "GROUP BY batch_size", hwTableName
-    );
-    res =  curl.exec(query);
-    for (const auto& row : res) {
-        BatchSizeType batchSize = row[0].as<BatchSizeType>();
-        batchInferProfile[batchSize].cpuUtil = row[1].as<CpuUtilType>();
-        batchInferProfile[batchSize].memUsage = row[2].as<MemUsageType>();
-        batchInferProfile[batchSize].rssMemUsage = row[3].as<MemUsageType>();
-        batchInferProfile[batchSize].gpuUtil = row[4].as<GpuUtilType>();
-        batchInferProfile[batchSize].gpuMemUsage = row[5].as<GpuMemUsageType>();
-    }
+    spdlog::get("container_agent")->trace("{0:s} pushed arrival metrics to the database.", cont_name);
+}
 
-    // Delete old profile entries
-    if (tableExists(*cont_metricsServerConn, cont_metricsServerConfigs.schema, profileTableName)) {
-        query = "DROP TABLE " + profileTableName + ";";
-        pushSQL(*cont_metricsServerConn, query);
-    }
-    query = absl::StrFormat(
-        "CREATE TABLE %s ("
-        "   infer_batch_size INT PRIMARY KEY, "
-        "   p95_infer_duration BIGINT NOT NULL, "
-        "   cpu_usage INT2 NOT NULL, "
-        "   mem_usage INT4 NOT NULL, "
-        "   rss_mem_usage INT4 NOT NULL, "
-        "   gpu_usage INT2 NOT NULL, "
-        "   gpu_mem_usage INT4 NOT NULL"
-        ");", profileTableName
-    );
-    pushSQL(*cont_metricsServerConn, query);
+void ContainerAgent::updateProcessRecords(ProcessRecordType processRecords, BatchInferRecordType batchInferRecords) {
+    for (auto& [key, records] : processRecords) {
+        std::string reqOriginStream = key.first;
+        BatchSizeType inferBatchSize = key.second;
+        uint32_t numEntries = records.postEndTime.size();
+        // Check if there are any records
+        if (numEntries < 20) {
+            continue;
+        }
 
-    // Insert new profile entries
-    query = absl::StrFormat(
-        "INSERT INTO %s (infer_batch_size, p95_infer_duration, cpu_usage, mem_usage, rss_mem_usage, gpu_usage, gpu_mem_usage) "
-        "VALUES ", profileTableName
-    );
-    for (const auto& [batchSize, profile] : batchInferProfile) {
-        query += absl::StrFormat(
-            "(%d,%d,%d,%ld,%ld, %d,%ld),",
-            batchSize, profile.p95inferLat, (int) profile.cpuUtil,
-            profile.memUsage, profile.rssMemUsage, profile.gpuUtil, profile.gpuMemUsage
-        );
-    }
+        // Construct the SQL statement
+        std::string sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, infer_batch_size", cont_processTableName);
 
-    pushSQL(*cont_metricsServerConn, query.substr(0, query.size() - 1) + ";");
+        for (auto& period : cont_metricsServerConfigs.queryArrivalPeriodMillisec) {
+            sql += ", thrput_" + std::to_string(period / 1000) + "s";
+        }
+
+        sql += ", p95_prep_duration_us, p95_batch_duration_us, p95_infer_duration_us, p95_post_duration_us, p95_input_size_b, p95_output_size_b, p95_encoded_size_b) VALUES (";
+        sql += timePointToEpochString(std::chrono::high_resolution_clock::now()) + ", '" + reqOriginStream + "'," + std::to_string(inferBatchSize);
+
+        // Calculate the throughput rates for the configured periods
+        std::vector<float> throughputRates = getThrptsInPeriods(records.postEndTime, cont_metricsServerConfigs.queryArrivalPeriodMillisec);
+        for (const auto& rate : throughputRates) {
+            sql += ", " + std::to_string(rate);
+        }
+
+        std::map<uint8_t, PercentilesProcessRecord> percentilesRecord = records.findPercentileAll({95});
+
+        // Add the 95th percentile values from the summarized records
+        sql += ", " + std::to_string(percentilesRecord[95].prepDuration);
+        sql += ", " + std::to_string(percentilesRecord[95].batchDuration);
+        sql += ", " + std::to_string(percentilesRecord[95].inferDuration);
+        sql += ", " + std::to_string(percentilesRecord[95].postDuration);
+        sql += ", " + std::to_string(percentilesRecord[95].inputSize);
+        sql += ", " + std::to_string(percentilesRecord[95].outputSize);
+        sql += ", " + std::to_string(percentilesRecord[95].encodedOutputSize);
+        sql += ")";
+
+        // Push the SQL statement
+        pushSQL(*cont_metricsServerConn, sql.c_str());
+    }
+    processRecords.clear();
+    spdlog::get("container_agent")->trace("{0:s} pushed PROCESS METRICS to the database.", cont_name);
+
+    for (auto& [keys, records] : batchInferRecords) {
+        uint32_t numEntries = records.inferDuration.size();
+        // Check if there are any records
+        if (numEntries == 0) { continue; }
+
+        std::string reqOriginStream = keys.first;
+        BatchSizeType inferBatchSize = keys.second;
+
+        std::map<uint8_t, PercentilesBatchInferRecord> percentilesRecord = records.findPercentileAll({95});
+
+        // Construct the SQL statement
+        std::string sql = absl::StrFormat("INSERT INTO %s (timestamps, stream, infer_batch_size, p95_infer_duration_us) "
+                              "VALUES (%s, '%s', %d, %ld)",
+                              cont_batchInferTableName,
+                              timePointToEpochString(std::chrono::high_resolution_clock::now()),
+                              reqOriginStream,
+                              inferBatchSize,
+                              percentilesRecord[95].inferDuration);
+
+        // Push the SQL statement
+        pushSQL(*cont_metricsServerConn, sql.c_str());
+    }
+    batchInferRecords.clear();
+    spdlog::get("container_agent")->trace("{0:s} pushed BATCH INFER METRICS to the database", cont_name);
 }
 
 void ContainerAgent::HandleRecvRpcs() {

@@ -156,12 +156,14 @@ public:
         preprocessor.detach();
     }
 
+    void flushBuffers() override;
+
     BasePreprocessorConfigs loadConfigsFromJson(const json &jsonConfigs);
 
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false) override;
 
 protected:
-    std::vector<cv::cuda::GpuMat> msvc_batchBuffer;
+    Request<LocalGPUReqDataType> outReq;
     template <typename T>
     bool validateRequest(Request<T> &req);
 
