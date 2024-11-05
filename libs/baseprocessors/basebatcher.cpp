@@ -322,7 +322,7 @@ void BaseBatcher::batchRequests() {
         bufferData.insert(bufferData.end(), currReq.req_data.begin(), currReq.req_data.end());
         batchConcatInfo.emplace_back(currReq.req_concatInfo[0]);
         batchConcatInfo.back().firstImageIndex = msvc_numImagesInBatch;
-        msvc_numImagesInBatch += currReq.req_concatInfo[0].numImages;
+        msvc_numImagesInBatch += currReq.req_concatInfo[0].numImagesAdded;
 
         prevData.insert(prevData.end(), currReq.upstreamReq_data.begin(), currReq.upstreamReq_data.end());
 

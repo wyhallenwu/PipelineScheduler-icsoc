@@ -113,11 +113,13 @@ struct ConcatDims {
     int32_t x1, y1, width, height;
 };
 
+typedef std::vector<ConcatDims> ConcatConfig;
+
 struct ConcatConfigs {
     uint8_t numImgs = 1;
     uint8_t currIndex = 0;
 
-    std::vector<ConcatDims> concatDims;
+    std::vector<ConcatConfig> list;
 };
 
 
@@ -281,7 +283,8 @@ struct BoundingBox {
  */
 inline std::vector<std::pair<uint8_t, uint16_t>> crop(
     const std::vector<cv::cuda::GpuMat> &images,
-    const std::vector<ConcatDims> &concatDims,
+    const std::vector<ConcatConfig> &allConcatConfigs,
+    const RequestConcatInfo &reqConcatInfo,
     int orig_h,
     int orig_w,
     int infer_h,
