@@ -132,7 +132,10 @@ void concatConfigsGenerator(
 class BasePreprocessor : public Microservice {
 public:
     BasePreprocessor(const json &jsonConfigs);
-    ~BasePreprocessor() = default;
+    ~BasePreprocessor() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s} has stopped", msvc_name);
+    }
 
     BasePreprocessor(const BasePreprocessor &other);
 
@@ -170,7 +173,10 @@ protected:
 class BaseBatcher : public Microservice {
 public:
     BaseBatcher(const json &jsonConfigs);
-    ~BaseBatcher() = default;
+    ~BaseBatcher() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s} has stopped", msvc_name);
+    }
 
     virtual void batchRequests();
 
@@ -222,7 +228,10 @@ typedef uint16_t BatchSizeType;
 class BaseBatchInferencer : public Microservice {
 public:
     BaseBatchInferencer(const json &jsonConfigs);
-    ~BaseBatchInferencer() = default;
+    ~BaseBatchInferencer() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s} has stopped", msvc_name);
+    }
     virtual void inference();
     virtual void inferenceProfiling();
 
@@ -298,7 +307,10 @@ public:
     BasePostprocessor(const json &jsonConfigs) : Microservice(jsonConfigs) {
         loadConfigs(jsonConfigs, true);
     };
-    ~BasePostprocessor() = default;
+    ~BasePostprocessor() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s} has stopped", msvc_name);
+    }
 
     BasePostprocessor(const BasePostprocessor &other) : Microservice(other) {
         std::lock(msvc_overallMutex, other.msvc_overallMutex);
@@ -390,7 +402,10 @@ protected:
 class BaseBBoxCropper : public BasePostprocessor {
 public:
     BaseBBoxCropper(const json &jsonConfigs);
-    ~BaseBBoxCropper() = default;
+    ~BaseBBoxCropper() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s} has stopped", msvc_name);
+    }
 
     BaseBBoxCropper(const BaseBBoxCropper &other) : BasePostprocessor(other) {};
 
@@ -427,7 +442,10 @@ public:
 class BaseBBoxCropperAugmentation : public BasePostprocessor {
 public:
     BaseBBoxCropperAugmentation(const json &jsonConfigs);
-    ~BaseBBoxCropperAugmentation() = default;
+    ~BaseBBoxCropperAugmentation() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s} has stopped", msvc_name);
+    }
 
     BaseBBoxCropperAugmentation(const BaseBBoxCropperAugmentation &other) : BasePostprocessor(other) {};
 
@@ -461,7 +479,10 @@ public:
 class BaseBBoxCropperVerifier : public BasePostprocessor {
 public:
     BaseBBoxCropperVerifier(const json& jsonConfigs);
-    ~BaseBBoxCropperVerifier() = default;
+    ~BaseBBoxCropperVerifier() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s} has stopped", msvc_name);
+    }
 
     void cropping();
 
@@ -486,7 +507,10 @@ public:
 class BaseClassifier : public BasePostprocessor {
 public:
     BaseClassifier(const json &jsonConfigs);
-    ~BaseClassifier() = default;
+    ~BaseClassifier() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s} has stopped", msvc_name);
+    }
 
     BaseClassifier(const BaseClassifier &other) : BasePostprocessor(other) {
         std::lock(msvc_overallMutex, other.msvc_overallMutex);
@@ -522,7 +546,10 @@ protected:
 class BaseSoftmaxClassifier : public BaseClassifier {
 public:
     BaseSoftmaxClassifier(const json &jsonConfigs);
-    ~BaseSoftmaxClassifier() = default;
+    ~BaseSoftmaxClassifier() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s} has stopped", msvc_name);
+    }
 
     BaseSoftmaxClassifier(const BaseSoftmaxClassifier &other) : BaseClassifier(other) {};
 
@@ -533,7 +560,10 @@ public:
 class BaseKPointExtractor : public BasePostprocessor {
 public:
     BaseKPointExtractor(const json &jsonConfigs);
-    ~BaseKPointExtractor() = default;
+    ~BaseKPointExtractor() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s} has stopped", msvc_name);
+    }
 
     BaseKPointExtractor(const BaseKPointExtractor &other) : BasePostprocessor(other) {};
 
