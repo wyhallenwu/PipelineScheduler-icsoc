@@ -466,6 +466,10 @@ void BasePreprocessor::preprocess() {
             continue;
         }
     }
+    if (preProcStream) {
+        delete preProcStream;
+        preProcStream = nullptr;
+    }
     msvc_logFile.close();
     STOPPED = true;
 }
