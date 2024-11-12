@@ -444,7 +444,7 @@ struct PipelineModel {
     std::vector<ContainerHandle *> manifestations;
 
     // Source
-    std::string datasourceName;
+    std::vector<std::string> datasourceName;
 
     uint64_t timeBudgetLeft = 9999999999;
 
