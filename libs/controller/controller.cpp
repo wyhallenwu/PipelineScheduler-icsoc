@@ -121,8 +121,8 @@ void Controller::readInitialObjectCount(const std::string &path) {
             stream->insert({"age", std::ceil(maxPersonRate) * 0.6});
             stream->insert({"gender", std::ceil(maxPersonRate) * 0.6});
             stream->insert({"movenet", std::ceil(maxPersonRate)});
-        } else if (streamName.find("zoom") != std::string::npos) {
-            stream->insert({"retinaface", ctrl_systemFPS});
+        } else if (streamName.find("indoor") != std::string::npos) {
+            stream->insert({"retinamtface", ctrl_systemFPS});
             stream->insert({"arcface", std::ceil(maxPersonRate)});
             stream->insert({"age", std::ceil(maxPersonRate)});
             stream->insert({"gender", std::ceil(maxPersonRate)});
@@ -456,9 +456,9 @@ void Controller::ApplyScheduling() {
                     model->name = replaceSubstring(model->name, "yolov5n", "yolov5ndsrc");
                 }
 
-            } else if (model->name.find("retina1face") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
-                if (model->name.find("retina1facedsrc") == std::string::npos) {
-                    model->name = replaceSubstring(model->name, "retina1face", "retina1facedsrc");
+            } else if (model->name.find("retinamtface") != std::string::npos && model->device != "server" && upstreamIsDatasource) {
+                if (model->name.find("retinamtfacedsrc") == std::string::npos) {
+                    model->name = replaceSubstring(model->name, "retinamtface", "retinamtfacedsrc");
                 }
             }
 
@@ -606,14 +606,14 @@ void Controller::ApplyScheduling() {
 }
 
 bool CheckMergable(const std::string &m) {
-    return m == "datasource" || m == "yolov5n" || m == "retina1face" || m == "yolov5ndsrc" || m == "retina1facedsrc";
+    return m == "datasource" || m == "yolov5n" || m == "retinamtface" || m == "yolov5ndsrc" || m == "retinamtfacedsrc";
 }
 
 ContainerHandle *Controller::TranslateToContainer(PipelineModel *model, NodeHandle *device, unsigned int i) {
     if (model->name.find("datasource") != std::string::npos) {
         for (auto &[downstream, coi] : model->downstreams) {
             if ((downstream->name.find("yolov5n") != std::string::npos ||
-                 downstream->name.find("retina1face") != std::string::npos) &&
+                 downstream->name.find("retinamtface") != std::string::npos) &&
                 downstream->device != "server") {
                 return nullptr;
             }
@@ -793,7 +793,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
             base_config[0]["msvc_dataShape"] = {container->dimensions};
             base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
         } else {
-            if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinafaceDsrc) {
+            if (model == ModelType::Yolov5nDsrc || model == ModelType::RetinaMtfaceDsrc) {
                 base_config[0]["msvc_dataShape"] = {container->dimensions};
                 base_config[0]["msvc_type"] = 500;
                 base_config[0]["msvc_idealBatchSize"] = ctrl_systemFPS;
@@ -804,7 +804,7 @@ void Controller::StartContainer(ContainerHandle *container, bool easy_allocation
 
         // adjust receiver upstreams
         base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"] = {};
-        if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinafaceDsrc) {
+        if (container->model == DataSource || container->model == Yolov5nDsrc || container->model == RetinaMtfaceDsrc) {
             base_config[0]["msvc_upstreamMicroservices"][0]["nb_name"] = "video_source";
             for (auto &source: container->pipelineModel->datasourceName) {
                 base_config[0]["msvc_upstreamMicroservices"][0]["nb_link"].push_back(source);
@@ -906,8 +906,8 @@ void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
             merge_dsrc = true;
             if (container->model == Yolov5n) {
                 container->model = Yolov5nDsrc;
-            } else if (container->model == Retinaface) {
-                container->model = RetinafaceDsrc;
+            } else if (container->model == RetinaMtface) {
+                container->model = RetinaMtfaceDsrc;
             }
         }
     } else {
@@ -915,8 +915,8 @@ void Controller::MoveContainer(ContainerHandle *container, NodeHandle *device) {
             start_dsrc = true;
             if (container->model == Yolov5nDsrc) {
                 container->model = Yolov5n;
-            } else if (container->model == RetinafaceDsrc) {
-                container->model = Retinaface;
+            } else if (container->model == RetinaMtfaceDsrc) {
+                container->model = RetinaMtface;
             }
         }
     }
@@ -1757,9 +1757,9 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
         case PipelineType::Video_Call: {
             auto *datasource = new PipelineModel{startDevice, "datasource", {}, true, {}, {}};
             datasource->possibleDevices = {startDevice};
-            auto *retina1face = new PipelineModel{
+            auto *retinamtface = new PipelineModel{
                     "server",
-                    "retina1face",
+                    "retinamtface",
                     {},
                     true,
                     {},
@@ -1767,8 +1767,8 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {{datasource, -1}}
             };
-            retina1face->possibleDevices = {"server"};
-            datasource->downstreams.push_back({retina1face, -1});
+            retinamtface->possibleDevices = {startDevice};
+            datasource->downstreams.push_back({retinamtface, -1});
 
             auto *emotionnet = new PipelineModel{
                     "server",
@@ -1778,10 +1778,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {},
                     {},
-                    {{retina1face, -1}}
+                    {{retinamtface, -1}}
             };
             emotionnet->possibleDevices = {"server"};
-            retina1face->downstreams.push_back({emotionnet, -1});
+            retinamtface->downstreams.push_back({emotionnet, -1});
 
             auto *age = new PipelineModel{
                     "server",
@@ -1791,10 +1791,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {},
                     {},
-                    {{retina1face, -1}}
+                    {{retinamtface, -1}}
             };
             age->possibleDevices = {"server"};
-            retina1face->downstreams.push_back({age, -1});
+            retinamtface->downstreams.push_back({age, -1});
 
             auto *gender = new PipelineModel{
                     "server",
@@ -1804,10 +1804,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {},
                     {},
-                    {{retina1face, -1}}
+                    {{retinamtface, -1}}
             };
-            gender->possibleDevices = {startDevice, "server"};
-            retina1face->downstreams.push_back({gender, -1});
+            gender->possibleDevices = {"server"};
+            retinamtface->downstreams.push_back({gender, -1});
 
             auto *arcface = new PipelineModel{
                     "server",
@@ -1817,10 +1817,10 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
                     {},
                     {},
                     {},
-                    {{retina1face, -1}}
+                    {{retinamtface, -1}}
             };
-            arcface->possibleDevices = {startDevice, "server"};
-            retina1face->downstreams.push_back({arcface, -1});
+            arcface->possibleDevices = {"server"};
+            retinamtface->downstreams.push_back({arcface, -1});
 
             auto *sink = new PipelineModel{
                     "sink",
@@ -1839,14 +1839,14 @@ PipelineModelListType Controller::getModelsByPipelineType(PipelineType type, con
             arcface->downstreams.push_back({sink, -1});
 
             if (!sourceName.empty()) {
-                retina1face->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][retina1face->name];
+                retinamtface->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][retinamtface->name];
                 emotionnet->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][emotionnet->name];
                 age->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][age->name];
                 gender->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][gender->name];
                 arcface->arrivalProfiles.arrivalRates = ctrl_initialRequestRates[sourceName][arcface->name];
             }
 
-            return {datasource, retina1face, emotionnet, age, gender, arcface, sink};
+            return {datasource, retinamtface, emotionnet, age, gender, arcface, sink};
         }
         default:
             return {};
