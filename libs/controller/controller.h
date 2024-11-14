@@ -1095,6 +1095,7 @@ private:
     ContainerLibType ctrl_containerLib;
     DeviceInfoType ctrl_sysDeviceInfo = {
         {Server, "server"},
+        {OnPremise, "onprem"},
         {AGXXavier, "agxavier"},
         {NXXavier, "nxavier"},
         {OrinNano, "orinano"}
