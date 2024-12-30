@@ -97,6 +97,8 @@ protected:
         std::string command;
         command =
                 "docker run --network=host -u 0:0 --privileged -v /home/cdsn:/home/soulsaver "
+                "-v /home/cdsn/pipe/data:/home/soulsaver/pipe/data "
+                "-v /home/cdsn/pipe/models:/home/soulsaver/pipe/models "
                 "-v /run/jtop.sock:/run/jtop.sock  -v /usr/bin/tegrastats:/usr/bin/tegrastats "
                 "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
