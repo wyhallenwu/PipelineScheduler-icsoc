@@ -44,7 +44,7 @@ void Engine::serializeEngineOptions(const TRTConfigs &configs) {
 
     m_subVals = configs.subVals;
     m_divVals = configs.divVals;
-    m_normalize = configs.normalize;
+    m_normalizedScale = configs.normalizeScale;
     m_precision = configs.precision;
     m_deviceIndex = configs.deviceIndex;
 
@@ -663,45 +663,6 @@ bool Engine::runInference(
     return inferenceStatus;
 
 
-}
-
-/**
- * @brief Preprocess the image by first permuting the images to shape CHW (instead) and normalize the image
- * 
- * @param batchInput 
- * @param subVals 
- * @param divVals 
- * @param normalize 
- * @return cv::cuda::GpuMat 
- */
-cv::cuda::GpuMat Engine::blobFromGpuMats(const std::vector<cv::cuda::GpuMat>& batchInput, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals, bool normalize) {
-    cv::cuda::GpuMat gpu_dst(1, batchInput[0].rows * batchInput[0].cols * batchInput.size(), CV_8UC3);
-
-    size_t width = batchInput[0].cols * batchInput[0].rows;
-    for (size_t img = 0; img < batchInput.size(); img++) {
-        std::vector<cv::cuda::GpuMat> input_channels{
-                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[0 + width * 3 * img])),
-                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[width + width * 3 * img])),
-                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U,
-                                 &(gpu_dst.ptr()[width * 2 + width * 3 * img]))
-        };
-        cv::cuda::split(batchInput[img], input_channels);  // HWC -> CHW
-    }
-
-    cv::cuda::GpuMat mfloat;
-    if (normalize) {
-        // [0.f, 1.f]
-        gpu_dst.convertTo(mfloat, CV_32FC3, 1.f / 255.f);
-    } else {
-        // [0.f, 255.f]
-        gpu_dst.convertTo(mfloat, CV_32FC3);
-    }
-
-    // Apply scaling and mean subtraction
-    cv::cuda::subtract(mfloat, cv::Scalar(subVals[0], subVals[1], subVals[2]), mfloat, cv::noArray(), -1);
-    cv::cuda::divide(mfloat, cv::Scalar(divVals[0], divVals[1], divVals[2]), mfloat, 1, -1);
-
-    return mfloat;
 }
 
 /**
