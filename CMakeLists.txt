@@ -235,12 +235,6 @@ else()
     # Manually specify the path to the protobufprotocols
     set(protobufprotocols_DIR "${CMAKE_CURRENT_BINARY_DIR}/../protobufprotocols")
 
-    add_subdirectory(libs/misc)
-    add_subdirectory(libs/microservice)
-    add_subdirectory(libs/utils/protobufprotocols)
-    add_subdirectory(libs/controller)
-    add_subdirectory(libs/communicator)
-    add_subdirectory(libs/container_agent)
     add_subdirectory(libs/trtengine)
     add_subdirectory(libs/utils/onnx2trt)
     add_subdirectory(libs/baseprocessors)
