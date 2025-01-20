@@ -4,8 +4,8 @@
         "cont_systemName": "ppp",
         "cont_pipeName": "traffic",
         "cont_taskName": "yolov5",
-        "cont_hostDevice": "agx",
-        "cont_hostDeviceType": "agx",
+        "cont_hostDevice": "nx",
+        "cont_hostDeviceType": "nx",
         "cont_name": "yolov5_0",
         "cont_pipeline": [
             {
@@ -240,7 +240,7 @@
                 "cbs":1,
                 "normalize": true,
                 "obs": 1,
-                "path": "../models/yolov5n_dynamic_nms_agx_fp32_16_1.engine",
+                "path": "../models/yolov5n_dynamic_nms_nx_fp32_8_1.engine",
                 "prec": 4,
                 "device": 0,
                 "msvc_imgNormScale": "1/255",
@@ -325,7 +325,7 @@
                         "nb_classOfInterest": -1,
                         "nb_commMethod": 2,
                         "nb_link": [
-                            "localhost:55012"
+                            "localhost:55055"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "name",
@@ -381,10 +381,10 @@
     },
     "profiling": {
         "profile_minBatch": 1,
-        "profile_maxBatch": 16,
+        "profile_maxBatch": 8,
         "profile_stepMode": 1,
         "profile_step": 1,
-        "profile_templateModelPath": "../models/yolov5n_dynamic_nms_agx_fp32_16_1.engine",
+        "profile_templateModelPath": "../models/yolov5n_dynamic_nms_nx_fp32_16_1.engine",
         "profile_inputRandomizeScheme": 0,
         "profile_numWarmUpBatches": 10,
         "profile_numProfileBatches": 100,

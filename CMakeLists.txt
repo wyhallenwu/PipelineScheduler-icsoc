@@ -319,5 +319,5 @@ else()
 
     add_executable(Container_CarBrand libs/workloads/carbrand/carbrand.cpp)
     target_link_libraries(Container_CarBrand carbrand)
-    
+
 endif()
