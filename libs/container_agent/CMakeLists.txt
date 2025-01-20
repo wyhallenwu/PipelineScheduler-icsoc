@@ -23,7 +23,6 @@ add_library(container_agent
 # the export namespace when using add_subdirectory() instead.
 add_library(container_agent::container_agent ALIAS container_agent)
 
-
 # Required compiler features.
 # https://cmake.org/cmake/help/v3.1/manual/cmake-compile-features.7.html
 target_compile_features(container_agent
@@ -58,7 +57,6 @@ target_include_directories(container_agent
         $<BUILD_INTERFACE:${container_agent_SOURCE_DIR}/>
         # Used when installing the library:
         $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
-        ${PYTHON_INCLUDE_DIRS}
         ${OpenCV_INCLUDE_DIRS}
         ${PostgreSQL_INCLUDE_DIRS}
         ${LIBPQXX_INCLUDE_DIRS}
@@ -78,7 +76,9 @@ target_link_libraries(container_agent
         ${PostgreSQL_LIBRARIES}
         ${LIBPQXX_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
-        ${PYTHON_LIBRARIES}
+        ${CUDA_LIBRARIES}
+        CUDA::nvml
+        profiler
         microservice
         controller
         communicator
