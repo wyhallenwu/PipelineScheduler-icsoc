@@ -205,13 +205,12 @@ json msvcconfigs::loadJson() {
         if (absl::GetFlag(FLAGS_json_path).has_value()) {
             std::ifstream file(absl::GetFlag(FLAGS_json_path).value());
             auto json_file = json::parse(file);
-            // try {
-            //     profilingConfigs = json_file.at("profiling");
-            // } catch (json::out_of_range &e) {
-            //     spdlog::trace("{0:s} No profiling configurations found.", __func__);
-            // } catch (json::parse_error &e) {
-            //     spdlog::error("{0:s} Error parsing json file.", __func__);
-            // }
+            file = std::ifstream("../jsons/container_lib.json");
+            auto containerLibs = json::parse(file);
+            std::string d = json_file["container"]["cont_taskName"].get<std::string>() + "_" +
+                            json_file["container"]["cont_hostDeviceType"].get<std::string>();
+            json_file["container"]["cont_pipeline"][3]["path"] = containerLibs[d]["modelPath"];
+            json_file["profiling"]["profile_templateModelPath"] = containerLibs[d]["modelPath"];
             spdlog::trace("{0:s} finished loading Json Configs from file.", __func__);
             return json_file;
         } else {
@@ -1041,7 +1040,7 @@ std::vector<float> getThrptsInPeriods(const std::vector<ClockType> &timestamps, 
     uint8_t periodIndex = 0;
     // Iterate through each period
     for (int i = timestamps.size() - 1; i >= 0; i--) {
-        if (timestamps[i] > now) { // TODO: This is a hack to avoid the case where the timestamp is in the future because of lokal Timing Updates of the device. This needs a better solution in the future
+        if (timestamps[i] > now) { // TODO: This is a hack to avoid the case where the timestamp is in the future because of local Timing Updates of the device. This needs a better solution in the future
             continue;
         }
         // Calculate the lower bound time point for the current period
