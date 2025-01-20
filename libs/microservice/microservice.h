@@ -23,7 +23,6 @@
 
 using json = nlohmann::ordered_json;
 
-
 template<typename DataType>
 struct RequestData {
     RequestDataShapeType shape;
@@ -40,6 +39,24 @@ struct RequestData {
         shape.clear();
     }
 };
+
+ 
+/**
+ * @brief Multiple of images can be resized and added into a single frame to improve throughput.
+ * And it is possible that each frame is not always filled with the same number of images.
+ */
+
+struct RequestConcatInfo {
+    // The total number of images that can be added to the frame.
+    uint8_t totalNumImages = 0;
+    // The number of images that have been added to the frame.
+    // Added by 1 every time a new image is added to the frame.
+    uint8_t numImagesAdded = 0;
+    // The index of the first image of the frame in the batch.
+    uint16_t firstImageIndex = 0;
+};
+
+typedef std::vector<RequestConcatInfo> BatchConcatInfo;
 
 /**
  * @brief 
@@ -66,6 +83,10 @@ struct Request {
 
     // The Inter-container GPU data of that this request carries.
     std::vector<RequestData<DataType>> req_data = {};
+
+    // The information use to track each image in the frames of the batch
+    BatchConcatInfo req_concatInfo;
+
     // To carry the data of the upstream microservice in case we need them for further processing.
     // For instance, for cropping we need both the original image (`upstreamReq_data`) and the output
     // of the inference engine, which is a result of `req_data`.
@@ -80,12 +101,14 @@ struct Request {
             RequestPathType path,
             BatchSizeType batchSize,
             std::vector<RequestData<DataType>> data,
+            BatchConcatInfo concatInfo,
             std::vector<RequestData<DataType>> upstream_data
 
     ) : req_origGenTime(genTime),
         req_e2eSLOLatency(latency),
         req_travelPath(std::move(path)),
-        req_batchSize(batchSize) {
+        req_batchSize(batchSize),
+        req_concatInfo(concatInfo) {
         req_data = data;
         upstreamReq_data = upstream_data;
     }
@@ -118,6 +141,7 @@ struct Request {
             req_batchSize = other.req_batchSize;
             req_data = other.req_data;
             upstreamReq_data = other.upstreamReq_data;
+            req_concatInfo = other.req_concatInfo;
         }
         return *this;
     }
@@ -125,6 +149,7 @@ struct Request {
     ~Request() {
         req_data.clear();
         upstreamReq_data.clear();
+        req_concatInfo.clear();
     }
 };
 
@@ -135,13 +160,23 @@ private:
     std::queue<Request<LocalCPUReqDataType>> q_cpuQueue;
     std::queue<Request<LocalGPUReqDataType>> q_gpuQueue;
     std::mutex q_mutex;
-    std::condition_variable q_condition;
+    std::condition_variable q_condition_producers;
+    std::condition_variable q_condition_consumer;
     std::uint8_t activeQueueIndex;
     QueueLengthType q_MaxSize = 100;
     std::int16_t class_of_interest;
     bool isEmpty;
     bool isEncoded = false;
     std::atomic<unsigned int> dropedCount = 0;
+
+    // Fairness control variables
+    std::atomic<uint32_t> producer_ticket{0}; // Ticket number for producers
+    std::atomic<uint32_t> current_ticket{0};  // Current ticket being served
+    std::atomic<bool> consumer_waiting{false}; // To give consumer priority
+    std::condition_variable ticket_condition;
+    std::mutex ticket_mutex;
+
+    static constexpr uint32_t MAX_TICKET_VALUE = UINT32_MAX - 1000; // Maximum ticket value before wraparound
 
 public:
     ThreadSafeFixSizedDoubleQueue(QueueLengthType size, int16_t coi, std::string name) :  q_name(name), q_MaxSize(size), class_of_interest(coi) {}
@@ -156,78 +191,190 @@ public:
     }
 
     /**
-     * @brief Emplacing Type 1 requests
+     * @brief 
      * 
      * @param request 
      */
     void emplace(Request<LocalCPUReqDataType> request) {
-        std::unique_lock<std::mutex> lock(q_mutex);
-        if (q_cpuQueue.size() == q_MaxSize) {
-            dropedCount += q_cpuQueue.front().req_batchSize;
-            spdlog::get("container_agent")->warn("Queue {0:s} is full, dropping request", q_name);
-            q_cpuQueue.pop();
-        }
-        q_cpuQueue.emplace(request);
-        q_condition.notify_one();
+        // // Get a ticket for this producer and handle overflow if necessary
+        // uint32_t my_ticket = producer_ticket.fetch_add(1);
+        // handleTicketOverflow();
+
+        // // Wait until it's this producer's turn and the consumer is not waiting
+        // while (current_ticket.load() != my_ticket || consumer_waiting.load()) {
+        //     std::this_thread::yield();
+        // }
+
+        // Enter critical section only for queue operations
+        {
+            std::unique_lock<std::mutex> lock(q_mutex);
+            if (q_cpuQueue.size() == q_MaxSize) {
+                dropedCount += q_cpuQueue.front().req_batchSize;
+                spdlog::get("container_agent")->warn("Queue {0:s} is full, dropping request", q_name);
+                q_cpuQueue.pop();
+            }
+            q_cpuQueue.emplace(std::move(request)); // Use move semantics for efficiency
+        } // Mutex is released here
+
+        // // Move to the next producer and notify consumer, outside the critical section
+        // current_ticket.fetch_add(1);
+        q_condition_consumer.notify_one();
     }
 
     /**
-     * @brief Emplacing Type 2 requests
+     * @brief Emplacing Type 1 requests with fairness for producers and ticket wraparound
+     *
+     * @param request
+     */
+    void emplace(std::vector<Request<LocalCPUReqDataType>> request) {
+        // // Get a ticket for this producer and handle overflow if necessary
+        // uint32_t my_ticket = producer_ticket.fetch_add(1);
+        // handleTicketOverflow();
+
+        // // Wait until it's this producer's turn
+        // {
+        //     std::unique_lock<std::mutex> ticketLock(ticket_mutex);
+        //     ticket_condition.wait(ticketLock, [this, my_ticket]() {
+        //         return current_ticket.load() == my_ticket;
+        //     });
+        // }
+
+        // Enter critical section only for queue operations
+        std::unique_lock<std::mutex> lock(q_mutex);
+        for (auto &req : request) {
+            if (q_cpuQueue.size() == q_MaxSize) {
+                dropedCount += q_cpuQueue.front().req_batchSize;
+                spdlog::get("container_agent")->warn("Queue {0:s} is full, dropping request", q_name);
+                q_cpuQueue.pop();
+            }
+            q_cpuQueue.emplace(std::move(req)); // Use move semantics for efficiency
+        }
+
+        // Move to the next producer and notify consumer, outside the critical section
+        // current_ticket.fetch_add(1);
+        q_condition_consumer.notify_one();
+    }
+
+    /**
+     * @brief Emplacing Type 2 requests with fairness for producers and ticket wraparound
      * 
      * @param request 
      */
     void emplace(Request<LocalGPUReqDataType> request) {
-        std::unique_lock<std::mutex> lock(q_mutex);
-        if (q_gpuQueue.size() == q_MaxSize) {
-            dropedCount += q_gpuQueue.front().req_batchSize;
-            spdlog::get("container_agent")->warn("Queue {0:s} is full, dropping request", q_name);
-            q_gpuQueue.pop();
-        }
-        q_gpuQueue.emplace(request);
-        q_condition.notify_one();
+        // uint32_t my_ticket = producer_ticket.fetch_add(1); // Get a ticket for this producer
+        // handleTicketOverflow(); // Handle overflow if needed
+
+        // while (current_ticket.load() != my_ticket) {
+        //     std::this_thread::yield(); // Wait for the producer's turn or yield to the consumer
+        // }
+
+        // Lock only to modify the queue safely
+        {
+            std::unique_lock<std::mutex> lock(q_mutex);
+            if (q_gpuQueue.size() == q_MaxSize) {
+                dropedCount += q_gpuQueue.front().req_batchSize;
+                spdlog::get("container_agent")->warn("Queue {0:s} is full, dropping request", q_name);
+                q_gpuQueue.pop();
+            }
+            q_gpuQueue.emplace(std::move(request)); // Use move semantics if possible for efficiency
+        } // Unlock as soon as queue operations are done
+
+        // // Move to the next producer and notify consumer, outside the critical section
+        // current_ticket.fetch_add(1);
+        q_condition_consumer.notify_one();
     }
 
     /**
-     * @brief poping Type 1 requests
+     * @brief Pop CPU requests
      * 
-     * @param request 
+     * @param getQueueSize Whether the queue size should be piggybacked on the shape of the first data element
+     * @param timeout 
+     * @return Request<LocalCPUReqDataType> 
      */
-    Request<LocalCPUReqDataType> pop1(uint32_t timeout = 100000) { // 100ms
-        std::unique_lock<std::mutex> lock(q_mutex);
-
+    Request<LocalCPUReqDataType> pop1(bool getQueueSize = false, uint32_t timeout = 100000) { // 100ms
         Request<LocalCPUReqDataType> request;
-        isEmpty = !q_condition.wait_for(
+        bool notify = false;
+        uint16_t queueSize = 0;
+
+        {
+            std::unique_lock<std::mutex> lock(q_mutex);
+            isEmpty = !q_condition_consumer.wait_for(
                 lock,
                 TimePrecisionType(timeout),
                 [this]() { return !q_cpuQueue.empty(); }
-        );
-        if (!isEmpty) {
-            request = q_cpuQueue.front();
-            q_cpuQueue.pop();
-        } else {
-            request.req_travelPath = {"empty"};
+            );
+
+            // Only proceed if the queue is not empty
+            if (!isEmpty) {
+                request = q_cpuQueue.front();
+                q_cpuQueue.pop();
+
+                queueSize = q_cpuQueue.size();
+
+                // Check if there's more work to notify another consumer
+                notify = !q_cpuQueue.empty();
+            }
         }
+
+        // Notify outside the critical section
+        if (notify) {
+            q_condition_consumer.notify_one();
+        }
+
+        // If the queue was empty, set a default value outside the critical section
+        if (isEmpty) {
+            request.req_travelPath = {"empty"};
+        } else {
+            // We piggyback the queue size on the shape of the first data element
+            if (getQueueSize) {
+                request.req_data[0].shape.emplace_back(queueSize);
+            }
+        }
+
         return request;
     }
 
     /**
-     * @brief popping Type 2 requests
+     * @brief Pop GPU requests
      * 
-     * @param request 
+     * @param getQueueSize Whether the queue size should be piggybacked on the shape of the first data element
+     * @param timeout 
+     * @return Request<LocalGPUReqDataType> 
      */
-    Request<LocalGPUReqDataType> pop2(uint32_t timeout = 100000) { // 100ms
-        std::unique_lock<std::mutex> lock(q_mutex);
+    Request<LocalGPUReqDataType> pop2(bool getQueueSize = false, uint32_t timeout = 100000) { // 100ms
         Request<LocalGPUReqDataType> request;
-        isEmpty = !q_condition.wait_for(
+        bool notify = false;
+        uint16_t queueSize = 0;
+
+        {
+            std::unique_lock<std::mutex> lock(q_mutex);
+            isEmpty = !q_condition_consumer.wait_for(
                 lock,
                 TimePrecisionType(timeout),
                 [this]() { return !q_gpuQueue.empty(); }
-        );
-        if (!isEmpty) {
-            request = q_gpuQueue.front();
-            q_gpuQueue.pop();
-        } else {
+            );
+
+            // Only proceed if the queue is not empty
+            if (!isEmpty) {
+                request = q_gpuQueue.front();
+                q_gpuQueue.pop();
+
+                queueSize = q_gpuQueue.size();
+
+                // Check if there's more work to notify another consumer
+                notify = !q_gpuQueue.empty();
+            }
+        }
+        if (notify) {
+            q_condition_consumer.notify_one();
+        }
+        if (isEmpty) {
             request.req_travelPath = {"empty"};
+        } else {
+            // We piggyback the queue size on the shape of the first data element
+            if (getQueueSize) {
+                request.req_data[0].shape.emplace_back(queueSize);
+            }
         }
         return request;
     }
@@ -241,18 +388,16 @@ public:
         std::unique_lock<std::mutex> lock(q_mutex);
         if (activeQueueIndex == 1) {
             return q_cpuQueue.size();
-        } //else if (activeQueueIndex == 2) {
+        }
         return q_gpuQueue.size();
-        //}
     }
 
     int32_t size(uint8_t queueIndex) {
         std::unique_lock<std::mutex> lock(q_mutex);
         if (queueIndex == 1) {
             return q_cpuQueue.size();
-        } //else if (activeQueueIndex == 2) {
+        }
         return q_gpuQueue.size();
-        //}
     }
 
     unsigned int drops() {
@@ -288,7 +433,21 @@ public:
         std::unique_lock<std::mutex> lock(q_mutex);
         return isEncoded;
     }
+
+private:
+    /**
+     * @brief Handle ticket overflow by resetting tickets when they reach a high value.
+     */
+    void handleTicketOverflow() {
+        uint32_t expected = MAX_TICKET_VALUE;
+        if (producer_ticket.load() >= expected && current_ticket.load() >= expected) {
+            // Reset atomically to avoid locking
+            producer_ticket.store(0);
+            current_ticket.store(0);
+        }
+    }
 };
+
 
 /**
  * @brief 
@@ -357,7 +516,9 @@ namespace msvcconfigs {
         ProfileGenerator = 501,
         DataSink = 502,
         // Preprocessor should have number between 1000 and 2000
-        PreprocessBatcher = 1000,
+        Preprocessor = 1000,
+        // Batcher should have number between 1500 and 2000
+        Batcher = 1500,
         // Inferencer should have number larger than 2000
         TRTInferencer = 2000,
         // Postprocessor should have number larger than 3000
@@ -385,8 +546,6 @@ namespace msvcconfigs {
         std::string msvc_name;
         // Type of microservice data receiver, data processor, or data sender
         MicroserviceType msvc_type;
-        // Application level configs
-        std::string msvc_appLvlConfigs = "";
         // The acceptable latency for each individual request processed by this microservice, in `microsecond`
         MsvcSLOType msvc_pipelineSLO;
         // 
@@ -443,9 +602,10 @@ public:
 
     /**
      * @brief Add a new arrival to the records. There are 3 timestamps to keep be kept.
-     * 1. The time the request is processed by the upstream postprocessor and placed onto the outqueue.
-     * 2. The time the request is sent out by upstream sender.
-     * 3. The time the request is placed onto the outqueue of receiver.
+     * 1. The time the request is processed by the upstream postprocessor and placed onto the outqueue. (SECOND_TIMESTAMP)
+     * 2. The time the request is sent out by upstream sender. (THIRD_TIMESTAMP)
+     * 3. The time the request is placed onto the outqueue of receiver. (FOURTH_TIMESTAMP)
+     * 4. The time the request is received by the preprocessor. (FIFTH_TIMESTAMP)
      *
      * @param timestamps
      */
@@ -461,31 +621,22 @@ public:
         for (size_t i = 0; i < timestamps.size() - 1; ++i) {
             if (timestamps[i] > timestamps[i + 1]) return;
         }
+
+
+        auto outQueueingDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count();
+        auto transferDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count();
+        auto inQueueingDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count();
+    
+        lastTransferDuration = transferDuration;
+
         std::unique_lock<std::mutex> lock(mutex);
         ArrivalRecord * record = &records[{reqOriginStream, originDevice}];
-        auto transferDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[3] - timestamps[2]).count();
         // If transfer latency is 0 or negative, which only happens when time between devices are not properly synchronized
-        if (timestamps[3] <= timestamps[2]) {
-            if (record->transferDuration.empty() || lastTransferDuration == -1){
-                transferDuration = 0;
-            } else {
-                transferDuration = record->transferDuration.back();
-            }
-        }
         record->transferDuration.emplace_back(transferDuration);
-        lastTransferDuration = transferDuration;
-        if (timestamps[2] <= timestamps[1]) {
-            record->outQueueingDuration.emplace_back(0);
-        } else {
-            record->outQueueingDuration.emplace_back(
-                    std::chrono::duration_cast<TimePrecisionType>(timestamps[2] - timestamps[1]).count());
-        }
-        if (timestamps[4] <= timestamps[3]) {
-            record->queueingDuration.emplace_back(0);
-        } else {
-            record->queueingDuration.emplace_back(
-                    std::chrono::duration_cast<TimePrecisionType>(timestamps[4] - timestamps[3]).count());
-        }
+        record->outQueueingDuration.emplace_back(outQueueingDuration);
+        record->queueingDuration.emplace_back(inQueueingDuration);
+        record->queueingDuration.emplace_back(inQueueingDuration);
+        
         record->arrivalTime.emplace_back(timestamps[2]);
         record->totalPkgSize.emplace_back(totalPkgSize); //Byte
         record->reqSize.emplace_back(requestSize); //Byte
@@ -503,6 +654,55 @@ public:
         records.clear();
         currNumEntries = 0;
         return temp;
+    }
+
+    /**
+     * @brief Get records into a combined record from multiple microservices
+     * 
+     * @param overallRecords 
+     */
+    void getRecords(ArrivalRecordType &overallRecords) {
+        std::unique_lock<std::mutex> lock(mutex);
+        // make deep copy of records
+
+        for (auto &record: records) {
+            if (overallRecords.find(record.first) == overallRecords.end()) {
+                overallRecords[record.first] = record.second;
+            } else {
+                overallRecords[record.first].transferDuration.insert(
+                    overallRecords[record.first].transferDuration.end(),
+                    record.second.transferDuration.begin(),
+                    record.second.transferDuration.end()
+                );
+                overallRecords[record.first].outQueueingDuration.insert(
+                    overallRecords[record.first].outQueueingDuration.end(),
+                    record.second.outQueueingDuration.begin(),
+                    record.second.outQueueingDuration.end()
+                );
+                overallRecords[record.first].queueingDuration.insert(
+                    overallRecords[record.first].queueingDuration.end(),
+                    record.second.queueingDuration.begin(),
+                    record.second.queueingDuration.end()
+                );
+                overallRecords[record.first].arrivalTime.insert(
+                    overallRecords[record.first].arrivalTime.end(),
+                    record.second.arrivalTime.begin(),
+                    record.second.arrivalTime.end()
+                );
+                overallRecords[record.first].totalPkgSize.insert(
+                    overallRecords[record.first].totalPkgSize.end(),
+                    record.second.totalPkgSize.begin(),
+                    record.second.totalPkgSize.end()
+                );
+                overallRecords[record.first].reqSize.insert(
+                    overallRecords[record.first].reqSize.end(),
+                    record.second.reqSize.begin(),
+                    record.second.reqSize.end()
+                );
+            }
+        }
+        records.clear();
+        currNumEntries = 0;
     }
 
     void setKeepLength(uint64_t keepLength) {
@@ -527,10 +727,15 @@ public:
 
 
     /**
-     * @brief Add a new arrival to the records. There are 3 timestamps to keep be kept.
-     * 1. The time the request is processed by the upstream postprocessor and placed onto the outqueue.
-     * 2. The time the request is sent out by upstream sender.
-     * 3. The time the request is placed onto the outqueue of receiver.
+     * @brief Add new process records to the records. There are 6 timestamps to keep be considered.
+     * 1. When the request was received by the preprocessor (FIFTH_TIMESTAMP)
+     * 2. When the request was done preprocessing by the preprocessor (SIXTH_TIMESTAMP)
+     * 3. When the request, along with all others in the batch, was batched together and sent to the inferencer (SEVENTH_TIMESTAMP)
+     * 4. When the batch was popped by the inferencer (EIGHTH_TIMESTAMP)
+     * 5. When the batch inferencer was completed by the inferencer (NINTH_TIMESTAMP)
+     * 6. When the batch was received by the postprocessor (TENTH_TIMESTAMP)
+     * 7. When each request starts to be processed by the postprocessor (ELEVENTH_TIMESTAMP)
+     * 8. When each request was completed by the postprocessor (TWELFTH_TIMESTAMP)
      *
      * @param timestamps
      */
@@ -546,19 +751,26 @@ public:
         for (size_t i = 0; i < timestamps.size() - 1; ++i) {
             if (timestamps[i] >= timestamps[i + 1]) return;
         }
+        auto prepDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[6] - timestamps[5]).count();
+        auto batchDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[7] - timestamps[6]).count();
+        auto inferQueueingDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[8] - timestamps[7]).count();
+        auto inferDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[9] - timestamps[8]).count();
+        auto postDuration = std::chrono::duration_cast<TimePrecisionType>(timestamps[11] - timestamps[10]).count();
+
         std::unique_lock<std::mutex> lock(mutex);
-        processRecords[{reqOrigin, inferBatchSize}].prepDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[6] - timestamps[5]).count());
-        processRecords[{reqOrigin, inferBatchSize}].batchDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[7] - timestamps[6]).count());
-        processRecords[{reqOrigin, inferBatchSize}].inferQueueingDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[8] - timestamps[7]).count());
-        processRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[9] - timestamps[8]).count());
-        processRecords[{reqOrigin, inferBatchSize}].postDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[11] - timestamps[10]).count());
+        processRecords[{reqOrigin, inferBatchSize}].prepDuration.emplace_back(prepDuration);
+        processRecords[{reqOrigin, inferBatchSize}].batchDuration.emplace_back(batchDuration);
+        processRecords[{reqOrigin, inferBatchSize}].inferQueueingDuration.emplace_back(inferQueueingDuration);
+        // We consider the time during which the batch inference results were unloaded from the inferencer to the postprocessor as the inference duration
+        processRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(inferDuration);
+        processRecords[{reqOrigin, inferBatchSize}].postDuration.emplace_back(postDuration);
         processRecords[{reqOrigin, inferBatchSize}].inferBatchSize.emplace_back(inferBatchSize);
         processRecords[{reqOrigin, inferBatchSize}].postEndTime.emplace_back(timestamps[11]);
         processRecords[{reqOrigin, inferBatchSize}].inputSize.emplace_back(inputSize);
         processRecords[{reqOrigin, inferBatchSize}].outputSize.emplace_back(outputSize);
         processRecords[{reqOrigin, inferBatchSize}].encodedOutputSize.emplace_back(encodedOutputSize);
 
-        batchInferRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(std::chrono::duration_cast<TimePrecisionType>(timestamps[9] - timestamps[8]).count());
+        batchInferRecords[{reqOrigin, inferBatchSize}].inferDuration.emplace_back(inferDuration);
 
         currNumEntries++;
         totalNumEntries++;
@@ -576,6 +788,74 @@ public:
         return temp;
     }
 
+    /**
+     * @brief Get records into a combined record from multiple microservices
+     * 
+     * @param overallRecords 
+     */
+    void getRecords(ProcessRecordType &overallRecords) {
+        std::unique_lock<std::mutex> lock(mutex);
+        for (auto &record: processRecords) {
+            if (overallRecords.find(record.first) == overallRecords.end()) {
+                overallRecords[record.first] = record.second;
+            } else {
+                overallRecords[record.first].prepDuration.insert(
+                    overallRecords[record.first].prepDuration.end(),
+                    record.second.prepDuration.begin(),
+                    record.second.prepDuration.end()
+                );
+                overallRecords[record.first].batchDuration.insert(
+                    overallRecords[record.first].batchDuration.end(),
+                    record.second.batchDuration.begin(),
+                    record.second.batchDuration.end()
+                );
+                overallRecords[record.first].inferQueueingDuration.insert(
+                    overallRecords[record.first].inferQueueingDuration.end(),
+                    record.second.inferQueueingDuration.begin(),
+                    record.second.inferQueueingDuration.end()
+                );
+                overallRecords[record.first].inferDuration.insert(
+                    overallRecords[record.first].inferDuration.end(),
+                    record.second.inferDuration.begin(),
+                    record.second.inferDuration.end()
+                );
+                overallRecords[record.first].postDuration.insert(
+                    overallRecords[record.first].postDuration.end(),
+                    record.second.postDuration.begin(),
+                    record.second.postDuration.end()
+                );
+                overallRecords[record.first].inferBatchSize.insert(
+                    overallRecords[record.first].inferBatchSize.end(),
+                    record.second.inferBatchSize.begin(),
+                    record.second.inferBatchSize.end()
+                );
+                overallRecords[record.first].postEndTime.insert(
+                    overallRecords[record.first].postEndTime.end(),
+                    record.second.postEndTime.begin(),
+                    record.second.postEndTime.end()
+                );
+                overallRecords[record.first].inputSize.insert(
+                    overallRecords[record.first].inputSize.end(),
+                    record.second.inputSize.begin(),
+                    record.second.inputSize.end()
+                );
+                overallRecords[record.first].outputSize.insert(
+                    overallRecords[record.first].outputSize.end(),
+                    record.second.outputSize.begin(),
+                    record.second.outputSize.end()
+                );
+                overallRecords[record.first].encodedOutputSize.insert(
+                    overallRecords[record.first].encodedOutputSize.end(),
+                    record.second.encodedOutputSize.begin(),
+                    record.second.encodedOutputSize.end()
+                );
+            }
+        }
+
+        processRecords.clear();
+        currNumEntries = 0;
+    }
+
     BatchInferRecordType getBatchInferRecords() {
         std::unique_lock<std::mutex> lock(mutex);
         BatchInferRecordType temp;
@@ -586,6 +866,24 @@ public:
         batchInferRecords.clear();
         currNumEntries = 0;
         return temp;
+    }
+
+    void getBatchInferRecords(BatchInferRecordType &overallRecords) {
+        std::unique_lock<std::mutex> lock(mutex);
+        for (auto &record: batchInferRecords) {
+            if (overallRecords.find(record.first) == overallRecords.end()) {
+                overallRecords[record.first] = record.second;
+            } else {
+                overallRecords[record.first].inferDuration.insert(
+                    overallRecords[record.first].inferDuration.end(),
+                    record.second.inferDuration.begin(),
+                    record.second.inferDuration.end()
+                );
+            }
+        }
+
+        batchInferRecords.clear();
+        currNumEntries = 0;
     }
 
     void setKeepLength(uint64_t keepLength) {
@@ -622,7 +920,30 @@ public:
     // Constructor that loads a struct args
     explicit Microservice(const json &jsonConfigs);
 
-    virtual ~Microservice() = default;
+    explicit Microservice(const Microservice &other);
+
+    virtual ~Microservice() {
+        waitStop();
+        spdlog::get("container_agent")->info("{0:s}::{1:s} has stopped", typeid(*this).name(), msvc_name);
+    }
+
+    void waitStop () {
+        uint8_t attempts = 0;
+        const uint8_t maxAttempts = 100;
+
+        while (!STOPPED) {
+            if (attempts == 0) {
+                spdlog::get("container_agent")->warn("Waiting for Microservice {} to stop...", msvc_name);
+            }
+            
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            
+            if (++attempts > maxAttempts) {
+                spdlog::get("container_agent")->error("Microservice {} failed to stop naturally after {} attempts", msvc_name, maxAttempts);
+                break;
+            }
+        }
+    }
 
     std::string msvc_experimentName;
     // Name Identifier assigned to the microservice in the format of `type_of_msvc-number`.
@@ -766,19 +1087,9 @@ public:
 
     virtual void dispatchThread() {};
 
+    virtual void flushBuffers() {};
+
     virtual void loadConfigs(const json &jsonConfigs, bool isConstructing = false);
-
-    virtual ArrivalRecordType getArrivalRecords() {
-        return {};
-    }
-
-    virtual ProcessRecordType getProcessRecords() {
-        return {};
-    }
-
-    virtual BatchInferRecordType getBatchInferRecords() {
-        return {};
-    }
 
     virtual void updateCycleTiming() {};
 
@@ -791,6 +1102,8 @@ public:
     virtual std::string getModelName() {return "model";}
 
 protected:
+    mutable std::mutex msvc_overallMutex;
+
     AllocationMode msvc_allocationMode = AllocationMode::Conservative;
 
     std::vector<ThreadSafeFixSizedDoubleQueue *> msvc_InQueue, msvc_OutQueue;
@@ -799,6 +1112,7 @@ protected:
 
     // Used to signal to thread when not to run and to bring thread to a natural end.
     bool STOP_THREADS = false;
+    bool STOPPED = false;
     bool READY = false;
 
     json msvc_configs;
@@ -814,9 +1128,6 @@ protected:
     BATCH_MODE msvc_BATCH_MODE = BATCH_MODE::FIXED;
     // In case `msvc_DROP_MODE` is `LAZY`, this is the time budget left for the current frame
     uint64_t msvc_timeBudgetLeft = 99999999; 
-
-    //Path to specific Application configurations for this microservice
-    std::string msvc_appLvlConfigs = "";
 
     // GPU index, -1 means CPU
     int8_t msvc_deviceIndex = -1;
@@ -848,6 +1159,8 @@ protected:
     uint64_t msvc_batchCount = 0;
 
     std::atomic<unsigned int> msvc_droppedReqCount = 0;
+    std::atomic<unsigned int> msvc_avgBatchSize = 0;
+    std::atomic<unsigned int> msvc_miniBatchCount = 0;
     std::atomic<unsigned int> msvc_totalReqCount = 0;
 
     //
@@ -891,9 +1204,6 @@ protected:
     virtual bool isTimeToBatch() { return true; };
 
     //
-    virtual bool checkReqEligibility(std::vector<ClockType> &currReq_time) { return true; };
-
-    //
     virtual void updateReqRate(ClockType lastInterReqDuration);
 
     // Get the frame ID from the path of travel of this request
@@ -922,6 +1232,7 @@ protected:
                         {},
                         {"WARMUP_COMPLETED"},
                         0,
+                        {},
                         {},
                         {}
                 }

@@ -1065,7 +1065,7 @@ TaskHandle* Controller::mergePipelines(const std::string& taskName) {
 }
 
 void Controller::mergePipelines() {
-    std::vector<std::string> toMerge = {"traffic", "people"};
+    std::vector<std::string> toMerge = {"traffic", "people", "indoor"};
     TaskHandle* mergedPipeline;
 
     for (const auto &taskName : toMerge) {
@@ -1191,8 +1191,13 @@ void Controller::crossDeviceWorkloadDistributor(TaskHandle *task, uint64_t slo) 
 
         estimateModelLatency(m);
         if (m->name.find("datasource") == std::string::npos) {
-            m->device = "server";
-            m->deviceTypeName = "server";
+            for (auto &d: m->possibleDevices) {
+                if (d == "server") {
+                    m->device = "server";
+                    m->deviceTypeName = "server";
+                    break;
+                }
+            }
         }
     }
 
