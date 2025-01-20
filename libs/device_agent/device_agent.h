@@ -130,7 +130,7 @@ protected:
                 "-d --rm --runtime nvidia --gpus all --name " +
                 absl::StrFormat(
                         R"(%s pipeline-scheduler-%s %s --json '%s' --device %i --port %i --port_offset %i)",
-                        cont_name, command executable, start_string, device, port, dev_port_offset) +
+                        cont_name, command, executable, start_string, device, port, dev_port_offset) +
                 " --log_dir ../logs";
         command += deploy_mode? " --logging_mode 1" : " --verbose 0 --logging_mode 2";
 
