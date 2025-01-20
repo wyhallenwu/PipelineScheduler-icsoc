@@ -10,8 +10,8 @@
         "cont_pipeline": [
             {
                 "msvc_name": "data_reader",
+                "msvc_numInstances": 1,
                 "msvc_idealBatchSize": 15,
-                "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
@@ -44,7 +44,7 @@
                         "nb_classOfInterest": -2,
                         "nb_commMethod": 4,
                         "nb_link": [
-                            "../data/preview/traffic_profiling.mp4"
+                            "../data/preview/zoom_profiling.mp4"
                         ],
                         "nb_maxQueueSize": 100,
                         "nb_name": "video_source",
@@ -61,8 +61,8 @@
             },
             {
                 "msvc_name": "sender",
+                "msvc_numInstances": 1,
                 "msvc_idealBatchSize": 1,
-                "msvc_appLvlConfigs": "",
                 "msvc_dnstreamMicroservices": [
                     {
                         "nb_classOfInterest": -1,
@@ -89,7 +89,7 @@
                     ]
                 ],
                 "msvc_pipelineSLO": 999999,
-                "msvc_type": 4000,
+                "msvc_type": 4002,
                 "msvc_upstreamMicroservices": [
                     {
                         "nb_classOfInterest": -2,

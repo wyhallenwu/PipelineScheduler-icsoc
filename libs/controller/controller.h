@@ -444,7 +444,7 @@ struct PipelineModel {
     std::vector<ContainerHandle *> manifestations;
 
     // Source
-    std::string datasourceName;
+    std::vector<std::string> datasourceName;
 
     uint64_t timeBudgetLeft = 9999999999;
 
@@ -1095,6 +1095,7 @@ private:
     ContainerLibType ctrl_containerLib;
     DeviceInfoType ctrl_sysDeviceInfo = {
         {Server, "server"},
+        {OnPremise, "onprem"},
         {AGXXavier, "agxavier"},
         {NXXavier, "nxavier"},
         {OrinNano, "orinano"}
