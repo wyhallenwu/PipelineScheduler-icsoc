@@ -4,6 +4,11 @@ ABSL_FLAG(uint16_t, deploy_mode, 0, "The deployment mode of the system. 0: devel
 
 using json = nlohmann::json;
 
+std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::milliseconds> timePointCastMillisecond(
+    std::chrono::system_clock::time_point tp) {
+    return std::chrono::time_point_cast<std::chrono::milliseconds>(tp);
+}
+
 uint64_t calculateP95(std::vector<uint64_t> &values) {
     if (values.empty()) {
         throw std::invalid_argument("Values set is empty.");
@@ -966,7 +971,7 @@ void setupLogger(
     std::vector<spdlog::sink_ptr> &loggerSinks,
     std::shared_ptr<spdlog::logger> &logger
 ) {
-    std::string path = logPath + "/" + loggerName + ".log";
+    std::string path = logPath + "/" + loggerName + "_" + getTimestampString() + ".log";
 
     // Console sink setup
     if (loggingMode == 0 || loggingMode == 2) {
@@ -1019,13 +1024,16 @@ std::unique_ptr<pqxx::connection> connectToMetricsServer(MetricsServerConfigs &m
 }
 
 pqxx::result pushSQL(pqxx::connection &conn, const std::string &sql) {
-
     pqxx::work session(conn);
     pqxx::result res;
     try {
         res = session.exec(sql.c_str());
         session.commit();
         return res;
+        //catch error when duplicate key detected
+    } catch (const pqxx::unique_violation &e) {
+        spdlog::get("container_agent")->error("{0:s} Unique Violation: {1:s}", __func__, e.what());
+        return {};
     } catch (const pqxx::sql_error &e) {
         spdlog::get("container_agent")->error("{0:s} SQL Error: {1:s}", __func__, e.what());
         exit(1);
@@ -1115,6 +1123,7 @@ bool confirmIntention(const std::string &message, const std::string &magicPhrase
 std::map<std::string, std::string> keywordAbbrs = {
     {"batch", "batch"},
     {"server", "serv"},
+    {"onprem", "onp"},
     {"agxavier", "agx"},
     {"agxavier1", "agx1"},
     {"orinano", "orn"},
@@ -1153,7 +1162,8 @@ std::map<std::string, std::string> keywordAbbrs = {
     {"yolov5x", "y5x"},
     {"yolov5ndsrc", "y5nd"},
     {"retina1face", "rt1f"},
-    {"retina1facedsrc", "rt1fd"},
+    {"retinamtface", "rt_mf"},
+    {"retinamtfacedsrc", "rtmfd"},
     {"age", "age"},
     {"arcface", "arcf"},
     {"carbrand", "cbrd"},
@@ -1171,6 +1181,7 @@ std::map<std::string, std::string> keywordAbbrs = {
 
 std::map<SystemDeviceType, std::string> SystemDeviceTypeList = {
     {Server, "server"},
+    {OnPremise, "onprem"},
     {NXXavier, "nxavier"},
     {AGXXavier, "agxavier"},
     {OrinNano, "orinano"}
@@ -1180,6 +1191,8 @@ std::map<SystemDeviceType, std::string> SystemDeviceTypeList = {
 std::map<std::string, SystemDeviceType> SystemDeviceTypeReverseList = {
     {"server", Server},
     {"serv", Server},
+    {"onprem", OnPremise},
+    {"onp", OnPremise},
     {"nxavier", NXXavier},
     {"nx", NXXavier},
     {"agxavier", AGXXavier},
@@ -1199,7 +1212,8 @@ std::map<ModelType, std::string> ModelTypeList = {
     {Yolov5nDsrc, "yolov5ndsrc"},
     {Arcface, "arcface"},
     {Retinaface, "retina1face"},
-    {RetinafaceDsrc, "retina1facedsrc"},
+    {RetinaMtface, "retinamtface"},
+    {RetinaMtfaceDsrc, "retinamtfacedsrc"},
     {PlateDet, "platedet"},
     {Movenet, "movenet"},
     {Emotionnet, "emotionnet"},
@@ -1232,8 +1246,10 @@ std::map<std::string, ModelType> ModelTypeReverseList = {
     {"arcf", Arcface},
     {"retina1face", Retinaface},
     {"rt1f", Retinaface},
-    {"retina1facedsrc", RetinafaceDsrc},
-    {"rt1fd", RetinafaceDsrc},
+    {"retinamtface", RetinaMtface},
+    {"rt_mf", RetinaMtface},
+    {"retinamtfacedsrc", RetinaMtfaceDsrc},
+    {"rtmfd", RetinaMtfaceDsrc},
     {"plateDet", PlateDet},
     {"pldt", PlateDet},
     {"emotionnet", Emotionnet},

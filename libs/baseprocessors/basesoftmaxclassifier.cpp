@@ -49,7 +49,6 @@ void BaseSoftmaxClassifier::classify() {
 
 
     cudaStream_t postProcStream;
-    cv::cuda::Stream postProcCVStream;
 
     NumQueuesType queueIndex = 0;
 
@@ -80,7 +79,6 @@ void BaseSoftmaxClassifier::classify() {
 
                 setDevice();
                 checkCudaErrorCode(cudaStreamCreate(&postProcStream), __func__);
-                postProcCVStream = cv::cuda::StreamAccessor::wrapStream(postProcStream);
 
                 BatchSizeType batchSize = msvc_allocationMode == AllocationMode::Conservative ? msvc_idealBatchSize : msvc_maxBatchSize;
                 predictedProbs = new float[batchSize * msvc_numClasses];
@@ -154,6 +152,7 @@ void BaseSoftmaxClassifier::classify() {
 
             if (msvc_activeOutQueueIndex.at(queueIndex) == 1) { //Local CPU
                 cv::Mat out;
+                cv::cuda::Stream postProcCVStream = cv::cuda::Stream();
                 currReq.upstreamReq_data[i].data.download(out, postProcCVStream);
                 postProcCVStream.waitForCompletion();
                 if (msvc_OutQueue.at(queueIndex)->getEncoded()) {
@@ -194,8 +193,8 @@ void BaseSoftmaxClassifier::classify() {
             /**
              * @brief There are 8 important timestamps to be recorded:
              * 1. When the request was generated
-             * 2. When the request was received by the batcher
-             * 3. When the request was done preprocessing by the batcher
+             * 2. When the request was received by the preprocessor
+             * 3. When the request was done preprocessing by the preprocessor
              * 4. When the request, along with all others in the batch, was batched together and sent to the inferencer
              * 5. When the batch inferencer popped the batch sent from batcher
              * 6. When the batch inference was completed by the inferencer 
@@ -229,6 +228,7 @@ void BaseSoftmaxClassifier::classify() {
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
     msvc_logFile.close();
+    STOPPED = true;
 }
 
 void BaseSoftmaxClassifier::classifyProfiling() {
@@ -351,4 +351,5 @@ void BaseSoftmaxClassifier::classifyProfiling() {
     }
     checkCudaErrorCode(cudaStreamDestroy(postProcStream), __func__);
     msvc_logFile.close();
+    STOPPED = true;
 }
