@@ -1,7 +1,7 @@
 # Builder Image
-ARG JETPACK_VERSION="r35.2.1-py3"
+FROM pipeplusplus:dev
 
-FROM pipeline-scheduler:${JETPACK_VERSION}
+ARG VERSION=Release
 
 USER root
 RUN mkdir /app/build -p
