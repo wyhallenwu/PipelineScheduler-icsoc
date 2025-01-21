@@ -163,7 +163,11 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBPQXX REQUIRED libpqxx)
 
 add_subdirectory(libs/misc)
-add_subdirectory(libs/utils/profiler)
+if (DEVICE_ARCH STREQUAL "amd64")
+    add_subdirectory(libs/utils/profiler)
+else ()
+    add_subdirectory(libs/utils/profiler-jetson)
+endif()
 add_subdirectory(libs/microservice)
 add_subdirectory(libs/utils/protobufprotocols)
 

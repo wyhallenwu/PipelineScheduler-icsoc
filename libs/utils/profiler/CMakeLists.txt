@@ -24,32 +24,18 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
             FORCE)
 endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
-if (DEVICE_ARCH STREQUAL "amd64")
-    # Only public header files go here.
-    set(
-            HEADER_FILES
-            profiler.h
-    )
 
-    # All source files and private header files go here.
-    set(
-            SOURCE_FILES
-            profiler.cpp
-    )
-else()
-    # Only public header files go here.
-    set(
-            HEADER_FILES
-            profiler-jetson.h
-    )
+# Only public header files go here.
+set(
+        HEADER_FILES
+        profiler.h
+)
 
-    # All source files and private header files go here.
-    set(
-            SOURCE_FILES
-            profiler-jetson.cpp
-    )
-    find_package(Python COMPONENTS Development REQUIRED)
-endif()
+# All source files and private header files go here.
+set(
+        SOURCE_FILES
+        profiler.cpp
+)
 
 # Here we define the library.
 add_library(profiler
@@ -92,11 +78,6 @@ target_link_libraries(profiler
         CUDA::nvml
         cuda
 )
-
-if (NOT DEVICE_ARCH STREQUAL "amd64")
-    target_include_directories(profiler PUBLIC ${Python_INCLUDE_DIRS})
-    target_link_libraries(profiler PUBLIC ${Python_LIBRARIES})
-endif ()
 
 # Here we configure variables specifying the target directories.
 set(INSTALL_RUNTIME_DIR ${CMAKE_INSTALL_BINDIR})
