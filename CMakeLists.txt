@@ -19,6 +19,7 @@ set(SYSTEM_NAME "PPP" CACHE STRING "System name: ")
 message("System name: ${SYSTEM_NAME}")
 
 set(DEVICE_ARCH "amd64" CACHE STRING "Device architecture: ")
+add_definitions(-DDEVICE_ARCH=${DEVICE_ARCH})
 
 # If no build type was specified, set it to Release.
 if (NOT CMAKE_BUILD_TYPE)

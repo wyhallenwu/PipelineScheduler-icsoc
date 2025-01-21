@@ -1,4 +1,4 @@
-#include "profiler.h"
+#include "profiler-jetson.h"
 
 Profiler::Profiler(const std::vector<unsigned int> &pids, std::string mode) {
     if (!pids.empty()) {

@@ -4,7 +4,15 @@
 #include <cstdlib>
 #include <misc.h>
 #include <sys/sysinfo.h>
-#include "profiler.h"
+#if defined(DEVICE_ARCH)
+    #if DEVICE_ARCH == amd64
+        #include "profiler.h"
+    #else
+        #include "profiler-jetson.h"
+    #endif
+#else
+    #include "profiler.h"
+#endif
 #include "controller.h"
 #include <arpa/inet.h>
 #include <sys/socket.h>

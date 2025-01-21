@@ -14,7 +14,15 @@
 #include <filesystem>
 #include <pqxx/pqxx>
 
-#include "profiler.h"
+#if defined(DEVICE_ARCH)
+    #if DEVICE_ARCH == amd64
+        #include "profiler.h"
+    #else
+        #include "profiler-jetson.h"
+    #endif
+#else
+    #include "profiler.h"
+#endif
 #include "microservice.h"
 #include "receiver.h"
 #include "sender.h"

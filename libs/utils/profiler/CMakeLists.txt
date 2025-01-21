@@ -24,17 +24,32 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
             FORCE)
 endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
-# Only public header files go here.
-set(
-        HEADER_FILES
-        profiler.h
-)
+if (DEVICE_ARCH STREQUAL "amd64")
+    # Only public header files go here.
+    set(
+            HEADER_FILES
+            profiler.h
+    )
 
-# All source files and private header files go here.
-set(
-        SOURCE_FILES
-        profiler.cpp
-)
+    # All source files and private header files go here.
+    set(
+            SOURCE_FILES
+            profiler.cpp
+    )
+else()
+    # Only public header files go here.
+    set(
+            HEADER_FILES
+            profiler-jetson.h
+    )
+
+    # All source files and private header files go here.
+    set(
+            SOURCE_FILES
+            profiler-jetson.cpp
+    )
+    find_package(Python COMPONENTS Development REQUIRED)
+endif()
 
 # Here we define the library.
 add_library(profiler
@@ -54,10 +69,6 @@ target_compile_features(profiler
 # By prefixing the installation paths with our name and version
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX profiler)
-
-if (NOT DEVICE_ARCH STREQUAL "amd64")
-    find_package(Python COMPONENTS Development REQUIRED)
-endif ()
 
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
