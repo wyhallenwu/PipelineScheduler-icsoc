@@ -55,7 +55,9 @@ target_compile_features(profiler
 # we can have multiple versions installed at the same time.
 set(PROJECT_PREFIX profiler)
 
-find_package(Python COMPONENTS Development REQUIRED)
+if (NOT DEVICE_ARCH STREQUAL "amd64")
+    find_package(Python COMPONENTS Development REQUIRED)
+endif ()
 
 # Defines the headers for this library.
 # https://cmake.org/cmake/help/v3.11/command/target_include_directories.html
@@ -66,7 +68,6 @@ target_include_directories(profiler
             # Used when installing the library:
             $<INSTALL_INTERFACE:${PROJECT_PREFIX}>
             ${CUDA_INCLUDE_DIRS}
-            ${Python_INCLUDE_DIRS}
         PRIVATE
             # Used only when building the library:
             src)
@@ -77,10 +78,14 @@ target_link_libraries(profiler
         absl::flags_parse
         ${CMAKE_THREAD_LIBS_INIT}
         ${CUDA_LIBRARIES}
-        ${Python_LIBRARIES}
         CUDA::nvml
         cuda
 )
+
+if (NOT DEVICE_ARCH STREQUAL "amd64")
+    target_include_directories(profiler PUBLIC ${Python_INCLUDE_DIRS})
+    target_link_libraries(profiler PUBLIC ${Python_LIBRARIES})
+endif ()
 
 # Here we configure variables specifying the target directories.
 set(INSTALL_RUNTIME_DIR ${CMAKE_INSTALL_BINDIR})

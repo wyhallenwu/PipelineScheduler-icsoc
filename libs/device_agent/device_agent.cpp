@@ -190,32 +190,43 @@ void DeviceAgent::collectRuntimeMetrics() {
 
         if (timePointCastMillisecond(startTime) >=
             timePointCastMillisecond(dev_metricsServerConfigs.nextHwMetricsScrapeTime)) {
+            std::vector<Profiler::sysStats> stats = dev_profiler->reportDeviceStats();
+
             DeviceHardwareMetrics metrics;
+            metrics.timestamp = std::chrono::high_resolution_clock::now();
+            metrics.cpuUsage = stats[0].cpuUsage;
+            metrics.memUsage = stats[0].processMemoryUsage;
+            metrics.rssMemUsage = stats[0].rssMemory;
+            for (unsigned int i = 0; i < stats.size(); i++) {
+                metrics.gpuUsage.emplace_back(stats[i].gpuUtilization);
+                metrics.gpuMemUsage.emplace_back(stats[i].gpuMemoryUsage);
+            }
+            dev_runtimeMetrics.emplace_back(metrics);
             for (auto &container: containers) {
                 if (container.second.pid > 0) {
-                    Profiler::sysStats stats = dev_profiler->reportAtRuntime(container.second.pid);
-                    container.second.hwMetrics = {stats.cpuUsage, stats.processMemoryUsage, stats.processMemoryUsage, stats.gpuUtilization,
+                    Profiler::sysStats stats = dev_profiler->reportAtRuntime(container.second.pid, container.second.pid);
+                    container.second.hwMetrics = {stats.cpuUsage, stats.processMemoryUsage, stats.rssMemory, stats.gpuUtilization,
                                     stats.gpuMemoryUsage};
                     spdlog::get("container_agent")->trace("{0:s} SCRAPE hardware metrics. Latency {1:d}ms.",
                                                         dev_name,
                                                         scrapeLatencyMillisec);
-                    metrics.timestamp = std::chrono::high_resolution_clock::now();
-                    metrics.memUsage = stats.deviceMemoryUsage;
-                    metrics.rssMemUsage = stats.deviceMemoryUsage;
-                    metrics.gpuUsage.emplace_back(stats.gpuUtilization);
-                    metrics.gpuMemUsage.emplace_back(stats.deviceMemoryUsage);
+//                    metrics.timestamp = std::chrono::high_resolution_clock::now();
+//                    metrics.memUsage = stats.deviceMemoryUsage;
+//                    metrics.rssMemUsage = stats.deviceMemoryUsage;
+//                    metrics.gpuUsage.emplace_back(stats.gpuUtilization);
+//                    metrics.gpuMemUsage.emplace_back(stats.deviceMemoryUsage);
                 }
             }
-            if (metrics.gpuUsage.empty()) {
-                Profiler::sysStats stats = dev_profiler->reportAnyMetrics();
-                metrics.timestamp = std::chrono::high_resolution_clock::now();
-                metrics.memUsage = stats.deviceMemoryUsage;
-                metrics.rssMemUsage = stats.deviceMemoryUsage;
-                metrics.gpuUsage.emplace_back(stats.gpuUtilization);
-                metrics.gpuMemUsage.emplace_back(stats.deviceMemoryUsage);
-            }
-            metrics.cpuUsage = dev_profiler->getDeviceCPUInfo();
-            dev_runtimeMetrics.emplace_back(metrics);
+//            if (metrics.gpuUsage.empty()) {
+//                Profiler::sysStats stats = dev_profiler->reportAnyMetrics();
+//                metrics.timestamp = std::chrono::high_resolution_clock::now();
+//                metrics.memUsage = stats.deviceMemoryUsage;
+//                metrics.rssMemUsage = stats.deviceMemoryUsage;
+//                metrics.gpuUsage.emplace_back(stats.gpuUtilization);
+//                metrics.gpuMemUsage.emplace_back(stats.deviceMemoryUsage);
+//            }
+//            metrics.cpuUsage = dev_profiler->getDeviceCPUInfo();
+//            dev_runtimeMetrics.emplace_back(metrics);
             metricsStopwatch.stop();
             scrapeLatencyMillisec = (uint64_t) std::ceil(metricsStopwatch.elapsed_microseconds() / 1000.f);
             dev_metricsServerConfigs.nextHwMetricsScrapeTime = std::chrono::high_resolution_clock::now() +
@@ -596,6 +607,7 @@ void DeviceAgent::StopContainerRequestHandler::Proceed() {
             DeviceAgent::StopContainer(device_agent->containers[request.name()], request.forced());
             std::lock_guard<std::mutex> lock(device_agent->containers_mutex);
             device_agent->containers.erase(request.name());
+            device_agent->dev_profiler->removePid(pid);
         }
         status = FINISH;
         responder.Finish(reply, Status::OK, this);

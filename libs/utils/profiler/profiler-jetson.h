@@ -9,11 +9,13 @@
 #include <sstream>
 #include <chrono>
 #include <thread>
-#include <cmath>
 #include <queue>
 #include <unistd.h>
-#include <nvml.h>
-#include <spdlog/spdlog.h>
+#include <Python.h>
+#include <mutex>
+#include <condition_variable>
+#include <termios.h>
+#include <sys/select.h>
 
 class LimitedPairQueue {
 public:
@@ -38,7 +40,7 @@ public:
     Profiler(const std::vector<unsigned int> &pids, std::string mode);
     ~Profiler();
 
-    void run() {};
+    void run();
 
     struct sysStats {
         uint64_t timestamp = 0;
@@ -51,44 +53,25 @@ public:
     };
 
 
-    void addPid(unsigned int pid) { setPidOnDevices(pid); };
-    void removePid(unsigned int pid) { pidOnDevices.erase(pid); };
-    int getGpuCount();
-    std::vector<long> getGpuMemory(int device_count);
+    void addPid(unsigned int pid) {};
+    void removePid(unsigned int pid) {};
+    static int getGpuCount() { return 1; };
+    static std::vector<unsigned int> getGpuMemory(int device_count) { return {0}; };
 
-    sysStats reportAtRuntime(unsigned int cpu_pid, unsigned int gpu_pid);
-
-    std::vector<Profiler::sysStats> reportDeviceStats();
-
-private:
-
-    bool initializeNVML();
-
-    static bool setAccounting(nvmlDevice_t device);
-
-    static std::vector<nvmlDevice_t> getDevices();
-
-    void setPidOnDevices(unsigned int pid);
-
-    bool cleanupNVML();
-
-    int getCPUInfo(unsigned int pid);
+    sysStats reportAtRuntime(unsigned int pid, unsigned int voidPid) {
+        std::lock_guard<std::mutex> lock(m); return stats[pid]; };
+    sysStats reportAnyMetrics() {
+        std::lock_guard<std::mutex> lock(m); return stats.begin()->second; };
 
     int getDeviceCPUInfo();
+    std::vector<sysStats> reportDeviceStats() {return {reportAnyMetrics()};};
 
-    std::pair<int, int> getMemoryInfo(unsigned int pid);
-
-    int getDeviceMemoryInfo();
-
-    nvmlUtilization_t getGPUInfo(unsigned int pid, nvmlDevice_t device);
-
-    unsigned int getPcieInfo(nvmlDevice_t device);
-
-    bool nvmlInitialized;
-
-    std::map<unsigned int, LimitedPairQueue> prevCpuTimes;
-    std::vector<nvmlDevice_t> cuda_devices;
-    std::map<unsigned int, nvmlDevice_t> pidOnDevices;
+private:
+    void jtop(const std::string &cmd);
+    LimitedPairQueue prevCpuTimes;
+    std::thread t;
+    std::mutex m;
+    std::map<unsigned int, sysStats> stats;
 };
 
 
