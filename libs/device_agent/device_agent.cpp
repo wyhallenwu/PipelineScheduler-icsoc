@@ -360,6 +360,10 @@ void DeviceAgent::ContainersLifeCheck() {
         ClientContext context;
         Status status;
         CompletionQueue *cq = container.second.cq;
+        if (cq == nullptr) {
+            spdlog::get("container_agent")->error("Container {}'s completion queue is null!", container.first);
+            continue;
+        }
         std::unique_ptr<ClientAsyncResponseReader<EmptyMessage>> rpc(
                 container.second.stub->AsyncKeepAlive(&context, request, cq));
 
