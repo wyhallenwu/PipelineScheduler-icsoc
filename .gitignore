@@ -36,6 +36,7 @@ cmake-build-default/
 model_profiles
 logs
 videos
+*/env/*
 
 data
 curve
@@ -51,3 +52,6 @@ curve
 *.pt
 *.pth
 *.tar
+*.pdf
+*.svg
+*.csv
