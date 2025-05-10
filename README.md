@@ -6,20 +6,6 @@ OctoCross is a system which enables the highest performance in terms of throughp
 OctoCross also considers *resource contention* and is equipped with **inference spatiotemporal scheduling** to mitigate the adverse effects of *co-location interference*.
 
 
-![overall-arch](/assets/overall-arch.png)
-
-When using our Code please cite the following paper:
-```
-@inproceedings{nguyen2025,
-    author={Thanh-Tung Nguyen and Lucas Liebe and Tau-Nhat Quang and Yuheng Wu and Jinghan Cheng and Dongman Lee}
-    title = {{OCTOPINF: Workload-Aware Real-Time Inference Serving for Edge Video Analytics}},
-    booktitle = {The 23rd International Conference on Pervasive Computing and Communications (PerCom 2025)},
-    year = {2025},
-    publisher = {IEEE},
-    month = march,
-}
-```
-
 # Table of Contents
 
 1. [Overview](#pipelinescheduler)  
