@@ -1,16 +1,12 @@
-# PipelineScheduler
+# OctoCross
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14789255.svg)](https://doi.org/10.5281/zenodo.14789255)
 
-PipelineScheduler is a system which enables the highest performance in terms of throughput and latency for can find the **optimal workload distribution** to split the pipelines between the server and the Edge devices, and set the **optimal batch sizes** for them to ensure the best throughput and latency against challenges such as *content dynamics* and *network instability*.
-PipelineScheduler also considers *resource contention* and is equipped with **inference spatiotemporal scheduling** to mitigate the adverse effects of *co-location interference*.
+OctoCross is a system which enables the highest performance in terms of throughput and latency for can find the **optimal workload distribution** to split the pipelines between the server and the Edge devices, and set the **optimal batch sizes** for them to ensure the best throughput and latency against challenges such as *content dynamics* and *network instability*.
+OctoCross also considers *resource contention* and is equipped with **inference spatiotemporal scheduling** to mitigate the adverse effects of *co-location interference*.
 
-The current stage of PipelineScheduler is the implementation for our [IEEE PerCom 2025](https://www.percom.org/) full paper, titled **"OCTOPINF: Workload-Aware Real-Time Inference Serving for Edge Video Analytics"**, available [here](). Future improvements will be continually updated. Architectural diagram:
 
 ![overall-arch](/assets/overall-arch.png)
-
-
-This repo is contributed and maintained by Thanh-Tung Nguyen, Lucas Liebe (equally), and other colleges at [CDSN Lab](http://cds.kaist.ac.kr) at KAIST.
 
 When using our Code please cite the following paper:
 ```
@@ -284,21 +280,4 @@ For the purpose of running the experiments with real-world 5G traces, this [scri
 ```bash
 ./stop_containers_with_keywords.sh KEY_WORD
 ```
-
-### Change names/Delete of PostgreSQL tables en masse.
-* If an experiment is not running as expected and we want to wipe out the old statistics table for a clean slate.
-
-# Citing our works
-If you find the repo useful, please cite the following works which have encompassed the development of this repo.
-
-* **OCTOPINF: Workload-Aware Real-Time Inference Serving for Edge Video Analytics** 
-    ```
-    @inproceedings{nguyen2025,
-        author={Thanh-Tung Nguyen and Lucas Liebe and Tau-Nhat Quang and Yuheng Wu and Jinghan Cheng and Dongman Lee}
-        title = {{OCTOPINF: Workload-Aware Real-Time Inference Serving for Edge Video Analytics}},
-        booktitle = {The 23rd International Conference on Pervasive Computing and Communications (PerCom 2025)},
-        year = {2025},
-        publisher = {IEEE},
-        month = march,
-    }
     ```
