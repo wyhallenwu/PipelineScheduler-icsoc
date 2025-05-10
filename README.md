@@ -8,7 +8,7 @@ OctoCross also considers *resource contention* and is equipped with **inference 
 
 # Table of Contents
 
-1. [Overview](#pipelinescheduler)  
+1. [Overview](#OctoCross)  
 2. [Implementation Architecture](#implementation-architecture)  
    * [Controller](#controller)  
    * [Device Agent](#device-agent)  
@@ -16,7 +16,7 @@ OctoCross also considers *resource contention* and is equipped with **inference 
      * [Container Agent](#container-agent)  
      * [Configurations](#configurations)  
    * [Knowledge Base](#knowledge-base)  
-3. [Running ***PipelineScheduler***](#running-pipelinescheduler)  
+3. [Running ***OctoCross***](#running-OctoCross)  
    * [Installation](#installation)  
      * [Prerequisites](#prerequisites)  
      * [Inference Platform](#inference-platform)  
@@ -33,14 +33,14 @@ OctoCross also considers *resource contention* and is equipped with **inference 
    * [Running](#running)  
      * [Step 1: Running the Controller](#step-1-running-the-controller)  
      * [Step 2: Running the Device Agent](#step-2-once-the-controller-is-running-run-a-device-agent-on-each-device)  
-4. [Extending ***PipelineScheduler***](#extending-pipelinescheduler)  
+4. [Extending ***OctoCross***](#extending-OctoCross)  
    * [Adding Models](#adding-models)  
    * [Local Optimizations](#local-optimizations)  
 5. [Misc](#misc)  
 6. [Citing Our Works](#citing-our-works)
 
 # Implementation Architecture
-PipelineScheduler is composed of 4 main components:
+OctoCross is composed of 4 main components:
 
 ## Controller
 The **Controller** is run as a separate C++ process to oversee the whole system.
@@ -152,7 +152,7 @@ Details on how to set the configurations can be found [here](/jsons/README).
 ## Knowledge Base
 The Knowledge Base is a PostgreSQL (14) database which contains all the operational statistics.
 
-# Running ***PipelineScheduler***
+# Running ***OctoCross***
 ## Installation
 ### Prerequisites
 To run the system, this following software must be installed on the host machines.
@@ -240,7 +240,7 @@ Models need to be prepared according to fit the current hardware and software in
     ./DeviceAgent --name [device_name] --device_type [server, agx, nx, orinano] --controller_url [controller_ip_address] --dev_port_offset 0 --dev_verbose 1 --deploy_mode 1
     ```
 
-# Extending ***PipelineScheduler***
+# Extending ***OctoCross***
 ## Adding Models
 New models can be easily introduced to the system using one of the following ways:
 1. Blackbox Container
